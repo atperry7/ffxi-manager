@@ -26,6 +26,7 @@
         </Style>
         
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
+        <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisConverter"/>
         <converters:BoolToActiveConverter x:Key="BoolToActiveConverter"/>
         <converters:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
         <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
@@ -74,17 +75,23 @@
                                      BorderThickness="1">
                                 <StackPanel Margin="5">
                                     <TextBlock Text="📋 Usage Tips" FontWeight="Bold" FontSize="14" Margin="0,0,0,8" Foreground="#495057"/>
-                                    <TextBlock Text="• 'Active Profile' shows which backup is currently in use" 
+                                    <TextBlock Text="• Double-click any profile to swap to it instantly" 
                                                TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
-                                    <TextBlock Text="• 'System File' shows the login_w.bin file (read-only)" 
+                                    <TextBlock Text="• Right-click profiles for context menu with all actions" 
                                                TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
-                                    <TextBlock Text="• Green highlight shows the profile currently being used" 
+                                    <TextBlock Text="• Use inline 🔄 ✏️ 🗑️ buttons for direct actions" 
                                                TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
-                                    <TextBlock Text="• [EXT] shows when file was changed outside the app" 
+                                    <TextBlock Text="• Rename auto-backups (backup_*) to convert to user profiles" 
                                                TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
-                                    <TextBlock Text="• Auto-backups are hidden by default - toggle checkbox to show" 
+                                    <TextBlock Text="• Green highlight shows the currently active profile" 
                                                TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
-                                    <TextBlock Text="• Expand 'Advanced' section for maintenance tools" 
+                                    <TextBlock Text="• login_w.bin is read-only (shows current state)" 
+                                               TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
+                                    <TextBlock Text="• [EXT] indicates file was changed outside the app" 
+                                               TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
+                                    <TextBlock Text="• Toggle 'Show auto-backups' to see/hide automatic backups" 
+                                               TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
+                                    <TextBlock Text="• Expand 'Advanced' for maintenance tools" 
                                                TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
                                 </StackPanel>
                             </ToolTip>
@@ -142,7 +149,25 @@
                               SelectionMode="Single"
                               IsReadOnly="True"
                               GridLinesVisibility="Horizontal"
-                              AlternatingRowBackground="#F9F9F9">
+                              AlternatingRowBackground="#F9F9F9"
+                              MouseDoubleClick="DataGrid_MouseDoubleClick">
+                        <DataGrid.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="🔄 Swap to This Profile" 
+                                          Command="{Binding SwapProfileCommand}"
+                                          FontWeight="Bold"/>
+                                <Separator/>
+                                <MenuItem Header="✏️ Rename Profile" 
+                                          Command="{Binding RenameProfileCommand}"/>
+                                <MenuItem Header="🗑️ Delete Profile" 
+                                          Command="{Binding DeleteProfileCommand}"/>
+                                <Separator/>
+                                <MenuItem Header="📋 Copy Profile Name" 
+                                          Click="CopyProfileName_Click"/>
+                                <MenuItem Header="📁 Open File Location" 
+                                          Click="OpenFileLocation_Click"/>
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
                         <DataGrid.RowStyle>
                             <Style TargetType="DataGridRow">
                                 <Style.Triggers>
@@ -180,6 +205,42 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="Actions" Width="130">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                                                    Visibility="{Binding IsActive, Converter={StaticResource InverseBoolToVisConverter}}">
+                                            <!-- All action buttons hidden for system files -->
+                                            <Button Content="🔄" 
+                                                    Command="{Binding DataContext.SwapProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Swap to this profile"
+                                                    Width="25" Height="25" 
+                                                    Margin="2"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Style="{x:Null}"/>
+                                            <Button Content="✏️" 
+                                                    Click="RenameProfile_Click"
+                                                    ToolTip="Rename this profile"
+                                                    Width="25" Height="25" 
+                                                    Margin="2"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Style="{x:Null}"/>
+                                            <Button Content="🗑️" 
+                                                    Command="{Binding DataContext.DeleteProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Delete this profile"
+                                                    Width="25" Height="25" 
+                                                    Margin="2"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Style="{x:Null}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
@@ -194,19 +255,6 @@
                     <!-- Profile Actions -->
                     <GroupBox Header="Profile Management">
                         <StackPanel>
-                            <Button Content="Swap to Selected Profile" 
-                                    Command="{Binding SwapProfileCommand}"
-                                    Background="#3498DB"
-                                    Foreground="White"
-                                    FontWeight="Bold"/>
-                            
-                            <Button Content="Delete Selected Profile" 
-                                    Command="{Binding DeleteProfileCommand}"
-                                    Background="#E74C3C"
-                                    Foreground="White"/>
-                            
-                            <Separator Margin="5"/>
-                            
                             <!-- Create Backup Section -->
                             <Label Content="Create New Backup:"/>
                             <TextBox Text="{Binding NewBackupName, UpdateSourceTrigger=PropertyChanged}" 

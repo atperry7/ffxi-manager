@@ -750,5 +750,59 @@ namespace FFXIManager.Services
                 // Ignore errors when clearing tracking
             }
         }
+        
+        /// <summary>
+        /// Renames a profile file
+        /// </summary>
+        public async Task RenameProfileAsync(ProfileInfo profile, string newName)
+        {
+            if (profile == null)
+                throw new ArgumentNullException(nameof(profile));
+            
+            if (string.IsNullOrWhiteSpace(newName))
+                throw new ArgumentException("New name cannot be empty", nameof(newName));
+            
+            if (profile.IsActive)
+                throw new InvalidOperationException("Cannot rename the active login file");
+            
+            // Sanitize the new name
+            var sanitizedName = SanitizeFileName(newName);
+            var newFilePath = Path.Combine(PlayOnlineDirectory, $"{sanitizedName}.bin");
+            
+            // Check if target file already exists
+            if (File.Exists(newFilePath))
+            {
+                throw new InvalidOperationException($"A profile with the name '{sanitizedName}' already exists");
+            }
+            
+            // Additional safety check - don't allow renaming system files
+            var fileName = Path.GetFileName(profile.FilePath);
+            if (EXCLUDED_FILES.Contains(fileName))
+                throw new InvalidOperationException("Cannot rename system files");
+            
+            if (!File.Exists(profile.FilePath))
+                throw new FileNotFoundException($"Profile file not found: {profile.FilePath}");
+            
+            try
+            {
+                // Rename the file
+                File.Move(profile.FilePath, newFilePath);
+                
+                // Update settings if this was the currently tracked active profile
+                if (SettingsService != null)
+                {
+                    var settings = SettingsService.LoadSettings();
+                    if (settings.CurrentActiveProfile == profile.Name)
+                    {
+                        settings.CurrentActiveProfile = sanitizedName;
+                        SettingsService.SaveSettings(settings);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error renaming profile: {ex.Message}", ex);
+            }
+        }
     }
 }

@@ -1,12 +1,14 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using FFXIManager.Models;
 using FFXIManager.Services;
+using FFXIManager.Views;
 
 namespace FFXIManager.ViewModels
 {
@@ -45,6 +47,11 @@ namespace FFXIManager.ViewModels
             CleanupAutoBackupsCommand = new RelayCommand(async () => await CleanupAutoBackupsAsync());
             ResetTrackingCommand = new RelayCommand(async () => await ResetActiveTrackingAsync());
             
+            // Parameterized commands for inline actions
+            SwapProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(async (profile) => await SwapProfileAsync(profile), (profile) => profile != null && !profile.IsActive);
+            DeleteProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(async (profile) => await DeleteProfileAsync(profile), (profile) => profile != null && !profile.IsActive);
+            RenameProfileCommand = new RelayCommand(async () => await RenameProfileAsync(), () => SelectedProfile != null && !SelectedProfile.IsActive);
+            
             // Load profiles on startup if auto-refresh is enabled
             if (_settings.AutoRefreshOnStartup)
             {
@@ -63,6 +70,7 @@ namespace FFXIManager.ViewModels
                 {
                     ((RelayCommand)SwapProfileCommand).RaiseCanExecuteChanged();
                     ((RelayCommand)DeleteProfileCommand).RaiseCanExecuteChanged();
+                    ((RelayCommand)RenameProfileCommand).RaiseCanExecuteChanged();
                     
                     // Save last used profile
                     if (value != null)
@@ -137,6 +145,11 @@ namespace FFXIManager.ViewModels
         public ICommand CleanupAutoBackupsCommand { get; }
         public ICommand ResetTrackingCommand { get; }
         
+        // Add parameterized commands for inline actions
+        public ICommand SwapProfileParameterCommand { get; }
+        public ICommand DeleteProfileParameterCommand { get; }
+        public ICommand RenameProfileCommand { get; }
+        
         private async Task RefreshProfilesAsync()
         {
             try
@@ -170,17 +183,23 @@ namespace FFXIManager.ViewModels
                     {
                         Profiles.Add(profile);
                         
-                        // Try to restore last selected profile (only for backup profiles)
-                        if (profile.Name == _settings.LastUsedProfile)
+                        // Try to restore last selected profile (only for backup profiles that are currently visible)
+                        if (profile.Name == _settings.LastUsedProfile && !profile.IsActive)
                         {
                             lastUsedProfile = profile;
                         }
                     }
                     
-                    // Restore last selected profile if found and it's not the active login file
-                    if (lastUsedProfile != null && !lastUsedProfile.IsActive)
+                    // Only restore selection if the profile is actually in the current view
+                    // This prevents selecting auto-backups when they're hidden
+                    if (lastUsedProfile != null && profiles.Contains(lastUsedProfile))
                     {
                         SelectedProfile = lastUsedProfile;
+                    }
+                    else
+                    {
+                        // Clear selection if the last used profile is not in the current view
+                        SelectedProfile = null;
                     }
                 });
                 
@@ -207,20 +226,26 @@ namespace FFXIManager.ViewModels
         private async Task SwapProfileAsync()
         {
             if (SelectedProfile == null) return;
+            await SwapProfileAsync(SelectedProfile);
+        }
+        
+        private async Task SwapProfileAsync(ProfileInfo profile)
+        {
+            if (profile == null) return;
             
             try
             {
                 IsLoading = true;
-                StatusMessage = $"Swapping to profile: {SelectedProfile.Name}";
+                StatusMessage = $"Swapping to profile: {profile.Name}";
                 
-                await _profileService.SwapProfileAsync(SelectedProfile);
+                await _profileService.SwapProfileAsync(profile);
                 
-                StatusMessage = $"Successfully swapped to profile: {SelectedProfile.Name}";
+                StatusMessage = $"? Successfully swapped to profile: {profile.Name}";
                 await RefreshProfilesAsync();
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error swapping profile: {ex.Message}";
+                StatusMessage = $"? Error swapping profile: {ex.Message}";
             }
             finally
             {
@@ -258,13 +283,19 @@ namespace FFXIManager.ViewModels
         private async Task DeleteProfileAsync()
         {
             if (SelectedProfile == null) return;
+            await DeleteProfileAsync(SelectedProfile);
+        }
+        
+        private async Task DeleteProfileAsync(ProfileInfo profile)
+        {
+            if (profile == null) return;
             
             MessageBoxResult result = MessageBoxResult.Yes;
             
             if (_settings.ConfirmDeleteOperations)
             {
                 result = MessageBox.Show(
-                    $"Are you sure you want to delete profile '{SelectedProfile.Name}'?",
+                    $"Are you sure you want to delete profile '{profile.Name}'?",
                     "Confirm Delete",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Warning);
@@ -275,21 +306,25 @@ namespace FFXIManager.ViewModels
             try
             {
                 IsLoading = true;
-                StatusMessage = $"Deleting profile: {SelectedProfile.Name}";
+                StatusMessage = $"Deleting profile: {profile.Name}";
                 
-                await _profileService.DeleteProfileAsync(SelectedProfile);
+                await _profileService.DeleteProfileAsync(profile);
                 
                 Application.Current.Dispatcher.Invoke(() =>
                 {
-                    Profiles.Remove(SelectedProfile);
+                    Profiles.Remove(profile);
                 });
                 
-                SelectedProfile = null;
-                StatusMessage = "Profile deleted successfully";
+                if (SelectedProfile == profile)
+                {
+                    SelectedProfile = null;
+                }
+                
+                StatusMessage = $"? Profile '{profile.Name}' deleted successfully";
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error deleting profile: {ex.Message}";
+                StatusMessage = $"? Error deleting profile: {ex.Message}";
             }
             finally
             {
@@ -399,6 +434,49 @@ namespace FFXIManager.ViewModels
             catch (Exception ex)
             {
                 StatusMessage = $"? Error resetting tracking: {ex.Message}";
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+        
+        private async Task RenameProfileAsync()
+        {
+            if (SelectedProfile == null) return;
+            
+            try
+            {
+                // Prompt user for new name
+                var dialog = new RenameProfileDialog(SelectedProfile.Name);
+                if (dialog.ShowDialog() == true)
+                {
+                    var newName = dialog.NewProfileName;
+                    if (string.IsNullOrWhiteSpace(newName))
+                    {
+                        StatusMessage = "? Profile name cannot be empty";
+                        return;
+                    }
+                    
+                    IsLoading = true;
+                    StatusMessage = $"?? Renaming profile '{SelectedProfile.Name}' to '{newName}'...";
+                    
+                    await _profileService.RenameProfileAsync(SelectedProfile, newName);
+                    
+                    StatusMessage = $"? Profile renamed successfully to '{newName}'";
+                    await RefreshProfilesAsync();
+                    
+                    // Try to reselect the renamed profile
+                    var renamedProfile = Profiles.FirstOrDefault(p => p.Name == newName);
+                    if (renamedProfile != null)
+                    {
+                        SelectedProfile = renamedProfile;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"? Error renaming profile: {ex.Message}";
             }
             finally
             {
