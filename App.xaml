@@ -4,6 +4,11 @@
              xmlns:local="clr-namespace:FFXIManager"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <!-- Global Tooltip Timing Configuration for Snappy Responsiveness -->
+        <Style TargetType="{x:Type FrameworkElement}">
+            <Setter Property="ToolTipService.InitialShowDelay" Value="150"/>
+            <Setter Property="ToolTipService.ShowDuration" Value="15000"/>
+            <Setter Property="ToolTipService.BetweenShowDelay" Value="50"/>
+        </Style>
     </Application.Resources>
 </Application>
