@@ -78,7 +78,7 @@ namespace FFXIManager.Converters
         {
             if (value is true)
             {
-                return "?? Currently Active";
+                return "Currently Active";
             }
             return string.Empty; // Return empty string instead of null for better handling
         }

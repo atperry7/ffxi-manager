@@ -1,14 +1,11 @@
-using System;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Input;
 using FFXIManager.Models;
 using FFXIManager.Services;
 using FFXIManager.Views;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Windows;
+using System.Windows.Input;
 
 namespace FFXIManager.ViewModels
 {
@@ -24,20 +21,20 @@ namespace FFXIManager.ViewModels
         private bool _isLoading;
         private string _statusMessage = string.Empty;
         private string _newBackupName = string.Empty;
-        
+
         public MainViewModel()
         {
             _settingsService = new SettingsService();
             _settings = _settingsService.LoadSettings();
-            
+
             _profileService = new ProfileService
             {
                 PlayOnlineDirectory = _settings.PlayOnlineDirectory,
                 SettingsService = _settingsService  // Pass settings service for smart tracking
             };
-            
+
             Profiles = new ObservableCollection<ProfileInfo>();
-            
+
             // Initialize commands
             RefreshCommand = new RelayCommand(async () => await RefreshProfilesAsync());
             SwapProfileCommand = new RelayCommand(async () => await SwapProfileAsync(), () => SelectedProfile != null && !SelectedProfile.IsActive);
@@ -46,21 +43,21 @@ namespace FFXIManager.ViewModels
             ChangeDirectoryCommand = new RelayCommand(ChangeDirectory);
             CleanupAutoBackupsCommand = new RelayCommand(async () => await CleanupAutoBackupsAsync());
             ResetTrackingCommand = new RelayCommand(async () => await ResetActiveTrackingAsync());
-            
+
             // Parameterized commands for inline actions
             SwapProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(async (profile) => await SwapProfileAsync(profile), (profile) => profile != null && !profile.IsActive);
             DeleteProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(async (profile) => await DeleteProfileAsync(profile), (profile) => profile != null && !profile.IsActive);
             RenameProfileCommand = new RelayCommand(async () => await RenameProfileAsync(), () => SelectedProfile != null && !SelectedProfile.IsActive);
-            
+
             // Load profiles on startup if auto-refresh is enabled
             if (_settings.AutoRefreshOnStartup)
             {
                 _ = Task.Run(async () => await RefreshProfilesAsync());
             }
         }
-        
+
         public ObservableCollection<ProfileInfo> Profiles { get; }
-        
+
         public ProfileInfo? SelectedProfile
         {
             get => _selectedProfile;
@@ -71,7 +68,7 @@ namespace FFXIManager.ViewModels
                     ((RelayCommand)SwapProfileCommand).RaiseCanExecuteChanged();
                     ((RelayCommand)DeleteProfileCommand).RaiseCanExecuteChanged();
                     ((RelayCommand)RenameProfileCommand).RaiseCanExecuteChanged();
-                    
+
                     // Save last used profile
                     if (value != null)
                     {
@@ -81,19 +78,19 @@ namespace FFXIManager.ViewModels
                 }
             }
         }
-        
+
         public bool IsLoading
         {
             get => _isLoading;
             set => SetProperty(ref _isLoading, value);
         }
-        
+
         public string StatusMessage
         {
             get => _statusMessage;
             set => SetProperty(ref _statusMessage, value);
         }
-        
+
         public string NewBackupName
         {
             get => _newBackupName;
@@ -105,7 +102,7 @@ namespace FFXIManager.ViewModels
                 }
             }
         }
-        
+
         public string PlayOnlineDirectory
         {
             get => _profileService.PlayOnlineDirectory;
@@ -121,7 +118,7 @@ namespace FFXIManager.ViewModels
                 }
             }
         }
-        
+
         public bool ShowAutoBackups
         {
             get => _settings.ShowAutoBackupsInList;
@@ -136,7 +133,7 @@ namespace FFXIManager.ViewModels
                 }
             }
         }
-        
+
         public ICommand RefreshCommand { get; }
         public ICommand SwapProfileCommand { get; }
         public ICommand CreateBackupCommand { get; }
@@ -144,55 +141,85 @@ namespace FFXIManager.ViewModels
         public ICommand ChangeDirectoryCommand { get; }
         public ICommand CleanupAutoBackupsCommand { get; }
         public ICommand ResetTrackingCommand { get; }
-        
+
         // Add parameterized commands for inline actions
         public ICommand SwapProfileParameterCommand { get; }
         public ICommand DeleteProfileParameterCommand { get; }
         public ICommand RenameProfileCommand { get; }
-        
+
         private async Task RefreshProfilesAsync()
         {
             try
             {
                 IsLoading = true;
                 StatusMessage = "Loading profiles...";
-                
+
                 // Check for external changes first
                 var externalChangeDetected = await _profileService.DetectExternalChangesAsync();
-                
+
                 // Get profiles based on user preferences
-                var profiles = _settings.ShowAutoBackupsInList 
-                    ? await _profileService.GetProfilesAsync() 
+                var profiles = _settings.ShowAutoBackupsInList
+                    ? await _profileService.GetProfilesAsync()
                     : await _profileService.GetUserProfilesAsync();
-                    
+
                 var activeLoginInfo = await _profileService.GetActiveLoginInfoAsync();
-                
+
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     Profiles.Clear();
+                    ProfileInfo? explicitActiveProfile = null;
                     ProfileInfo? lastUsedProfile = null;
-                    
+
                     // Add active login info for display purposes (but not selectable for swapping)
                     if (activeLoginInfo != null)
                     {
                         Profiles.Add(activeLoginInfo);
                     }
-                    
+
                     // Add backup profiles
                     foreach (var profile in profiles)
                     {
+                        // Only one profile can be active at a time
+                        profile.IsActive = false;
+                        // If this profile matches the explicit active profile (name and hash), mark it as active
+                        if (!string.IsNullOrEmpty(_settings.CurrentActiveProfile) && !string.IsNullOrEmpty(_settings.ActiveProfileHash))
+                        {
+                            // Compute hash for this profile
+                            try
+                            {
+                                var backupContent = System.IO.File.ReadAllBytes(profile.FilePath);
+                                var backupHash = Convert.ToBase64String(FFXIManager.Services.ProfileService.GetFileHash(backupContent));
+                                if (profile.Name == _settings.CurrentActiveProfile && backupHash == _settings.ActiveProfileHash)
+                                {
+                                    profile.IsCurrentlyActive = true;
+                                    explicitActiveProfile = profile;
+                                }
+                                else
+                                {
+                                    profile.IsCurrentlyActive = false;
+                                }
+                            }
+                            catch
+                            {
+                                profile.IsCurrentlyActive = false;
+                            }
+                        }
                         Profiles.Add(profile);
-                        
+
                         // Try to restore last selected profile (only for backup profiles that are currently visible)
                         if (profile.Name == _settings.LastUsedProfile && !profile.IsActive)
                         {
                             lastUsedProfile = profile;
                         }
                     }
-                    
+
                     // Only restore selection if the profile is actually in the current view
                     // This prevents selecting auto-backups when they're hidden
-                    if (lastUsedProfile != null && profiles.Contains(lastUsedProfile))
+                    if (explicitActiveProfile != null && profiles.Contains(explicitActiveProfile))
+                    {
+                        SelectedProfile = explicitActiveProfile;
+                    }
+                    else if (lastUsedProfile != null && profiles.Contains(lastUsedProfile))
                     {
                         SelectedProfile = lastUsedProfile;
                     }
@@ -202,12 +229,12 @@ namespace FFXIManager.ViewModels
                         SelectedProfile = null;
                     }
                 });
-                
+
                 var autoBackupCount = _settings.ShowAutoBackupsInList ? 0 : (await _profileService.GetAutoBackupsAsync()).Count;
                 var statusSuffix = _settings.ShowAutoBackupsInList ? "" : $" ({autoBackupCount} auto-backups hidden)";
                 var externalChangeNote = externalChangeDetected ? " (External change detected)" : "";
                 StatusMessage = $"Loaded {profiles.Count} backup profiles{statusSuffix}{externalChangeNote}";
-                
+
                 if (activeLoginInfo == null)
                 {
                     StatusMessage += " (Warning: No active login_w.bin file found)";
@@ -222,51 +249,59 @@ namespace FFXIManager.ViewModels
                 IsLoading = false;
             }
         }
-        
+
         private async Task SwapProfileAsync()
         {
             if (SelectedProfile == null) return;
             await SwapProfileAsync(SelectedProfile);
         }
-        
+
         private async Task SwapProfileAsync(ProfileInfo profile)
         {
             if (profile == null) return;
-            
+
             try
             {
                 IsLoading = true;
                 StatusMessage = $"Swapping to profile: {profile.Name}";
-                
+
                 await _profileService.SwapProfileAsync(profile);
-                
-                StatusMessage = $"? Successfully swapped to profile: {profile.Name}";
+
+                // Track explicit active profile choice and hash
+                var backupContent = System.IO.File.ReadAllBytes(profile.FilePath);
+                var backupHash = Convert.ToBase64String(FFXIManager.Services.ProfileService.GetFileHash(backupContent));
+                _settings.CurrentActiveProfile = profile.Name;
+                _settings.ActiveProfileHash = backupHash;
+                _settings.ActiveProfileSetTime = DateTime.Now;
+                _settingsService.SaveSettings(_settings);
+
+                StatusMessage = $"Successfully swapped to profile: {profile.Name}";
                 await RefreshProfilesAsync();
             }
             catch (Exception ex)
             {
-                StatusMessage = $"? Error swapping profile: {ex.Message}";
+                StatusMessage = $"Error swapping profile: {ex.Message}";
             }
             finally
             {
                 IsLoading = false;
             }
         }
-        
+
         private async Task CreateBackupAsync()
         {
             try
             {
                 IsLoading = true;
                 StatusMessage = $"Creating backup: {NewBackupName}";
-                
+
                 var newProfile = await _profileService.CreateBackupAsync(NewBackupName);
-                
+
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     Profiles.Add(newProfile);
                 });
-                
+
                 NewBackupName = string.Empty;
                 StatusMessage = $"Successfully created backup: {newProfile.Name}";
             }
@@ -279,19 +314,19 @@ namespace FFXIManager.ViewModels
                 IsLoading = false;
             }
         }
-        
+
         private async Task DeleteProfileAsync()
         {
             if (SelectedProfile == null) return;
             await DeleteProfileAsync(SelectedProfile);
         }
-        
+
         private async Task DeleteProfileAsync(ProfileInfo profile)
         {
             if (profile == null) return;
-            
+
             MessageBoxResult result = MessageBoxResult.Yes;
-            
+
             if (_settings.ConfirmDeleteOperations)
             {
                 result = MessageBox.Show(
@@ -300,38 +335,38 @@ namespace FFXIManager.ViewModels
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Warning);
             }
-            
+
             if (result != MessageBoxResult.Yes) return;
-            
+
             try
             {
                 IsLoading = true;
                 StatusMessage = $"Deleting profile: {profile.Name}";
-                
+
                 await _profileService.DeleteProfileAsync(profile);
-                
+
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     Profiles.Remove(profile);
                 });
-                
+
                 if (SelectedProfile == profile)
                 {
                     SelectedProfile = null;
                 }
-                
-                StatusMessage = $"? Profile '{profile.Name}' deleted successfully";
+
+                StatusMessage = $"Profile '{profile.Name}' deleted successfully";
             }
             catch (Exception ex)
             {
-                StatusMessage = $"? Error deleting profile: {ex.Message}";
+                StatusMessage = $"Error deleting profile: {ex.Message}";
             }
             finally
             {
                 IsLoading = false;
             }
         }
-        
+
         private void ChangeDirectory()
         {
             var dialog = new Microsoft.Win32.OpenFolderDialog
@@ -339,38 +374,38 @@ namespace FFXIManager.ViewModels
                 Title = "Select PlayOnline Directory",
                 InitialDirectory = PlayOnlineDirectory
             };
-            
+
             if (dialog.ShowDialog() == true)
             {
                 PlayOnlineDirectory = dialog.FolderName;
             }
         }
-        
+
         private async Task CleanupAutoBackupsAsync()
         {
             try
             {
                 IsLoading = true;
-                StatusMessage = "?? Cleaning up auto-backups...";
-                
+                StatusMessage = "Cleaning up auto-backups...";
+
                 // Add a small delay to ensure user sees the loading state
                 await Task.Delay(300);
-                
+
                 var autoBackups = await _profileService.GetAutoBackupsAsync();
                 var countBefore = autoBackups.Count;
-                
+
                 await _profileService.CleanupAutoBackupsAsync();
-                
+
                 var autoBackupsAfter = await _profileService.GetAutoBackupsAsync();
                 var countAfter = autoBackupsAfter.Count;
                 var deletedCount = countBefore - countAfter;
-                
-                StatusMessage = "?? Refreshing profiles after cleanup...";
+
+                StatusMessage = "Refreshing profiles after cleanup...";
                 await RefreshProfilesAsync();
-                
+
                 // Show success message
-                StatusMessage = $"? Cleaned up {deletedCount} old auto-backup files";
-                
+                StatusMessage = $"Cleaned up {deletedCount} old auto-backup files";
+
                 // Keep the success message visible for 3 seconds
                 _ = Task.Run(async () =>
                 {
@@ -389,32 +424,32 @@ namespace FFXIManager.ViewModels
             }
             catch (Exception ex)
             {
-                StatusMessage = $"? Error cleaning up auto-backups: {ex.Message}";
+                StatusMessage = $"Error cleaning up auto-backups: {ex.Message}";
             }
             finally
             {
                 IsLoading = false;
             }
         }
-        
+
         private async Task ResetActiveTrackingAsync()
         {
             try
             {
                 IsLoading = true;
                 StatusMessage = "?? Resetting active profile tracking...";
-                
+
                 // Add a small delay to ensure user sees the loading state
                 await Task.Delay(300);
-                
+
                 await _profileService.ClearActiveProfileTrackingAsync();
-                
-                StatusMessage = "?? Refreshing profiles after reset...";
+
+                StatusMessage = "Refreshing profiles after reset...";
                 await RefreshProfilesAsync();
-                
+
                 // Show success message for a reasonable duration
-                StatusMessage = "? Active profile tracking reset successfully - will auto-detect on next swap";
-                
+                StatusMessage = "Active profile tracking reset successfully - will auto-detect on next swap";
+
                 // Keep the success message visible for 3 seconds
                 _ = Task.Run(async () =>
                 {
@@ -433,18 +468,18 @@ namespace FFXIManager.ViewModels
             }
             catch (Exception ex)
             {
-                StatusMessage = $"? Error resetting tracking: {ex.Message}";
+                StatusMessage = $"Error resetting tracking: {ex.Message}";
             }
             finally
             {
                 IsLoading = false;
             }
         }
-        
+
         private async Task RenameProfileAsync()
         {
             if (SelectedProfile == null) return;
-            
+
             try
             {
                 // Prompt user for new name
@@ -454,18 +489,18 @@ namespace FFXIManager.ViewModels
                     var newName = dialog.NewProfileName;
                     if (string.IsNullOrWhiteSpace(newName))
                     {
-                        StatusMessage = "? Profile name cannot be empty";
+                        StatusMessage = "Profile name cannot be empty";
                         return;
                     }
-                    
+
                     IsLoading = true;
-                    StatusMessage = $"?? Renaming profile '{SelectedProfile.Name}' to '{newName}'...";
-                    
+                    StatusMessage = $"Renaming profile '{SelectedProfile.Name}' to '{newName}'...";
+
                     await _profileService.RenameProfileAsync(SelectedProfile, newName);
-                    
-                    StatusMessage = $"? Profile renamed successfully to '{newName}'";
+
+                    StatusMessage = $"Profile renamed successfully to '{newName}'";
                     await RefreshProfilesAsync();
-                    
+
                     // Try to reselect the renamed profile
                     var renamedProfile = Profiles.FirstOrDefault(p => p.Name == newName);
                     if (renamedProfile != null)
@@ -476,21 +511,21 @@ namespace FFXIManager.ViewModels
             }
             catch (Exception ex)
             {
-                StatusMessage = $"? Error renaming profile: {ex.Message}";
+                StatusMessage = $"Error renaming profile: {ex.Message}";
             }
             finally
             {
                 IsLoading = false;
             }
         }
-        
+
         public event PropertyChangedEventHandler? PropertyChanged;
-        
+
         protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
-        
+
         protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
         {
             if (Equals(field, value)) return false;

@@ -406,11 +406,11 @@ namespace FFXIManager.Services
             {
                 if (isAutoBackup)
                 {
-                    return $"? {baseDescription} (Currently matches active file)";
+                    return $"{baseDescription} (Currently matches active file)";
                 }
                 else
                 {
-                    return $"? {baseDescription} (Your selected active profile)";
+                    return $"{baseDescription} (Your selected active profile)";
                 }
             }
             
@@ -803,6 +803,14 @@ namespace FFXIManager.Services
             {
                 throw new InvalidOperationException($"Error renaming profile: {ex.Message}", ex);
             }
+        }
+
+        /// <summary>
+        /// Gets the hash of the file content
+        /// </summary>
+        public static byte[] GetFileHash(byte[] content)
+        {
+            return ComputeFileHash(content);
         }
     }
 }
