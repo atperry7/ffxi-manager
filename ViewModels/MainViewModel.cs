@@ -41,6 +41,7 @@ namespace FFXIManager.ViewModels
             CreateBackupCommand = new RelayCommand(async () => await CreateBackupAsync(), () => !string.IsNullOrWhiteSpace(NewBackupName));
             DeleteProfileCommand = new RelayCommand(async () => await DeleteProfileAsync(), () => SelectedProfile != null && !SelectedProfile.IsActive);
             ChangeDirectoryCommand = new RelayCommand(ChangeDirectory);
+            CleanupAutoBackupsCommand = new RelayCommand(async () => await CleanupAutoBackupsAsync());
             
             // Load profiles on startup if auto-refresh is enabled
             if (_settings.AutoRefreshOnStartup)
@@ -111,11 +112,27 @@ namespace FFXIManager.ViewModels
             }
         }
         
+        public bool ShowAutoBackups
+        {
+            get => _settings.ShowAutoBackupsInList;
+            set
+            {
+                if (_settings.ShowAutoBackupsInList != value)
+                {
+                    _settings.ShowAutoBackupsInList = value;
+                    _settingsService.SaveSettings(_settings);
+                    OnPropertyChanged();
+                    _ = Task.Run(async () => await RefreshProfilesAsync());
+                }
+            }
+        }
+        
         public ICommand RefreshCommand { get; }
         public ICommand SwapProfileCommand { get; }
         public ICommand CreateBackupCommand { get; }
         public ICommand DeleteProfileCommand { get; }
         public ICommand ChangeDirectoryCommand { get; }
+        public ICommand CleanupAutoBackupsCommand { get; }
         
         private async Task RefreshProfilesAsync()
         {
@@ -124,7 +141,11 @@ namespace FFXIManager.ViewModels
                 IsLoading = true;
                 StatusMessage = "Loading profiles...";
                 
-                var profiles = await _profileService.GetProfilesAsync();
+                // Get profiles based on user preferences
+                var profiles = _settings.ShowAutoBackupsInList 
+                    ? await _profileService.GetProfilesAsync() 
+                    : await _profileService.GetUserProfilesAsync();
+                    
                 var activeLoginInfo = await _profileService.GetActiveLoginInfoAsync();
                 
                 Application.Current.Dispatcher.Invoke(() =>
@@ -157,8 +178,9 @@ namespace FFXIManager.ViewModels
                     }
                 });
                 
-                var totalProfiles = profiles.Count + (activeLoginInfo != null ? 1 : 0);
-                StatusMessage = $"Loaded {profiles.Count} backup profiles";
+                var autoBackupCount = _settings.ShowAutoBackupsInList ? 0 : (await _profileService.GetAutoBackupsAsync()).Count;
+                var statusSuffix = _settings.ShowAutoBackupsInList ? "" : $" ({autoBackupCount} auto-backups hidden)";
+                StatusMessage = $"Loaded {profiles.Count} backup profiles{statusSuffix}";
                 
                 if (activeLoginInfo == null)
                 {
@@ -279,6 +301,35 @@ namespace FFXIManager.ViewModels
             if (dialog.ShowDialog() == true)
             {
                 PlayOnlineDirectory = dialog.FolderName;
+            }
+        }
+        
+        private async Task CleanupAutoBackupsAsync()
+        {
+            try
+            {
+                IsLoading = true;
+                StatusMessage = "Cleaning up auto-backups...";
+                
+                var autoBackups = await _profileService.GetAutoBackupsAsync();
+                var countBefore = autoBackups.Count;
+                
+                await _profileService.CleanupAutoBackupsAsync();
+                
+                var autoBackupsAfter = await _profileService.GetAutoBackupsAsync();
+                var countAfter = autoBackupsAfter.Count;
+                var deletedCount = countBefore - countAfter;
+                
+                StatusMessage = $"Cleaned up {deletedCount} old auto-backup files";
+                await RefreshProfilesAsync();
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error cleaning up auto-backups: {ex.Message}";
+            }
+            finally
+            {
+                IsLoading = false;
             }
         }
         

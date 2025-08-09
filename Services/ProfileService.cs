@@ -62,8 +62,22 @@ namespace FFXIManager.Services
                     profiles.Add(profile);
                 }
                 
-                // Sort profiles by name for consistent display
-                profiles.Sort((x, y) => string.Compare(x.Name, y.Name, StringComparison.OrdinalIgnoreCase));
+                // Sort profiles: User profiles first, then auto-backups, all by name
+                profiles.Sort((x, y) => 
+                {
+                    var xIsAuto = x.Name.StartsWith("backup_", StringComparison.OrdinalIgnoreCase);
+                    var yIsAuto = y.Name.StartsWith("backup_", StringComparison.OrdinalIgnoreCase);
+                    
+                    // If one is auto-backup and other is not, user profiles come first
+                    if (xIsAuto != yIsAuto)
+                        return xIsAuto.CompareTo(yIsAuto);
+                    
+                    // Within same category, sort by name (or date for auto-backups)
+                    if (xIsAuto && yIsAuto)
+                        return y.LastModified.CompareTo(x.LastModified); // Newest auto-backups first
+                    else
+                        return string.Compare(x.Name, y.Name, StringComparison.OrdinalIgnoreCase); // User profiles alphabetically
+                });
             }
             catch (Exception ex)
             {
@@ -71,6 +85,26 @@ namespace FFXIManager.Services
             }
             
             return profiles;
+        }
+        
+        /// <summary>
+        /// Gets user-created profiles only (excludes auto-backups)
+        /// </summary>
+        public async Task<List<ProfileInfo>> GetUserProfilesAsync()
+        {
+            var allProfiles = await GetProfilesAsync();
+            return allProfiles.Where(p => !p.Name.StartsWith("backup_", StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+        
+        /// <summary>
+        /// Gets auto-backup profiles only
+        /// </summary>
+        public async Task<List<ProfileInfo>> GetAutoBackupsAsync()
+        {
+            var allProfiles = await GetProfilesAsync();
+            return allProfiles.Where(p => p.Name.StartsWith("backup_", StringComparison.OrdinalIgnoreCase))
+                              .OrderByDescending(p => p.LastModified)
+                              .ToList();
         }
         
         /// <summary>
@@ -136,14 +170,10 @@ namespace FFXIManager.Services
             
             try
             {
-                // Create backup of current active file if it exists
+                // Create backup of current active file if it exists and settings allow
                 if (File.Exists(activeLoginPath))
                 {
-                    var backupPath = Path.Combine(PlayOnlineDirectory, $"backup_{DateTime.Now:yyyyMMdd_HHmmss}.bin");
-                    File.Copy(activeLoginPath, backupPath, true);
-                    
-                    // Clean up old auto-backups
-                    await CleanupAutoBackupsAsync();
+                    await CreateSmartBackupAsync(activeLoginPath);
                 }
                 
                 // Copy target profile to active location
@@ -153,6 +183,81 @@ namespace FFXIManager.Services
             {
                 throw new InvalidOperationException($"Error swapping profile: {ex.Message}", ex);
             }
+        }
+        
+        /// <summary>
+        /// Creates a smart backup that avoids duplicates and manages auto-backup storage efficiently
+        /// </summary>
+        private async Task CreateSmartBackupAsync(string activeLoginPath)
+        {
+            try
+            {
+                // Check if we should create auto-backups (user setting)
+                if (!ShouldCreateAutoBackup())
+                    return;
+                
+                var currentContent = File.ReadAllBytes(activeLoginPath);
+                var currentHash = ComputeFileHash(currentContent);
+                
+                // Check if we already have a recent backup with identical content
+                var existingBackups = Directory.GetFiles(PlayOnlineDirectory, "backup_*.bin")
+                    .Select(f => new FileInfo(f))
+                    .OrderByDescending(f => f.LastWriteTime)
+                    .Take(5) // Only check the 5 most recent backups
+                    .ToList();
+                
+                foreach (var backup in existingBackups)
+                {
+                    try
+                    {
+                        var backupContent = File.ReadAllBytes(backup.FullName);
+                        var backupHash = ComputeFileHash(backupContent);
+                        
+                        // If we find identical content, just update the timestamp instead of creating new backup
+                        if (currentHash.SequenceEqual(backupHash))
+                        {
+                            File.SetLastWriteTime(backup.FullName, DateTime.Now);
+                            return; // Don't create a new backup
+                        }
+                    }
+                    catch
+                    {
+                        // If we can't read a backup file, ignore it and continue
+                        continue;
+                    }
+                }
+                
+                // Create new backup only if content is different
+                var backupPath = Path.Combine(PlayOnlineDirectory, $"backup_{DateTime.Now:yyyyMMdd_HHmmss}.bin");
+                File.Copy(activeLoginPath, backupPath, true);
+                
+                // Clean up old auto-backups
+                await CleanupAutoBackupsAsync();
+            }
+            catch (Exception)
+            {
+                // If backup creation fails, don't stop the swap operation
+                // Auto-backup is a convenience feature, not critical
+            }
+        }
+        
+        /// <summary>
+        /// Computes a simple hash for file content comparison
+        /// </summary>
+        private static byte[] ComputeFileHash(byte[] content)
+        {
+            using var sha1 = System.Security.Cryptography.SHA1.Create();
+            return sha1.ComputeHash(content);
+        }
+        
+        /// <summary>
+        /// Determines if auto-backup should be created based on settings
+        /// </summary>
+        private static bool ShouldCreateAutoBackup()
+        {
+            // This could be expanded to check user settings
+            // For now, always create backups but with smart deduplication
+            return true;
         }
         
         /// <summary>
@@ -248,14 +353,16 @@ namespace FFXIManager.Services
         /// <summary>
         /// Cleans up old automatic backup files, keeping only the most recent ones
         /// </summary>
-        private async Task CleanupAutoBackupsAsync()
+        public async Task CleanupAutoBackupsAsync()
         {
             try
             {
+                var maxBackups = GetMaxAutoBackupsFromSettings(); // Default to 5 instead of 10
+                
                 var backupFiles = Directory.GetFiles(PlayOnlineDirectory, "backup_*.bin")
                     .Select(f => new FileInfo(f))
                     .OrderByDescending(f => f.LastWriteTime)
-                    .Skip(10) // Keep the 10 most recent backups
+                    .Skip(maxBackups) // Keep the most recent backups based on settings
                     .ToList();
                 
                 foreach (var file in backupFiles)
@@ -267,6 +374,16 @@ namespace FFXIManager.Services
             {
                 // Ignore cleanup errors - not critical
             }
+        }
+        
+        /// <summary>
+        /// Gets the maximum number of auto-backups to keep from settings
+        /// </summary>
+        private static int GetMaxAutoBackupsFromSettings()
+        {
+            // This could be enhanced to actually read from settings
+            // For now, return a sensible default
+            return 5;
         }
     }
 }

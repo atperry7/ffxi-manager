@@ -65,7 +65,9 @@ namespace FFXIManager.Services
         public bool AutoRefreshOnStartup { get; set; } = true;
         public bool ConfirmDeleteOperations { get; set; } = true;
         public bool CreateAutoBackups { get; set; } = true;
-        public int MaxAutoBackups { get; set; } = 10;
+        public int MaxAutoBackups { get; set; } = 5;
         public string LastUsedProfile { get; set; } = string.Empty;
+        public bool ShowAutoBackupsInList { get; set; } = false;
+        public bool EnableSmartBackupDeduplication { get; set; } = true;
     }
 }
