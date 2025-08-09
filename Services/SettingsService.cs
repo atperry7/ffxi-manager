@@ -69,5 +69,21 @@ namespace FFXIManager.Services
         public string LastUsedProfile { get; set; } = string.Empty;
         public bool ShowAutoBackupsInList { get; set; } = false;
         public bool EnableSmartBackupDeduplication { get; set; } = true;
+        
+        /// <summary>
+        /// The profile name that the user explicitly selected to be active
+        /// </summary>
+        public string CurrentActiveProfile { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Hash of the login_w.bin file when CurrentActiveProfile was set
+        /// Used to detect if file was changed externally
+        /// </summary>
+        public string ActiveProfileHash { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Timestamp when the active profile was last set by user
+        /// </summary>
+        public DateTime ActiveProfileSetTime { get; set; } = DateTime.MinValue;
     }
 }

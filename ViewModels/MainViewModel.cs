@@ -30,7 +30,8 @@ namespace FFXIManager.ViewModels
             
             _profileService = new ProfileService
             {
-                PlayOnlineDirectory = _settings.PlayOnlineDirectory
+                PlayOnlineDirectory = _settings.PlayOnlineDirectory,
+                SettingsService = _settingsService  // Pass settings service for smart tracking
             };
             
             Profiles = new ObservableCollection<ProfileInfo>();
@@ -42,6 +43,7 @@ namespace FFXIManager.ViewModels
             DeleteProfileCommand = new RelayCommand(async () => await DeleteProfileAsync(), () => SelectedProfile != null && !SelectedProfile.IsActive);
             ChangeDirectoryCommand = new RelayCommand(ChangeDirectory);
             CleanupAutoBackupsCommand = new RelayCommand(async () => await CleanupAutoBackupsAsync());
+            ResetTrackingCommand = new RelayCommand(async () => await ResetActiveTrackingAsync());
             
             // Load profiles on startup if auto-refresh is enabled
             if (_settings.AutoRefreshOnStartup)
@@ -133,6 +135,7 @@ namespace FFXIManager.ViewModels
         public ICommand DeleteProfileCommand { get; }
         public ICommand ChangeDirectoryCommand { get; }
         public ICommand CleanupAutoBackupsCommand { get; }
+        public ICommand ResetTrackingCommand { get; }
         
         private async Task RefreshProfilesAsync()
         {
@@ -140,6 +143,9 @@ namespace FFXIManager.ViewModels
             {
                 IsLoading = true;
                 StatusMessage = "Loading profiles...";
+                
+                // Check for external changes first
+                var externalChangeDetected = await _profileService.DetectExternalChangesAsync();
                 
                 // Get profiles based on user preferences
                 var profiles = _settings.ShowAutoBackupsInList 
@@ -180,7 +186,8 @@ namespace FFXIManager.ViewModels
                 
                 var autoBackupCount = _settings.ShowAutoBackupsInList ? 0 : (await _profileService.GetAutoBackupsAsync()).Count;
                 var statusSuffix = _settings.ShowAutoBackupsInList ? "" : $" ({autoBackupCount} auto-backups hidden)";
-                StatusMessage = $"Loaded {profiles.Count} backup profiles{statusSuffix}";
+                var externalChangeNote = externalChangeDetected ? " (External change detected)" : "";
+                StatusMessage = $"Loaded {profiles.Count} backup profiles{statusSuffix}{externalChangeNote}";
                 
                 if (activeLoginInfo == null)
                 {
@@ -326,6 +333,28 @@ namespace FFXIManager.ViewModels
             catch (Exception ex)
             {
                 StatusMessage = $"Error cleaning up auto-backups: {ex.Message}";
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+        
+        private async Task ResetActiveTrackingAsync()
+        {
+            try
+            {
+                IsLoading = true;
+                StatusMessage = "Resetting active profile tracking...";
+                
+                await _profileService.ClearActiveProfileTrackingAsync();
+                
+                StatusMessage = "Active profile tracking reset - will auto-detect on next swap";
+                await RefreshProfilesAsync();
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error resetting tracking: {ex.Message}";
             }
             finally
             {

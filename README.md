@@ -51,8 +51,9 @@ This application solves the limitation of the `login_w.bin` file which can only 
 
 ## File Structure
 
-- **Active File**: `login_w.bin` - The file PlayOnline actually reads (shown for info, cannot be modified)
-- **Backup Files**: `[custom_name].bin` - Your saved profile backups
+- **System File**: `login_w.bin` - The file PlayOnline actually reads (shown as "System File")
+- **Active Profile**: The backup profile currently loaded into login_w.bin (shown as "Active Profile") 
+- **Backup Files**: `[custom_name].bin` - Your saved profile backups (shown as "Inactive" when not in use)
 - **Auto-Backups**: `backup_[timestamp].bin` - Automatic backups created during swaps
 - **System Files**: `inet_w.bin`, `noramim.bin` - Excluded from profile management
 

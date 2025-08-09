@@ -29,6 +29,8 @@
         <converters:BoolToActiveConverter x:Key="BoolToActiveConverter"/>
         <converters:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
         <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
+        <converters:BoolToCurrentlyActiveConverter x:Key="BoolToCurrentlyActiveConverter"/>
+        <converters:ProfileStatusConverter x:Key="ProfileStatusConverter"/>
     </Window.Resources>
     
     <Grid>
@@ -92,10 +94,17 @@
                         <DataGrid.RowStyle>
                             <Style TargetType="DataGridRow">
                                 <Style.Triggers>
-                                    <!-- Highlight active login file differently -->
+                                    <!-- Highlight login_w.bin (system file) differently -->
                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                        <Setter Property="Background" Value="#E8F4F8"/>
+                                        <Setter Property="Background" Value="#F0F8FF"/>
                                         <Setter Property="FontWeight" Value="Bold"/>
+                                    </DataTrigger>
+                                    <!-- Highlight currently active backup profile more prominently -->
+                                    <DataTrigger Binding="{Binding IsCurrentlyActive}" Value="True">
+                                        <Setter Property="Background" Value="#E8F5E8"/>
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                        <Setter Property="BorderBrush" Value="DarkGreen"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -104,12 +113,18 @@
                             <DataGridTextColumn Header="Profile Name" Binding="{Binding Name}" Width="*"/>
                             <DataGridTextColumn Header="File Size" Binding="{Binding FileSizeFormatted, Mode=OneWay}" Width="80"/>
                             <DataGridTextColumn Header="Last Modified" Binding="{Binding LastModified, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" Width="130"/>
-                            <DataGridTemplateColumn Header="Type" Width="100">
+                            <DataGridTemplateColumn Header="Status" Width="120">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding IsActive, Converter={StaticResource BoolToActiveConverter}}" 
-                                                   FontWeight="{Binding IsActive, Converter={StaticResource BoolToFontWeightConverter}}"
-                                                   Foreground="{Binding IsActive, Converter={StaticResource BoolToColorConverter}}"/>
+                                        <TextBlock FontWeight="{Binding IsActive, Converter={StaticResource BoolToFontWeightConverter}}"
+                                                   Foreground="{Binding IsCurrentlyActive, ConverterParameter=Status, Converter={StaticResource BoolToColorConverter}}">
+                                            <TextBlock.Text>
+                                                <MultiBinding Converter="{StaticResource ProfileStatusConverter}">
+                                                    <Binding Path="IsActive"/>
+                                                    <Binding Path="IsCurrentlyActive"/>
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                        </TextBlock>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
@@ -182,8 +197,15 @@
                                 </TextBlock>
                                 
                                 <TextBlock>
-                                    <Run Text="Type: " FontWeight="Bold"/>
-                                    <Run Text="{Binding IsActive, Converter={StaticResource BoolToActiveConverter}}"/>
+                                    <Run Text="Status: " FontWeight="Bold"/>
+                                    <Run Foreground="{Binding IsCurrentlyActive, ConverterParameter=Status, Converter={StaticResource BoolToColorConverter}}">
+                                        <Run.Text>
+                                            <MultiBinding Converter="{StaticResource ProfileStatusConverter}">
+                                                <Binding Path="IsActive"/>
+                                                <Binding Path="IsCurrentlyActive"/>
+                                            </MultiBinding>
+                                        </Run.Text>
+                                    </Run>
                                 </TextBlock>
                                 
                                 <TextBlock Text="{Binding Description}" 
@@ -200,10 +222,10 @@
                                         Margin="0,5,0,5"
                                         Visibility="{Binding IsActive, Converter={StaticResource BoolToVisConverter}}">
                                     <StackPanel>
-                                        <TextBlock Text="⚠️ Active Login File" 
+                                        <TextBlock Text="⚠ System Login File" 
                                                    FontWeight="Bold" 
                                                    Foreground="#856404"/>
-                                        <TextBlock Text="This file is currently used by PlayOnline. It cannot be deleted or swapped. Create backups from this file instead." 
+                                        <TextBlock Text="This is the system file used by PlayOnline. It cannot be deleted or swapped. Create backups from this file instead." 
                                                    TextWrapping="Wrap" 
                                                    FontSize="10" 
                                                    Foreground="#856404" 
@@ -243,18 +265,33 @@
                     <GroupBox Header="Quick Help" Margin="0,10,0,0">
                         <StackPanel>
                             <TextBlock Text="Usage Tips:" FontWeight="Bold" Margin="0,0,0,5"/>
-                            <TextBlock Text="• login_w.bin is shown for info but cannot be modified" 
+                            <TextBlock Text="• 'Active Profile' shows which backup is currently in use" 
                                        TextWrapping="Wrap" Margin="0,2"/>
-                            <TextBlock Text="• Auto-backups are hidden by default - use checkbox to show" 
+                            <TextBlock Text="• 'System File' shows the login_w.bin file (read-only)" 
                                        TextWrapping="Wrap" Margin="0,2"/>
-                            <TextBlock Text="• Smart deduplication prevents duplicate auto-backups" 
+                            <TextBlock Text="• Green highlight shows the profile currently being used" 
                                        TextWrapping="Wrap" Margin="0,2"/>
-                            <TextBlock Text="• Each profile contains 4 account slots" 
+                            <TextBlock Text="• [EXT] shows when file was changed outside the app" 
                                        TextWrapping="Wrap" Margin="0,2"/>
-                            <TextBlock Text="• Use 'Clean Up' to remove old auto-backup files" 
+                            <TextBlock Text="• Use 'Reset Tracking' if detection seems incorrect" 
                                        TextWrapping="Wrap" Margin="0,2"/>
                         </StackPanel>
                     </GroupBox>
+                    
+                    <!-- Maintenance Section -->
+                    <GroupBox Header="Maintenance" Margin="0,10,0,0">
+    <StackPanel>
+        <Button Content="Clean Up Auto-Backups" 
+                Command="{Binding CleanupAutoBackupsCommand}"
+                Background="#F39C12"
+                Foreground="White"/>
+        <Button Content="Reset Active Tracking" 
+                Command="{Binding ResetTrackingCommand}"
+                Background="#9B59B6"
+                Foreground="White"
+                ToolTip="Clear active profile tracking - useful if detection is incorrect"/>
+    </StackPanel>
+</GroupBox>
                 </StackPanel>
             </GroupBox>
         </Grid>

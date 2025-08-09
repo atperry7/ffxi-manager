@@ -26,7 +26,12 @@ namespace FFXIManager.Services
         public string PlayOnlineDirectory { get; set; } = @"C:\Program Files (x86)\PlayOnline\SquareEnix\PlayOnlineViewer\usr\all";
         
         /// <summary>
-        /// Gets all available profile backup files (excludes system files)
+        /// Settings service for accessing user preferences and tracking
+        /// </summary>
+        public SettingsService? SettingsService { get; set; }
+        
+        /// <summary>
+        /// Gets all available profile backup files with smart active detection
         /// </summary>
         public async Task<List<ProfileInfo>> GetProfilesAsync()
         {
@@ -37,6 +42,48 @@ namespace FFXIManager.Services
             
             try
             {
+                // Get current active profile info for smart tracking
+                string? trackedActiveProfile = null;
+                bool useContentDetection = true;
+                
+                if (SettingsService != null)
+                {
+                    var settings = SettingsService.LoadSettings();
+                    var activeLoginPath = Path.Combine(PlayOnlineDirectory, DEFAULT_LOGIN_FILE);
+                    
+                    if (File.Exists(activeLoginPath) && !string.IsNullOrEmpty(settings.CurrentActiveProfile))
+                    {
+                        var activeContent = File.ReadAllBytes(activeLoginPath);
+                        var currentHash = Convert.ToBase64String(ComputeFileHash(activeContent));
+                        
+                        // If hash matches, trust the user's tracked choice
+                        if (settings.ActiveProfileHash == currentHash)
+                        {
+                            trackedActiveProfile = settings.CurrentActiveProfile;
+                            useContentDetection = false;
+                        }
+                    }
+                }
+                
+                // Get active login content for fallback content detection
+                byte[]? activeHash = null;
+                if (useContentDetection)
+                {
+                    var activeLoginPath = Path.Combine(PlayOnlineDirectory, DEFAULT_LOGIN_FILE);
+                    if (File.Exists(activeLoginPath))
+                    {
+                        try
+                        {
+                            var activeContent = File.ReadAllBytes(activeLoginPath);
+                            activeHash = ComputeFileHash(activeContent);
+                        }
+                        catch
+                        {
+                            // If we can't read active file, continue without comparison
+                        }
+                    }
+                }
+                
                 var files = Directory.GetFiles(PlayOnlineDirectory, $"*{BACKUP_EXTENSION}");
                 
                 foreach (var file in files)
@@ -49,14 +96,76 @@ namespace FFXIManager.Services
                     if (EXCLUDED_FILES.Contains(fileName))
                         continue;
                     
+                    // Determine if this profile is currently active
+                    bool isCurrentlyActive = false;
+                    
+                    if (trackedActiveProfile != null)
+                    {
+                        // Use tracked active profile (more reliable)
+                        // Only mark as active if it exactly matches the tracked profile name
+                        isCurrentlyActive = fileNameWithoutExtension.Equals(trackedActiveProfile, StringComparison.OrdinalIgnoreCase);
+                    }
+                    else if (activeHash != null)
+                    {
+                        // Fallback to content detection, but prefer user profiles over auto-backups
+                        try
+                        {
+                            var backupContent = File.ReadAllBytes(file);
+                            var backupHash = ComputeFileHash(backupContent);
+                            bool contentMatches = activeHash.SequenceEqual(backupHash);
+                            
+                            if (contentMatches)
+                            {
+                                // If content matches, prefer user-created profiles over auto-backups
+                                var isAutoBackup = fileNameWithoutExtension.StartsWith("backup_", StringComparison.OrdinalIgnoreCase);
+                                
+                                if (!isAutoBackup)
+                                {
+                                    // User-created profile gets priority
+                                    isCurrentlyActive = true;
+                                }
+                                else
+                                {
+                                    // Auto-backup: only mark as active if no user profile matches
+                                    var userProfiles = files
+                                        .Where(f => !Path.GetFileNameWithoutExtension(f).StartsWith("backup_", StringComparison.OrdinalIgnoreCase))
+                                        .Where(f => !EXCLUDED_FILES.Contains(Path.GetFileName(f)));
+                                    
+                                    bool hasMatchingUserProfile = false;
+                                    foreach (var userFile in userProfiles)
+                                    {
+                                        try
+                                        {
+                                            var userContent = File.ReadAllBytes(userFile);
+                                            var userHash = ComputeFileHash(userContent);
+                                            if (activeHash.SequenceEqual(userHash))
+                                            {
+                                                hasMatchingUserProfile = true;
+                                                break;
+                                            }
+                                        }
+                                        catch { }
+                                    }
+                                    
+                                    isCurrentlyActive = !hasMatchingUserProfile;
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            // If we can't read backup file, assume it's not active
+                        }
+                    }
+                    
                     var profile = new ProfileInfo
                     {
                         Name = fileNameWithoutExtension,
                         FilePath = file,
                         LastModified = fileInfo.LastWriteTime,
                         FileSize = fileInfo.Length,
-                        IsActive = false, // Backup profiles are never "active"
-                        Description = GetProfileDescription(fileNameWithoutExtension)
+                        IsActive = false, // Backup profiles are never marked as "active" in the traditional sense
+                        IsCurrentlyActive = isCurrentlyActive,
+                        Description = GetProfileDescription(fileNameWithoutExtension, isCurrentlyActive)
                     };
                     
                     profiles.Add(profile);
@@ -120,14 +229,90 @@ namespace FFXIManager.Services
             try
             {
                 var fileInfo = new FileInfo(activeLoginPath);
+                var activeContent = File.ReadAllBytes(activeLoginPath);
+                var currentHash = Convert.ToBase64String(ComputeFileHash(activeContent));
+                
+                string? displayProfile = null;
+                string description;
+                bool wasChangedExternally = false;
+                
+                if (SettingsService != null)
+                {
+                    var settings = SettingsService.LoadSettings();
+                    
+                    // Check if we have a tracked active profile
+                    if (!string.IsNullOrEmpty(settings.CurrentActiveProfile))
+                    {
+                        // Check if the file hash matches what we expect
+                        if (settings.ActiveProfileHash == currentHash)
+                        {
+                            // File hasn't changed since we set it - user's choice is still valid
+                            displayProfile = settings.CurrentActiveProfile;
+                            description = $"Currently active login file - set to '{displayProfile}' by user";
+                        }
+                        else
+                        {
+                            // File was changed externally - we need to detect or ask
+                            wasChangedExternally = true;
+                            var detectedProfile = await FindMatchingBackupProfileAsync(ComputeFileHash(activeContent));
+                            
+                            if (detectedProfile != null)
+                            {
+                                displayProfile = detectedProfile;
+                                description = $"Currently active login file - detected as '{detectedProfile}' (changed externally)";
+                            }
+                            else
+                            {
+                                displayProfile = "Unknown";
+                                description = "Currently active login file - changed externally, source unknown";
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // First time or no tracked profile - try to detect
+                        var detectedProfile = await FindMatchingBackupProfileAsync(ComputeFileHash(activeContent));
+                        
+                        if (detectedProfile != null)
+                        {
+                            displayProfile = detectedProfile;
+                            description = $"Currently active login file - detected as '{detectedProfile}' (not explicitly set)";
+                        }
+                        else
+                        {
+                            displayProfile = "Unknown";
+                            description = "Currently active login file - no matching backup profile found";
+                        }
+                    }
+                }
+                else
+                {
+                    // Fallback to content detection if no settings service
+                    var detectedProfile = await FindMatchingBackupProfileAsync(ComputeFileHash(activeContent));
+                    displayProfile = detectedProfile ?? "Unknown";
+                    description = detectedProfile != null 
+                        ? $"Currently active login file - detected as '{detectedProfile}'"
+                        : "Currently active login file - no matching backup profile found";
+                }
+                
+                var displayName = displayProfile != null && displayProfile != "Unknown"
+                    ? $"login_w (Currently: {displayProfile})"
+                    : "login_w (Active - Unknown Source)";
+                
+                if (wasChangedExternally)
+                {
+                    displayName += " [EXT]";
+                    description += " - File was modified outside this application";
+                }
+                
                 return new ProfileInfo
                 {
-                    Name = "login_w (Active)",
+                    Name = displayName,
                     FilePath = activeLoginPath,
                     LastModified = fileInfo.LastWriteTime,
                     FileSize = fileInfo.Length,
                     IsActive = true,
-                    Description = "Currently active login file used by PlayOnline"
+                    Description = description
                 };
             }
             catch (Exception ex)
@@ -137,18 +322,103 @@ namespace FFXIManager.Services
         }
         
         /// <summary>
-        /// Gets a description for a profile based on its name pattern
+        /// Finds which backup profile matches the given content hash (prioritizes user profiles)
         /// </summary>
-        private static string GetProfileDescription(string profileName)
+        private async Task<string?> FindMatchingBackupProfileAsync(byte[] activeHash)
         {
-            if (profileName.StartsWith("backup_", StringComparison.OrdinalIgnoreCase))
-                return "Automatic backup created during profile swap";
-            
-            return "User-created profile backup";
+            try
+            {
+                var allBackupFiles = Directory.GetFiles(PlayOnlineDirectory, "*.bin")
+                    .Where(f => !EXCLUDED_FILES.Contains(Path.GetFileName(f)))
+                    .ToList();
+                
+                // First pass: Look for user-created profiles (non-auto-backups)
+                foreach (var backupFile in allBackupFiles)
+                {
+                    var fileName = Path.GetFileNameWithoutExtension(backupFile);
+                    
+                    // Skip auto-backups in first pass
+                    if (fileName.StartsWith("backup_", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    
+                    try
+                    {
+                        var backupContent = File.ReadAllBytes(backupFile);
+                        var backupHash = ComputeFileHash(backupContent);
+                        
+                        if (activeHash.SequenceEqual(backupHash))
+                        {
+                            return fileName; // Return the user profile name
+                        }
+                    }
+                    catch
+                    {
+                        // If we can't read a backup file, skip it
+                        continue;
+                    }
+                }
+                
+                // Second pass: If no user profile matches, check auto-backups
+                foreach (var backupFile in allBackupFiles)
+                {
+                    var fileName = Path.GetFileNameWithoutExtension(backupFile);
+                    
+                    // Only check auto-backups in second pass
+                    if (!fileName.StartsWith("backup_", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    
+                    try
+                    {
+                        var backupContent = File.ReadAllBytes(backupFile);
+                        var backupHash = ComputeFileHash(backupContent);
+                        
+                        if (activeHash.SequenceEqual(backupHash))
+                        {
+                            return fileName; // Return the auto-backup name
+                        }
+                    }
+                    catch
+                    {
+                        // If we can't read a backup file, skip it
+                        continue;
+                    }
+                }
+                
+                return null; // No matching profile found
+            }
+            catch
+            {
+                return null;
+            }
         }
         
         /// <summary>
-        /// Swaps the active login file with a backup profile
+        /// Gets a description for a profile based on its name pattern and active status
+        /// </summary>
+        private static string GetProfileDescription(string profileName, bool isCurrentlyActive = false)
+        {
+            var isAutoBackup = profileName.StartsWith("backup_", StringComparison.OrdinalIgnoreCase);
+            var baseDescription = isAutoBackup
+                ? "Automatic backup created during profile swap"
+                : "User-created profile backup";
+            
+            if (isCurrentlyActive)
+            {
+                if (isAutoBackup)
+                {
+                    return $"? {baseDescription} (Currently matches active file)";
+                }
+                else
+                {
+                    return $"? {baseDescription} (Your selected active profile)";
+                }
+            }
+            
+            return baseDescription;
+        }
+        
+        /// <summary>
+        /// Swaps the active login file with a backup profile and tracks user choice
         /// </summary>
         public async Task SwapProfileAsync(ProfileInfo targetProfile)
         {
@@ -178,10 +448,42 @@ namespace FFXIManager.Services
                 
                 // Copy target profile to active location
                 File.Copy(targetProfile.FilePath, activeLoginPath, true);
+                
+                // Record the user's explicit choice for smart tracking
+                await RecordActiveProfileChoiceAsync(targetProfile.Name);
             }
             catch (Exception ex)
             {
                 throw new InvalidOperationException($"Error swapping profile: {ex.Message}", ex);
+            }
+        }
+        
+        /// <summary>
+        /// Records the user's explicit active profile choice for smart tracking
+        /// </summary>
+        private async Task RecordActiveProfileChoiceAsync(string profileName)
+        {
+            if (SettingsService == null) return;
+            
+            try
+            {
+                var activeLoginPath = Path.Combine(PlayOnlineDirectory, DEFAULT_LOGIN_FILE);
+                if (!File.Exists(activeLoginPath)) return;
+                
+                var activeContent = File.ReadAllBytes(activeLoginPath);
+                var currentHash = Convert.ToBase64String(ComputeFileHash(activeContent));
+                
+                var settings = SettingsService.LoadSettings();
+                settings.CurrentActiveProfile = profileName;
+                settings.ActiveProfileHash = currentHash;
+                settings.ActiveProfileSetTime = DateTime.Now;
+                
+                SettingsService.SaveSettings(settings);
+            }
+            catch
+            {
+                // If we can't record the choice, don't fail the swap operation
+                // This is just for UX improvement
             }
         }
         
@@ -384,6 +686,69 @@ namespace FFXIManager.Services
             // This could be enhanced to actually read from settings
             // For now, return a sensible default
             return 5;
+        }
+        
+        /// <summary>
+        /// Checks if the active login file was changed externally and updates tracking
+        /// </summary>
+        public async Task<bool> DetectExternalChangesAsync()
+        {
+            if (SettingsService == null) return false;
+            
+            try
+            {
+                var activeLoginPath = Path.Combine(PlayOnlineDirectory, DEFAULT_LOGIN_FILE);
+                if (!File.Exists(activeLoginPath)) return false;
+                
+                var settings = SettingsService.LoadSettings();
+                if (string.IsNullOrEmpty(settings.CurrentActiveProfile)) return false;
+                
+                var activeContent = File.ReadAllBytes(activeLoginPath);
+                var currentHash = Convert.ToBase64String(ComputeFileHash(activeContent));
+                
+                // If hash doesn't match, file was changed externally
+                if (settings.ActiveProfileHash != currentHash)
+                {
+                    // Try to detect what it was changed to
+                    var detectedProfile = await FindMatchingBackupProfileAsync(ComputeFileHash(activeContent));
+                    
+                    // Update tracking with detected or unknown state
+                    settings.CurrentActiveProfile = detectedProfile ?? "Unknown";
+                    settings.ActiveProfileHash = currentHash;
+                    settings.ActiveProfileSetTime = DateTime.Now;
+                    
+                    SettingsService.SaveSettings(settings);
+                    return true; // External change detected
+                }
+                
+                return false; // No external change
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// Clears the active profile tracking (useful when user wants to reset)
+        /// </summary>
+        public async Task ClearActiveProfileTrackingAsync()
+        {
+            if (SettingsService == null) return;
+            
+            try
+            {
+                var settings = SettingsService.LoadSettings();
+                settings.CurrentActiveProfile = string.Empty;
+                settings.ActiveProfileHash = string.Empty;
+                settings.ActiveProfileSetTime = DateTime.MinValue;
+                
+                SettingsService.SaveSettings(settings);
+            }
+            catch
+            {
+                // Ignore errors when clearing tracking
+            }
         }
     }
 }

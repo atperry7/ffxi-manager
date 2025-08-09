@@ -40,6 +40,12 @@ namespace FFXIManager.Models
             set => SetProperty(ref _isActive, value);
         }
         
+        /// <summary>
+        /// Indicates if this profile's content is currently active in login_w.bin
+        /// (Different from IsActive which indicates if this IS the login_w.bin file)
+        /// </summary>
+        public bool IsCurrentlyActive { get; set; }
+        
         public string Description
         {
             get => _description;
