@@ -82,16 +82,15 @@
                                                TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
                                     <TextBlock Text="• [EXT] shows when file was changed outside the app" 
                                                TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
-                                    <TextBlock Text="• Use 'Reset Tracking' if detection seems incorrect" 
-                                               TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
                                     <TextBlock Text="• Auto-backups are hidden by default - toggle checkbox to show" 
+                                               TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
+                                    <TextBlock Text="• Expand 'Advanced' section for maintenance tools" 
                                                TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
                                 </StackPanel>
                             </ToolTip>
                         </Border.ToolTip>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="?" FontSize="16" FontWeight="Bold" Foreground="#3498DB" Margin="0,0,4,0"/>
-                            <TextBlock Text="Help" FontSize="12" Foreground="#BDC3C7"/>
+                            <TextBlock Text="?" FontSize="16" FontWeight="Bold" Foreground="#3498DB" Margin="0,0,0,0"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -314,23 +313,26 @@
                         </Grid>
                     </GroupBox>
                     
-                    <!-- Maintenance Section -->
-                    <GroupBox Header="Maintenance" Margin="0,10,0,0">
-    <StackPanel>
-        <Button Content="Clean Up Auto-Backups" 
-                Command="{Binding CleanupAutoBackupsCommand}"
-                Background="#F39C12"
-                Foreground="White"/>
-        <Button Content="Reset Active Tracking" 
-                Command="{Binding ResetTrackingCommand}"
-                Background="#9B59B6"
-                Foreground="White"
-                ToolTip="Clear active profile tracking - useful if detection is incorrect"
-                ToolTipService.InitialShowDelay="150"
-                ToolTipService.ShowDuration="8000"
-                ToolTipService.BetweenShowDelay="50"/>
-    </StackPanel>
-</GroupBox>
+                    <!-- Advanced Options -->
+                    <GroupBox Header="Advanced" Margin="0,10,0,0">
+                        <Expander Header="Maintenance Tools" IsExpanded="False">
+                            <StackPanel Margin="0,5,0,0">
+                                <Button Content="Clean Up Auto-Backups" 
+                                        Command="{Binding CleanupAutoBackupsCommand}"
+                                        Background="#F39C12"
+                                        Foreground="White"
+                                        ToolTip="Remove old automatic backup files (keeps 5 most recent). Auto-backups are created automatically during profile swaps for safety."/>
+                                <Button Content="Reset Active Tracking" 
+                                        Command="{Binding ResetTrackingCommand}"
+                                        Background="#9B59B6"
+                                        Foreground="White"
+                                        ToolTip="Clear active profile tracking and start fresh. Use this if the app incorrectly identifies which profile is active."
+                                        ToolTipService.InitialShowDelay="150"
+                                        ToolTipService.ShowDuration="8000"
+                                        ToolTipService.BetweenShowDelay="50"/>
+                            </StackPanel>
+                        </Expander>
+                    </GroupBox>
                 </StackPanel>
             </GroupBox>
         </Grid>

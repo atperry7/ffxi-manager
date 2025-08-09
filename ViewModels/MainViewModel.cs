@@ -316,7 +316,10 @@ namespace FFXIManager.ViewModels
             try
             {
                 IsLoading = true;
-                StatusMessage = "Cleaning up auto-backups...";
+                StatusMessage = "?? Cleaning up auto-backups...";
+                
+                // Add a small delay to ensure user sees the loading state
+                await Task.Delay(300);
                 
                 var autoBackups = await _profileService.GetAutoBackupsAsync();
                 var countBefore = autoBackups.Count;
@@ -327,12 +330,31 @@ namespace FFXIManager.ViewModels
                 var countAfter = autoBackupsAfter.Count;
                 var deletedCount = countBefore - countAfter;
                 
-                StatusMessage = $"Cleaned up {deletedCount} old auto-backup files";
+                StatusMessage = "?? Refreshing profiles after cleanup...";
                 await RefreshProfilesAsync();
+                
+                // Show success message
+                StatusMessage = $"? Cleaned up {deletedCount} old auto-backup files";
+                
+                // Keep the success message visible for 3 seconds
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(3000);
+                    if (StatusMessage.StartsWith("? Cleaned up"))
+                    {
+                        await Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            // Return to standard status after 3 seconds
+                            var autoBackupCount = _settings.ShowAutoBackupsInList ? 0 : Profiles.Count(p => p.Name.StartsWith("backup_"));
+                            var statusSuffix = _settings.ShowAutoBackupsInList ? "" : $" ({autoBackupCount} auto-backups hidden)";
+                            StatusMessage = $"Loaded {Profiles.Count(p => !p.IsActive)} backup profiles{statusSuffix}";
+                        });
+                    }
+                });
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error cleaning up auto-backups: {ex.Message}";
+                StatusMessage = $"? Error cleaning up auto-backups: {ex.Message}";
             }
             finally
             {
@@ -345,16 +367,38 @@ namespace FFXIManager.ViewModels
             try
             {
                 IsLoading = true;
-                StatusMessage = "Resetting active profile tracking...";
+                StatusMessage = "?? Resetting active profile tracking...";
+                
+                // Add a small delay to ensure user sees the loading state
+                await Task.Delay(300);
                 
                 await _profileService.ClearActiveProfileTrackingAsync();
                 
-                StatusMessage = "Active profile tracking reset - will auto-detect on next swap";
+                StatusMessage = "?? Refreshing profiles after reset...";
                 await RefreshProfilesAsync();
+                
+                // Show success message for a reasonable duration
+                StatusMessage = "? Active profile tracking reset successfully - will auto-detect on next swap";
+                
+                // Keep the success message visible for 3 seconds
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(3000);
+                    if (StatusMessage.StartsWith("? Active profile tracking"))
+                    {
+                        await Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            // Return to standard status after 3 seconds
+                            var autoBackupCount = _settings.ShowAutoBackupsInList ? 0 : Profiles.Count(p => p.Name.StartsWith("backup_"));
+                            var statusSuffix = _settings.ShowAutoBackupsInList ? "" : $" ({autoBackupCount} auto-backups hidden)";
+                            StatusMessage = $"Loaded {Profiles.Count(p => !p.IsActive)} backup profiles{statusSuffix}";
+                        });
+                    }
+                });
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error resetting tracking: {ex.Message}";
+                StatusMessage = $"? Error resetting tracking: {ex.Message}";
             }
             finally
             {
