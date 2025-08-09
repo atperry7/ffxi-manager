@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:FFXIManager"
         xmlns:converters="clr-namespace:FFXIManager.Converters"
         mc:Ignorable="d"
-        Title="FFXI Manager - Login Profile Swapper" Height="600" Width="1000"
+        Title="FFXI - Multi-Box Manager" Height="600" Width="1000"
         WindowStartupLocation="CenterScreen">
     
     <Window.Resources>
