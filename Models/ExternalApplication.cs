@@ -21,7 +21,13 @@ namespace FFXIManager.Models
         private bool _isEnabled = true;
         private string _description = string.Empty;
         private bool _allowMultipleInstances;
-        private int _currentInstances; // Add this for debugging
+        private int _currentInstances;
+        
+        // Caching for ExecutableExists to reduce file system calls
+        private bool? _cachedExecutableExists;
+        private string _cachedExecutablePath = string.Empty;
+        private DateTime _lastFileCheckTime = DateTime.MinValue;
+        private static readonly TimeSpan FileCheckCacheTime = TimeSpan.FromSeconds(5); // Cache for 5 seconds
 
         public string Name
         {
@@ -32,7 +38,18 @@ namespace FFXIManager.Models
         public string ExecutablePath
         {
             get => _executablePath;
-            set => SetProperty(ref _executablePath, value);
+            set 
+            { 
+                if (SetProperty(ref _executablePath, value))
+                {
+                    // Clear cache when path changes
+                    _cachedExecutableExists = null;
+                    _cachedExecutablePath = string.Empty;
+                    OnPropertyChanged(nameof(ExecutableExists));
+                    OnPropertyChanged(nameof(StatusColor));
+                    OnPropertyChanged(nameof(StatusText));
+                }
+            }
         }
 
         public string Arguments
@@ -90,9 +107,61 @@ namespace FFXIManager.Models
         }
 
         /// <summary>
-        /// Gets whether the application executable exists
+        /// Gets whether the application executable exists (with caching to reduce file system calls)
         /// </summary>
-        public bool ExecutableExists => File.Exists(ExecutablePath);
+        public bool ExecutableExists
+        {
+            get
+            {
+                // Skip check if path is empty or invalid
+                if (string.IsNullOrWhiteSpace(ExecutablePath))
+                    return false;
+
+                var now = DateTime.UtcNow;
+                
+                // Use cached value if:
+                // 1. We have a cached value
+                // 2. The path hasn't changed
+                // 3. The cache is still valid (within 5 seconds)
+                if (_cachedExecutableExists.HasValue && 
+                    _cachedExecutablePath == ExecutablePath && 
+                    now - _lastFileCheckTime < FileCheckCacheTime)
+                {
+                    return _cachedExecutableExists.Value;
+                }
+
+                // Perform file check with error handling
+                bool exists = false;
+                try
+                {
+                    exists = File.Exists(ExecutablePath);
+                }
+                catch (Exception)
+                {
+                    // If file check fails (IOException, etc.), assume false
+                    exists = false;
+                }
+
+                // Update cache
+                _cachedExecutableExists = exists;
+                _cachedExecutablePath = ExecutablePath;
+                _lastFileCheckTime = now;
+
+                return exists;
+            }
+        }
+
+        /// <summary>
+        /// Forces a refresh of the ExecutableExists cache
+        /// </summary>
+        public void RefreshExecutableExists()
+        {
+            _cachedExecutableExists = null;
+            _cachedExecutablePath = string.Empty;
+            OnPropertyChanged(nameof(ExecutableExists));
+            OnPropertyChanged(nameof(StatusColor));
+            OnPropertyChanged(nameof(StatusText));
+        }
 
         /// <summary>
         /// Gets the status color for UI display
@@ -115,7 +184,10 @@ namespace FFXIManager.Models
             {
                 OnPropertyChanged(nameof(StatusColor));
                 OnPropertyChanged(nameof(StatusText));
-                OnPropertyChanged(nameof(ExecutableExists));
+                if (propertyName == nameof(ExecutablePath))
+                {
+                    OnPropertyChanged(nameof(ExecutableExists));
+                }
             }
         }
 

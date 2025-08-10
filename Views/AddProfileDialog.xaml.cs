@@ -19,13 +19,13 @@ namespace FFXIManager.Views
             }
         }
 
-        private void Vm_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        private void Vm_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             // Listen for successful profile creation by checking if NewBackupName is cleared
             if (e.PropertyName == "NewBackupName")
             {
-                var vmType = sender.GetType();
-                var prop = vmType.GetProperty("NewBackupName");
+                var vmType = sender?.GetType();
+                var prop = vmType?.GetProperty("NewBackupName");
                 if (prop != null)
                 {
                     var value = prop.GetValue(sender) as string;
