@@ -14,100 +14,248 @@
         </Style>
     </UserControl.Resources>
     
-    <GroupBox Header="🚀 Application Manager">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel>
-            <!-- Application List -->
-            <ItemsControl ItemsSource="{Binding ExternalApplications}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border BorderBrush="LightGray" BorderThickness="1" Margin="0,2" Padding="5" Background="AliceBlue">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,8,0"
-                                         VerticalAlignment="Center"
-                                         Fill="{Binding StatusColor}"/>
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12"/>
-                                    <TextBlock Text="{Binding StatusText}" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="2" Orientation="Horizontal">
-                                    <Button Content="▶️"
-                                            Command="{Binding DataContext.LaunchApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            CommandParameter="{Binding}"
-                                            ToolTip="Launch Application"
-                                            Width="25" Height="28" Margin="2" Padding="5,2" FontSize="11" BorderThickness="1"
-                                            Background="#2ECC71" Foreground="White">
-                                        <Button.Style>
-                                            <Style TargetType="Button">
-                                                <Setter Property="Background" Value="#2ECC71"/>
-                                                <Setter Property="Foreground" Value="White"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsEnabled}" Value="False">
-                                                        <Setter Property="IsEnabled" Value="False"/>
-                                                        <Setter Property="Background" Value="Gray"/>
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding ExecutableExists}" Value="False">
-                                                        <Setter Property="Background" Value="Orange"/>
-                                                        <Setter Property="ToolTip" Value="Executable not found - click to configure path"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Button.Style>
-                                    </Button>
-                                    <Button Content="⏹️"
-                                            Command="{Binding DataContext.KillApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            CommandParameter="{Binding}"
-                                            ToolTip="Stop Application"
-                                            Width="25" Height="28" Margin="2" Padding="5,2" FontSize="11" BorderThickness="1"
-                                            Background="#E74C3C" Foreground="White">
-                                        <Button.Style>
-                                            <Style TargetType="Button">
-                                                <Setter Property="Background" Value="#E74C3C"/>
-                                                <Setter Property="Foreground" Value="White"/>
-                                                <Setter Property="IsEnabled" Value="{Binding IsRunning}"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsRunning}" Value="False">
-                                                        <Setter Property="Background" Value="Gray"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Button.Style>
-                                    </Button>
-                                    <Button Content="⚙️" Style="{StaticResource AppButtonStyle}"
-                                            Command="{Binding DataContext.EditApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            CommandParameter="{Binding}"
-                                            ToolTip="Edit Application"
-                                            Background="#F39C12" Foreground="White"
-                                            Width="25"/>
-                                    <Button Content="🗑️" Style="{StaticResource AppButtonStyle}"
-                                            Command="{Binding DataContext.RemoveApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            CommandParameter="{Binding}"
-                                            ToolTip="Remove Application"
-                                            Background="#95A5A6" Foreground="White"
-                                            Width="25"/>
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <!-- Application control buttons right-aligned with hover tooltips -->
-            <StackPanel Orientation="Horizontal" Margin="0,5,0,0" HorizontalAlignment="Right">
-                <Button Content="➕" 
-                        Command="{Binding AddApplicationCommand}"
-                        Background="#3498DB" Foreground="White"
-                        ToolTip="Add Application"
-                        Margin="0,0,5,0" Width="25" Height="28"/>
-                <Button Content="🔄" 
-                        Command="{Binding RefreshApplicationsCommand}"
-                        Background="#9B59B6" Foreground="White"
-                        ToolTip="Refresh Status"
-                        Width="25" Height="28"/>
-            </StackPanel>
+            <!-- Application Manager -->
+            <GroupBox Header="🚀 Application Manager" Margin="0,0,0,10">
+                <StackPanel>
+                    <!-- Application List -->
+                    <ItemsControl ItemsSource="{Binding ExternalApplications}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="LightGray" BorderThickness="1" Margin="0,2" Padding="5" Background="AliceBlue">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,8,0"
+                                                 VerticalAlignment="Center"
+                                                 Fill="{Binding StatusColor}"/>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12"/>
+                                            <TextBlock Text="{Binding StatusText}" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                            <Button Content="▶️"
+                                                    Command="{Binding DataContext.LaunchApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Launch Application"
+                                                    Width="25" Height="28" Margin="2" Padding="5,2" FontSize="11" BorderThickness="1"
+                                                    Background="#2ECC71" Foreground="White">
+                                                <Button.Style>
+                                                    <Style TargetType="Button">
+                                                        <Setter Property="Background" Value="#2ECC71"/>
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                                                                <Setter Property="IsEnabled" Value="False"/>
+                                                                <Setter Property="Background" Value="Gray"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding ExecutableExists}" Value="False">
+                                                                <Setter Property="Background" Value="Orange"/>
+                                                                <Setter Property="ToolTip" Value="Executable not found - click to configure path"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <Button Content="⏹️"
+                                                    Command="{Binding DataContext.KillApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Stop Application"
+                                                    Width="25" Height="28" Margin="2" Padding="5,2" FontSize="11" BorderThickness="1"
+                                                    Background="#E74C3C" Foreground="White">
+                                                <Button.Style>
+                                                    <Style TargetType="Button">
+                                                        <Setter Property="Background" Value="#E74C3C"/>
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                        <Setter Property="IsEnabled" Value="{Binding IsRunning}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsRunning}" Value="False">
+                                                                <Setter Property="Background" Value="Gray"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <Button Content="⚙️" Style="{StaticResource AppButtonStyle}"
+                                                    Command="{Binding DataContext.EditApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Edit Application"
+                                                    Background="#F39C12" Foreground="White"
+                                                    Width="25"/>
+                                            <Button Content="🗑️" Style="{StaticResource AppButtonStyle}"
+                                                    Command="{Binding DataContext.RemoveApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Remove Application"
+                                                    Background="#95A5A6" Foreground="White"
+                                                    Width="25"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <!-- Application control buttons -->
+                    <StackPanel Orientation="Horizontal" Margin="0,5,0,0" HorizontalAlignment="Right">
+                        <Button Content="➕" 
+                                Command="{Binding AddApplicationCommand}"
+                                Background="#3498DB" Foreground="White"
+                                ToolTip="Add Application"
+                                Margin="0,0,5,0" Width="25" Height="28"/>
+                        <Button Content="🔄" 
+                                Command="{Binding RefreshApplicationsCommand}"
+                                Background="#9B59B6" Foreground="White"
+                                ToolTip="Refresh Status"
+                                Width="25" Height="28"/>
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+
+            <!-- PlayOnline Character Monitor -->
+            <GroupBox Header="🎮 Character Monitor">
+                <StackPanel>
+                    <!-- Monitor Status -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <TextBlock Text="📊 " FontSize="14" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding PlayOnlineMonitor.MonitoringStatus, FallbackValue='Not Available'}" 
+                                       FontWeight="Bold" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBlock Text=" | " Margin="5,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding PlayOnlineMonitor.CharacterCount, FallbackValue=0}" 
+                                       FontWeight="Bold" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBlock Text=" character(s)" VerticalAlignment="Center" FontSize="12"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button Content="🔄" 
+                                    Command="{Binding PlayOnlineMonitor.RefreshCharactersCommand}"
+                                    Background="#27AE60" Foreground="White"
+                                    ToolTip="Refresh Characters"
+                                    Width="25" Height="25" Margin="0,0,5,0"/>
+                            <Button Content="📱" 
+                                    Command="{Binding PlayOnlineMonitor.ShowCharacterMonitorCommand}"
+                                    Background="#8E44AD" Foreground="White"
+                                    ToolTip="Open Character Monitor Window"
+                                    Width="25" Height="25" Margin="0,0,5,0"/>
+                            <ToggleButton IsChecked="{Binding PlayOnlineMonitor.IsMonitoring, FallbackValue=True}"
+                                          Width="25" Height="25"
+                                          ToolTip="Toggle Monitoring">
+                                <ToggleButton.Style>
+                                    <Style TargetType="ToggleButton">
+                                        <Setter Property="Content" Value="⏸️"/>
+                                        <Setter Property="Background" Value="#E74C3C"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter Property="Content" Value="▶️"/>
+                                                <Setter Property="Background" Value="#27AE60"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ToggleButton.Style>
+                            </ToggleButton>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Character List -->
+                    <ItemsControl ItemsSource="{Binding PlayOnlineMonitor.Characters}" MaxHeight="200">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="LightGray" BorderThickness="1" Margin="0,2" Padding="5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="LightCyan"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsActive, FallbackValue=False}" Value="True">
+                                                    <Setter Property="Background" Value="LightBlue"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsResponding, FallbackValue=True}" Value="False">
+                                                    <Setter Property="Background" Value="LightGray"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                                                                
+                                        <!-- Status Indicator -->
+                                        <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,8,0"
+                                                 VerticalAlignment="Center"
+                                                 Fill="{Binding StatusBrush, FallbackValue=Gray}"/>
+                                        
+                                        <!-- Character Info -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DisplayName, FallbackValue='Unknown Character'}" 
+                                                       FontWeight="Bold" FontSize="12"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding StatusText, FallbackValue='Unknown'}" 
+                                                           FontSize="10" Foreground="Gray"/>
+                                                <TextBlock Text=" | PID: " FontSize="10" Foreground="Gray"/>
+                                                <TextBlock Text="{Binding ProcessId, FallbackValue=0}" 
+                                                           FontSize="10" Foreground="Gray"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                        
+                                        <!-- Activate Button -->
+                                        <Button Grid.Column="2" Content="🎯"
+                                                Command="{Binding DataContext.PlayOnlineMonitor.ActivateCharacterCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip="Activate Character Window"
+                                                Width="25" Height="25"
+                                                Background="#3498DB" Foreground="White">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Background" Value="#3498DB"/>
+                                                    <Setter Property="Foreground" Value="White"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsActive, FallbackValue=False}" Value="True">
+                                                            <Setter Property="Background" Value="#2ECC71"/>
+                                                            <Setter Property="ToolTip" Value="Currently Active"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsResponding, FallbackValue=True}" Value="False">
+                                                            <Setter Property="Background" Value="#E74C3C"/>
+                                                            <Setter Property="ToolTip" Value="Character Not Responding"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- No Characters Message -->
+                    <TextBlock Text="No PlayOnline characters detected. Launch FFXI to see character instances here."
+                               HorizontalAlignment="Center"
+                               Margin="10"
+                               FontStyle="Italic"
+                               Foreground="Gray"
+                               TextWrapping="Wrap">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding PlayOnlineMonitor.CharacterCount, FallbackValue=0}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+            </GroupBox>
         </StackPanel>
-    </GroupBox>
+    </ScrollViewer>
 </UserControl>

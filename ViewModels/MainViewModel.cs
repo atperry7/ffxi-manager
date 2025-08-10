@@ -26,7 +26,8 @@ namespace FFXIManager.ViewModels
             ServiceLocator.ValidationService,
             ServiceLocator.LoggingService,
             ServiceLocator.NotificationService,
-            ServiceLocator.ExternalApplicationService)
+            ServiceLocator.ExternalApplicationService,
+            ServiceLocator.PlayOnlineMonitorService)
         {
         }
 
@@ -41,7 +42,8 @@ namespace FFXIManager.ViewModels
             IValidationService validationService,
             ILoggingService loggingService,
             INotificationService notificationService,
-            IExternalApplicationService applicationService)
+            IExternalApplicationService applicationService,
+            IPlayOnlineMonitorService playOnlineMonitorService)
         {
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
             _configService = configService ?? throw new ArgumentNullException(nameof(configService));
@@ -53,6 +55,9 @@ namespace FFXIManager.ViewModels
 
             ApplicationManagement = new ApplicationManagementViewModel(
                 applicationService, statusService, loggingService);
+
+            PlayOnlineMonitor = new PlayOnlineMonitorViewModel(
+                playOnlineMonitorService, statusService, loggingService);
 
             UICommands = new UICommandsViewModel(uiCommandService, statusService);
 
@@ -84,6 +89,11 @@ namespace FFXIManager.ViewModels
         /// Application Management ViewModel - handles all external application operations
         /// </summary>
         public ApplicationManagementViewModel ApplicationManagement { get; }
+
+        /// <summary>
+        /// Play Online Character Monitor ViewModel - handles character detection and window switching
+        /// </summary>
+        public PlayOnlineMonitorViewModel PlayOnlineMonitor { get; }
 
         /// <summary>
         /// UI Commands ViewModel - handles UI-specific commands like copy/open
@@ -179,6 +189,7 @@ namespace FFXIManager.ViewModels
             // Load data asynchronously
             await ProfileManagement.RefreshProfilesAsync();
             await ApplicationManagement.LoadExternalApplicationsAsync();
+            await PlayOnlineMonitor.LoadCharactersAsync();
         }
 
         #endregion

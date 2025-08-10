@@ -18,6 +18,7 @@ namespace FFXIManager.Infrastructure
         private static ICachingService? _cachingService;
         private static INotificationService? _notificationService;
         private static IExternalApplicationService? _externalApplicationService;
+        private static IPlayOnlineMonitorService? _playOnlineMonitorService;
         
         public static ISettingsService SettingsService 
         {
@@ -81,6 +82,15 @@ namespace FFXIManager.Infrastructure
                 return _externalApplicationService;
             }
         }
+
+        public static IPlayOnlineMonitorService PlayOnlineMonitorService
+        {
+            get
+            {
+                _playOnlineMonitorService ??= new PlayOnlineMonitorService(LoggingService);
+                return _playOnlineMonitorService;
+            }
+        }
         
         public static IProfileService ProfileService
         {
@@ -128,7 +138,8 @@ namespace FFXIManager.Infrastructure
             ILoggingService? loggingService = null,
             ICachingService? cachingService = null,
             INotificationService? notificationService = null,
-            IExternalApplicationService? externalApplicationService = null)
+            IExternalApplicationService? externalApplicationService = null,
+            IPlayOnlineMonitorService? playOnlineMonitorService = null)
         {
             _settingsService = settingsService;
             _profileService = profileService;
@@ -140,6 +151,7 @@ namespace FFXIManager.Infrastructure
             _cachingService = cachingService;
             _notificationService = notificationService;
             _externalApplicationService = externalApplicationService;
+            _playOnlineMonitorService = playOnlineMonitorService;
         }
         
         // For cleanup during testing
@@ -155,6 +167,7 @@ namespace FFXIManager.Infrastructure
             _cachingService = null;
             _notificationService = null;
             _externalApplicationService = null;
+            _playOnlineMonitorService = null;
         }
     }
 }
