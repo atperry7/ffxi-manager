@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
@@ -30,19 +31,20 @@ namespace FFXIManager.Services
                     var settings = JsonSerializer.Deserialize<ApplicationSettings>(json);
                     
                     // DEBUG: Show what was loaded
-                    System.Diagnostics.Debug.WriteLine($"?? SETTINGS LOADED from: {_settingsPath}");
+                    System.Diagnostics.Debug.WriteLine($"SETTINGS LOADED from: {_settingsPath}");
                     System.Diagnostics.Debug.WriteLine($"   - LastUsedProfile: '{settings?.LastUsedProfile ?? "null"}'");
+                    System.Diagnostics.Debug.WriteLine($"   - ExternalApplications count: {settings?.ExternalApplications?.Count ?? 0}");
                     
                     return settings ?? new ApplicationSettings();
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine($"?? SETTINGS FILE NOT FOUND: {_settingsPath}");
+                    System.Diagnostics.Debug.WriteLine($"SETTINGS FILE NOT FOUND: {_settingsPath}");
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"? ERROR LOADING SETTINGS: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"ERROR LOADING SETTINGS: {ex.Message}");
                 // If there's any error loading settings, return defaults
             }
             
@@ -60,21 +62,20 @@ namespace FFXIManager.Services
                 File.WriteAllText(_settingsPath, json);
                 
                 // DEBUG: Verify what was saved
-                System.Diagnostics.Debug.WriteLine($"?? SETTINGS SAVED to: {_settingsPath}");
+                System.Diagnostics.Debug.WriteLine($"SETTINGS SAVED to: {_settingsPath}");
                 System.Diagnostics.Debug.WriteLine($"   - LastUsedProfile: '{settings.LastUsedProfile}'");
-                System.Diagnostics.Debug.WriteLine($"   - Settings JSON:");
-                System.Diagnostics.Debug.WriteLine(json);
+                System.Diagnostics.Debug.WriteLine($"   - ExternalApplications count: {settings.ExternalApplications?.Count ?? 0}");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"? ERROR SAVING SETTINGS: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"ERROR SAVING SETTINGS: {ex.Message}");
                 // Silently fail - settings are not critical
             }
         }
     }
     
     /// <summary>
-    /// Application settings model - SIMPLIFIED VERSION
+    /// Application settings model with external applications support
     /// </summary>
     public class ApplicationSettings
     {
@@ -86,11 +87,25 @@ namespace FFXIManager.Services
         public bool ShowAutoBackupsInList { get; set; } = false;
         public bool EnableSmartBackupDeduplication { get; set; } = true;
         
-        // SIMPLIFIED: Just track the user's last selected profile name
+        // Profile tracking
         public string LastActiveProfileName { get; set; } = string.Empty;
         public string LastUsedProfile { get; set; } = string.Empty;
         
-        // Remove all the complex tracking properties:
-        // CurrentActiveProfile, ActiveProfileHash, ActiveProfileSetTime
+        // External applications persistence
+        public List<ExternalApplicationData> ExternalApplications { get; set; } = new();
+    }
+    
+    /// <summary>
+    /// Simplified external application data for persistence
+    /// </summary>
+    public class ExternalApplicationData
+    {
+        public string Name { get; set; } = string.Empty;
+        public string ExecutablePath { get; set; } = string.Empty;
+        public string Arguments { get; set; } = string.Empty;
+        public string WorkingDirectory { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public bool IsEnabled { get; set; } = true;
+        public bool AllowMultipleInstances { get; set; } = false;
     }
 }

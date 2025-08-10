@@ -168,13 +168,14 @@ namespace FFXIManager.Services
 
             try
             {
+                var oldProcessId = application.ProcessId;
                 var process = Process.GetProcessById(application.ProcessId);
                 process.Kill();
                 process.WaitForExit(5000); // Wait up to 5 seconds
                 
                 application.IsRunning = false;
                 application.ProcessId = 0;
-                _processToAppMap.Remove(application.ProcessId);
+                _processToAppMap.Remove(oldProcessId); // Use the old ProcessId, not the current (which is now 0)
                 
                 await _loggingService.LogInfoAsync($"Successfully killed {application.Name}", "ExternalApplicationService");
                 ApplicationStatusChanged?.Invoke(this, application);
@@ -184,8 +185,11 @@ namespace FFXIManager.Services
             catch (ArgumentException)
             {
                 // Process already exited
+                var oldProcessId = application.ProcessId;
                 application.IsRunning = false;
                 application.ProcessId = 0;
+                if (oldProcessId > 0)
+                    _processToAppMap.Remove(oldProcessId);
                 ApplicationStatusChanged?.Invoke(this, application);
                 return true;
             }
@@ -213,46 +217,80 @@ namespace FFXIManager.Services
             try
             {
                 var processName = Path.GetFileNameWithoutExtension(application.ExecutablePath);
-                await _loggingService.LogDebugAsync($"?? Checking for process: '{processName}' (from path: {application.ExecutablePath})", "ExternalApplicationService");
+                await _loggingService.LogDebugAsync($"Checking for process: '{processName}' (from path: {application.ExecutablePath})", "ExternalApplicationService");
                 
                 var runningProcesses = Process.GetProcessesByName(processName);
-                await _loggingService.LogDebugAsync($"?? Found {runningProcesses.Length} instances of '{processName}'", "ExternalApplicationService");
+                await _loggingService.LogDebugAsync($"Found {runningProcesses.Length} instances of '{processName}'", "ExternalApplicationService");
                 
                 var wasRunning = application.IsRunning;
-                var previousInstances = application.CurrentInstances;
+                var oldProcessId = application.ProcessId;
                 
-                // Update the running status
-                application.IsRunning = runningProcesses.Length > 0;
-
-                if (application.IsRunning && runningProcesses.Length > 0)
+                // Check if our specific tracked process is still running
+                bool isOurProcessRunning = false;
+                if (application.ProcessId > 0)
                 {
+                    try
+                    {
+                        var trackedProcess = Process.GetProcessById(application.ProcessId);
+                        isOurProcessRunning = !trackedProcess.HasExited;
+                        await _loggingService.LogDebugAsync($"Our tracked process {application.ProcessId} is {(isOurProcessRunning ? "running" : "stopped")}", "ExternalApplicationService");
+                    }
+                    catch (ArgumentException)
+                    {
+                        // Process no longer exists
+                        isOurProcessRunning = false;
+                        await _loggingService.LogDebugAsync($"Our tracked process {application.ProcessId} no longer exists", "ExternalApplicationService");
+                    }
+                }
+
+                // Update the running status based on our tracked process or any running instance
+                bool hasRunningInstances = runningProcesses.Length > 0;
+                
+                if (application.ProcessId > 0 && !isOurProcessRunning)
+                {
+                    // Our specific process has stopped
+                    application.IsRunning = false;
+                    _processToAppMap.Remove(oldProcessId);
+                    application.ProcessId = 0;
+                    await _loggingService.LogDebugAsync($"Application {application.Name} detected as STOPPED (our process ended)", "ExternalApplicationService");
+                }
+                else if (hasRunningInstances && !application.IsRunning)
+                {
+                    // New instance detected
+                    application.IsRunning = true;
                     application.ProcessId = runningProcesses[0].Id;
                     _processToAppMap[application.ProcessId] = application;
-                    await _loggingService.LogDebugAsync($"? Application {application.Name} detected as RUNNING (PID: {application.ProcessId})", "ExternalApplicationService");
+                    await _loggingService.LogDebugAsync($"Application {application.Name} detected as RUNNING (PID: {application.ProcessId})", "ExternalApplicationService");
                 }
-                else if (!application.IsRunning)
+                else if (!hasRunningInstances && application.IsRunning)
                 {
-                    if (application.ProcessId > 0)
-                        _processToAppMap.Remove(application.ProcessId);
+                    // All instances stopped
+                    application.IsRunning = false;
+                    if (oldProcessId > 0)
+                        _processToAppMap.Remove(oldProcessId);
                     application.ProcessId = 0;
-                    await _loggingService.LogDebugAsync($"? Application {application.Name} detected as STOPPED", "ExternalApplicationService");
+                    await _loggingService.LogDebugAsync($"Application {application.Name} detected as STOPPED (no instances found)", "ExternalApplicationService");
                 }
+
+                // Update current instances count
+                application.CurrentInstances = runningProcesses.Length;
 
                 // Force property change notifications to update UI
                 application.OnPropertyChanged(nameof(application.IsRunning));
                 application.OnPropertyChanged(nameof(application.StatusColor));
                 application.OnPropertyChanged(nameof(application.StatusText));
                 application.OnPropertyChanged(nameof(application.ExecutableExists));
+                application.OnPropertyChanged(nameof(application.CurrentInstances));
 
                 if (wasRunning != application.IsRunning)
                 {
-                    await _loggingService.LogInfoAsync($"?? Application {application.Name} status changed: {(application.IsRunning ? "STARTED" : "STOPPED")}", "ExternalApplicationService");
+                    await _loggingService.LogInfoAsync($"Application {application.Name} status changed: {(application.IsRunning ? "STARTED" : "STOPPED")}", "ExternalApplicationService");
                     ApplicationStatusChanged?.Invoke(this, application);
                 }
             }
             catch (Exception ex)
             {
-                await _loggingService.LogWarningAsync($"? Error refreshing status for {application.Name}: {ex.Message}", "ExternalApplicationService");
+                await _loggingService.LogWarningAsync($"Error refreshing status for {application.Name}: {ex.Message}", "ExternalApplicationService");
             }
         }
 
@@ -284,14 +322,94 @@ namespace FFXIManager.Services
 
         private void LoadApplicationsFromSettings()
         {
-            // For now, add some default applications
-            _applications.AddRange(GetDefaultApplications());
+            try
+            {
+                var settings = _settingsService.LoadSettings();
+                
+                // Always start with default applications
+                _applications.AddRange(GetDefaultApplications());
+                
+                // Load saved custom applications if any exist
+                if (settings.ExternalApplications != null && settings.ExternalApplications.Count > 0)
+                {
+                    foreach (var appData in settings.ExternalApplications)
+                    {
+                        // Check if this is a custom application (not one of our defaults)
+                        var isDefaultApp = _applications.Any(defaultApp => 
+                            defaultApp.Name.Equals(appData.Name, StringComparison.OrdinalIgnoreCase));
+                        
+                        if (isDefaultApp)
+                        {
+                            // Update the existing default application with saved settings
+                            var existingApp = _applications.First(app => 
+                                app.Name.Equals(appData.Name, StringComparison.OrdinalIgnoreCase));
+                            
+                            existingApp.ExecutablePath = appData.ExecutablePath;
+                            existingApp.Arguments = appData.Arguments;
+                            existingApp.WorkingDirectory = appData.WorkingDirectory;
+                            existingApp.Description = appData.Description;
+                            existingApp.IsEnabled = appData.IsEnabled;
+                            existingApp.AllowMultipleInstances = appData.AllowMultipleInstances;
+                        }
+                        else
+                        {
+                            // Add as a new custom application
+                            var application = new ExternalApplication
+                            {
+                                Name = appData.Name,
+                                ExecutablePath = appData.ExecutablePath,
+                                Arguments = appData.Arguments,
+                                WorkingDirectory = appData.WorkingDirectory,
+                                Description = appData.Description,
+                                IsEnabled = appData.IsEnabled,
+                                AllowMultipleInstances = appData.AllowMultipleInstances
+                            };
+                            _applications.Add(application);
+                        }
+                    }
+                    
+                    _loggingService.LogInfoAsync($"Loaded {_applications.Count} applications ({settings.ExternalApplications.Count} from settings)", "ExternalApplicationService");
+                }
+                else
+                {
+                    _loggingService.LogInfoAsync($"Loaded {_applications.Count} default applications", "ExternalApplicationService");
+                }
+            }
+            catch (Exception ex)
+            {
+                // If loading fails, fall back to default applications only
+                _applications.Clear();
+                _applications.AddRange(GetDefaultApplications());
+                _loggingService.LogErrorAsync($"Failed to load applications from settings, using defaults: {ex.Message}", ex, "ExternalApplicationService");
+            }
         }
 
         private async Task SaveApplicationsToSettings()
         {
-            // TODO: Implement settings persistence
-            await _loggingService.LogDebugAsync("Applications saved to settings", "ExternalApplicationService");
+            try
+            {
+                var settings = _settingsService.LoadSettings();
+                
+                // Convert applications to serializable format
+                settings.ExternalApplications = _applications.Select(app => new ExternalApplicationData
+                {
+                    Name = app.Name,
+                    ExecutablePath = app.ExecutablePath,
+                    Arguments = app.Arguments,
+                    WorkingDirectory = app.WorkingDirectory,
+                    Description = app.Description,
+                    IsEnabled = app.IsEnabled,
+                    AllowMultipleInstances = app.AllowMultipleInstances
+                }).ToList();
+                
+                _settingsService.SaveSettings(settings);
+                
+                await _loggingService.LogInfoAsync($"Successfully saved {_applications.Count} applications to settings", "ExternalApplicationService");
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Failed to save applications to settings", ex, "ExternalApplicationService");
+            }
         }
 
         private List<ExternalApplication> GetDefaultApplications()

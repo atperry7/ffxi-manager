@@ -207,6 +207,9 @@ namespace FFXIManager.ViewModels
                 // Process result
                 if (dialogResult == true)
                 {
+                    // IMPORTANT: Call UpdateApplicationAsync to persist changes
+                    await _applicationService.UpdateApplicationAsync(application);
+                    
                     _statusService.SetMessage($"Application {application.Name} updated successfully");
                     
                     // Trigger property notifications for UI updates
@@ -310,7 +313,11 @@ namespace FFXIManager.ViewModels
             // Update UI on status changes - this runs on a background thread
             Application.Current.Dispatcher.BeginInvoke(() =>
             {
-                // Commands will update automatically due to binding
+                // Force command CanExecute reevaluation when application status changes
+                ((RelayCommandWithParameter<ExternalApplication>)KillApplicationCommand).RaiseCanExecuteChanged();
+                ((RelayCommandWithParameter<ExternalApplication>)LaunchApplicationCommand).RaiseCanExecuteChanged();
+                ((RelayCommandWithParameter<ExternalApplication>)EditApplicationCommand).RaiseCanExecuteChanged();
+                ((RelayCommandWithParameter<ExternalApplication>)RemoveApplicationCommand).RaiseCanExecuteChanged();
             });
         }
 
