@@ -334,6 +334,14 @@ namespace FFXIManager.Services
                 throw new InvalidOperationException(error);
             }
             
+            // SECURITY: Prevent deletion of currently active profiles
+            if (profile.IsCurrentlyActive)
+            {
+                var error = $"Cannot delete the currently active profile '{profile.Name}'. Please switch to a different profile first.";
+                await _loggingService.LogWarningAsync(error, "ProfileService");
+                throw new InvalidOperationException(error);
+            }
+            
             if (!File.Exists(profile.FilePath))
             {
                 var error = $"Profile file not found: {profile.FilePath}";

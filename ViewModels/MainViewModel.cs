@@ -241,7 +241,7 @@ namespace FFXIManager.ViewModels
                 profile => profile != null && !profile.IsSystemFile);
             DeleteProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
                 async profile => await DeleteProfileAsync(profile), 
-                profile => profile != null && !profile.IsSystemFile);
+                profile => profile != null && !profile.IsSystemFile && !profile.IsCurrentlyActive);
             RenameProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
                 async profile => await RenameProfileParameterAsync(profile), 
                 profile => profile != null && !profile.IsSystemFile);
@@ -753,7 +753,7 @@ namespace FFXIManager.ViewModels
         }
 
         private bool CanSwapProfile() => SelectedProfile != null && !SelectedProfile.IsSystemFile;
-        private bool CanDeleteProfile() => SelectedProfile != null && !SelectedProfile.IsSystemFile;
+        private bool CanDeleteProfile() => SelectedProfile != null && !SelectedProfile.IsSystemFile && !SelectedProfile.IsCurrentlyActive;
         private bool CanRenameProfile() => SelectedProfile != null && !SelectedProfile.IsSystemFile;
         private bool CanCreateBackup() => !string.IsNullOrWhiteSpace(NewBackupName);
 

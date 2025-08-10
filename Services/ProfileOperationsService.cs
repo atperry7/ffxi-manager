@@ -94,6 +94,10 @@ namespace FFXIManager.Services
                 if (profile.IsSystemFile)
                     return (false, "Cannot delete system files");
 
+                // SECURITY: Prevent deletion of currently active profiles
+                if (profile.IsCurrentlyActive)
+                    return (false, $"Cannot delete the currently active profile '{profile.Name}'. Please switch to a different profile first.");
+
                 if (confirmDelete)
                 {
                     var settings = _settingsService.LoadSettings();
