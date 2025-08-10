@@ -34,7 +34,6 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         
         <!-- Header Section -->
@@ -58,16 +57,7 @@
             <views:ProfileActionsView Grid.Column="2" Margin="5,0,0,0" DataContext="{Binding}"/>
         </Grid>
         
-        <!-- Loading Indicator -->
-        <Border Grid.Row="2" Background="LightYellow" Padding="10" 
-                Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisConverter}}">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <TextBlock Text="⏳" FontSize="16" Margin="0,0,10,0"/>
-                <TextBlock Text="Loading..." FontWeight="Bold"/>
-            </StackPanel>
-        </Border>
-        
         <!-- Status Bar -->
-        <views:StatusBarView Grid.Row="3" DataContext="{Binding}"/>
+        <views:StatusBarView Grid.Row="2" DataContext="{Binding}"/>
     </Grid>
 </Window>

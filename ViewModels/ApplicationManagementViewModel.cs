@@ -1,0 +1,285 @@
+using FFXIManager.Models;
+using FFXIManager.Services;
+using FFXIManager.ViewModels.Base;
+using FFXIManager.Views;
+using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Input;
+
+namespace FFXIManager.ViewModels
+{
+    /// <summary>
+    /// ViewModel responsible for Application Management operations
+    /// </summary>
+    public class ApplicationManagementViewModel : ViewModelBase
+    {
+        private readonly IExternalApplicationService _applicationService;
+        private readonly IStatusMessageService _statusService;
+        private readonly ILoggingService _loggingService;
+
+        public ApplicationManagementViewModel(
+            IExternalApplicationService applicationService,
+            IStatusMessageService statusService,
+            ILoggingService loggingService)
+        {
+            _applicationService = applicationService ?? throw new ArgumentNullException(nameof(applicationService));
+            _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
+            _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+
+            ExternalApplications = new ObservableCollection<ExternalApplication>();
+            
+            _applicationService.ApplicationStatusChanged += OnApplicationStatusChanged;
+            InitializeCommands();
+            
+            // Start monitoring
+            _applicationService.StartMonitoring();
+        }
+
+        #region Properties
+
+        public ObservableCollection<ExternalApplication> ExternalApplications { get; }
+
+        #endregion
+
+        #region Commands
+
+        public ICommand LaunchApplicationCommand { get; private set; } = null!;
+        public ICommand KillApplicationCommand { get; private set; } = null!;
+        public ICommand EditApplicationCommand { get; private set; } = null!;
+        public ICommand RemoveApplicationCommand { get; private set; } = null!;
+        public ICommand AddApplicationCommand { get; private set; } = null!;
+        public ICommand RefreshApplicationsCommand { get; private set; } = null!;
+
+        private void InitializeCommands()
+        {
+            LaunchApplicationCommand = new RelayCommandWithParameter<ExternalApplication>(
+                async app => await LaunchApplicationAsync(app),
+                app => app != null && app.IsEnabled);
+            KillApplicationCommand = new RelayCommandWithParameter<ExternalApplication>(
+                async app => await KillApplicationAsync(app),
+                app => app != null && app.IsRunning);
+            EditApplicationCommand = new RelayCommandWithParameter<ExternalApplication>(
+                async app => await EditApplicationAsync(app),
+                app => app != null);
+            RemoveApplicationCommand = new RelayCommandWithParameter<ExternalApplication>(
+                async app => await RemoveApplicationAsync(app),
+                app => app != null);
+            AddApplicationCommand = new RelayCommand(async () => await AddApplicationAsync());
+            RefreshApplicationsCommand = new RelayCommand(async () => await LoadExternalApplicationsAsync());
+        }
+
+        #endregion
+
+        #region Public Methods
+
+        public async Task LoadExternalApplicationsAsync()
+        {
+            try
+            {
+                var applications = await _applicationService.GetApplicationsAsync();
+                await _applicationService.RefreshApplicationStatusAsync();
+
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    ExternalApplications.Clear();
+                    foreach (var app in applications)
+                    {
+                        ExternalApplications.Add(app);
+                    }
+                });
+
+                _statusService.SetMessage($"Loaded {applications.Count} external applications");
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"Error loading applications: {ex.Message}");
+            }
+        }
+
+        #endregion
+
+        #region Private Methods
+
+        private async Task LaunchApplicationAsync(ExternalApplication application)
+        {
+            if (application == null) return;
+
+            try
+            {
+                _statusService.SetMessage($"Launching {application.Name}...");
+
+                if (!application.ExecutableExists)
+                {
+                    var result = MessageBox.Show(
+                        $"The executable for '{application.Name}' was not found at:\n{application.ExecutablePath}\n\nWould you like to configure the correct path?",
+                        "Executable Not Found",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        await EditApplicationAsync(application);
+                        return;
+                    }
+                    else
+                    {
+                        _statusService.SetMessage($"Launch cancelled - {application.Name} executable not found");
+                        return;
+                    }
+                }
+
+                var success = await _applicationService.LaunchApplicationAsync(application);
+                
+                if (success)
+                {
+                    _statusService.SetMessage($"Successfully launched {application.Name}");
+                }
+                else
+                {
+                    _statusService.SetMessage($"Failed to launch {application.Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"Error launching {application.Name}: {ex.Message}");
+            }
+        }
+
+        private async Task KillApplicationAsync(ExternalApplication application)
+        {
+            if (application == null) return;
+
+            try
+            {
+                _statusService.SetMessage($"Stopping {application.Name}...");
+
+                var success = await _applicationService.KillApplicationAsync(application);
+                
+                if (success)
+                {
+                    _statusService.SetMessage($"Successfully stopped {application.Name}");
+                }
+                else
+                {
+                    _statusService.SetMessage($"Failed to stop {application.Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"Error stopping {application.Name}: {ex.Message}");
+            }
+        }
+
+        private async Task EditApplicationAsync(ExternalApplication application)
+        {
+            if (application == null) 
+            {
+                _statusService.SetMessage("No application selected for editing");
+                return;
+            }
+
+            try
+            {
+                _statusService.SetMessage($"Opening configuration for {application.Name}...");
+
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    try
+                    {
+                        var dialog = new ApplicationConfigDialog(application)
+                        {
+                            Owner = Application.Current.MainWindow,
+                            ShowInTaskbar = false
+                        };
+                        
+                        var result = dialog.ShowDialog();
+                        
+                        if (result == true)
+                        {
+                            _statusService.SetMessage($"Application {application.Name} updated successfully");
+                            
+                            // Force property notifications to update UI
+                            application.OnPropertyChanged(nameof(application.StatusColor));
+                            application.OnPropertyChanged(nameof(application.StatusText));
+                            application.OnPropertyChanged(nameof(application.ExecutableExists));
+                        }
+                        else
+                        {
+                            _statusService.SetMessage("Configuration cancelled");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _statusService.SetMessage($"Error opening configuration dialog: {ex.Message}");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"Error editing application: {ex.Message}");
+                await _loggingService.LogErrorAsync($"Error in EditApplicationAsync for {application.Name}", ex, "ApplicationManagementViewModel");
+            }
+        }
+
+        private async Task RemoveApplicationAsync(ExternalApplication application)
+        {
+            if (application == null) return;
+
+            try
+            {
+                var result = MessageBox.Show(
+                    $"Are you sure you want to remove '{application.Name}'?",
+                    "Confirm Remove Application",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    await _applicationService.RemoveApplicationAsync(application);
+                    ExternalApplications.Remove(application);
+                    _statusService.SetMessage($"Removed application: {application.Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"Error removing application: {ex.Message}");
+            }
+        }
+
+        private async Task AddApplicationAsync()
+        {
+            try
+            {
+                var newApplication = new ExternalApplication
+                {
+                    Name = "New Application",
+                    AllowMultipleInstances = false,
+                    IsEnabled = true
+                };
+
+                var dialog = new ApplicationConfigDialog(newApplication);
+                if (dialog.ShowDialog() == true)
+                {
+                    await _applicationService.AddApplicationAsync(newApplication);
+                    ExternalApplications.Add(newApplication);
+                    _statusService.SetMessage($"Added application: {newApplication.Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"Error adding application: {ex.Message}");
+            }
+        }
+
+        private void OnApplicationStatusChanged(object? sender, ExternalApplication application)
+        {
+            // Update UI on status changes - this runs on a background thread
+            Application.Current.Dispatcher.BeginInvoke(() =>
+            {
+                // Commands will update automatically due to binding
+            });
+        }
+
+        #endregion
+    }
+}

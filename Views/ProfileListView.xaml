@@ -15,6 +15,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
             
             <!-- Directory Settings -->
@@ -24,16 +25,6 @@
                     <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding ChangeDirectoryCommand}" Width="80"/>
                     <TextBox Text="{Binding PlayOnlineDirectory}" IsReadOnly="True" Background="#F5F5F5"/>
                 </DockPanel>
-                
-                <!-- Active Login File Status -->
-                <Border Background="#E3F2FD" BorderBrush="#2196F3" BorderThickness="1" 
-                        CornerRadius="4" Padding="8" Margin="0,5,0,5">
-                    <StackPanel>
-                        <TextBlock Text="Active Login File:" FontWeight="Bold" FontSize="11" Foreground="#1976D2"/>
-                        <TextBlock Text="{Binding ActiveLoginStatus}" FontSize="11" Foreground="#333" 
-                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
-                    </StackPanel>
-                </Border>
                 
                 <DockPanel>
                     <CheckBox DockPanel.Dock="Right" 
@@ -151,6 +142,12 @@
                     </DataGridTemplateColumn>
                 </DataGrid.Columns>
             </DataGrid>
+            <!-- Add Profile Button moved below DataGrid -->
+            <Button Grid.Row="2"
+                    Content="➕ Add Profile" 
+                    Command="{Binding ShowAddProfileDialogCommand}"
+                    Background="#3498DB" Foreground="White"
+                    Margin="10,10,0,0" Width="120" HorizontalAlignment="Left"/>
         </Grid>
     </GroupBox>
 </UserControl>

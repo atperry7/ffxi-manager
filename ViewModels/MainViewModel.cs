@@ -1,37 +1,19 @@
-using FFXIManager.Models;
-using FFXIManager.Services;
-using FFXIManager.Views;
-using FFXIManager.Infrastructure;
 using FFXIManager.Configuration;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
-using System.Windows;
-using System.Windows.Input;
+using FFXIManager.Infrastructure;
+using FFXIManager.Services;
+using FFXIManager.ViewModels.Base;
+using FFXIManager.Views;
 
 namespace FFXIManager.ViewModels
 {
     /// <summary>
-    /// ENHANCED ViewModel for the main window - now includes external application management
+    /// Clean, refactored Main ViewModel that coordinates between specialized ViewModels
+    /// Following Single Responsibility Principle and proper separation of concerns
     /// </summary>
-    public class MainViewModel : INotifyPropertyChanged
+    public class MainViewModel : ViewModelBase
     {
-        private readonly IProfileOperationsService _profileOperations;
         private readonly IStatusMessageService _statusService;
-        private readonly ISettingsService _settingsService;
-        private readonly IProfileService _profileService;
-        private readonly IUICommandService _uiCommandService;
-        private readonly IDialogService _dialogService;
         private readonly IConfigurationService _configService;
-        private readonly IValidationService _validationService;
-        private readonly ILoggingService _loggingService;
-        private readonly INotificationService _notificationService;
-        private readonly IExternalApplicationService _applicationService;
-        
-        private ApplicationSettings _settings;
-        private ProfileInfo? _selectedProfile;
-        private bool _isLoading;
-        private string _newBackupName = string.Empty;
 
         public MainViewModel() : this(
             ServiceLocator.SettingsService,
@@ -48,9 +30,8 @@ namespace FFXIManager.ViewModels
         {
         }
 
-        // Constructor for dependency injection (testability)
         public MainViewModel(
-            ISettingsService settingsService, 
+            ISettingsService settingsService,
             IProfileService profileService,
             IProfileOperationsService profileOperations,
             IStatusMessageService statusService,
@@ -62,974 +43,142 @@ namespace FFXIManager.ViewModels
             INotificationService notificationService,
             IExternalApplicationService applicationService)
         {
-            _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-            _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
-            _profileOperations = profileOperations ?? throw new ArgumentNullException(nameof(profileOperations));
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
-            _uiCommandService = uiCommandService ?? throw new ArgumentNullException(nameof(uiCommandService));
-            _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
             _configService = configService ?? throw new ArgumentNullException(nameof(configService));
-            _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
-            _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
-            _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
-            _applicationService = applicationService ?? throw new ArgumentNullException(nameof(applicationService));
 
-            _settings = _settingsService.LoadSettings();
-            _profileService.PlayOnlineDirectory = _settings.PlayOnlineDirectory;
+            // Create specialized ViewModels with their specific dependencies
+            ProfileManagement = new ProfileManagementViewModel(
+                profileOperations, statusService, settingsService, 
+                profileService, dialogService, validationService);
 
-            // DEBUG: Show what was loaded
-            System.Diagnostics.Debug.WriteLine($"CONSTRUCTOR: Loaded LastUsedProfile = '{_settings.LastUsedProfile}'");
+            ApplicationManagement = new ApplicationManagementViewModel(
+                applicationService, statusService, loggingService);
 
-            Profiles = new ObservableCollection<ProfileInfo>();
-            ExternalApplications = new ObservableCollection<ExternalApplication>();
-            
+            UICommands = new UICommandsViewModel(uiCommandService, statusService);
+
             // Subscribe to status message changes
             _statusService.MessageChanged += (_, message) => OnPropertyChanged(nameof(StatusMessage));
-            
-            // Subscribe to application status changes
-            _applicationService.ApplicationStatusChanged += OnApplicationStatusChanged;
 
-            InitializeCommands();
-            
-            // Load profiles and applications on startup if auto-refresh is enabled
-            if (_settings.AutoRefreshOnStartup)
+            // Subscribe to IsLoading changes from ProfileManagement
+            ProfileManagement.PropertyChanged += (_, e) =>
             {
-                _ = Task.Run(async () => await RefreshProfilesAsync());
-                _ = Task.Run(async () => await LoadExternalApplicationsAsync());
-            }
-            
-            // Start application monitoring
-            _applicationService.StartMonitoring();
+                if (e.PropertyName == nameof(ProfileManagement.IsLoading))
+                {
+                    OnPropertyChanged(nameof(IsLoading));
+                }
+            };
+
+            // Initialize commands and data
+            InitializeCommands();
+            InitializeAsync();
         }
 
         #region Properties
 
-        public ObservableCollection<ProfileInfo> Profiles { get; }
-        
-        public ObservableCollection<ExternalApplication> ExternalApplications { get; }
+        /// <summary>
+        /// Profile Management ViewModel - handles all profile-related operations
+        /// </summary>
+        public ProfileManagementViewModel ProfileManagement { get; }
 
-        public ProfileInfo? SelectedProfile
-        {
-            get => _selectedProfile;
-            set
-            {
-                if (SetProperty(ref _selectedProfile, value))
-                {
-                    UpdateCommandStates();
-                    SaveLastUsedProfile(value);
-                }
-            }
-        }
+        /// <summary>
+        /// Application Management ViewModel - handles all external application operations
+        /// </summary>
+        public ApplicationManagementViewModel ApplicationManagement { get; }
 
-        public bool IsLoading
-        {
-            get => _isLoading;
-            set => SetProperty(ref _isLoading, value);
-        }
+        /// <summary>
+        /// UI Commands ViewModel - handles UI-specific commands like copy/open
+        /// </summary>
+        public UICommandsViewModel UICommands { get; }
 
-        public string StatusMessage
-        {
-            get => _statusService.CurrentMessage;
-            private set { } // Remove the setter that causes the loop
-        }
-
-        public string NewBackupName
-        {
-            get => _newBackupName;
-            set
-            {
-                if (SetProperty(ref _newBackupName, value))
-                {
-                    ((RelayCommand)CreateBackupCommand).RaiseCanExecuteChanged();
-                }
-            }
-        }
-
-        public string PlayOnlineDirectory
-        {
-            get => _profileService.PlayOnlineDirectory;
-            set
-            {
-                if (_profileService.PlayOnlineDirectory != value)
-                {
-                    _profileService.PlayOnlineDirectory = value;
-                    _settings.PlayOnlineDirectory = value;
-                    _settingsService.SaveSettings(_settings);
-                    OnPropertyChanged();
-                    _ = Task.Run(async () => await RefreshProfilesAsync());
-                }
-            }
-        }
-
-        public bool ShowAutoBackups
-        {
-            get => _settings.ShowAutoBackupsInList;
-            set
-            {
-                if (_settings.ShowAutoBackupsInList != value)
-                {
-                    _settings.ShowAutoBackupsInList = value;
-                    _settingsService.SaveSettings(_settings);
-                    OnPropertyChanged();
-                    _ = Task.Run(async () => await RefreshProfilesAsync());
-                }
-            }
-        }
-
+        // Main window properties
+        public string StatusMessage => _statusService.CurrentMessage;
         public string ApplicationTitle => _configService.UIConfig.ApplicationTitle;
+        public bool IsLoading => ProfileManagement.IsLoading;
 
-        public ProfileInfo? ActiveLoginInfo { get; private set; }
+        // Expose commonly used properties for easy data binding (delegated to child ViewModels)
+        public System.Collections.ObjectModel.ObservableCollection<Models.ProfileInfo> Profiles => ProfileManagement.Profiles;
+        public System.Collections.ObjectModel.ObservableCollection<Models.ExternalApplication> ExternalApplications => ApplicationManagement.ExternalApplications;
         
-        public string ActiveLoginStatus
-        {
-            get
-            {
-                if (ActiveLoginInfo == null)
-                    return "? No active login file found";
-                
-                // Extract the "Last Set" information from the name if it exists
-                var displayText = ActiveLoginInfo.Name;
-                if (displayText.Contains("(Last Set:"))
-                {
-                    // Format: "login_w.bin (Last Set: char2)" -> show "Currently Active: char2 profile"
-                    var match = System.Text.RegularExpressions.Regex.Match(displayText, @"Last Set: ([^)]+)");
-                    if (match.Success)
-                    {
-                        var lastSetProfile = match.Groups[1].Value;
-                        return $"Currently Active: '{lastSetProfile}' profile ({ActiveLoginInfo.FileSizeFormatted}) - Modified: {ActiveLoginInfo.LastModified:yyyy-MM-dd HH:mm}";
-                    }
-                }
-                
-                // Fallback for system file without last set info
-                return $"Current: System file ({ActiveLoginInfo.FileSizeFormatted}) - Modified: {ActiveLoginInfo.LastModified:yyyy-MM-dd HH:mm}";
-            }
+        public Models.ProfileInfo? SelectedProfile 
+        { 
+            get => ProfileManagement.SelectedProfile; 
+            set => ProfileManagement.SelectedProfile = value; 
+        }
+
+        public string NewBackupName 
+        { 
+            get => ProfileManagement.NewBackupName; 
+            set => ProfileManagement.NewBackupName = value; 
         }
         
-        public string? CurrentActiveProfileName
-        {
-            get
-            {
-                if (ActiveLoginInfo?.Name?.Contains("(Last Set:") == true)
-                {
-                    var match = System.Text.RegularExpressions.Regex.Match(ActiveLoginInfo.Name, @"Last Set: ([^)]+)");
-                    return match.Success ? match.Groups[1].Value : null;
-                }
-                return null;
-            }
+        public string PlayOnlineDirectory 
+        { 
+            get => ProfileManagement.PlayOnlineDirectory; 
+            set => ProfileManagement.PlayOnlineDirectory = value; 
         }
+        
+        public bool ShowAutoBackups 
+        { 
+            get => ProfileManagement.ShowAutoBackups; 
+            set => ProfileManagement.ShowAutoBackups = value; 
+        }
+        
+        public string ActiveLoginStatus => ProfileManagement.ActiveLoginStatus;
 
         #endregion
 
         #region Commands
 
-        // Existing Profile Commands
-        public ICommand RefreshCommand { get; private set; } = null!;
-        public ICommand SwapProfileCommand { get; private set; } = null!;
-        public ICommand CreateBackupCommand { get; private set; } = null!;
-        public ICommand DeleteProfileCommand { get; private set; } = null!;
-        public ICommand ChangeDirectoryCommand { get; private set; } = null!;
-        public ICommand CleanupAutoBackupsCommand { get; private set; } = null!;
-        public ICommand ResetTrackingCommand { get; private set; } = null!;
-        public ICommand SwapProfileParameterCommand { get; private set; } = null!;
-        public ICommand DeleteProfileParameterCommand { get; private set; } = null!;
-        public ICommand RenameProfileCommand { get; private set; } = null!;
-        public ICommand CopyProfileNameCommand { get; private set; } = null!;
-        public ICommand OpenFileLocationCommand { get; private set; } = null!;
-        public ICommand RenameProfileParameterCommand { get; private set; } = null!;
-        public ICommand CopyProfileNameParameterCommand { get; private set; } = null!;
-        public ICommand OpenFileLocationParameterCommand { get; private set; } = null!;
+        // Expose commonly used commands for easy data binding (delegated to child ViewModels)
+        
+        // Profile Commands
+        public System.Windows.Input.ICommand RefreshCommand => ProfileManagement.RefreshCommand;
+        public System.Windows.Input.ICommand SwapProfileCommand => ProfileManagement.SwapProfileCommand;
+        public System.Windows.Input.ICommand CreateBackupCommand => ProfileManagement.CreateBackupCommand;
+        public System.Windows.Input.ICommand DeleteProfileCommand => ProfileManagement.DeleteProfileCommand;
+        public System.Windows.Input.ICommand ChangeDirectoryCommand => ProfileManagement.ChangeDirectoryCommand;
+        public System.Windows.Input.ICommand RenameProfileCommand => ProfileManagement.RenameProfileCommand;
+        public System.Windows.Input.ICommand SwapProfileParameterCommand => ProfileManagement.SwapProfileParameterCommand;
+        public System.Windows.Input.ICommand DeleteProfileParameterCommand => ProfileManagement.DeleteProfileParameterCommand;
+        public System.Windows.Input.ICommand RenameProfileParameterCommand => ProfileManagement.RenameProfileParameterCommand;
 
-        // New Application Management Commands
-        public ICommand LaunchApplicationCommand { get; private set; } = null!;
-        public ICommand KillApplicationCommand { get; private set; } = null!;
-        public ICommand EditApplicationCommand { get; private set; } = null!;
-        public ICommand RemoveApplicationCommand { get; private set; } = null!;
-        public ICommand AddApplicationCommand { get; private set; } = null!;
-        public ICommand RefreshApplicationsCommand { get; private set; } = null!;
+        // Application Commands
+        public System.Windows.Input.ICommand LaunchApplicationCommand => ApplicationManagement.LaunchApplicationCommand;
+        public System.Windows.Input.ICommand KillApplicationCommand => ApplicationManagement.KillApplicationCommand;
+        public System.Windows.Input.ICommand EditApplicationCommand => ApplicationManagement.EditApplicationCommand;
+        public System.Windows.Input.ICommand RemoveApplicationCommand => ApplicationManagement.RemoveApplicationCommand;
+        public System.Windows.Input.ICommand AddApplicationCommand => ApplicationManagement.AddApplicationCommand;
+        public System.Windows.Input.ICommand RefreshApplicationsCommand => ApplicationManagement.RefreshApplicationsCommand;
+
+        // UI Commands
+        public System.Windows.Input.ICommand CopyProfileNameParameterCommand => UICommands.CopyProfileNameParameterCommand;
+        public System.Windows.Input.ICommand OpenFileLocationParameterCommand => UICommands.OpenFileLocationParameterCommand;
+
+        // Main ViewModel specific commands
+        public System.Windows.Input.ICommand ShowAddProfileDialogCommand { get; private set; } = null!;
 
         private void InitializeCommands()
         {
-            // Existing Profile Commands
-            RefreshCommand = new RelayCommand(async () => await RefreshAllAsync());
-            SwapProfileCommand = new RelayCommand(async () => await SwapProfileAsync(), CanSwapProfile);
-            CreateBackupCommand = new RelayCommand(async () => await CreateBackupAsync(), CanCreateBackup);
-            DeleteProfileCommand = new RelayCommand(async () => await DeleteProfileAsync(), CanDeleteProfile);
-            ChangeDirectoryCommand = new RelayCommand(ChangeDirectory);
-            CleanupAutoBackupsCommand = new RelayCommand(async () => await CleanupAutoBackupsAsync());
-            ResetTrackingCommand = new RelayCommand(async () => await ResetTrackingAsync());
-            RenameProfileCommand = new RelayCommand(async () => await RenameProfileAsync(), CanRenameProfile);
+            ShowAddProfileDialogCommand = new RelayCommand(ShowAddProfileDialog);
+        }
 
-            // Parameterized profile commands
-            SwapProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
-                async profile => await SwapProfileAsync(profile), 
-                profile => profile != null && !profile.IsSystemFile);
-            DeleteProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
-                async profile => await DeleteProfileAsync(profile), 
-                profile => profile != null && !profile.IsSystemFile && !profile.IsCurrentlyActive);
-            RenameProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
-                async profile => await RenameProfileParameterAsync(profile), 
-                profile => profile != null && !profile.IsSystemFile);
-            
-            // UI Commands
-            CopyProfileNameCommand = new RelayCommand(CopyProfileName, () => SelectedProfile != null);
-            OpenFileLocationCommand = new RelayCommand(OpenFileLocation, () => SelectedProfile != null);
-            CopyProfileNameParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
-                profile => CopyProfileNameParameter(profile), 
-                profile => profile != null);
-            OpenFileLocationParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
-                profile => OpenFileLocationParameter(profile), 
-                profile => profile != null);
-
-            // New Application Management Commands
-            LaunchApplicationCommand = new RelayCommandWithParameter<ExternalApplication>(
-                async app => await LaunchApplicationAsync(app),
-                app => app != null && app.IsEnabled && app.ExecutableExists);
-            KillApplicationCommand = new RelayCommandWithParameter<ExternalApplication>(
-                async app => await KillApplicationAsync(app),
-                app => app != null && app.IsRunning);
-            EditApplicationCommand = new RelayCommandWithParameter<ExternalApplication>(
-                async app => await EditApplicationAsync(app),
-                app => app != null);
-            RemoveApplicationCommand = new RelayCommandWithParameter<ExternalApplication>(
-                async app => await RemoveApplicationAsync(app),
-                app => app != null);
-            AddApplicationCommand = new RelayCommand(async () => await AddApplicationAsync());
-            RefreshApplicationsCommand = new RelayCommand(async () => await LoadExternalApplicationsAsync());
+        private void ShowAddProfileDialog()
+        {
+            var dialog = new AddProfileDialog();
+            dialog.DataContext = this;
+            var result = dialog.ShowDialog();
+            // Profile creation is handled by ProfileManagement.CreateBackupCommand
         }
 
         #endregion
 
-        #region Application Management Operations
+        #region Private Methods
 
-        private async Task RefreshAllAsync()
+        private async void InitializeAsync()
         {
-            await RefreshProfilesAsync();
-            await LoadExternalApplicationsAsync();
-        }
-
-        private async Task LoadExternalApplicationsAsync()
-        {
-            try
-            {
-                var applications = await _applicationService.GetApplicationsAsync();
-                await _applicationService.RefreshApplicationStatusAsync();
-
-                await Application.Current.Dispatcher.InvokeAsync(() =>
-                {
-                    ExternalApplications.Clear();
-                    foreach (var app in applications)
-                    {
-                        ExternalApplications.Add(app);
-                    }
-                });
-
-                _statusService.SetMessage($"Loaded {applications.Count} external applications");
-            }
-            catch (Exception ex)
-            {
-                _statusService.SetMessage($"Error loading applications: {ex.Message}");
-            }
-        }
-
-        private async Task LaunchApplicationAsync(ExternalApplication application)
-        {
-            if (application == null) return;
-
-            try
-            {
-                _statusService.SetMessage($"Launching {application.Name}...");
-
-                var success = await _applicationService.LaunchApplicationAsync(application);
-                
-                if (success)
-                {
-                    _statusService.SetMessage($"Successfully launched {application.Name}");
-                }
-                else
-                {
-                    _statusService.SetMessage($"Failed to launch {application.Name}");
-                }
-            }
-            catch (Exception ex)
-            {
-                _statusService.SetMessage($"Error launching {application.Name}: {ex.Message}");
-            }
-        }
-
-        private async Task KillApplicationAsync(ExternalApplication application)
-        {
-            if (application == null) return;
-
-            try
-            {
-                _statusService.SetMessage($"Stopping {application.Name}...");
-
-                var success = await _applicationService.KillApplicationAsync(application);
-                
-                if (success)
-                {
-                    _statusService.SetMessage($"Successfully stopped {application.Name}");
-                }
-                else
-                {
-                    _statusService.SetMessage($"Failed to stop {application.Name}");
-                }
-            }
-            catch (Exception ex)
-            {
-                _statusService.SetMessage($"Error stopping {application.Name}: {ex.Message}");
-            }
-        }
-
-        private async Task EditApplicationAsync(ExternalApplication application)
-        {
-            if (application == null) 
-            {
-                _statusService.SetMessage("? No application selected for editing");
-                return;
-            }
-
-            try
-            {
-                _statusService.SetMessage($"?? Opening configuration for {application.Name}...");
-
-                // Simple UI thread check and dialog creation
-                bool dialogCompleted = false;
-                Exception? dialogException = null;
-                
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    try
-                    {
-                        _statusService.SetMessage($"?? Creating dialog for {application.Name}...");
-                        
-                        // Use simple dialog first to test
-                        var dialog = new SimpleApplicationDialog(application)
-                        {
-                            Owner = Application.Current.MainWindow,
-                            ShowInTaskbar = false
-                        };
-                        
-                        _statusService.SetMessage($"?? Showing dialog for {application.Name}...");
-                        
-                        var result = dialog.ShowDialog();
-                        
-                        if (result == true)
-                        {
-                            _statusService.SetMessage($"?? Application {application.Name} updated successfully");
-                            
-                            // Force property notifications
-                            application.OnPropertyChanged(nameof(application.StatusColor));
-                            application.OnPropertyChanged(nameof(application.StatusText));
-                            application.OnPropertyChanged(nameof(application.ExecutableExists));
-                        }
-                        else
-                        {
-                            _statusService.SetMessage("? Configuration cancelled");
-                        }
-                        
-                        dialogCompleted = true;
-                    }
-                    catch (Exception ex)
-                    {
-                        dialogException = ex;
-                        _statusService.SetMessage($"? Dialog error: {ex.Message}");
-                    }
-                });
-
-                if (dialogException != null)
-                {
-                    await _loggingService.LogErrorAsync($"Dialog creation failed for {application.Name}", dialogException, "MainViewModel");
-                }
-                else if (dialogCompleted)
-                {
-                    await _loggingService.LogInfoAsync($"Successfully edited application {application.Name}", "MainViewModel");
-                }
-            }
-            catch (Exception ex)
-            {
-                _statusService.SetMessage($"? Error editing application: {ex.Message}");
-                await _loggingService.LogErrorAsync($"Error in EditApplicationAsync for {application.Name}", ex, "MainViewModel");
-            }
-        }
-
-        private async Task RemoveApplicationAsync(ExternalApplication application)
-        {
-            if (application == null) return;
-
-            try
-            {
-                var result = MessageBox.Show(
-                    $"Are you sure you want to remove '{application.Name}'?",
-                    "Confirm Remove Application",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
-
-                if (result == MessageBoxResult.Yes)
-                {
-                    await _applicationService.RemoveApplicationAsync(application);
-                    ExternalApplications.Remove(application);
-                    _statusService.SetMessage($"Removed application: {application.Name}");
-                }
-            }
-            catch (Exception ex)
-            {
-                _statusService.SetMessage($"Error removing application: {ex.Message}");
-            }
-        }
-
-        private async Task AddApplicationAsync()
-        {
-            try
-            {
-                var newApplication = new ExternalApplication
-                {
-                    Name = "New Application",
-                    AllowMultipleInstances = false,
-                    IsEnabled = true
-                };
-
-                var dialog = new ApplicationConfigDialog(newApplication);
-                if (dialog.ShowDialog() == true)
-                {
-                    await _applicationService.AddApplicationAsync(newApplication);
-                    ExternalApplications.Add(newApplication);
-                    _statusService.SetMessage($"Added application: {newApplication.Name}");
-                }
-            }
-            catch (Exception ex)
-            {
-                _statusService.SetMessage($"Error adding application: {ex.Message}");
-            }
-        }
-
-        private void OnApplicationStatusChanged(object? sender, ExternalApplication application)
-        {
-            // Update UI on status changes - this runs on a background thread
-            Application.Current.Dispatcher.BeginInvoke(() =>
-            {
-                // Update command states
-                UpdateCommandStates();
-            });
-        }
-
-        #endregion
-
-        #region Profile Management Operations (Existing Code)
-
-        private async Task RefreshProfilesAsync()
-        {
-            try
-            {
-                IsLoading = true;
-                _statusService.SetMessage("Loading profiles...");
-
-                var profiles = await _profileOperations.LoadProfilesAsync(_settings.ShowAutoBackupsInList);
-                var activeLoginInfo = await _profileOperations.GetActiveLoginInfoAsync();
-
-                await Application.Current.Dispatcher.InvokeAsync(() => UpdateProfilesCollection(profiles, activeLoginInfo));
-
-                var autoBackupCount = _settings.ShowAutoBackupsInList ? 0 : 
-                    (await _profileService.GetAutoBackupsAsync()).Count;
-                var statusSuffix = _settings.ShowAutoBackupsInList ? "" : $" ({autoBackupCount} auto-backups hidden)";
-                _statusService.SetMessage($"Loaded {profiles.Count} backup profiles{statusSuffix}");
-
-                if (activeLoginInfo == null)
-                {
-                    _statusService.SetMessage(_statusService.CurrentMessage + " (Warning: No active login_w.bin file found)");
-                }
-            }
-            catch (Exception ex)
-            {
-                _statusService.SetMessage($"Error loading profiles: {ex.Message}");
-            }
-            finally
-            {
-                IsLoading = false;
-            }
-        }
-
-        private async Task SwapProfileAsync()
-        {
-            if (SelectedProfile != null)
-                await SwapProfileAsync(SelectedProfile);
-        }
-
-        private async Task SwapProfileAsync(ProfileInfo profile)
-        {
-            if (profile == null) return;
-
-            try
-            {
-                IsLoading = true;
-                _statusService.SetMessage($"Swapping to profile: {profile.Name}");
-
-                var (success, message) = await _profileOperations.SwapProfileAsync(profile);
-                _statusService.SetMessage(message);
-
-                if (success)
-                {
-                    // ENHANCED: Immediately update local settings for better persistence
-                    _settings.LastUsedProfile = profile.Name;
-                    _settings.LastActiveProfileName = profile.Name;
-                    _settingsService.SaveSettings(_settings);
-                    
-                    System.Diagnostics.Debug.WriteLine($"SWAP SUCCESS: Updated settings - LastUsedProfile = '{profile.Name}'");
-                    
-                    await RefreshProfilesAsync();
-                }
-            }
-            finally
-            {
-                IsLoading = false;
-            }
-        }
-
-        private async Task CreateBackupAsync()
-        {
-            try
-            {
-                // Validate backup name first
-                var validation = _validationService.ValidateProfileName(NewBackupName);
-                if (!validation.IsValid)
-                {
-                    _statusService.SetMessage($"{validation.ErrorMessage}");
-                    return;
-                }
-
-                IsLoading = true;
-                _statusService.SetMessage(_configService.UIConfig.StatusMessages.GetValueOrDefault(
-                    "CreatingBackup", $"Creating backup: {NewBackupName}"));
-
-                var (success, message, newProfile) = await _profileOperations.CreateBackupAsync(NewBackupName);
-                _statusService.SetMessage(message);
-
-                if (success && newProfile != null)
-                {
-                    Application.Current.Dispatcher.Invoke(() => Profiles.Add(newProfile));
-                    NewBackupName = string.Empty;
-                }
-            }
-            finally
-            {
-                IsLoading = false;
-            }
-        }
-
-        private async Task DeleteProfileAsync()
-        {
-            if (SelectedProfile != null)
-                await DeleteProfileAsync(SelectedProfile);
-        }
-
-        private async Task DeleteProfileAsync(ProfileInfo profile)
-        {
-            if (profile == null) return;
-
-            try
-            {
-                IsLoading = true;
-                _statusService.SetMessage($"Deleting profile: {profile.Name}");
-
-                var (success, message) = await _profileOperations.DeleteProfileAsync(profile);
-                _statusService.SetMessage(message);
-
-                if (success)
-                {
-                    Application.Current.Dispatcher.Invoke(() =>
-                    {
-                        Profiles.Remove(profile);
-                        if (SelectedProfile == profile)
-                            SelectedProfile = null;
-                    });
-                }
-            }
-            finally
-            {
-                IsLoading = false;
-            }
-        }
-
-        private async Task RenameProfileAsync()
-        {
-            if (SelectedProfile == null) return;
-
-            if (SelectedProfile.IsSystemFile)
-            {
-                _statusService.SetMessage(_configService.UIConfig.StatusMessages.GetValueOrDefault(
-                    "SystemFileRenameError", "Cannot rename the system login file."));
-                return;
-            }
-
-            try
-            {
-                var oldName = SelectedProfile.Name;
-                var newName = await _dialogService.ShowRenameDialogAsync(SelectedProfile.Name, SelectedProfile.IsSystemFile);
-                if (newName == null) return; // User cancelled
-                
-                // Validate new name
-                var validation = _validationService.ValidateProfileName(newName);
-                if (!validation.IsValid)
-                {
-                    _statusService.SetMessage($"{validation.ErrorMessage}");
-                    return;
-                }
-
-                IsLoading = true;
-                _statusService.SetMessage($"Renaming profile '{SelectedProfile.Name}' to '{newName}'...");
-
-                var (success, message) = await _profileOperations.RenameProfileAsync(SelectedProfile, newName);
-                _statusService.SetMessage(message);
-
-                if (success)
-                {
-                    // Update local settings if this was the last used profile
-                    if (_settings.LastUsedProfile == oldName)
-                    {
-                        _settings.LastUsedProfile = newName;
-                        _settingsService.SaveSettings(_settings);
-                    }
-                    
-                    await RefreshProfilesAsync();
-                    
-                    // Try to reselect the renamed profile
-                    var renamedProfile = Profiles.FirstOrDefault(p => p.Name == newName);
-                    if (renamedProfile != null)
-                        SelectedProfile = renamedProfile;
-                }
-            }
-            catch (Exception ex)
-            {
-                _statusService.SetMessage($"Error renaming profile: {ex.Message}");
-            }
-            finally
-            {
-                IsLoading = false;
-            }
-        }
-
-        private async Task CleanupAutoBackupsAsync()
-        {
-            try
-            {
-                IsLoading = true;
-                _statusService.SetMessage("Cleaning up auto-backups...");
-                
-                await Task.Delay(300); // Brief delay for user feedback
-
-                var (success, message, deletedCount) = await _profileOperations.CleanupAutoBackupsAsync();
-                
-                _statusService.SetMessage("Refreshing profiles after cleanup...");
-                await RefreshProfilesAsync();
-
-                if (success)
-                {
-                    _statusService.SetTemporaryMessage($"Cleaned up {deletedCount} old auto-backup files", TimeSpan.FromSeconds(3));
-                }
-                else
-                {
-                    _statusService.SetMessage(message);
-                }
-            }
-            finally
-            {
-                IsLoading = false;
-            }
-        }
-
-        private async Task ResetTrackingAsync()
-        {
-            try
-            {
-                IsLoading = true;
-                _statusService.SetMessage("Resetting user profile choice and cleaning up orphaned references...");
-                
-                await Task.Delay(300); // Brief delay for user feedback
-
-                // Clear local settings as well
-                _settings.LastUsedProfile = string.Empty;
-                _settings.LastActiveProfileName = string.Empty;
-                _settingsService.SaveSettings(_settings);
-
-                var (success, message) = await _profileOperations.ResetTrackingAsync();
-                
-                _statusService.SetMessage("Refreshing profiles after reset...");
-                await RefreshProfilesAsync();
-
-                if (success)
-                {
-                    _statusService.SetTemporaryMessage("All profile tracking reset - orphaned references cleaned up", TimeSpan.FromSeconds(4));
-                }
-                else
-                {
-                    _statusService.SetMessage(message);
-                }
-            }
-            finally
-            {
-                IsLoading = false;
-            }
-        }
-
-        private async void ChangeDirectory()
-        {
-            try
-            {
-                var selectedPath = await _dialogService.ShowFolderBrowserDialogAsync("Select PlayOnline Directory", PlayOnlineDirectory);
-                if (selectedPath != null)
-                {
-                    // Validate directory
-                    var validation = _validationService.ValidateDirectory(selectedPath);
-                    if (!validation.IsValid)
-                    {
-                        _statusService.SetMessage($"{validation.ErrorMessage}");
-                        return;
-                    }
-
-                    PlayOnlineDirectory = selectedPath;
-                }
-            }
-            catch (Exception ex)
-            {
-                _statusService.SetMessage($"Error selecting directory: {ex.Message}");
-            }
-        }
-
-        private void CopyProfileName()
-        {
-            if (SelectedProfile == null) return;
-            
-            try
-            {
-                _uiCommandService.CopyToClipboard(SelectedProfile.Name);
-                _statusService.SetMessage($"Copied profile name: {SelectedProfile.Name}");
-            }
-            catch (Exception ex)
-            {
-                _statusService.SetMessage($"Error copying to clipboard: {ex.Message}");
-            }
-        }
-
-        private void OpenFileLocation()
-        {
-            if (SelectedProfile == null) return;
-            
-            try
-            {
-                _uiCommandService.OpenFileLocation(SelectedProfile.FilePath);
-                _statusService.SetMessage($"Opened file location for: {SelectedProfile.Name}");
-            }
-            catch (Exception ex)
-            {
-                _statusService.SetMessage($"{ex.Message}");
-            }
-        }
-
-        private async Task RenameProfileParameterAsync(ProfileInfo profile)
-        {
-            if (profile == null) return;
-
-            if (profile.IsSystemFile)
-            {
-                _statusService.SetMessage("Cannot rename the system login file (login_w.bin).");
-                return;
-            }
-
-            // Temporarily select this profile for the operation
-            var originalSelection = SelectedProfile;
-            SelectedProfile = profile;
-            
-            try
-            {
-                await RenameProfileAsync();
-            }
-            finally
-            {
-                // Restore original selection if rename didn't change it
-                if (SelectedProfile == profile && originalSelection != profile)
-                {
-                    SelectedProfile = originalSelection;
-                }
-            }
-        }
-
-        private void CopyProfileNameParameter(ProfileInfo profile)
-        {
-            if (profile == null) return;
-            
-            try
-            {
-                _uiCommandService.CopyToClipboard(profile.Name);
-                _statusService.SetMessage($"Copied profile name: {profile.Name}");
-            }
-            catch (Exception ex)
-            {
-                _statusService.SetMessage($"Error copying to clipboard: {ex.Message}");
-            }
-        }
-
-        private void OpenFileLocationParameter(ProfileInfo profile)
-        {
-            if (profile == null) return;
-            
-            try
-            {
-                _uiCommandService.OpenFileLocation(profile.FilePath);
-                _statusService.SetMessage($"Opened file location for: {profile.Name}");
-            }
-            catch (Exception ex)
-            {
-                _statusService.SetMessage($"{ex.Message}");
-            }
-        }
-
-        #endregion
-
-        #region Helper Methods
-
-        private void UpdateProfilesCollection(List<ProfileInfo> profiles, ProfileInfo? activeLoginInfo)
-        {
-            Profiles.Clear();
-            ProfileInfo? lastUserChoice = null;
-            ProfileInfo? lastUsedProfile = null;
-            ProfileInfo? currentActiveProfile = null;
-
-            // Store active login info separately (don't add to profiles list)
-            ActiveLoginInfo = activeLoginInfo;
-            OnPropertyChanged(nameof(ActiveLoginInfo));
-            OnPropertyChanged(nameof(ActiveLoginStatus));
-            OnPropertyChanged(nameof(CurrentActiveProfileName));
-
-            // Get the currently active profile name from the login file
-            var activeProfileName = CurrentActiveProfileName;
-            
-            System.Diagnostics.Debug.WriteLine($"? PERSISTENCE DEBUG:");
-            System.Diagnostics.Debug.WriteLine($"   - CurrentActiveProfileName (from login file): '{activeProfileName}'");
-            System.Diagnostics.Debug.WriteLine($"   - _settings.LastUsedProfile (from app settings): '{_settings.LastUsedProfile}'");
-            System.Diagnostics.Debug.WriteLine($"   - _settings.LastActiveProfileName (from app settings): '{_settings.LastActiveProfileName}'");
-
-            // Check if the active profile name references a profile that no longer exists
-            bool activeProfileExists = false;
-            if (!string.IsNullOrEmpty(activeProfileName))
-            {
-                activeProfileExists = profiles.Any(p => p.Name.Equals(activeProfileName, StringComparison.OrdinalIgnoreCase));
-                
-                // If the active profile no longer exists, we need to clean up the orphaned reference
-                if (!activeProfileExists)
-                {
-                    _statusService.SetMessage($"? Previously active profile '{activeProfileName}' no longer exists - resetting tracking");
-                }
-            }
-
-            // Add only backup profiles (exclude system file)
-            foreach (var profile in profiles)
-            {
-                // Set the IsCurrentlyActive property based on the active login file
-                profile.IsCurrentlyActive = !string.IsNullOrEmpty(activeProfileName) && 
-                                          profile.Name.Equals(activeProfileName, StringComparison.OrdinalIgnoreCase) &&
-                                          activeProfileExists; // Only mark as active if the profile actually exists
-                                
-                Profiles.Add(profile);
-
-                if (profile.IsLastUserChoice)
-                    lastUserChoice = profile;
-                
-                if (profile.Name == _settings.LastUsedProfile && !profile.IsSystemFile)
-                    lastUsedProfile = profile;
-                
-                // Check if this profile matches the currently active one
-                if (profile.IsCurrentlyActive)
-                {
-                    currentActiveProfile = profile;
-                }
-            }
-
-            // ENHANCED selection logic - prioritize the actually active profile
-            // Priority: 1. Currently active profile (from login file), 2. Last used profile (from settings), 3. Last user choice, 4. Most recent
-            System.Diagnostics.Debug.WriteLine($"? SELECTION CANDIDATES:");
-            System.Diagnostics.Debug.WriteLine($"   - currentActiveProfile: {currentActiveProfile?.Name ?? "null"}");
-            System.Diagnostics.Debug.WriteLine($"   - lastUsedProfile: {lastUsedProfile?.Name ?? "null"}");
-            System.Diagnostics.Debug.WriteLine($"   - lastUserChoice: {lastUserChoice?.Name ?? "null"}");
-            
-            // NEW LOGIC: Prioritize the currently active profile first
-            if (currentActiveProfile != null)
-            {
-                System.Diagnostics.Debug.WriteLine($"? SELECTED: currentActiveProfile = '{currentActiveProfile.Name}' (matches login file)");
-                SelectedProfile = currentActiveProfile;
-                
-                // Sync the settings to match the active profile
-                if (_settings.LastUsedProfile != currentActiveProfile.Name)
-                {
-                    _settings.LastUsedProfile = currentActiveProfile.Name;
-                    _settingsService.SaveSettings(_settings);
-                    System.Diagnostics.Debug.WriteLine($"?? SYNCED LastUsedProfile to match active: '{currentActiveProfile.Name}'");
-                }
-            }
-            else if (lastUsedProfile != null && profiles.Contains(lastUsedProfile))
-            {
-                System.Diagnostics.Debug.WriteLine($"? SELECTED: lastUsedProfile = '{lastUsedProfile.Name}' (from settings)");
-                SelectedProfile = lastUsedProfile;
-            }
-            else if (lastUserChoice != null && profiles.Contains(lastUserChoice))
-            {
-                System.Diagnostics.Debug.WriteLine($"? SELECTED: lastUserChoice = '{lastUserChoice.Name}' (legacy flag)");
-                SelectedProfile = lastUserChoice;
-            }
-            else
-            {
-                // Fallback to most recent non-auto-backup profile
-                var fallbackProfile = profiles
-                    .Where(p => !p.Name.StartsWith("backup_", StringComparison.OrdinalIgnoreCase))
-                    .OrderByDescending(p => p.LastModified)
-                    .FirstOrDefault();
-                
-                System.Diagnostics.Debug.WriteLine($"? SELECTED: fallback = '{fallbackProfile?.Name ?? "null"}' (most recent)");
-                SelectedProfile = fallbackProfile ?? profiles.FirstOrDefault();
-            }
-        }
-
-        private void UpdateCommandStates()
-        {
-            ((RelayCommand)SwapProfileCommand).RaiseCanExecuteChanged();
-            ((RelayCommand)DeleteProfileCommand).RaiseCanExecuteChanged();
-            ((RelayCommand)RenameProfileCommand).RaiseCanExecuteChanged();
-            ((RelayCommand)CopyProfileNameCommand).RaiseCanExecuteChanged();
-            ((RelayCommand)OpenFileLocationCommand).RaiseCanExecuteChanged();
-        }
-
-        private void SaveLastUsedProfile(ProfileInfo? profile)
-        {
-            if (profile != null)
-            {
-                System.Diagnostics.Debug.WriteLine($"SAVING LastUsedProfile: '{profile.Name}'");
-                _settings.LastUsedProfile = profile.Name;
-                _settingsService.SaveSettings(_settings);
-                System.Diagnostics.Debug.WriteLine($"SAVED LastUsedProfile: '{_settings.LastUsedProfile}'");
-            }
-        }
-
-        private bool CanSwapProfile() => SelectedProfile != null && !SelectedProfile.IsSystemFile;
-        private bool CanDeleteProfile() => SelectedProfile != null && !SelectedProfile.IsSystemFile && !SelectedProfile.IsCurrentlyActive;
-        private bool CanRenameProfile() => SelectedProfile != null && !SelectedProfile.IsSystemFile;
-        private bool CanCreateBackup() => !string.IsNullOrWhiteSpace(NewBackupName);
-
-        #endregion
-
-        #region INotifyPropertyChanged
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-
-        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
-
-        protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
-        {
-            if (Equals(field, value)) return false;
-            field = value;
-            OnPropertyChanged(propertyName);
-            return true;
+            // Load data asynchronously
+            await ProfileManagement.RefreshProfilesAsync();
+            await ApplicationManagement.LoadExternalApplicationsAsync();
         }
 
         #endregion

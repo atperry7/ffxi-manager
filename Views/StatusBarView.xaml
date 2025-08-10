@@ -1,10 +1,61 @@
 <UserControl x:Class="FFXIManager.Views.StatusBarView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
+    </UserControl.Resources>
+    
     <Border Background="#34495E" Padding="10">
         <DockPanel>
-            <TextBlock Text="Status: " Foreground="White" FontWeight="Bold"/>
-            <TextBlock Text="{Binding StatusMessage}" Foreground="LightGray"/>
+            <!-- Loading Indicator with animated spinner -->
+            <StackPanel DockPanel.Dock="Left" 
+                        Orientation="Horizontal" 
+                        Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisConverter}}"
+                        Margin="0,0,15,0">
+                
+                <!-- Animated Loading Spinner -->
+                <Border Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center">
+                    <Ellipse Width="12" Height="12" 
+                             Stroke="LightBlue" 
+                             StrokeThickness="2" 
+                             StrokeDashArray="6,4" 
+                             StrokeDashOffset="0">
+                        <Ellipse.RenderTransform>
+                            <RotateTransform CenterX="6" CenterY="6"/>
+                        </Ellipse.RenderTransform>
+                        <Ellipse.Triggers>
+                            <EventTrigger RoutedEvent="Loaded">
+                                <BeginStoryboard>
+                                    <Storyboard RepeatBehavior="Forever">
+                                        <DoubleAnimation 
+                                            Storyboard.TargetProperty="RenderTransform.Angle"
+                                            From="0" To="360" Duration="0:0:1"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                        </Ellipse.Triggers>
+                    </Ellipse>
+                </Border>
+                
+                <TextBlock Text="Working..." 
+                           Foreground="LightBlue" 
+                           FontWeight="Bold" 
+                           VerticalAlignment="Center"
+                           FontSize="12"/>
+            </StackPanel>
+            
+            <!-- Status Label and Message -->
+            <TextBlock Text="Status: " 
+                       Foreground="White" 
+                       FontWeight="Bold" 
+                       VerticalAlignment="Center"
+                       FontSize="12"/>
+            <TextBlock Text="{Binding StatusMessage}" 
+                       Foreground="LightGray" 
+                       VerticalAlignment="Center"
+                       FontSize="12"
+                       TextTrimming="CharacterEllipsis"/>
         </DockPanel>
     </Border>
 </UserControl>
