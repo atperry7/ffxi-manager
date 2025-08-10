@@ -326,53 +326,35 @@ namespace FFXIManager.Services
             {
                 var settings = _settingsService.LoadSettings();
                 
-                // Always start with default applications
-                _applications.AddRange(GetDefaultApplications());
-                
-                // Load saved custom applications if any exist
+                // If we have saved applications, load them directly
                 if (settings.ExternalApplications != null && settings.ExternalApplications.Count > 0)
                 {
+                    // Load all applications from settings (including previously saved defaults)
                     foreach (var appData in settings.ExternalApplications)
                     {
-                        // Check if this is a custom application (not one of our defaults)
-                        var isDefaultApp = _applications.Any(defaultApp => 
-                            defaultApp.Name.Equals(appData.Name, StringComparison.OrdinalIgnoreCase));
-                        
-                        if (isDefaultApp)
+                        var application = new ExternalApplication
                         {
-                            // Update the existing default application with saved settings
-                            var existingApp = _applications.First(app => 
-                                app.Name.Equals(appData.Name, StringComparison.OrdinalIgnoreCase));
-                            
-                            existingApp.ExecutablePath = appData.ExecutablePath;
-                            existingApp.Arguments = appData.Arguments;
-                            existingApp.WorkingDirectory = appData.WorkingDirectory;
-                            existingApp.Description = appData.Description;
-                            existingApp.IsEnabled = appData.IsEnabled;
-                            existingApp.AllowMultipleInstances = appData.AllowMultipleInstances;
-                        }
-                        else
-                        {
-                            // Add as a new custom application
-                            var application = new ExternalApplication
-                            {
-                                Name = appData.Name,
-                                ExecutablePath = appData.ExecutablePath,
-                                Arguments = appData.Arguments,
-                                WorkingDirectory = appData.WorkingDirectory,
-                                Description = appData.Description,
-                                IsEnabled = appData.IsEnabled,
-                                AllowMultipleInstances = appData.AllowMultipleInstances
-                            };
-                            _applications.Add(application);
-                        }
+                            Name = appData.Name,
+                            ExecutablePath = appData.ExecutablePath,
+                            Arguments = appData.Arguments,
+                            WorkingDirectory = appData.WorkingDirectory,
+                            Description = appData.Description,
+                            IsEnabled = appData.IsEnabled,
+                            AllowMultipleInstances = appData.AllowMultipleInstances
+                        };
+                        _applications.Add(application);
                     }
                     
-                    _loggingService.LogInfoAsync($"Loaded {_applications.Count} applications ({settings.ExternalApplications.Count} from settings)", "ExternalApplicationService");
+                    _loggingService.LogInfoAsync($"Loaded {_applications.Count} applications from settings", "ExternalApplicationService");
                 }
                 else
                 {
-                    _loggingService.LogInfoAsync($"Loaded {_applications.Count} default applications", "ExternalApplicationService");
+                    // First run - load default applications and save them immediately
+                    _applications.AddRange(GetDefaultApplications());
+                    _loggingService.LogInfoAsync($"First run - loaded {_applications.Count} default applications", "ExternalApplicationService");
+                    
+                    // Save defaults to settings so they persist
+                    _ = Task.Run(async () => await SaveApplicationsToSettings());
                 }
             }
             catch (Exception ex)
@@ -381,6 +363,9 @@ namespace FFXIManager.Services
                 _applications.Clear();
                 _applications.AddRange(GetDefaultApplications());
                 _loggingService.LogErrorAsync($"Failed to load applications from settings, using defaults: {ex.Message}", ex, "ExternalApplicationService");
+                
+                // Try to save defaults
+                _ = Task.Run(async () => await SaveApplicationsToSettings());
             }
         }
 
