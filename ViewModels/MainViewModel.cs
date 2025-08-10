@@ -74,7 +74,7 @@ namespace FFXIManager.ViewModels
             _profileService.PlayOnlineDirectory = _settings.PlayOnlineDirectory;
 
             // DEBUG: Show what was loaded
-            System.Diagnostics.Debug.WriteLine($"?? CONSTRUCTOR: Loaded LastUsedProfile = '{_settings.LastUsedProfile}'");
+            System.Diagnostics.Debug.WriteLine($"CONSTRUCTOR: Loaded LastUsedProfile = '{_settings.LastUsedProfile}'");
 
             Profiles = new ObservableCollection<ProfileInfo>();
             
@@ -177,17 +177,17 @@ namespace FFXIManager.ViewModels
                 var displayText = ActiveLoginInfo.Name;
                 if (displayText.Contains("(Last Set:"))
                 {
-                    // Format: "login_w.bin (Last Set: char2)" -> show "?? Currently Active: char2 profile"
+                    // Format: "login_w.bin (Last Set: char2)" -> show "Currently Active: char2 profile"
                     var match = System.Text.RegularExpressions.Regex.Match(displayText, @"Last Set: ([^)]+)");
                     if (match.Success)
                     {
                         var lastSetProfile = match.Groups[1].Value;
-                        return $"?? Currently Active: '{lastSetProfile}' profile ({ActiveLoginInfo.FileSizeFormatted}) - Modified: {ActiveLoginInfo.LastModified:yyyy-MM-dd HH:mm}";
+                        return $"Currently Active: '{lastSetProfile}' profile ({ActiveLoginInfo.FileSizeFormatted}) - Modified: {ActiveLoginInfo.LastModified:yyyy-MM-dd HH:mm}";
                     }
                 }
                 
                 // Fallback for system file without last set info
-                return $"?? Current: System file ({ActiveLoginInfo.FileSizeFormatted}) - Modified: {ActiveLoginInfo.LastModified:yyyy-MM-dd HH:mm}";
+                return $"Current: System file ({ActiveLoginInfo.FileSizeFormatted}) - Modified: {ActiveLoginInfo.LastModified:yyyy-MM-dd HH:mm}";
             }
         }
         
@@ -318,7 +318,7 @@ namespace FFXIManager.ViewModels
                     _settings.LastActiveProfileName = profile.Name;
                     _settingsService.SaveSettings(_settings);
                     
-                    System.Diagnostics.Debug.WriteLine($"?? SWAP SUCCESS: Updated settings - LastUsedProfile = '{profile.Name}'");
+                    System.Diagnostics.Debug.WriteLine($"SWAP SUCCESS: Updated settings - LastUsedProfile = '{profile.Name}'");
                     
                     await RefreshProfilesAsync();
                 }
@@ -337,7 +337,7 @@ namespace FFXIManager.ViewModels
                 var validation = _validationService.ValidateProfileName(NewBackupName);
                 if (!validation.IsValid)
                 {
-                    _statusService.SetMessage($"? {validation.ErrorMessage}");
+                    _statusService.SetMessage($"{validation.ErrorMessage}");
                     return;
                 }
 
@@ -415,7 +415,7 @@ namespace FFXIManager.ViewModels
                 var validation = _validationService.ValidateProfileName(newName);
                 if (!validation.IsValid)
                 {
-                    _statusService.SetMessage($"? {validation.ErrorMessage}");
+                    _statusService.SetMessage($"{validation.ErrorMessage}");
                     return;
                 }
 
@@ -502,7 +502,7 @@ namespace FFXIManager.ViewModels
 
                 if (success)
                 {
-                    _statusService.SetTemporaryMessage("? All profile tracking reset - orphaned references cleaned up", TimeSpan.FromSeconds(4));
+                    _statusService.SetTemporaryMessage("All profile tracking reset - orphaned references cleaned up", TimeSpan.FromSeconds(4));
                 }
                 else
                 {
@@ -526,7 +526,7 @@ namespace FFXIManager.ViewModels
                     var validation = _validationService.ValidateDirectory(selectedPath);
                     if (!validation.IsValid)
                     {
-                        _statusService.SetMessage($"? {validation.ErrorMessage}");
+                        _statusService.SetMessage($"{validation.ErrorMessage}");
                         return;
                     }
 
@@ -535,7 +535,7 @@ namespace FFXIManager.ViewModels
             }
             catch (Exception ex)
             {
-                _statusService.SetMessage($"? Error selecting directory: {ex.Message}");
+                _statusService.SetMessage($"Error selecting directory: {ex.Message}");
             }
         }
 
@@ -546,11 +546,11 @@ namespace FFXIManager.ViewModels
             try
             {
                 _uiCommandService.CopyToClipboard(SelectedProfile.Name);
-                _statusService.SetMessage($"?? Copied profile name: {SelectedProfile.Name}");
+                _statusService.SetMessage($"Copied profile name: {SelectedProfile.Name}");
             }
             catch (Exception ex)
             {
-                _statusService.SetMessage($"? Error copying to clipboard: {ex.Message}");
+                _statusService.SetMessage($"Error copying to clipboard: {ex.Message}");
             }
         }
 
@@ -561,11 +561,11 @@ namespace FFXIManager.ViewModels
             try
             {
                 _uiCommandService.OpenFileLocation(SelectedProfile.FilePath);
-                _statusService.SetMessage($"?? Opened file location for: {SelectedProfile.Name}");
+                _statusService.SetMessage($"Opened file location for: {SelectedProfile.Name}");
             }
             catch (Exception ex)
             {
-                _statusService.SetMessage($"? {ex.Message}");
+                _statusService.SetMessage($"{ex.Message}");
             }
         }
 
@@ -604,11 +604,11 @@ namespace FFXIManager.ViewModels
             try
             {
                 _uiCommandService.CopyToClipboard(profile.Name);
-                _statusService.SetMessage($"?? Copied profile name: {profile.Name}");
+                _statusService.SetMessage($"Copied profile name: {profile.Name}");
             }
             catch (Exception ex)
             {
-                _statusService.SetMessage($"? Error copying to clipboard: {ex.Message}");
+                _statusService.SetMessage($"Error copying to clipboard: {ex.Message}");
             }
         }
 
@@ -619,11 +619,11 @@ namespace FFXIManager.ViewModels
             try
             {
                 _uiCommandService.OpenFileLocation(profile.FilePath);
-                _statusService.SetMessage($"?? Opened file location for: {profile.Name}");
+                _statusService.SetMessage($"Opened file location for: {profile.Name}");
             }
             catch (Exception ex)
             {
-                _statusService.SetMessage($"? {ex.Message}");
+                _statusService.SetMessage($"{ex.Message}");
             }
         }
 
@@ -745,10 +745,10 @@ namespace FFXIManager.ViewModels
         {
             if (profile != null)
             {
-                System.Diagnostics.Debug.WriteLine($"?? SAVING LastUsedProfile: '{profile.Name}'");
+                System.Diagnostics.Debug.WriteLine($"SAVING LastUsedProfile: '{profile.Name}'");
                 _settings.LastUsedProfile = profile.Name;
                 _settingsService.SaveSettings(_settings);
-                System.Diagnostics.Debug.WriteLine($"? SAVED LastUsedProfile: '{_settings.LastUsedProfile}'");
+                System.Diagnostics.Debug.WriteLine($"SAVED LastUsedProfile: '{_settings.LastUsedProfile}'");
             }
         }
 

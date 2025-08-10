@@ -43,7 +43,7 @@ namespace FFXIManager.Converters
     }
     
     /// <summary>
-    /// Converts boolean to color - UPDATED FOR SIMPLIFIED VERSION
+    /// Converts boolean to color - UPDATED FOR ACTIVE PROFILES
     /// </summary>
     public class BoolToColorConverter : IValueConverter
     {
@@ -53,7 +53,7 @@ namespace FFXIManager.Converters
         {
             if (parameter?.ToString() == "Status")
             {
-                // For status column - green for user's last choice, black for others
+                // For status column - green for active profiles, black for others
                 return value is true ? Brushes.DarkGreen : Brushes.Black;
             }
             
@@ -90,28 +90,28 @@ namespace FFXIManager.Converters
     }
     
     /// <summary>
-    /// Combines profile type and user choice into a meaningful status message - SIMPLIFIED VERSION
+    /// Combines profile type and active status into a clear, user-friendly status message
     /// </summary>
     public class ProfileStatusConverter : IMultiValueConverter
     {
         public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
         {
-            if (values?.Length != 2) return "Inactive";
+            if (values?.Length < 2) return "Available";
             
             var isSystemFile = values[0] as bool? ?? false;
-            var isLastUserChoice = values[1] as bool? ?? false;
+            var isCurrentlyActive = values.Length > 2 ? (values[2] as bool? ?? false) : false;
             
             if (isSystemFile)
             {
                 return "System File"; // This is the login_w.bin file
             }
-            else if (isLastUserChoice)
+            else if (isCurrentlyActive)
             {
-                return "Last Choice"; // This was the user's last selected profile
+                return "Active"; // This profile is currently loaded in login_w.bin
             }
             else
             {
-                return "Inactive"; // This backup is not the user's last choice
+                return "Available"; // This backup is available for use
             }
         }
         

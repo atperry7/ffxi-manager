@@ -99,20 +99,16 @@
                     <DataGridTemplateColumn Header="Status" Width="140">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock FontWeight="{Binding IsSystemFile, Mode=OneWay, Converter={StaticResource BoolToFontWeightConverter}}"
-                                               Foreground="{Binding IsLastUserChoice, Mode=OneWay, ConverterParameter=Status, Converter={StaticResource BoolToColorConverter}}">
-                                        <TextBlock.Text>
-                                            <MultiBinding Converter="{StaticResource ProfileStatusConverter}">
-                                                <Binding Path="IsSystemFile" Mode="OneWay"/>
-                                                <Binding Path="IsLastUserChoice" Mode="OneWay"/>
-                                            </MultiBinding>
-                                        </TextBlock.Text>
-                                    </TextBlock>
-                                    <!-- Show active indicator for currently active profile -->
-                                    <TextBlock Text="ACTIVE" FontWeight="Bold" Foreground="#4CAF50" Margin="5,0,0,0" FontSize="10"
-                                               Visibility="{Binding IsCurrentlyActive, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}"/>
-                                </StackPanel>
+                                <TextBlock FontWeight="{Binding IsCurrentlyActive, Mode=OneWay, Converter={StaticResource BoolToFontWeightConverter}}"
+                                           Foreground="{Binding IsCurrentlyActive, Mode=OneWay, ConverterParameter=Status, Converter={StaticResource BoolToColorConverter}}">
+                                    <TextBlock.Text>
+                                        <MultiBinding Converter="{StaticResource ProfileStatusConverter}">
+                                            <Binding Path="IsSystemFile" Mode="OneWay"/>
+                                            <Binding Path="IsLastUserChoice" Mode="OneWay"/>
+                                            <Binding Path="IsCurrentlyActive" Mode="OneWay"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
