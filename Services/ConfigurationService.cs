@@ -12,7 +12,7 @@ namespace FFXIManager.Services
     public class ConfigurationService : IConfigurationService
     {
         private readonly string _configurationPath;
-        private ApplicationConfiguration _configuration;
+        private ApplicationConfiguration _configuration = null!; // Will be initialized in constructor
 
         public ProfileConfiguration ProfileConfig => _configuration.Profile;
         public UIConfiguration UIConfig => _configuration.UI;

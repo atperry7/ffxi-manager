@@ -85,14 +85,17 @@ namespace FFXIManager.Services
         {
             await LoadLogsIfNeeded();
             
-            lock (_lock)
+            return await Task.Run(() =>
             {
-                var startIndex = Math.Max(0, _logBuffer.Count - count);
-                return _logBuffer.GetRange(startIndex, _logBuffer.Count - startIndex);
-            }
+                lock (_lock)
+                {
+                    var startIndex = Math.Max(0, _logBuffer.Count - count);
+                    return _logBuffer.GetRange(startIndex, _logBuffer.Count - startIndex);
+                }
+            });
         }
 
-        public async Task ClearLogsAsync()
+        public Task ClearLogsAsync()
         {
             lock (_lock)
             {
@@ -110,9 +113,11 @@ namespace FFXIManager.Services
             {
                 // Ignore file deletion errors
             }
+            
+            return Task.CompletedTask;
         }
 
-        private async Task LogAsync(LogLevel level, string message, Exception? exception, string? category)
+        private Task LogAsync(LogLevel level, string message, Exception? exception, string? category)
         {
             var logEntry = new LogEntry
             {
@@ -134,8 +139,10 @@ namespace FFXIManager.Services
                 }
             }
 
-            // Write to file asynchronously
+            // Write to file asynchronously (fire-and-forget)
             _ = Task.Run(async () => await WriteToFileAsync(logEntry));
+            
+            return Task.CompletedTask;
         }
 
         private async Task WriteToFileAsync(LogEntry logEntry)

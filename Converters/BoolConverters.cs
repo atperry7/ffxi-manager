@@ -96,7 +96,7 @@ namespace FFXIManager.Converters
     {
         public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
         {
-            if (values?.Length < 2) return "Available";
+            if (values == null || values.Length < 2) return "Available";
             
             var isSystemFile = values[0] as bool? ?? false;
             var isCurrentlyActive = values.Length > 2 ? (values[2] as bool? ?? false) : false;

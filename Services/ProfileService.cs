@@ -151,10 +151,18 @@ namespace FFXIManager.Services
         {
             await _loggingService.LogDebugAsync("Getting active login info", "ProfileService");
             
-            return await _cachingService.GetOrSetAsync(
-                CacheKeys.ActiveLoginInfo,
-                async () => await Task.Run(() => GetActiveLoginInfoInternal()),
-                TimeSpan.FromMinutes(1)); // Short cache as this can change frequently
+            // Handle nullable return type properly for caching
+            var result = await _cachingService.GetAsync<ProfileInfo>(CacheKeys.ActiveLoginInfo);
+            if (result != null)
+                return result;
+                
+            var activeInfo = GetActiveLoginInfoInternal();
+            if (activeInfo != null)
+            {
+                await _cachingService.SetAsync(CacheKeys.ActiveLoginInfo, activeInfo, TimeSpan.FromMinutes(1));
+            }
+            
+            return activeInfo;
         }
         
         private ProfileInfo? GetActiveLoginInfoInternal()
@@ -445,7 +453,7 @@ namespace FFXIManager.Services
                             file.Delete();
                             deletedCount++;
                         }
-                        catch (Exception ex)
+                        catch
                         {
                             await _loggingService.LogWarningAsync($"Failed to delete auto-backup: {file.Name}", "ProfileService");
                         }
