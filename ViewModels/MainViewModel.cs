@@ -12,7 +12,7 @@ using System.Windows.Input;
 namespace FFXIManager.ViewModels
 {
     /// <summary>
-    /// SIMPLIFIED ViewModel for the main window - now focused only on UI state management
+    /// ENHANCED ViewModel for the main window - now includes external application management
     /// </summary>
     public class MainViewModel : INotifyPropertyChanged
     {
@@ -26,6 +26,7 @@ namespace FFXIManager.ViewModels
         private readonly IValidationService _validationService;
         private readonly ILoggingService _loggingService;
         private readonly INotificationService _notificationService;
+        private readonly IExternalApplicationService _applicationService;
         
         private ApplicationSettings _settings;
         private ProfileInfo? _selectedProfile;
@@ -42,7 +43,8 @@ namespace FFXIManager.ViewModels
             ServiceLocator.ConfigurationService,
             ServiceLocator.ValidationService,
             ServiceLocator.LoggingService,
-            ServiceLocator.NotificationService)
+            ServiceLocator.NotificationService,
+            ServiceLocator.ExternalApplicationService)
         {
         }
 
@@ -57,7 +59,8 @@ namespace FFXIManager.ViewModels
             IConfigurationService configService,
             IValidationService validationService,
             ILoggingService loggingService,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            IExternalApplicationService applicationService)
         {
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
             _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
@@ -69,6 +72,7 @@ namespace FFXIManager.ViewModels
             _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
+            _applicationService = applicationService ?? throw new ArgumentNullException(nameof(applicationService));
 
             _settings = _settingsService.LoadSettings();
             _profileService.PlayOnlineDirectory = _settings.PlayOnlineDirectory;
@@ -77,22 +81,32 @@ namespace FFXIManager.ViewModels
             System.Diagnostics.Debug.WriteLine($"CONSTRUCTOR: Loaded LastUsedProfile = '{_settings.LastUsedProfile}'");
 
             Profiles = new ObservableCollection<ProfileInfo>();
+            ExternalApplications = new ObservableCollection<ExternalApplication>();
             
             // Subscribe to status message changes
             _statusService.MessageChanged += (_, message) => OnPropertyChanged(nameof(StatusMessage));
+            
+            // Subscribe to application status changes
+            _applicationService.ApplicationStatusChanged += OnApplicationStatusChanged;
 
             InitializeCommands();
             
-            // Load profiles on startup if auto-refresh is enabled
+            // Load profiles and applications on startup if auto-refresh is enabled
             if (_settings.AutoRefreshOnStartup)
             {
                 _ = Task.Run(async () => await RefreshProfilesAsync());
+                _ = Task.Run(async () => await LoadExternalApplicationsAsync());
             }
+            
+            // Start application monitoring
+            _applicationService.StartMonitoring();
         }
 
         #region Properties
 
         public ObservableCollection<ProfileInfo> Profiles { get; }
+        
+        public ObservableCollection<ExternalApplication> ExternalApplications { get; }
 
         public ProfileInfo? SelectedProfile
         {
@@ -171,7 +185,7 @@ namespace FFXIManager.ViewModels
             get
             {
                 if (ActiveLoginInfo == null)
-                    return "?? No active login file found";
+                    return "? No active login file found";
                 
                 // Extract the "Last Set" information from the name if it exists
                 var displayText = ActiveLoginInfo.Name;
@@ -208,6 +222,7 @@ namespace FFXIManager.ViewModels
 
         #region Commands
 
+        // Existing Profile Commands
         public ICommand RefreshCommand { get; private set; } = null!;
         public ICommand SwapProfileCommand { get; private set; } = null!;
         public ICommand CreateBackupCommand { get; private set; } = null!;
@@ -224,9 +239,18 @@ namespace FFXIManager.ViewModels
         public ICommand CopyProfileNameParameterCommand { get; private set; } = null!;
         public ICommand OpenFileLocationParameterCommand { get; private set; } = null!;
 
+        // New Application Management Commands
+        public ICommand LaunchApplicationCommand { get; private set; } = null!;
+        public ICommand KillApplicationCommand { get; private set; } = null!;
+        public ICommand EditApplicationCommand { get; private set; } = null!;
+        public ICommand RemoveApplicationCommand { get; private set; } = null!;
+        public ICommand AddApplicationCommand { get; private set; } = null!;
+        public ICommand RefreshApplicationsCommand { get; private set; } = null!;
+
         private void InitializeCommands()
         {
-            RefreshCommand = new RelayCommand(async () => await RefreshProfilesAsync());
+            // Existing Profile Commands
+            RefreshCommand = new RelayCommand(async () => await RefreshAllAsync());
             SwapProfileCommand = new RelayCommand(async () => await SwapProfileAsync(), CanSwapProfile);
             CreateBackupCommand = new RelayCommand(async () => await CreateBackupAsync(), CanCreateBackup);
             DeleteProfileCommand = new RelayCommand(async () => await DeleteProfileAsync(), CanDeleteProfile);
@@ -235,7 +259,7 @@ namespace FFXIManager.ViewModels
             ResetTrackingCommand = new RelayCommand(async () => await ResetTrackingAsync());
             RenameProfileCommand = new RelayCommand(async () => await RenameProfileAsync(), CanRenameProfile);
 
-            // Parameterized commands
+            // Parameterized profile commands
             SwapProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
                 async profile => await SwapProfileAsync(profile), 
                 profile => profile != null && !profile.IsSystemFile);
@@ -255,11 +279,243 @@ namespace FFXIManager.ViewModels
             OpenFileLocationParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
                 profile => OpenFileLocationParameter(profile), 
                 profile => profile != null);
+
+            // New Application Management Commands
+            LaunchApplicationCommand = new RelayCommandWithParameter<ExternalApplication>(
+                async app => await LaunchApplicationAsync(app),
+                app => app != null && app.IsEnabled && app.ExecutableExists);
+            KillApplicationCommand = new RelayCommandWithParameter<ExternalApplication>(
+                async app => await KillApplicationAsync(app),
+                app => app != null && app.IsRunning);
+            EditApplicationCommand = new RelayCommandWithParameter<ExternalApplication>(
+                async app => await EditApplicationAsync(app),
+                app => app != null);
+            RemoveApplicationCommand = new RelayCommandWithParameter<ExternalApplication>(
+                async app => await RemoveApplicationAsync(app),
+                app => app != null);
+            AddApplicationCommand = new RelayCommand(async () => await AddApplicationAsync());
+            RefreshApplicationsCommand = new RelayCommand(async () => await LoadExternalApplicationsAsync());
         }
 
         #endregion
 
-        #region Command Operations
+        #region Application Management Operations
+
+        private async Task RefreshAllAsync()
+        {
+            await RefreshProfilesAsync();
+            await LoadExternalApplicationsAsync();
+        }
+
+        private async Task LoadExternalApplicationsAsync()
+        {
+            try
+            {
+                var applications = await _applicationService.GetApplicationsAsync();
+                await _applicationService.RefreshApplicationStatusAsync();
+
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    ExternalApplications.Clear();
+                    foreach (var app in applications)
+                    {
+                        ExternalApplications.Add(app);
+                    }
+                });
+
+                _statusService.SetMessage($"Loaded {applications.Count} external applications");
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"Error loading applications: {ex.Message}");
+            }
+        }
+
+        private async Task LaunchApplicationAsync(ExternalApplication application)
+        {
+            if (application == null) return;
+
+            try
+            {
+                _statusService.SetMessage($"Launching {application.Name}...");
+
+                var success = await _applicationService.LaunchApplicationAsync(application);
+                
+                if (success)
+                {
+                    _statusService.SetMessage($"Successfully launched {application.Name}");
+                }
+                else
+                {
+                    _statusService.SetMessage($"Failed to launch {application.Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"Error launching {application.Name}: {ex.Message}");
+            }
+        }
+
+        private async Task KillApplicationAsync(ExternalApplication application)
+        {
+            if (application == null) return;
+
+            try
+            {
+                _statusService.SetMessage($"Stopping {application.Name}...");
+
+                var success = await _applicationService.KillApplicationAsync(application);
+                
+                if (success)
+                {
+                    _statusService.SetMessage($"Successfully stopped {application.Name}");
+                }
+                else
+                {
+                    _statusService.SetMessage($"Failed to stop {application.Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"Error stopping {application.Name}: {ex.Message}");
+            }
+        }
+
+        private async Task EditApplicationAsync(ExternalApplication application)
+        {
+            if (application == null) 
+            {
+                _statusService.SetMessage("? No application selected for editing");
+                return;
+            }
+
+            try
+            {
+                _statusService.SetMessage($"?? Opening configuration for {application.Name}...");
+
+                // Simple UI thread check and dialog creation
+                bool dialogCompleted = false;
+                Exception? dialogException = null;
+                
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    try
+                    {
+                        _statusService.SetMessage($"?? Creating dialog for {application.Name}...");
+                        
+                        // Use simple dialog first to test
+                        var dialog = new SimpleApplicationDialog(application)
+                        {
+                            Owner = Application.Current.MainWindow,
+                            ShowInTaskbar = false
+                        };
+                        
+                        _statusService.SetMessage($"?? Showing dialog for {application.Name}...");
+                        
+                        var result = dialog.ShowDialog();
+                        
+                        if (result == true)
+                        {
+                            _statusService.SetMessage($"?? Application {application.Name} updated successfully");
+                            
+                            // Force property notifications
+                            application.OnPropertyChanged(nameof(application.StatusColor));
+                            application.OnPropertyChanged(nameof(application.StatusText));
+                            application.OnPropertyChanged(nameof(application.ExecutableExists));
+                        }
+                        else
+                        {
+                            _statusService.SetMessage("? Configuration cancelled");
+                        }
+                        
+                        dialogCompleted = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        dialogException = ex;
+                        _statusService.SetMessage($"? Dialog error: {ex.Message}");
+                    }
+                });
+
+                if (dialogException != null)
+                {
+                    await _loggingService.LogErrorAsync($"Dialog creation failed for {application.Name}", dialogException, "MainViewModel");
+                }
+                else if (dialogCompleted)
+                {
+                    await _loggingService.LogInfoAsync($"Successfully edited application {application.Name}", "MainViewModel");
+                }
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"? Error editing application: {ex.Message}");
+                await _loggingService.LogErrorAsync($"Error in EditApplicationAsync for {application.Name}", ex, "MainViewModel");
+            }
+        }
+
+        private async Task RemoveApplicationAsync(ExternalApplication application)
+        {
+            if (application == null) return;
+
+            try
+            {
+                var result = MessageBox.Show(
+                    $"Are you sure you want to remove '{application.Name}'?",
+                    "Confirm Remove Application",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    await _applicationService.RemoveApplicationAsync(application);
+                    ExternalApplications.Remove(application);
+                    _statusService.SetMessage($"Removed application: {application.Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"Error removing application: {ex.Message}");
+            }
+        }
+
+        private async Task AddApplicationAsync()
+        {
+            try
+            {
+                var newApplication = new ExternalApplication
+                {
+                    Name = "New Application",
+                    AllowMultipleInstances = false,
+                    IsEnabled = true
+                };
+
+                var dialog = new ApplicationConfigDialog(newApplication);
+                if (dialog.ShowDialog() == true)
+                {
+                    await _applicationService.AddApplicationAsync(newApplication);
+                    ExternalApplications.Add(newApplication);
+                    _statusService.SetMessage($"Added application: {newApplication.Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"Error adding application: {ex.Message}");
+            }
+        }
+
+        private void OnApplicationStatusChanged(object? sender, ExternalApplication application)
+        {
+            // Update UI on status changes - this runs on a background thread
+            Application.Current.Dispatcher.BeginInvoke(() =>
+            {
+                // Update command states
+                UpdateCommandStates();
+            });
+        }
+
+        #endregion
+
+        #region Profile Management Operations (Existing Code)
 
         private async Task RefreshProfilesAsync()
         {
@@ -647,7 +903,7 @@ namespace FFXIManager.ViewModels
             // Get the currently active profile name from the login file
             var activeProfileName = CurrentActiveProfileName;
             
-            System.Diagnostics.Debug.WriteLine($"?? PERSISTENCE DEBUG:");
+            System.Diagnostics.Debug.WriteLine($"? PERSISTENCE DEBUG:");
             System.Diagnostics.Debug.WriteLine($"   - CurrentActiveProfileName (from login file): '{activeProfileName}'");
             System.Diagnostics.Debug.WriteLine($"   - _settings.LastUsedProfile (from app settings): '{_settings.LastUsedProfile}'");
             System.Diagnostics.Debug.WriteLine($"   - _settings.LastActiveProfileName (from app settings): '{_settings.LastActiveProfileName}'");
@@ -661,7 +917,7 @@ namespace FFXIManager.ViewModels
                 // If the active profile no longer exists, we need to clean up the orphaned reference
                 if (!activeProfileExists)
                 {
-                    _statusService.SetMessage($"?? Previously active profile '{activeProfileName}' no longer exists - resetting tracking");
+                    _statusService.SetMessage($"? Previously active profile '{activeProfileName}' no longer exists - resetting tracking");
                 }
             }
 
@@ -690,7 +946,7 @@ namespace FFXIManager.ViewModels
 
             // ENHANCED selection logic - prioritize the actually active profile
             // Priority: 1. Currently active profile (from login file), 2. Last used profile (from settings), 3. Last user choice, 4. Most recent
-            System.Diagnostics.Debug.WriteLine($"?? SELECTION CANDIDATES:");
+            System.Diagnostics.Debug.WriteLine($"? SELECTION CANDIDATES:");
             System.Diagnostics.Debug.WriteLine($"   - currentActiveProfile: {currentActiveProfile?.Name ?? "null"}");
             System.Diagnostics.Debug.WriteLine($"   - lastUsedProfile: {lastUsedProfile?.Name ?? "null"}");
             System.Diagnostics.Debug.WriteLine($"   - lastUserChoice: {lastUserChoice?.Name ?? "null"}");

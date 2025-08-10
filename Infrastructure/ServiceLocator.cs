@@ -4,7 +4,7 @@ using FFXIManager.Configuration;
 namespace FFXIManager.Infrastructure
 {
     /// <summary>
-    /// Enhanced service locator with performance services
+    /// Enhanced service locator with external application management services
     /// </summary>
     public static class ServiceLocator
     {
@@ -17,6 +17,7 @@ namespace FFXIManager.Infrastructure
         private static ILoggingService? _loggingService;
         private static ICachingService? _cachingService;
         private static INotificationService? _notificationService;
+        private static IExternalApplicationService? _externalApplicationService;
         
         public static ISettingsService SettingsService 
         {
@@ -72,6 +73,15 @@ namespace FFXIManager.Infrastructure
             }
         }
         
+        public static IExternalApplicationService ExternalApplicationService
+        {
+            get
+            {
+                _externalApplicationService ??= new ExternalApplicationService(LoggingService, SettingsService);
+                return _externalApplicationService;
+            }
+        }
+        
         public static IProfileService ProfileService
         {
             get
@@ -117,7 +127,8 @@ namespace FFXIManager.Infrastructure
             IValidationService? validationService = null,
             ILoggingService? loggingService = null,
             ICachingService? cachingService = null,
-            INotificationService? notificationService = null)
+            INotificationService? notificationService = null,
+            IExternalApplicationService? externalApplicationService = null)
         {
             _settingsService = settingsService;
             _profileService = profileService;
@@ -128,11 +139,10 @@ namespace FFXIManager.Infrastructure
             _loggingService = loggingService;
             _cachingService = cachingService;
             _notificationService = notificationService;
+            _externalApplicationService = externalApplicationService;
         }
-
-        /// <summary>
-        /// Clear all cached services (useful for testing)
-        /// </summary>
+        
+        // For cleanup during testing
         public static void Reset()
         {
             _settingsService = null;
@@ -144,6 +154,7 @@ namespace FFXIManager.Infrastructure
             _loggingService = null;
             _cachingService = null;
             _notificationService = null;
+            _externalApplicationService = null;
         }
     }
 }

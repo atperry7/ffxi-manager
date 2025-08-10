@@ -1,4 +1,4 @@
-<UserControl x:Class="FFXIManager.Views.ProfileActionsView"
+﻿<UserControl x:Class="FFXIManager.Views.ProfileActionsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:converters="clr-namespace:FFXIManager.Converters">
@@ -6,139 +6,266 @@
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
         <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
         <converters:ProfileStatusConverter x:Key="ProfileStatusConverter"/>
+        
+        <!-- Style for application buttons -->
+        <Style x:Key="AppButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Padding" Value="5,2"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
     </UserControl.Resources>
     
     <GroupBox Header="Actions">
-        <StackPanel>
-            <!-- Profile Actions -->
-            <GroupBox Header="Profile Management">
-                <StackPanel>
-                    <!-- Create Backup Section -->
-                    <Label Content="Create New Backup:"/>
-                    <TextBox Text="{Binding NewBackupName, UpdateSourceTrigger=PropertyChanged}" 
-                             x:Name="BackupNameTextBox"/>
-                    <Button Content="Create Backup from Active" 
-                            Command="{Binding CreateBackupCommand}"
-                            Background="#27AE60"
-                            Foreground="White"/>
-                </StackPanel>
-            </GroupBox>
-            
-            <!-- Selected Profile Details -->
-            <GroupBox Header="Selected Profile Details">
-                <Grid>
-                    <!-- Profile Details -->
-                    <StackPanel DataContext="{Binding SelectedProfile}">
-                        <StackPanel.Style>
-                            <Style TargetType="StackPanel">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding}" Value="{x:Null}">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </StackPanel.Style>
-                        
-                        <TextBlock>
-                            <Run Text="Name: " FontWeight="Bold"/>
-                            <Run Text="{Binding Name}"/>
-                        </TextBlock>
-                        
-                        <TextBlock>
-                            <Run Text="File Size: " FontWeight="Bold"/>
-                            <Run Text="{Binding FileSizeFormatted, Mode=OneWay}"/>
-                        </TextBlock>
-                        
-                        <TextBlock>
-                            <Run Text="Last Modified: " FontWeight="Bold"/>
-                            <Run Text="{Binding LastModified, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"/>
-                        </TextBlock>
-                        
-                        <TextBlock>
-                            <Run Text="Status: " FontWeight="Bold"/>
-                            <Run Foreground="{Binding IsLastUserChoice, Mode=OneWay, ConverterParameter=Status, Converter={StaticResource BoolToColorConverter}}">
-                                <Run.Text>
-                                    <MultiBinding Converter="{StaticResource ProfileStatusConverter}">
-                                        <Binding Path="IsSystemFile" Mode="OneWay"/>
-                                        <Binding Path="IsLastUserChoice" Mode="OneWay"/>
-                                    </MultiBinding>
-                                </Run.Text>
-                            </Run>
-                        </TextBlock>
-                        
-                        <TextBlock Text="{Binding Description}" 
-                                   TextWrapping="Wrap" 
-                                   FontSize="11" 
-                                   Foreground="DarkBlue" 
-                                   Margin="0,5,0,5"/>
-                        
-                        <!-- Warning for system file -->
-                        <Border Background="#FFF3CD" 
-                                BorderBrush="#FFEAA7" 
-                                BorderThickness="1" 
-                                Padding="8" 
-                                Margin="0,5,0,5"
-                                Visibility="{Binding IsSystemFile, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}">
-                            <StackPanel>
-                                <TextBlock Text="Warning: System Login File" 
-                                           FontWeight="Bold" 
-                                           Foreground="#856404"/>
-                                <TextBlock Text="This is the system file used by PlayOnline. It cannot be deleted or swapped. Create backups from this file instead." 
-                                           TextWrapping="Wrap" 
-                                           FontSize="10" 
-                                           Foreground="#856404" 
-                                           Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </Border>
-                        
-                        <TextBlock Text="{Binding FilePath}" 
-                                   TextWrapping="Wrap" 
-                                   FontSize="10" 
-                                   Foreground="Gray" 
-                                   Margin="0,5,0,0"/>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <!-- Profile Actions -->
+                <GroupBox Header="Profile Management">
+                    <StackPanel>
+                        <!-- Create Backup Section -->
+                        <Label Content="Create New Backup:"/>
+                        <TextBox Text="{Binding NewBackupName, UpdateSourceTrigger=PropertyChanged}" 
+                                 x:Name="BackupNameTextBox"/>
+                        <Button Content="Create Backup from Active" 
+                                Command="{Binding CreateBackupCommand}"
+                                Background="#27AE60"
+                                Foreground="White"/>
                     </StackPanel>
-                    
-                    <!-- No Selection Message -->
-                    <TextBlock Text="No profile selected" 
-                               FontStyle="Italic" 
-                               Foreground="Gray"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               Margin="10">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding SelectedProfile}" Value="{x:Null}">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                </Grid>
-            </GroupBox>
-            
-            <!-- Advanced Options -->
-            <GroupBox Header="Advanced" Margin="0,10,0,0">
-                <Expander Header="Maintenance Tools" IsExpanded="False">
-                    <StackPanel Margin="0,5,0,0">
-                        <Button Content="Clean Up Auto-Backups" 
-                                Command="{Binding CleanupAutoBackupsCommand}"
-                                Background="#F39C12"
-                                Foreground="White"
-                                ToolTip="Remove old automatic backup files (keeps 5 most recent). Auto-backups are created automatically during profile swaps for safety."/>
-                        <Button Content="Reset Active Tracking" 
-                                Command="{Binding ResetTrackingCommand}"
-                                Background="#9B59B6"
-                                Foreground="White"
-                                ToolTip="Clear active profile tracking and start fresh. Use this if the app incorrectly identifies which profile is active."
-                                ToolTipService.InitialShowDelay="150"
-                                ToolTipService.ShowDuration="8000"
-                                ToolTipService.BetweenShowDelay="50"/>
+                </GroupBox>
+                
+                <!-- Application Management Section -->
+                <GroupBox Header="🚀 Application Manager" Margin="0,10,0,0">
+                    <StackPanel>
+                        <!-- Application List -->
+                        <ItemsControl ItemsSource="{Binding ExternalApplications}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="LightGray" BorderThickness="1" Margin="0,2" Padding="5" 
+                                            Background="AliceBlue">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            
+                                            <!-- Status Indicator -->
+                                            <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,8,0"
+                                                     VerticalAlignment="Center"
+                                                     Fill="{Binding StatusColor}"/>
+                                            
+                                            <!-- Application Info -->
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12"/>
+                                                <TextBlock Text="{Binding StatusText}" FontSize="10" 
+                                                           Foreground="Gray" Margin="0,1,0,0"/>
+                                            </StackPanel>
+                                            
+                                            <!-- Action Buttons -->
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                <!-- Launch Button -->
+                                                <Button Content="▶️"
+                                                        Command="{Binding DataContext.LaunchApplicationCommand, 
+                                                                 RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip="Launch Application"
+                                                        Width="25" Height="28" Margin="2" Padding="5,2" FontSize="11" BorderThickness="1"
+                                                        Background="#2ECC71" Foreground="White">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button">
+                                                            <Setter Property="Background" Value="#2ECC71"/>
+                                                            <Setter Property="Foreground" Value="White"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding ExecutableExists}" Value="False">
+                                                                    <Setter Property="IsEnabled" Value="False"/>
+                                                                    <Setter Property="Background" Value="Gray"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                                                                    <Setter Property="IsEnabled" Value="False"/>
+                                                                    <Setter Property="Background" Value="Gray"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
+                                                
+                                                <!-- Kill Button -->
+                                                <Button Content="⏹️"
+                                                        Command="{Binding DataContext.KillApplicationCommand, 
+                                                                 RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip="Stop Application"
+                                                        Width="25" Height="28" Margin="2" Padding="5,2" FontSize="11" BorderThickness="1"
+                                                        Background="#E74C3C" Foreground="White">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button">
+                                                            <Setter Property="Background" Value="#E74C3C"/>
+                                                            <Setter Property="Foreground" Value="White"/>
+                                                            <Setter Property="IsEnabled" Value="{Binding IsRunning}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsRunning}" Value="False">
+                                                                    <Setter Property="Background" Value="Gray"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
+                                                
+                                                <!-- Edit Button -->
+                                                <Button Content="⚙️" Style="{StaticResource AppButtonStyle}"
+                                                        Command="{Binding DataContext.EditApplicationCommand, 
+                                                                 RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip="Edit Application"
+                                                        Background="#F39C12" Foreground="White"
+                                                        Width="25"/>
+                                                
+                                                <!-- Remove Button -->
+                                                <Button Content="🗑️" Style="{StaticResource AppButtonStyle}"
+                                                        Command="{Binding DataContext.RemoveApplicationCommand, 
+                                                                 RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip="Remove Application"
+                                                        Background="#95A5A6" Foreground="White"
+                                                        Width="25"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        
+                        <!-- Add Application Button -->
+                        <Button Content="➕ Add Application" 
+                                Command="{Binding AddApplicationCommand}"
+                                Background="#3498DB" Foreground="White"
+                                Margin="0,5,0,0"/>
+                        
+                        <!-- Refresh Applications Button -->
+                        <Button Content="🔄 Refresh Status" 
+                                Command="{Binding RefreshApplicationsCommand}"
+                                Background="#9B59B6" Foreground="White"
+                                Margin="0,2,0,0"/>
                     </StackPanel>
-                </Expander>
-            </GroupBox>
-        </StackPanel>
+                </GroupBox>
+                
+                <!-- Selected Profile Details -->
+                <GroupBox Header="Selected Profile Details" Margin="0,10,0,0">
+                    <Grid>
+                        <!-- Profile Details -->
+                        <StackPanel DataContext="{Binding SelectedProfile}">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            
+                            <TextBlock>
+                                <Run Text="Name: " FontWeight="Bold"/>
+                                <Run Text="{Binding Name}"/>
+                            </TextBlock>
+                            
+                            <TextBlock>
+                                <Run Text="File Size: " FontWeight="Bold"/>
+                                <Run Text="{Binding FileSizeFormatted, Mode=OneWay}"/>
+                            </TextBlock>
+                            
+                            <TextBlock>
+                                <Run Text="Last Modified: " FontWeight="Bold"/>
+                                <Run Text="{Binding LastModified, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"/>
+                            </TextBlock>
+                            
+                            <TextBlock>
+                                <Run Text="Status: " FontWeight="Bold"/>
+                                <Run Foreground="{Binding IsLastUserChoice, Mode=OneWay, ConverterParameter=Status, Converter={StaticResource BoolToColorConverter}}">
+                                    <Run.Text>
+                                        <MultiBinding Converter="{StaticResource ProfileStatusConverter}">
+                                            <Binding Path="IsSystemFile" Mode="OneWay"/>
+                                            <Binding Path="IsLastUserChoice" Mode="OneWay"/>
+                                        </MultiBinding>
+                                    </Run.Text>
+                                </Run>
+                            </TextBlock>
+                            
+                            <TextBlock Text="{Binding Description}" 
+                                       TextWrapping="Wrap" 
+                                       FontSize="11" 
+                                       Foreground="DarkBlue" 
+                                       Margin="0,5,0,5"/>
+                            
+                            <!-- Warning for system file -->
+                            <Border Background="#FFF3CD" 
+                                    BorderBrush="#FFEAA7" 
+                                    BorderThickness="1" 
+                                    Padding="8" 
+                                    Margin="0,5,0,5"
+                                    Visibility="{Binding IsSystemFile, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}">
+                                <StackPanel>
+                                    <TextBlock Text="Warning: System Login File" 
+                                               FontWeight="Bold" 
+                                               Foreground="#856404"/>
+                                    <TextBlock Text="This is the system file used by PlayOnline. It cannot be deleted or swapped. Create backups from this file instead." 
+                                               TextWrapping="Wrap" 
+                                               FontSize="10" 
+                                               Foreground="#856404" 
+                                               Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            
+                            <TextBlock Text="{Binding FilePath}" 
+                                       TextWrapping="Wrap" 
+                                       FontSize="10" 
+                                       Foreground="Gray" 
+                                       Margin="0,5,0,0"/>
+                        </StackPanel>
+                        
+                        <!-- No Selection Message -->
+                        <TextBlock Text="No profile selected" 
+                                   FontStyle="Italic" 
+                                   Foreground="Gray"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Margin="10">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedProfile}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </GroupBox>
+                
+                <!-- Advanced Options -->
+                <GroupBox Header="Advanced" Margin="0,10,0,0">
+                    <Expander Header="Maintenance Tools" IsExpanded="False">
+                        <StackPanel Margin="0,5,0,0">
+                            <Button Content="Clean Up Auto-Backups" 
+                                    Command="{Binding CleanupAutoBackupsCommand}"
+                                    Background="#F39C12"
+                                    Foreground="White"
+                                    ToolTip="Remove old automatic backup files (keeps 5 most recent). Auto-backups are created automatically during profile swaps for safety."/>
+                            <Button Content="Reset Active Tracking" 
+                                    Command="{Binding ResetTrackingCommand}"
+                                    Background="#9B59B6"
+                                    Foreground="White"
+                                    ToolTip="Clear active profile tracking and start fresh. Use this if the app incorrectly identifies which profile is active."
+                                    ToolTipService.InitialShowDelay="150"
+                                    ToolTipService.ShowDuration="8000"
+                                    ToolTipService.BetweenShowDelay="50"/>
+                        </StackPanel>
+                    </Expander>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
     </GroupBox>
 </UserControl>
