@@ -182,37 +182,42 @@ namespace FFXIManager.ViewModels
             {
                 _statusService.SetMessage($"Opening configuration for {application.Name}...");
 
+                // Create and show dialog on UI thread
+                bool? dialogResult = null;
+
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     try
                     {
                         var dialog = new ApplicationConfigDialog(application)
                         {
-                            Owner = Application.Current.MainWindow,
-                            ShowInTaskbar = false
+                            Owner = Application.Current.MainWindow
                         };
                         
-                        var result = dialog.ShowDialog();
-                        
-                        if (result == true)
-                        {
-                            _statusService.SetMessage($"Application {application.Name} updated successfully");
-                            
-                            // Force property notifications to update UI
-                            application.OnPropertyChanged(nameof(application.StatusColor));
-                            application.OnPropertyChanged(nameof(application.StatusText));
-                            application.OnPropertyChanged(nameof(application.ExecutableExists));
-                        }
-                        else
-                        {
-                            _statusService.SetMessage("Configuration cancelled");
-                        }
+                        dialogResult = dialog.ShowDialog();
                     }
                     catch (Exception ex)
                     {
-                        _statusService.SetMessage($"Error opening configuration dialog: {ex.Message}");
+                        MessageBox.Show($"Error opening configuration dialog: {ex.Message}", "Dialog Error", 
+                                      MessageBoxButton.OK, MessageBoxImage.Error);
+                        _statusService.SetMessage($"Failed to open configuration dialog: {ex.Message}");
                     }
                 });
+
+                // Process result
+                if (dialogResult == true)
+                {
+                    _statusService.SetMessage($"Application {application.Name} updated successfully");
+                    
+                    // Trigger property notifications for UI updates
+                    application.OnPropertyChanged(nameof(application.StatusColor));
+                    application.OnPropertyChanged(nameof(application.StatusText));
+                    application.OnPropertyChanged(nameof(application.ExecutableExists));
+                }
+                else
+                {
+                    _statusService.SetMessage("Configuration cancelled");
+                }
             }
             catch (Exception ex)
             {
@@ -250,6 +255,8 @@ namespace FFXIManager.ViewModels
         {
             try
             {
+                _statusService.SetMessage("Creating new application...");
+
                 var newApplication = new ExternalApplication
                 {
                     Name = "New Application",
@@ -257,17 +264,44 @@ namespace FFXIManager.ViewModels
                     IsEnabled = true
                 };
 
-                var dialog = new ApplicationConfigDialog(newApplication);
-                if (dialog.ShowDialog() == true)
+                // Create and show dialog on UI thread
+                bool? dialogResult = null;
+
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    try
+                    {
+                        var dialog = new ApplicationConfigDialog(newApplication)
+                        {
+                            Owner = Application.Current.MainWindow
+                        };
+                        
+                        dialogResult = dialog.ShowDialog();
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error opening application dialog: {ex.Message}", "Dialog Error", 
+                                      MessageBoxButton.OK, MessageBoxImage.Error);
+                        _statusService.SetMessage($"Failed to open application dialog: {ex.Message}");
+                    }
+                });
+
+                // Process result
+                if (dialogResult == true)
                 {
                     await _applicationService.AddApplicationAsync(newApplication);
                     ExternalApplications.Add(newApplication);
                     _statusService.SetMessage($"Added application: {newApplication.Name}");
                 }
+                else
+                {
+                    _statusService.SetMessage("Application creation cancelled");
+                }
             }
             catch (Exception ex)
             {
                 _statusService.SetMessage($"Error adding application: {ex.Message}");
+                await _loggingService.LogErrorAsync("Error in AddApplicationAsync", ex, "ApplicationManagementViewModel");
             }
         }
 

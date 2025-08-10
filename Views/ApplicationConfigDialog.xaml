@@ -1,110 +1,74 @@
 <Window x:Class="FFXIManager.Views.ApplicationConfigDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d"
-        Title="Application Configuration" Height="450" Width="500"
-        WindowStartupLocation="CenterOwner" ResizeMode="CanResize">
+        Title="Application Configuration" Height="400" Width="500"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize">
     
-    <Grid Margin="15">
+    <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         
-        <!-- Form Content -->
-        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-                <!-- Basic Information -->
-                <GroupBox Header="Basic Information" Margin="0,0,0,10">
-                    <StackPanel Margin="10">
-                        <Label Content="Application Name:" FontWeight="Bold"/>
-                        <TextBox x:Name="NameTextBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,10"/>
-                        
-                        <Label Content="Description:" FontWeight="Bold"/>
-                        <TextBox x:Name="DescriptionTextBox" Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,10"/>
-                    </StackPanel>
-                </GroupBox>
-                
-                <!-- Executable Configuration -->
-                <GroupBox Header="Executable Configuration" Margin="0,0,0,10">
-                    <StackPanel Margin="10">
-                        <Label Content="Executable Path:" FontWeight="Bold"/>
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox x:Name="ExecutablePathTextBox" 
-                                     Text="{Binding ExecutablePath, UpdateSourceTrigger=PropertyChanged}"
-                                     Grid.Column="0"/>
-                            <Button Content="Browse..." Grid.Column="1" 
-                                    Click="BrowseExecutable_Click" 
-                                    Margin="5,0,0,0" Padding="8,3"/>
-                        </Grid>
-                        
-                        <Label Content="Command Line Arguments (optional):" FontWeight="Bold"/>
-                        <TextBox x:Name="ArgumentsTextBox" Text="{Binding Arguments, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,10"/>
-                        
-                        <Label Content="Working Directory (optional):" FontWeight="Bold"/>
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox x:Name="WorkingDirectoryTextBox" 
-                                     Text="{Binding WorkingDirectory, UpdateSourceTrigger=PropertyChanged}"
-                                     Grid.Column="0"/>
-                            <Button Content="Browse..." Grid.Column="1" 
-                                    Click="BrowseWorkingDirectory_Click" 
-                                    Margin="5,0,0,0" Padding="8,3"/>
-                        </Grid>
-                    </StackPanel>
-                </GroupBox>
-                
-                <!-- Options -->
-                <GroupBox Header="Options" Margin="0,0,0,10">
-                    <StackPanel Margin="10">
-                        <CheckBox x:Name="AllowMultipleInstancesCheckBox" 
-                                  Content="Allow Multiple Instances" 
-                                  IsChecked="{Binding AllowMultipleInstances}"
-                                  ToolTip="Check this if you want to be able to launch multiple copies of this application (e.g., for Windower)"
-                                  Margin="0,0,0,5"/>
-                        
-                        <CheckBox x:Name="IsEnabledCheckBox" 
-                                  Content="Enabled" 
-                                  IsChecked="{Binding IsEnabled}"
-                                  ToolTip="Uncheck to disable this application in the launcher"/>
-                    </StackPanel>
-                </GroupBox>
-                
-                <!-- Status Information -->
-                <GroupBox Header="Status Information">
-                    <StackPanel Margin="10">
-                        <TextBlock Margin="0,0,0,5">
-                            <Run Text="Executable Exists: " FontWeight="Bold"/>
-                            <Run Text="{Binding ExecutableExists}"/>
-                        </TextBlock>
-                        <TextBlock Margin="0,0,0,5">
-                            <Run Text="Current Status: " FontWeight="Bold"/>
-                            <Run Text="{Binding StatusText}"/>
-                        </TextBlock>
-                        <TextBlock>
-                            <Run Text="Last Launched: " FontWeight="Bold"/>
-                            <Run Text="{Binding LastLaunched, StringFormat=yyyy-MM-dd HH:mm:ss}"/>
-                        </TextBlock>
-                    </StackPanel>
-                </GroupBox>
-            </StackPanel>
-        </ScrollViewer>
+        <!-- Application Name -->
+        <Label Grid.Row="0" Content="Application Name:" FontWeight="Bold" Margin="0,0,0,5"/>
+        <TextBox Grid.Row="1" x:Name="NameTextBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" 
+                 Height="28" Margin="0,0,0,10"/>
+        
+        <!-- Description -->
+        <Label Grid.Row="2" Content="Description (optional):" FontWeight="Bold" Margin="0,0,0,5"/>
+        <TextBox Grid.Row="3" x:Name="DescriptionTextBox" Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" 
+                 Height="28" Margin="0,0,0,10"/>
+        
+        <!-- Executable Path -->
+        <Label Grid.Row="4" Content="Executable Path:" FontWeight="Bold" Margin="0,0,0,5"/>
+        <Grid Grid.Row="5" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="ExecutablePathTextBox" Grid.Column="0"
+                     Text="{Binding ExecutablePath, UpdateSourceTrigger=PropertyChanged}" 
+                     Height="28" Margin="0,0,5,0"/>
+            <Button Grid.Column="1" Content="Browse..." 
+                    Click="BrowseExecutable_Click" 
+                    Width="80" Height="28"/>
+        </Grid>
+        
+        <!-- Command Line Arguments -->
+        <Label Grid.Row="6" Content="Command Line Arguments (optional):" FontWeight="Bold" Margin="0,0,0,5"/>
+        <TextBox Grid.Row="7" x:Name="ArgumentsTextBox" Text="{Binding Arguments, UpdateSourceTrigger=PropertyChanged}" 
+                 Height="28" Margin="0,0,0,10"/>
+        
+        <!-- Options -->
+        <StackPanel Grid.Row="7" Margin="0,10,0,10">
+            <CheckBox x:Name="AllowMultipleInstancesCheckBox" 
+                      Content="Allow Multiple Instances" 
+                      IsChecked="{Binding AllowMultipleInstances}"
+                      ToolTip="Check this if you want to launch multiple copies of this application"
+                      Margin="0,5,0,5"/>
+            
+            <CheckBox x:Name="IsEnabledCheckBox" 
+                      Content="Enabled" 
+                      IsChecked="{Binding IsEnabled}"
+                      ToolTip="Uncheck to disable this application in the launcher"
+                      Margin="0,0,0,5"/>
+        </StackPanel>
         
         <!-- Buttons -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-            <Button Content="OK" IsDefault="True" Click="OK_Click" 
-                    Margin="0,0,10,0" Padding="15,5" MinWidth="70"/>
-            <Button Content="Cancel" IsCancel="True" Click="Cancel_Click" 
-                    Padding="15,5" MinWidth="70"/>
+        <StackPanel Grid.Row="8" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+            <Button Content="Cancel" Width="80" Margin="0,0,10,0" 
+                    Click="Cancel_Click" IsCancel="True"/>
+            <Button Content="OK" Width="80" 
+                    Click="OK_Click" IsDefault="True"/>
         </StackPanel>
     </Grid>
 </Window>
