@@ -7,7 +7,7 @@ namespace FFXIManager.Services
     /// <summary>
     /// Service for managing application settings
     /// </summary>
-    public class SettingsService
+    public class SettingsService : ISettingsService
     {
         private const string SETTINGS_FILE = "FFXIManagerSettings.json";
         private readonly string _settingsPath;
@@ -57,7 +57,7 @@ namespace FFXIManager.Services
     }
     
     /// <summary>
-    /// Application settings model
+    /// Application settings model - SIMPLIFIED VERSION
     /// </summary>
     public class ApplicationSettings
     {
@@ -66,24 +66,14 @@ namespace FFXIManager.Services
         public bool ConfirmDeleteOperations { get; set; } = true;
         public bool CreateAutoBackups { get; set; } = true;
         public int MaxAutoBackups { get; set; } = 5;
-        public string LastUsedProfile { get; set; } = string.Empty;
         public bool ShowAutoBackupsInList { get; set; } = false;
         public bool EnableSmartBackupDeduplication { get; set; } = true;
         
-        /// <summary>
-        /// The profile name that the user explicitly selected to be active
-        /// </summary>
-        public string CurrentActiveProfile { get; set; } = string.Empty;
+        // SIMPLIFIED: Just track the user's last selected profile name
+        public string LastActiveProfileName { get; set; } = string.Empty;
+        public string LastUsedProfile { get; set; } = string.Empty;
         
-        /// <summary>
-        /// Hash of the login_w.bin file when CurrentActiveProfile was set
-        /// Used to detect if file was changed externally
-        /// </summary>
-        public string ActiveProfileHash { get; set; } = string.Empty;
-        
-        /// <summary>
-        /// Timestamp when the active profile was last set by user
-        /// </summary>
-        public DateTime ActiveProfileSetTime { get; set; } = DateTime.MinValue;
+        // Remove all the complex tracking properties:
+        // CurrentActiveProfile, ActiveProfileHash, ActiveProfileSetTime
     }
 }

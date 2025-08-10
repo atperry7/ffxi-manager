@@ -4,306 +4,175 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using FFXIManager.Models;
+using FFXIManager.Configuration;
 
 namespace FFXIManager.Services
 {
     /// <summary>
-    /// Service for managing FFXI login profile files
+    /// Performance-optimized service for managing FFXI login profile files with caching and logging
     /// </summary>
-    public class ProfileService
+    public class ProfileService : IProfileService
     {
-        private const string DEFAULT_LOGIN_FILE = "login_w.bin";
-        private const string BACKUP_EXTENSION = ".bin";
+        private readonly IConfigurationService _configService;
+        private readonly ICachingService _cachingService;
+        private readonly ILoggingService _loggingService;
         
-        // System files that should be excluded from profile management
-        private static readonly HashSet<string> EXCLUDED_FILES = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        public string PlayOnlineDirectory { get; set; }
+        public ISettingsService? SettingsService { get; set; }
+        
+        public ProfileService(
+            IConfigurationService configService, 
+            ICachingService cachingService, 
+            ILoggingService loggingService)
         {
-            "login_w.bin",    // Active login file - managed separately
-            "inet_w.bin",     // Network configuration file
-            "noramim.bin"     // System configuration file
-        };
-        
-        public string PlayOnlineDirectory { get; set; } = @"C:\Program Files (x86)\PlayOnline\SquareEnix\PlayOnlineViewer\usr\all";
-        
+            _configService = configService ?? throw new ArgumentNullException(nameof(configService));
+            _cachingService = cachingService ?? throw new ArgumentNullException(nameof(cachingService));
+            _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            PlayOnlineDirectory = _configService.ProfileConfig.DefaultPlayOnlineDirectory;
+        }
+
         /// <summary>
-        /// Settings service for accessing user preferences and tracking
-        /// </summary>
-        public SettingsService? SettingsService { get; set; }
-        
-        /// <summary>
-        /// Gets all available profile backup files with smart active detection
+        /// Gets profiles with optional filtering and caching
         /// </summary>
         public async Task<List<ProfileInfo>> GetProfilesAsync()
         {
-            var profiles = new List<ProfileInfo>();
+            await _loggingService.LogDebugAsync("Getting all profiles", "ProfileService");
             
+            return await _cachingService.GetOrSetAsync(
+                CacheKeys.ProfilesList,
+                async () => await Task.Run(() => GetProfiles(includeAutoBackups: true)),
+                TimeSpan.FromMinutes(5));
+        }
+        
+        /// <summary>
+        /// Gets user-created profiles only (excludes auto-backups) with caching
+        /// </summary>
+        public async Task<List<ProfileInfo>> GetUserProfilesAsync()
+        {
+            await _loggingService.LogDebugAsync("Getting user profiles", "ProfileService");
+            
+            return await _cachingService.GetOrSetAsync(
+                CacheKeys.UserProfilesList,
+                async () => await Task.Run(() => GetProfiles(includeAutoBackups: false)),
+                TimeSpan.FromMinutes(5));
+        }
+        
+        /// <summary>
+        /// Gets auto-backup profiles only with caching
+        /// </summary>
+        public async Task<List<ProfileInfo>> GetAutoBackupsAsync()
+        {
+            await _loggingService.LogDebugAsync("Getting auto-backup profiles", "ProfileService");
+            
+            return await _cachingService.GetOrSetAsync(
+                CacheKeys.AutoBackupsList,
+                async () => await Task.Run(() => GetProfiles(includeAutoBackups: true)
+                    .Where(p => p.Name.StartsWith(_configService.ProfileConfig.AutoBackupPrefix, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(p => p.LastModified)
+                    .ToList()),
+                TimeSpan.FromMinutes(2)); // Shorter cache for auto-backups as they change more frequently
+        }
+        
+        /// <summary>
+        /// Core method to get profiles with filtering and performance optimizations
+        /// </summary>
+        private List<ProfileInfo> GetProfiles(bool includeAutoBackups)
+        {
             if (!Directory.Exists(PlayOnlineDirectory))
-                return profiles;
+            {
+                _loggingService.LogWarningAsync($"PlayOnline directory does not exist: {PlayOnlineDirectory}", "ProfileService");
+                return new List<ProfileInfo>();
+            }
+            
+            var profiles = new List<ProfileInfo>();
+            var settings = SettingsService?.LoadSettings();
+            var config = _configService.ProfileConfig;
             
             try
             {
-                // Get current active profile info for smart tracking
-                string? trackedActiveProfile = null;
-                bool useContentDetection = true;
+                var searchPattern = $"*{config.BackupFileExtension}";
+                var files = Directory.EnumerateFiles(PlayOnlineDirectory, searchPattern, SearchOption.TopDirectoryOnly)
+                    .Where(file => !config.ExcludedFiles.Contains(Path.GetFileName(file)))
+                    .ToArray(); // Materialize to avoid multiple enumerations
                 
-                if (SettingsService != null)
-                {
-                    var settings = SettingsService.LoadSettings();
-                    var activeLoginPath = Path.Combine(PlayOnlineDirectory, DEFAULT_LOGIN_FILE);
-                    
-                    if (File.Exists(activeLoginPath) && !string.IsNullOrEmpty(settings.CurrentActiveProfile))
-                    {
-                        var activeContent = File.ReadAllBytes(activeLoginPath);
-                        var currentHash = Convert.ToBase64String(ComputeFileHash(activeContent));
-                        
-                        // If hash matches, trust the user's tracked choice
-                        if (settings.ActiveProfileHash == currentHash)
-                        {
-                            trackedActiveProfile = settings.CurrentActiveProfile;
-                            useContentDetection = false;
-                        }
-                    }
-                }
-                
-                // Get active login content for fallback content detection
-                byte[]? activeHash = null;
-                if (useContentDetection)
-                {
-                    var activeLoginPath = Path.Combine(PlayOnlineDirectory, DEFAULT_LOGIN_FILE);
-                    if (File.Exists(activeLoginPath))
-                    {
-                        try
-                        {
-                            var activeContent = File.ReadAllBytes(activeLoginPath);
-                            activeHash = ComputeFileHash(activeContent);
-                        }
-                        catch
-                        {
-                            // If we can't read active file, continue without comparison
-                        }
-                    }
-                }
-                
-                var files = Directory.GetFiles(PlayOnlineDirectory, $"*{BACKUP_EXTENSION}");
+                // Pre-allocate list capacity for better performance
+                profiles = new List<ProfileInfo>(files.Length);
                 
                 foreach (var file in files)
                 {
                     var fileInfo = new FileInfo(file);
-                    var fileName = fileInfo.Name;
-                    var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(file);
+                    var name = Path.GetFileNameWithoutExtension(file);
+                    var isAutoBackup = name.StartsWith(config.AutoBackupPrefix, StringComparison.OrdinalIgnoreCase);
                     
-                    // Skip system files that shouldn't be managed as profiles
-                    if (EXCLUDED_FILES.Contains(fileName))
-                        continue;
-                    
-                    // Determine if this profile is currently active
-                    bool isCurrentlyActive = false;
-                    
-                    if (trackedActiveProfile != null)
-                    {
-                        // Use tracked active profile (more reliable)
-                        // Only mark as active if it exactly matches the tracked profile name
-                        isCurrentlyActive = fileNameWithoutExtension.Equals(trackedActiveProfile, StringComparison.OrdinalIgnoreCase);
-                    }
-                    else if (activeHash != null)
-                    {
-                        // Fallback to content detection, but prefer user profiles over auto-backups
-                        try
-                        {
-                            var backupContent = File.ReadAllBytes(file);
-                            var backupHash = ComputeFileHash(backupContent);
-                            bool contentMatches = activeHash.SequenceEqual(backupHash);
-                            
-                            if (contentMatches)
-                            {
-                                // If content matches, prefer user-created profiles over auto-backups
-                                var isAutoBackup = fileNameWithoutExtension.StartsWith("backup_", StringComparison.OrdinalIgnoreCase);
-                                
-                                if (!isAutoBackup)
-                                {
-                                    // User-created profile gets priority
-                                    isCurrentlyActive = true;
-                                }
-                                else
-                                {
-                                    // Auto-backup: only mark as active if no user profile matches
-                                    var userProfiles = files
-                                        .Where(f => !Path.GetFileNameWithoutExtension(f).StartsWith("backup_", StringComparison.OrdinalIgnoreCase))
-                                        .Where(f => !EXCLUDED_FILES.Contains(Path.GetFileName(f)));
-                                    
-                                    bool hasMatchingUserProfile = false;
-                                    foreach (var userFile in userProfiles)
-                                    {
-                                        try
-                                        {
-                                            var userContent = File.ReadAllBytes(userFile);
-                                            var userHash = ComputeFileHash(userContent);
-                                            if (activeHash.SequenceEqual(userHash))
-                                            {
-                                                hasMatchingUserProfile = true;
-                                                break;
-                                            }
-                                        }
-                                        catch { }
-                                    }
-                                    
-                                    isCurrentlyActive = !hasMatchingUserProfile;
-                                }
-                            }
-                        }
-                        catch
-                        {
-                            // If we can't read backup file, assume it's not active
-                        }
-                    }
+                    // Filter auto-backups if not requested
+                    if (isAutoBackup && !includeAutoBackups) continue;
                     
                     var profile = new ProfileInfo
                     {
-                        Name = fileNameWithoutExtension,
+                        Name = name,
                         FilePath = file,
                         LastModified = fileInfo.LastWriteTime,
                         FileSize = fileInfo.Length,
-                        IsActive = false, // Backup profiles are never marked as "active" in the traditional sense
-                        IsCurrentlyActive = isCurrentlyActive,
-                        Description = GetProfileDescription(fileNameWithoutExtension, isCurrentlyActive)
+                        Description = GetProfileDescription(name),
+                        IsLastUserChoice = settings?.LastActiveProfileName.Equals(name, StringComparison.OrdinalIgnoreCase) == true
                     };
                     
                     profiles.Add(profile);
                 }
                 
-                // Sort profiles: User profiles first, then auto-backups, all by name
+                // Efficient sorting with pre-computed values
                 profiles.Sort((x, y) => 
                 {
-                    var xIsAuto = x.Name.StartsWith("backup_", StringComparison.OrdinalIgnoreCase);
-                    var yIsAuto = y.Name.StartsWith("backup_", StringComparison.OrdinalIgnoreCase);
+                    var xIsAuto = x.Name.StartsWith(config.AutoBackupPrefix, StringComparison.OrdinalIgnoreCase);
+                    var yIsAuto = y.Name.StartsWith(config.AutoBackupPrefix, StringComparison.OrdinalIgnoreCase);
                     
-                    // If one is auto-backup and other is not, user profiles come first
-                    if (xIsAuto != yIsAuto)
-                        return xIsAuto.CompareTo(yIsAuto);
+                    if (xIsAuto != yIsAuto) return xIsAuto.CompareTo(yIsAuto);
                     
-                    // Within same category, sort by name (or date for auto-backups)
-                    if (xIsAuto && yIsAuto)
-                        return y.LastModified.CompareTo(x.LastModified); // Newest auto-backups first
-                    else
-                        return string.Compare(x.Name, y.Name, StringComparison.OrdinalIgnoreCase); // User profiles alphabetically
+                    return xIsAuto 
+                        ? y.LastModified.CompareTo(x.LastModified) // Newest auto-backups first
+                        : string.Compare(x.Name, y.Name, StringComparison.OrdinalIgnoreCase); // User profiles alphabetically
                 });
+
+                _loggingService.LogInfoAsync($"Successfully loaded {profiles.Count} profiles (includeAutoBackups: {includeAutoBackups})", "ProfileService");
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"Error reading profiles from directory: {ex.Message}", ex);
+                _loggingService.LogErrorAsync($"Error reading profiles from {PlayOnlineDirectory}", ex, "ProfileService");
+                throw new InvalidOperationException($"Error reading profiles: {ex.Message}", ex);
             }
             
             return profiles;
         }
         
         /// <summary>
-        /// Gets user-created profiles only (excludes auto-backups)
-        /// </summary>
-        public async Task<List<ProfileInfo>> GetUserProfilesAsync()
-        {
-            var allProfiles = await GetProfilesAsync();
-            return allProfiles.Where(p => !p.Name.StartsWith("backup_", StringComparison.OrdinalIgnoreCase)).ToList();
-        }
-        
-        /// <summary>
-        /// Gets auto-backup profiles only
-        /// </summary>
-        public async Task<List<ProfileInfo>> GetAutoBackupsAsync()
-        {
-            var allProfiles = await GetProfilesAsync();
-            return allProfiles.Where(p => p.Name.StartsWith("backup_", StringComparison.OrdinalIgnoreCase))
-                              .OrderByDescending(p => p.LastModified)
-                              .ToList();
-        }
-        
-        /// <summary>
-        /// Gets the current active login file information
+        /// Gets the current active login file information with caching
         /// </summary>
         public async Task<ProfileInfo?> GetActiveLoginInfoAsync()
         {
-            var activeLoginPath = Path.Combine(PlayOnlineDirectory, DEFAULT_LOGIN_FILE);
+            await _loggingService.LogDebugAsync("Getting active login info", "ProfileService");
             
-            if (!File.Exists(activeLoginPath))
-                return null;
+            return await _cachingService.GetOrSetAsync(
+                CacheKeys.ActiveLoginInfo,
+                async () => await Task.Run(() => GetActiveLoginInfoInternal()),
+                TimeSpan.FromMinutes(1)); // Short cache as this can change frequently
+        }
+        
+        private ProfileInfo? GetActiveLoginInfoInternal()
+        {
+            var config = _configService.ProfileConfig;
+            var activeLoginPath = Path.Combine(PlayOnlineDirectory, config.DefaultLoginFileName);
+            if (!File.Exists(activeLoginPath)) return null;
             
             try
             {
                 var fileInfo = new FileInfo(activeLoginPath);
-                var activeContent = File.ReadAllBytes(activeLoginPath);
-                var currentHash = Convert.ToBase64String(ComputeFileHash(activeContent));
+                var settings = SettingsService?.LoadSettings();
                 
-                string? displayProfile = null;
-                string description;
-                bool wasChangedExternally = false;
-                
-                if (SettingsService != null)
-                {
-                    var settings = SettingsService.LoadSettings();
-                    
-                    // Check if we have a tracked active profile
-                    if (!string.IsNullOrEmpty(settings.CurrentActiveProfile))
-                    {
-                        // Check if the file hash matches what we expect
-                        if (settings.ActiveProfileHash == currentHash)
-                        {
-                            // File hasn't changed since we set it - user's choice is still valid
-                            displayProfile = settings.CurrentActiveProfile;
-                            description = $"Currently active login file - set to '{displayProfile}' by user";
-                        }
-                        else
-                        {
-                            // File was changed externally - we need to detect or ask
-                            wasChangedExternally = true;
-                            var detectedProfile = await FindMatchingBackupProfileAsync(ComputeFileHash(activeContent));
-                            
-                            if (detectedProfile != null)
-                            {
-                                displayProfile = detectedProfile;
-                                description = $"Currently active login file - detected as '{detectedProfile}' (changed externally)";
-                            }
-                            else
-                            {
-                                displayProfile = "Unknown";
-                                description = "Currently active login file - changed externally, source unknown";
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // First time or no tracked profile - try to detect
-                        var detectedProfile = await FindMatchingBackupProfileAsync(ComputeFileHash(activeContent));
-                        
-                        if (detectedProfile != null)
-                        {
-                            displayProfile = detectedProfile;
-                            description = $"Currently active login file - detected as '{detectedProfile}' (not explicitly set)";
-                        }
-                        else
-                        {
-                            displayProfile = "Unknown";
-                            description = "Currently active login file - no matching backup profile found";
-                        }
-                    }
-                }
-                else
-                {
-                    // Fallback to content detection if no settings service
-                    var detectedProfile = await FindMatchingBackupProfileAsync(ComputeFileHash(activeContent));
-                    displayProfile = detectedProfile ?? "Unknown";
-                    description = detectedProfile != null 
-                        ? $"Currently active login file - detected as '{detectedProfile}'"
-                        : "Currently active login file - no matching backup profile found";
-                }
-                
-                var displayName = displayProfile != null && displayProfile != "Unknown"
-                    ? $"login_w (Currently: {displayProfile})"
-                    : "login_w (Active - Unknown Source)";
-                
-                if (wasChangedExternally)
-                {
-                    displayName += " [EXT]";
-                    description += " - File was modified outside this application";
-                }
+                var (displayName, description) = !string.IsNullOrEmpty(settings?.LastActiveProfileName)
+                    ? ($"{config.DefaultLoginFileName} (Last Set: {settings.LastActiveProfileName})", 
+                       $"System login file - last set to '{settings.LastActiveProfileName}' by user")
+                    : ($"{config.DefaultLoginFileName} (System File)", 
+                       _configService.BackupConfig.ProfileDescriptions["SystemFile"]);
                 
                 return new ProfileInfo
                 {
@@ -311,255 +180,74 @@ namespace FFXIManager.Services
                     FilePath = activeLoginPath,
                     LastModified = fileInfo.LastWriteTime,
                     FileSize = fileInfo.Length,
-                    IsActive = true,
                     Description = description
                 };
             }
             catch (Exception ex)
             {
+                _loggingService.LogErrorAsync($"Error reading active login file: {activeLoginPath}", ex, "ProfileService");
                 throw new InvalidOperationException($"Error reading active login file: {ex.Message}", ex);
             }
         }
         
         /// <summary>
-        /// Finds which backup profile matches the given content hash (prioritizes user profiles)
-        /// </summary>
-        private async Task<string?> FindMatchingBackupProfileAsync(byte[] activeHash)
-        {
-            try
-            {
-                var allBackupFiles = Directory.GetFiles(PlayOnlineDirectory, "*.bin")
-                    .Where(f => !EXCLUDED_FILES.Contains(Path.GetFileName(f)))
-                    .ToList();
-                
-                // First pass: Look for user-created profiles (non-auto-backups)
-                foreach (var backupFile in allBackupFiles)
-                {
-                    var fileName = Path.GetFileNameWithoutExtension(backupFile);
-                    
-                    // Skip auto-backups in first pass
-                    if (fileName.StartsWith("backup_", StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    
-                    try
-                    {
-                        var backupContent = File.ReadAllBytes(backupFile);
-                        var backupHash = ComputeFileHash(backupContent);
-                        
-                        if (activeHash.SequenceEqual(backupHash))
-                        {
-                            return fileName; // Return the user profile name
-                        }
-                    }
-                    catch
-                    {
-                        // If we can't read a backup file, skip it
-                        continue;
-                    }
-                }
-                
-                // Second pass: If no user profile matches, check auto-backups
-                foreach (var backupFile in allBackupFiles)
-                {
-                    var fileName = Path.GetFileNameWithoutExtension(backupFile);
-                    
-                    // Only check auto-backups in second pass
-                    if (!fileName.StartsWith("backup_", StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    
-                    try
-                    {
-                        var backupContent = File.ReadAllBytes(backupFile);
-                        var backupHash = ComputeFileHash(backupContent);
-                        
-                        if (activeHash.SequenceEqual(backupHash))
-                        {
-                            return fileName; // Return the auto-backup name
-                        }
-                    }
-                    catch
-                    {
-                        // If we can't read a backup file, skip it
-                        continue;
-                    }
-                }
-                
-                return null; // No matching profile found
-            }
-            catch
-            {
-                return null;
-            }
-        }
-        
-        /// <summary>
-        /// Gets a description for a profile based on its name pattern and active status
-        /// </summary>
-        private static string GetProfileDescription(string profileName, bool isCurrentlyActive = false)
-        {
-            var isAutoBackup = profileName.StartsWith("backup_", StringComparison.OrdinalIgnoreCase);
-            var baseDescription = isAutoBackup
-                ? "Automatic backup created during profile swap"
-                : "User-created profile backup";
-            
-            if (isCurrentlyActive)
-            {
-                if (isAutoBackup)
-                {
-                    return $"{baseDescription} (Currently matches active file)";
-                }
-                else
-                {
-                    return $"{baseDescription} (Your selected active profile)";
-                }
-            }
-            
-            return baseDescription;
-        }
-        
-        /// <summary>
-        /// Swaps the active login file with a backup profile and tracks user choice
+        /// Swaps the active login file with a backup profile
         /// </summary>
         public async Task SwapProfileAsync(ProfileInfo targetProfile)
         {
-            if (targetProfile == null)
-                throw new ArgumentNullException(nameof(targetProfile));
+            ArgumentNullException.ThrowIfNull(targetProfile);
             
-            if (targetProfile.IsActive)
-                throw new InvalidOperationException("Cannot swap with the active login file");
+            await _loggingService.LogInfoAsync($"Starting profile swap to: {targetProfile.Name}", "ProfileService");
             
-            // Additional safety check - don't allow swapping system files
-            var fileName = Path.GetFileName(targetProfile.FilePath);
-            if (EXCLUDED_FILES.Contains(fileName))
-                throw new InvalidOperationException("Cannot swap system files");
+            if (targetProfile.IsSystemFile)
+            {
+                var error = "Cannot swap with the system login file";
+                await _loggingService.LogWarningAsync(error, "ProfileService");
+                throw new InvalidOperationException(error);
+            }
             
-            var activeLoginPath = Path.Combine(PlayOnlineDirectory, DEFAULT_LOGIN_FILE);
+            var config = _configService.ProfileConfig;
+            var activeLoginPath = Path.Combine(PlayOnlineDirectory, config.DefaultLoginFileName);
             
             if (!File.Exists(targetProfile.FilePath))
-                throw new FileNotFoundException($"Profile file not found: {targetProfile.FilePath}");
+            {
+                var error = $"Profile file not found: {targetProfile.FilePath}";
+                await _loggingService.LogErrorAsync(error, null, "ProfileService");
+                throw new FileNotFoundException(error);
+            }
             
             try
             {
-                // Create backup of current active file if it exists and settings allow
-                if (File.Exists(activeLoginPath))
+                // Create auto-backup of current file
+                if (File.Exists(activeLoginPath) && _configService.BackupConfig.CreateAutoBackupsOnSwap)
                 {
-                    await CreateSmartBackupAsync(activeLoginPath);
+                    var backupPath = Path.Combine(PlayOnlineDirectory, 
+                        $"{config.AutoBackupPrefix}{DateTime.Now.ToString(config.AutoBackupDateTimeFormat)}{config.BackupFileExtension}");
+                    
+                    await _loggingService.LogDebugAsync($"Creating auto-backup: {backupPath}", "ProfileService");
+                    File.Copy(activeLoginPath, backupPath, true);
+                    
+                    // Clean up old backups asynchronously
+                    _ = Task.Run(async () => await CleanupAutoBackupsAsync());
                 }
                 
                 // Copy target profile to active location
+                await _loggingService.LogDebugAsync($"Copying profile from {targetProfile.FilePath} to {activeLoginPath}", "ProfileService");
                 File.Copy(targetProfile.FilePath, activeLoginPath, true);
                 
-                // Record the user's explicit choice for smart tracking
-                await RecordActiveProfileChoiceAsync(targetProfile.Name);
+                // Remember user's choice
+                UpdateLastActiveProfile(targetProfile.Name);
+                
+                // Invalidate relevant caches
+                await InvalidateProfileCaches();
+                
+                await _loggingService.LogInfoAsync($"Successfully swapped to profile: {targetProfile.Name}", "ProfileService");
             }
             catch (Exception ex)
             {
+                await _loggingService.LogErrorAsync($"Error swapping to profile: {targetProfile.Name}", ex, "ProfileService");
                 throw new InvalidOperationException($"Error swapping profile: {ex.Message}", ex);
             }
-        }
-        
-        /// <summary>
-        /// Records the user's explicit active profile choice for smart tracking
-        /// </summary>
-        private async Task RecordActiveProfileChoiceAsync(string profileName)
-        {
-            if (SettingsService == null) return;
-            
-            try
-            {
-                var activeLoginPath = Path.Combine(PlayOnlineDirectory, DEFAULT_LOGIN_FILE);
-                if (!File.Exists(activeLoginPath)) return;
-                
-                var activeContent = File.ReadAllBytes(activeLoginPath);
-                var currentHash = Convert.ToBase64String(ComputeFileHash(activeContent));
-                
-                var settings = SettingsService.LoadSettings();
-                settings.CurrentActiveProfile = profileName;
-                settings.ActiveProfileHash = currentHash;
-                settings.ActiveProfileSetTime = DateTime.Now;
-                
-                SettingsService.SaveSettings(settings);
-            }
-            catch
-            {
-                // If we can't record the choice, don't fail the swap operation
-                // This is just for UX improvement
-            }
-        }
-        
-        /// <summary>
-        /// Creates a smart backup that avoids duplicates and manages auto-backup storage efficiently
-        /// </summary>
-        private async Task CreateSmartBackupAsync(string activeLoginPath)
-        {
-            try
-            {
-                // Check if we should create auto-backups (user setting)
-                if (!ShouldCreateAutoBackup())
-                    return;
-                
-                var currentContent = File.ReadAllBytes(activeLoginPath);
-                var currentHash = ComputeFileHash(currentContent);
-                
-                // Check if we already have a recent backup with identical content
-                var existingBackups = Directory.GetFiles(PlayOnlineDirectory, "backup_*.bin")
-                    .Select(f => new FileInfo(f))
-                    .OrderByDescending(f => f.LastWriteTime)
-                    .Take(5) // Only check the 5 most recent backups
-                    .ToList();
-                
-                foreach (var backup in existingBackups)
-                {
-                    try
-                    {
-                        var backupContent = File.ReadAllBytes(backup.FullName);
-                        var backupHash = ComputeFileHash(backupContent);
-                        
-                        // If we find identical content, just update the timestamp instead of creating new backup
-                        if (currentHash.SequenceEqual(backupHash))
-                        {
-                            File.SetLastWriteTime(backup.FullName, DateTime.Now);
-                            return; // Don't create a new backup
-                        }
-                    }
-                    catch
-                    {
-                        // If we can't read a backup file, ignore it and continue
-                        continue;
-                    }
-                }
-                
-                // Create new backup only if content is different
-                var backupPath = Path.Combine(PlayOnlineDirectory, $"backup_{DateTime.Now:yyyyMMdd_HHmmss}.bin");
-                File.Copy(activeLoginPath, backupPath, true);
-                
-                // Clean up old auto-backups
-                await CleanupAutoBackupsAsync();
-            }
-            catch (Exception)
-            {
-                // If backup creation fails, don't stop the swap operation
-                // Auto-backup is a convenience feature, not critical
-            }
-        }
-        
-        /// <summary>
-        /// Computes a simple hash for file content comparison
-        /// </summary>
-        private static byte[] ComputeFileHash(byte[] content)
-        {
-            using var sha1 = System.Security.Cryptography.SHA1.Create();
-            return sha1.ComputeHash(content);
-        }
-        
-        /// <summary>
-        /// Determines if auto-backup should be created based on settings
-        /// </summary>
-        private static bool ShouldCreateAutoBackup()
-        {
-            // This could be expanded to check user settings
-            // For now, always create backups but with smart deduplication
-            return true;
         }
         
         /// <summary>
@@ -570,36 +258,55 @@ namespace FFXIManager.Services
             if (string.IsNullOrWhiteSpace(backupName))
                 throw new ArgumentException("Backup name cannot be empty", nameof(backupName));
             
-            var activeLoginPath = Path.Combine(PlayOnlineDirectory, DEFAULT_LOGIN_FILE);
+            await _loggingService.LogInfoAsync($"Creating backup: {backupName}", "ProfileService");
             
+            var config = _configService.ProfileConfig;
+            var activeLoginPath = Path.Combine(PlayOnlineDirectory, config.DefaultLoginFileName);
             if (!File.Exists(activeLoginPath))
-                throw new FileNotFoundException("Active login file not found");
+            {
+                var error = "Active login file not found";
+                await _loggingService.LogErrorAsync(error, null, "ProfileService");
+                throw new FileNotFoundException(error);
+            }
             
-            // Sanitize backup name
             var sanitizedName = SanitizeFileName(backupName);
-            var backupPath = Path.Combine(PlayOnlineDirectory, $"{sanitizedName}.bin");
+            var backupPath = Path.Combine(PlayOnlineDirectory, $"{sanitizedName}{config.BackupFileExtension}");
             
             if (File.Exists(backupPath))
-                throw new InvalidOperationException($"Backup file already exists: {sanitizedName}.bin");
+            {
+                var error = $"Backup file already exists: {sanitizedName}{config.BackupFileExtension}";
+                await _loggingService.LogWarningAsync(error, "ProfileService");
+                throw new InvalidOperationException(error);
+            }
             
-            try
+            return await Task.Run(async () =>
             {
-                File.Copy(activeLoginPath, backupPath);
-                
-                var fileInfo = new FileInfo(backupPath);
-                return new ProfileInfo
+                try
                 {
-                    Name = sanitizedName,
-                    FilePath = backupPath,
-                    LastModified = fileInfo.LastWriteTime,
-                    FileSize = fileInfo.Length,
-                    IsActive = false
-                };
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"Error creating backup: {ex.Message}", ex);
-            }
+                    File.Copy(activeLoginPath, backupPath);
+                    var fileInfo = new FileInfo(backupPath);
+                    
+                    var profile = new ProfileInfo
+                    {
+                        Name = sanitizedName,
+                        FilePath = backupPath,
+                        LastModified = fileInfo.LastWriteTime,
+                        FileSize = fileInfo.Length,
+                        Description = _configService.BackupConfig.ProfileDescriptions["UserProfile"]
+                    };
+                    
+                    // Invalidate caches since we added a new profile
+                    await InvalidateProfileCaches();
+                    
+                    await _loggingService.LogInfoAsync($"Successfully created backup: {sanitizedName}", "ProfileService");
+                    return profile;
+                }
+                catch (Exception ex)
+                {
+                    await _loggingService.LogErrorAsync($"Error creating backup: {backupName}", ex, "ProfileService");
+                    throw new InvalidOperationException($"Error creating backup: {ex.Message}", ex);
+                }
+            });
         }
         
         /// <summary>
@@ -607,148 +314,42 @@ namespace FFXIManager.Services
         /// </summary>
         public async Task DeleteProfileAsync(ProfileInfo profile)
         {
-            if (profile == null)
-                throw new ArgumentNullException(nameof(profile));
+            ArgumentNullException.ThrowIfNull(profile);
             
-            if (profile.IsActive)
-                throw new InvalidOperationException("Cannot delete the active login file");
+            await _loggingService.LogInfoAsync($"Deleting profile: {profile.Name}", "ProfileService");
             
-            // Additional safety check - don't allow deletion of system files
-            var fileName = Path.GetFileName(profile.FilePath);
-            if (EXCLUDED_FILES.Contains(fileName))
-                throw new InvalidOperationException("Cannot delete system files");
+            var config = _configService.ProfileConfig;
+            if (profile.IsSystemFile || config.ExcludedFiles.Contains(Path.GetFileName(profile.FilePath)))
+            {
+                var error = "Cannot delete system files";
+                await _loggingService.LogWarningAsync(error, "ProfileService");
+                throw new InvalidOperationException(error);
+            }
             
             if (!File.Exists(profile.FilePath))
-                throw new FileNotFoundException($"Profile file not found: {profile.FilePath}");
-            
-            try
             {
-                File.Delete(profile.FilePath);
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"Error deleting profile: {ex.Message}", ex);
-            }
-        }
-        
-        /// <summary>
-        /// Validates if the PlayOnline directory exists and is accessible
-        /// </summary>
-        public bool ValidatePlayOnlineDirectory()
-        {
-            return Directory.Exists(PlayOnlineDirectory);
-        }
-        
-        private static string SanitizeFileName(string fileName)
-        {
-            var invalidChars = Path.GetInvalidFileNameChars();
-            var sanitized = fileName;
-            
-            foreach (var invalidChar in invalidChars)
-            {
-                sanitized = sanitized.Replace(invalidChar, '_');
+                var error = $"Profile file not found: {profile.FilePath}";
+                await _loggingService.LogWarningAsync(error, "ProfileService");
+                throw new FileNotFoundException(error);
             }
             
-            return sanitized.Trim();
-        }
-        
-        /// <summary>
-        /// Cleans up old automatic backup files, keeping only the most recent ones
-        /// </summary>
-        public async Task CleanupAutoBackupsAsync()
-        {
-            try
+            await Task.Run(async () =>
             {
-                var maxBackups = GetMaxAutoBackupsFromSettings(); // Default to 5 instead of 10
-                
-                var backupFiles = Directory.GetFiles(PlayOnlineDirectory, "backup_*.bin")
-                    .Select(f => new FileInfo(f))
-                    .OrderByDescending(f => f.LastWriteTime)
-                    .Skip(maxBackups) // Keep the most recent backups based on settings
-                    .ToList();
-                
-                foreach (var file in backupFiles)
+                try
                 {
-                    File.Delete(file.FullName);
+                    File.Delete(profile.FilePath);
+                    
+                    // Invalidate caches since we removed a profile
+                    await InvalidateProfileCaches();
+                    
+                    await _loggingService.LogInfoAsync($"Successfully deleted profile: {profile.Name}", "ProfileService");
                 }
-            }
-            catch (Exception)
-            {
-                // Ignore cleanup errors - not critical
-            }
-        }
-        
-        /// <summary>
-        /// Gets the maximum number of auto-backups to keep from settings
-        /// </summary>
-        private static int GetMaxAutoBackupsFromSettings()
-        {
-            // This could be enhanced to actually read from settings
-            // For now, return a sensible default
-            return 5;
-        }
-        
-        /// <summary>
-        /// Checks if the active login file was changed externally and updates tracking
-        /// </summary>
-        public async Task<bool> DetectExternalChangesAsync()
-        {
-            if (SettingsService == null) return false;
-            
-            try
-            {
-                var activeLoginPath = Path.Combine(PlayOnlineDirectory, DEFAULT_LOGIN_FILE);
-                if (!File.Exists(activeLoginPath)) return false;
-                
-                var settings = SettingsService.LoadSettings();
-                if (string.IsNullOrEmpty(settings.CurrentActiveProfile)) return false;
-                
-                var activeContent = File.ReadAllBytes(activeLoginPath);
-                var currentHash = Convert.ToBase64String(ComputeFileHash(activeContent));
-                
-                // If hash doesn't match, file was changed externally
-                if (settings.ActiveProfileHash != currentHash)
+                catch (Exception ex)
                 {
-                    // Try to detect what it was changed to
-                    var detectedProfile = await FindMatchingBackupProfileAsync(ComputeFileHash(activeContent));
-                    
-                    // Update tracking with detected or unknown state
-                    settings.CurrentActiveProfile = detectedProfile ?? "Unknown";
-                    settings.ActiveProfileHash = currentHash;
-                    settings.ActiveProfileSetTime = DateTime.Now;
-                    
-                    SettingsService.SaveSettings(settings);
-                    return true; // External change detected
+                    await _loggingService.LogErrorAsync($"Error deleting profile: {profile.Name}", ex, "ProfileService");
+                    throw new InvalidOperationException($"Error deleting profile: {ex.Message}", ex);
                 }
-                
-                return false; // No external change
-            }
-            catch
-            {
-                return false;
-            }
-        }
-        
-        /// <summary>
-        /// Clears the active profile tracking (useful when user wants to reset)
-        /// </summary>
-        public async Task ClearActiveProfileTrackingAsync()
-        {
-            if (SettingsService == null) return;
-            
-            try
-            {
-                var settings = SettingsService.LoadSettings();
-                settings.CurrentActiveProfile = string.Empty;
-                settings.ActiveProfileHash = string.Empty;
-                settings.ActiveProfileSetTime = DateTime.MinValue;
-                
-                SettingsService.SaveSettings(settings);
-            }
-            catch
-            {
-                // Ignore errors when clearing tracking
-            }
+            });
         }
         
         /// <summary>
@@ -756,61 +357,191 @@ namespace FFXIManager.Services
         /// </summary>
         public async Task RenameProfileAsync(ProfileInfo profile, string newName)
         {
-            if (profile == null)
-                throw new ArgumentNullException(nameof(profile));
-            
+            ArgumentNullException.ThrowIfNull(profile);
             if (string.IsNullOrWhiteSpace(newName))
                 throw new ArgumentException("New name cannot be empty", nameof(newName));
             
-            if (profile.IsActive)
-                throw new InvalidOperationException("Cannot rename the active login file");
+            await _loggingService.LogInfoAsync($"Renaming profile from '{profile.Name}' to '{newName}'", "ProfileService");
             
-            // Sanitize the new name
-            var sanitizedName = SanitizeFileName(newName);
-            var newFilePath = Path.Combine(PlayOnlineDirectory, $"{sanitizedName}.bin");
-            
-            // Check if target file already exists
-            if (File.Exists(newFilePath))
+            if (profile.IsSystemFile)
             {
-                throw new InvalidOperationException($"A profile with the name '{sanitizedName}' already exists");
+                var error = "Cannot rename the system login file";
+                await _loggingService.LogWarningAsync(error, "ProfileService");
+                throw new InvalidOperationException(error);
             }
             
-            // Additional safety check - don't allow renaming system files
-            var fileName = Path.GetFileName(profile.FilePath);
-            if (EXCLUDED_FILES.Contains(fileName))
-                throw new InvalidOperationException("Cannot rename system files");
+            var config = _configService.ProfileConfig;
+            var sanitizedName = SanitizeFileName(newName);
+            var newFilePath = Path.Combine(PlayOnlineDirectory, $"{sanitizedName}{config.BackupFileExtension}");
+            
+            if (File.Exists(newFilePath))
+            {
+                var error = $"A profile with the name '{sanitizedName}' already exists";
+                await _loggingService.LogWarningAsync(error, "ProfileService");
+                throw new InvalidOperationException(error);
+            }
             
             if (!File.Exists(profile.FilePath))
-                throw new FileNotFoundException($"Profile file not found: {profile.FilePath}");
+            {
+                var error = $"Profile file not found: {profile.FilePath}";
+                await _loggingService.LogWarningAsync(error, "ProfileService");
+                throw new FileNotFoundException(error);
+            }
             
+            await Task.Run(async () =>
+            {
+                try
+                {
+                    File.Move(profile.FilePath, newFilePath);
+                    
+                    // Update settings if this was the user's last active profile
+                    var settings = SettingsService?.LoadSettings();
+                    if (settings?.LastActiveProfileName == profile.Name)
+                    {
+                        settings.LastActiveProfileName = sanitizedName;
+                        SettingsService?.SaveSettings(settings);
+                    }
+                    
+                    // Invalidate caches since we changed a profile
+                    await InvalidateProfileCaches();
+                    
+                    await _loggingService.LogInfoAsync($"Successfully renamed profile to: {sanitizedName}", "ProfileService");
+                }
+                catch (Exception ex)
+                {
+                    await _loggingService.LogErrorAsync($"Error renaming profile from '{profile.Name}' to '{newName}'", ex, "ProfileService");
+                    throw new InvalidOperationException($"Error renaming profile: {ex.Message}", ex);
+                }
+            });
+        }
+        
+        /// <summary>
+        /// Cleans up old automatic backup files, keeping only the most recent ones
+        /// </summary>
+        public async Task CleanupAutoBackupsAsync()
+        {
+            await _loggingService.LogDebugAsync("Starting auto-backup cleanup", "ProfileService");
+            
+            await Task.Run(async () =>
+            {
+                try
+                {
+                    var config = _configService.ProfileConfig;
+                    var settings = SettingsService?.LoadSettings();
+                    var maxBackups = settings?.MaxAutoBackups ?? _configService.BackupConfig.DefaultMaxAutoBackups;
+                    
+                    var backupFiles = Directory.GetFiles(PlayOnlineDirectory, $"{config.AutoBackupPrefix}*{config.BackupFileExtension}")
+                        .Select(f => new FileInfo(f))
+                        .OrderByDescending(f => f.LastWriteTime)
+                        .ToArray();
+                    
+                    var filesToDelete = backupFiles.Skip(maxBackups);
+                    var deletedCount = 0;
+                    
+                    foreach (var file in filesToDelete)
+                    {
+                        try
+                        {
+                            file.Delete();
+                            deletedCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            await _loggingService.LogWarningAsync($"Failed to delete auto-backup: {file.Name}", "ProfileService");
+                        }
+                    }
+                    
+                    if (deletedCount > 0)
+                    {
+                        // Invalidate auto-backup cache
+                        await _cachingService.RemoveAsync(CacheKeys.AutoBackupsList);
+                        await _loggingService.LogInfoAsync($"Cleaned up {deletedCount} old auto-backup files", "ProfileService");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await _loggingService.LogErrorAsync("Error during auto-backup cleanup", ex, "ProfileService");
+                    // Don't throw - cleanup errors are not critical
+                }
+            });
+        }
+        
+        /// <summary>
+        /// Clears the user's profile choice
+        /// </summary>
+        public async Task ClearActiveProfileTrackingAsync()
+        {
+            await _loggingService.LogInfoAsync("Clearing active profile tracking", "ProfileService");
+            await Task.Run(() => UpdateLastActiveProfile(string.Empty));
+            await _cachingService.RemoveAsync(CacheKeys.ActiveLoginInfo);
+        }
+        
+        /// <summary>
+        /// Always returns false - external change detection removed for simplicity
+        /// </summary>
+        public async Task<bool> DetectExternalChangesAsync() => await Task.FromResult(false);
+        
+        /// <summary>
+        /// Validates if the PlayOnline directory exists with caching
+        /// </summary>
+        public bool ValidatePlayOnlineDirectory()
+        {
+            var cacheKey = string.Format(CacheKeys.DirectoryValidation, PlayOnlineDirectory);
+            
+            // Use synchronous check for validation - can be cached if needed
+            var exists = Directory.Exists(PlayOnlineDirectory);
+            
+            if (!exists)
+            {
+                _loggingService.LogWarningAsync($"PlayOnline directory validation failed: {PlayOnlineDirectory}", "ProfileService");
+            }
+            
+            return exists;
+        }
+        
+        // Helper methods
+        private string GetProfileDescription(string profileName)
+        {
+            var config = _configService.BackupConfig;
+            var isAutoBackup = profileName.StartsWith(_configService.ProfileConfig.AutoBackupPrefix, StringComparison.OrdinalIgnoreCase);
+            return isAutoBackup ? config.ProfileDescriptions["AutoBackup"] : config.ProfileDescriptions["UserProfile"];
+        }
+        
+        private void UpdateLastActiveProfile(string profileName)
+        {
             try
             {
-                // Rename the file
-                File.Move(profile.FilePath, newFilePath);
-                
-                // Update settings if this was the currently tracked active profile
-                if (SettingsService != null)
+                var settings = SettingsService?.LoadSettings();
+                if (settings != null)
                 {
-                    var settings = SettingsService.LoadSettings();
-                    if (settings.CurrentActiveProfile == profile.Name)
-                    {
-                        settings.CurrentActiveProfile = sanitizedName;
-                        SettingsService.SaveSettings(settings);
-                    }
+                    settings.LastActiveProfileName = profileName;
+                    SettingsService?.SaveSettings(settings);
                 }
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"Error renaming profile: {ex.Message}", ex);
+                _loggingService.LogWarningAsync($"Failed to update last active profile: {ex.Message}", "ProfileService");
             }
         }
-
-        /// <summary>
-        /// Gets the hash of the file content
-        /// </summary>
-        public static byte[] GetFileHash(byte[] content)
+        
+        private string SanitizeFileName(string fileName)
         {
-            return ComputeFileHash(content);
+            var config = _configService.FileSystemConfig;
+            var invalidChars = Path.GetInvalidFileNameChars()
+                .Concat(config.InvalidFileNameChars.Select(s => s[0]))
+                .Distinct();
+                
+            return invalidChars
+                .Aggregate(fileName, (current, invalidChar) => current.Replace(invalidChar, '_'))
+                .Trim();
+        }
+        
+        private async Task InvalidateProfileCaches()
+        {
+            await _cachingService.RemoveAsync(CacheKeys.ProfilesList);
+            await _cachingService.RemoveAsync(CacheKeys.UserProfilesList);
+            await _cachingService.RemoveAsync(CacheKeys.AutoBackupsList);
+            await _cachingService.RemoveAsync(CacheKeys.ActiveLoginInfo);
         }
     }
 }

@@ -7,7 +7,7 @@ using System.Windows.Media;
 namespace FFXIManager.Converters
 {
     /// <summary>
-    /// Converts boolean to Active/Backup status
+    /// Converts boolean to Active/Backup status - UPDATED FOR SIMPLIFIED VERSION
     /// </summary>
     public class BoolToActiveConverter : IValueConverter
     {
@@ -25,7 +25,7 @@ namespace FFXIManager.Converters
     }
     
     /// <summary>
-    /// Converts boolean to FontWeight (Bold for active, Normal for inactive)
+    /// Converts boolean to FontWeight (Bold for system file, Normal for backup)
     /// </summary>
     public class BoolToFontWeightConverter : IValueConverter
     {
@@ -43,7 +43,7 @@ namespace FFXIManager.Converters
     }
     
     /// <summary>
-    /// Converts boolean to color (Green for currently active, DarkBlue for system file, Black for inactive)
+    /// Converts boolean to color - UPDATED FOR SIMPLIFIED VERSION
     /// </summary>
     public class BoolToColorConverter : IValueConverter
     {
@@ -53,12 +53,12 @@ namespace FFXIManager.Converters
         {
             if (parameter?.ToString() == "Status")
             {
-                // For status column - green for currently active profiles
+                // For status column - green for user's last choice, black for others
                 return value is true ? Brushes.DarkGreen : Brushes.Black;
             }
             
-            // For other uses - green for active/system files, black for others
-            return value is true ? Brushes.Green : Brushes.Black;
+            // For other uses - blue for system files, black for others
+            return value is true ? Brushes.DarkBlue : Brushes.Black;
         }
         
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -68,19 +68,19 @@ namespace FFXIManager.Converters
     }
     
     /// <summary>
-    /// Converts IsCurrentlyActive boolean to a visual indicator
+    /// Converts IsLastUserChoice boolean to a visual indicator
     /// </summary>
-    public class BoolToCurrentlyActiveConverter : IValueConverter
+    public class BoolToLastUserChoiceConverter : IValueConverter
     {
-        public static readonly BoolToCurrentlyActiveConverter Instance = new();
+        public static readonly BoolToLastUserChoiceConverter Instance = new();
         
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
             if (value is true)
             {
-                return "Currently Active";
+                return "Last Choice";
             }
-            return string.Empty; // Return empty string instead of null for better handling
+            return string.Empty;
         }
         
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -90,28 +90,28 @@ namespace FFXIManager.Converters
     }
     
     /// <summary>
-    /// Combines profile type and active status into a meaningful status message
+    /// Combines profile type and user choice into a meaningful status message - SIMPLIFIED VERSION
     /// </summary>
     public class ProfileStatusConverter : IMultiValueConverter
     {
         public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
         {
-            if (values?.Length != 2) return "Unknown";
+            if (values?.Length != 2) return "Inactive";
             
-            var isActive = values[0] as bool? ?? false;
-            var isCurrentlyActive = values[1] as bool? ?? false;
+            var isSystemFile = values[0] as bool? ?? false;
+            var isLastUserChoice = values[1] as bool? ?? false;
             
-            if (isActive)
+            if (isSystemFile)
             {
                 return "System File"; // This is the login_w.bin file
             }
-            else if (isCurrentlyActive)
+            else if (isLastUserChoice)
             {
-                return "Active Profile"; // This backup is currently in use
+                return "Last Choice"; // This was the user's last selected profile
             }
             else
             {
-                return "Inactive"; // This backup is not currently in use
+                return "Inactive"; // This backup is not the user's last choice
             }
         }
         
@@ -138,6 +138,25 @@ namespace FFXIManager.Converters
             if (value is Visibility visibility)
                 return visibility != Visibility.Visible;
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Simple boolean inverter for IsEnabled binding - OneWay only
+    /// </summary>
+    public class InverseBooleanConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is bool boolValue)
+                return !boolValue;
+            return true;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            // Throw to prevent two-way binding on read-only properties
+            throw new NotSupportedException("InverseBooleanConverter only supports OneWay binding");
         }
     }
 }

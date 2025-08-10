@@ -1,40 +1,52 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Windows;
 
 namespace FFXIManager.Views
 {
+    /// <summary>
+    /// MVVM-compliant RenameProfileDialog with no code-behind logic
+    /// </summary>
     public partial class RenameProfileDialog : Window
     {
-        public string CurrentName { get; }
-        public string NewProfileName { get; set; }
+        public RenameProfileDialogViewModel ViewModel { get; }
         
-        public RenameProfileDialog(string currentName)
+        public string NewProfileName => ViewModel.NewProfileName;
+
+        public RenameProfileDialog(string currentName, bool isSystemFile)
         {
             InitializeComponent();
-            CurrentName = currentName;
-            NewProfileName = currentName;
-            DataContext = this;
             
-            // Select all text when dialog opens
+            ViewModel = new RenameProfileDialogViewModel(currentName, isSystemFile);
+            DataContext = ViewModel;
+            
+            // Subscribe to ViewModel events
+            ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+            
             Loaded += (s, e) => NewNameTextBox.SelectAll();
             NewNameTextBox.Focus();
         }
         
-        private void Rename_Click(object sender, RoutedEventArgs e)
+        private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(NewProfileName))
-            {
-                MessageBox.Show("Profile name cannot be empty.", "Invalid Name", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
+            System.Diagnostics.Debug.WriteLine($"ViewModel PropertyChanged: {e.PropertyName}");
             
-            DialogResult = true;
-            Close();
+            if (e.PropertyName == nameof(RenameProfileDialogViewModel.DialogResult))
+            {
+                System.Diagnostics.Debug.WriteLine($"DialogResult changed to: {ViewModel.DialogResult}");
+                DialogResult = ViewModel.DialogResult;
+                if (ViewModel.DialogResult.HasValue)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Closing dialog with result: {ViewModel.DialogResult}");
+                    Close();
+                }
+            }
         }
         
-        private void Cancel_Click(object sender, RoutedEventArgs e)
+        protected override void OnClosed(EventArgs e)
         {
-            DialogResult = false;
-            Close();
+            ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
+            base.OnClosed(e);
         }
     }
 }

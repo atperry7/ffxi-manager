@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:FFXIManager"
         xmlns:converters="clr-namespace:FFXIManager.Converters"
         mc:Ignorable="d"
-        Title="FFXI - Multi-Box Manager" Height="600" Width="1000"
+        Title="{Binding ApplicationTitle}" Height="600" Width="1000"
         WindowStartupLocation="CenterScreen">
     
     <Window.Resources>
@@ -30,7 +30,6 @@
         <converters:BoolToActiveConverter x:Key="BoolToActiveConverter"/>
         <converters:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
         <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
-        <converters:BoolToCurrentlyActiveConverter x:Key="BoolToCurrentlyActiveConverter"/>
         <converters:ProfileStatusConverter x:Key="ProfileStatusConverter"/>
     </Window.Resources>
     
@@ -117,7 +116,7 @@
             </Grid.ColumnDefinitions>
             
             <!-- Profiles List -->
-            <GroupBox Grid.Column="0" Header="Available Profiles" Margin="0,0,5,0">
+            <GroupBox Grid.Column="0" Header="Backup Profiles" Margin="0,0,5,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -131,6 +130,17 @@
                             <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding ChangeDirectoryCommand}" Width="80"/>
                             <TextBox Text="{Binding PlayOnlineDirectory}" IsReadOnly="True" Background="#F5F5F5"/>
                         </DockPanel>
+                        
+                        <!-- Active Login File Status -->
+                        <Border Background="#E3F2FD" BorderBrush="#2196F3" BorderThickness="1" 
+                                CornerRadius="4" Padding="8" Margin="0,5,0,5">
+                            <StackPanel>
+                                <TextBlock Text="Active Login File:" FontWeight="Bold" FontSize="11" Foreground="#1976D2"/>
+                                <TextBlock Text="{Binding ActiveLoginStatus}" FontSize="11" Foreground="#333" 
+                                           TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        
                         <DockPanel>
                             <CheckBox DockPanel.Dock="Right" 
                                       Content="Show auto-backups" 
@@ -163,21 +173,21 @@
                                           Command="{Binding DeleteProfileCommand}"/>
                                 <Separator/>
                                 <MenuItem Header="📋 Copy Profile Name" 
-                                          Click="CopyProfileName_Click"/>
+                                          Command="{Binding CopyProfileNameCommand}"/>
                                 <MenuItem Header="📁 Open File Location" 
-                                          Click="OpenFileLocation_Click"/>
+                                          Command="{Binding OpenFileLocationCommand}"/>
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.RowStyle>
                             <Style TargetType="DataGridRow">
                                 <Style.Triggers>
                                     <!-- Highlight login_w.bin (system file) differently -->
-                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                    <DataTrigger Binding="{Binding IsSystemFile, Mode=OneWay}" Value="True">
                                         <Setter Property="Background" Value="#F0F8FF"/>
                                         <Setter Property="FontWeight" Value="Bold"/>
                                     </DataTrigger>
-                                    <!-- Highlight currently active backup profile more prominently -->
-                                    <DataTrigger Binding="{Binding IsCurrentlyActive}" Value="True">
+                                    <!-- Highlight user's last choice more prominently -->
+                                    <DataTrigger Binding="{Binding IsLastUserChoice, Mode=OneWay}" Value="True">
                                         <Setter Property="Background" Value="#E8F5E8"/>
                                         <Setter Property="FontWeight" Value="SemiBold"/>
                                         <Setter Property="BorderBrush" Value="DarkGreen"/>
@@ -193,12 +203,12 @@
                             <DataGridTemplateColumn Header="Status" Width="120">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <TextBlock FontWeight="{Binding IsActive, Converter={StaticResource BoolToFontWeightConverter}}"
-                                                   Foreground="{Binding IsCurrentlyActive, ConverterParameter=Status, Converter={StaticResource BoolToColorConverter}}">
+                                        <TextBlock FontWeight="{Binding IsSystemFile, Mode=OneWay, Converter={StaticResource BoolToFontWeightConverter}}"
+                                                   Foreground="{Binding IsLastUserChoice, Mode=OneWay, ConverterParameter=Status, Converter={StaticResource BoolToColorConverter}}">
                                             <TextBlock.Text>
                                                 <MultiBinding Converter="{StaticResource ProfileStatusConverter}">
-                                                    <Binding Path="IsActive"/>
-                                                    <Binding Path="IsCurrentlyActive"/>
+                                                    <Binding Path="IsSystemFile" Mode="OneWay"/>
+                                                    <Binding Path="IsLastUserChoice" Mode="OneWay"/>
                                                 </MultiBinding>
                                             </TextBlock.Text>
                                         </TextBlock>
@@ -209,7 +219,7 @@
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
-                                                    Visibility="{Binding IsActive, Converter={StaticResource InverseBoolToVisConverter}}">
+                                                    Visibility="{Binding IsSystemFile, Mode=OneWay, Converter={StaticResource InverseBoolToVisConverter}}">
                                             <!-- All action buttons hidden for system files -->
                                             <Button Content="🔄" 
                                                     Command="{Binding DataContext.SwapProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
@@ -221,7 +231,8 @@
                                                     BorderThickness="0"
                                                     Style="{x:Null}"/>
                                             <Button Content="✏️" 
-                                                    Click="RenameProfile_Click"
+                                                    Command="{Binding DataContext.RenameProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                    CommandParameter="{Binding}"
                                                     ToolTip="Rename this profile"
                                                     Width="25" Height="25" 
                                                     Margin="2"
@@ -298,11 +309,11 @@
                                 
                                 <TextBlock>
                                     <Run Text="Status: " FontWeight="Bold"/>
-                                    <Run Foreground="{Binding IsCurrentlyActive, ConverterParameter=Status, Converter={StaticResource BoolToColorConverter}}">
+                                    <Run Foreground="{Binding IsLastUserChoice, Mode=OneWay, ConverterParameter=Status, Converter={StaticResource BoolToColorConverter}}">
                                         <Run.Text>
                                             <MultiBinding Converter="{StaticResource ProfileStatusConverter}">
-                                                <Binding Path="IsActive"/>
-                                                <Binding Path="IsCurrentlyActive"/>
+                                                <Binding Path="IsSystemFile" Mode="OneWay"/>
+                                                <Binding Path="IsLastUserChoice" Mode="OneWay"/>
                                             </MultiBinding>
                                         </Run.Text>
                                     </Run>
@@ -314,13 +325,13 @@
                                            Foreground="DarkBlue" 
                                            Margin="0,5,0,5"/>
                                 
-                                <!-- Warning for active file -->
+                                <!-- Warning for system file -->
                                 <Border Background="#FFF3CD" 
                                         BorderBrush="#FFEAA7" 
                                         BorderThickness="1" 
                                         Padding="8" 
                                         Margin="0,5,0,5"
-                                        Visibility="{Binding IsActive, Converter={StaticResource BoolToVisConverter}}">
+                                        Visibility="{Binding IsSystemFile, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}">
                                     <StackPanel>
                                         <TextBlock Text="⚠ System Login File" 
                                                    FontWeight="Bold" 

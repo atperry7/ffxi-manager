@@ -1,18 +1,18 @@
 using System;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 
 namespace FFXIManager.Models
 {
     /// <summary>
-    /// Represents a login profile backup file
+    /// Represents a login profile backup file - SIMPLIFIED VERSION
     /// </summary>
     public class ProfileInfo : INotifyPropertyChanged
     {
         private string _name = string.Empty;
         private string _filePath = string.Empty;
         private DateTime _lastModified;
-        private bool _isActive;
         private string _description = string.Empty;
         private long _fileSize;
         
@@ -33,18 +33,6 @@ namespace FFXIManager.Models
             get => _lastModified;
             set => SetProperty(ref _lastModified, value);
         }
-        
-        public bool IsActive
-        {
-            get => _isActive;
-            set => SetProperty(ref _isActive, value);
-        }
-        
-        /// <summary>
-        /// Indicates if this profile's content is currently active in login_w.bin
-        /// (Different from IsActive which indicates if this IS the login_w.bin file)
-        /// </summary>
-        public bool IsCurrentlyActive { get; set; }
         
         public string Description
         {
@@ -72,6 +60,16 @@ namespace FFXIManager.Models
         /// Gets a display-friendly file size
         /// </summary>
         public string FileSizeFormatted => FormatFileSize(FileSize);
+        
+        /// <summary>
+        /// SIMPLIFIED: True if this is the login_w.bin system file
+        /// </summary>
+        public bool IsSystemFile => Path.GetFileName(FilePath).Equals("login_w.bin", StringComparison.OrdinalIgnoreCase);
+        
+        /// <summary>
+        /// SIMPLIFIED: True if this is the user's last selected active profile
+        /// </summary>
+        public bool IsLastUserChoice { get; set; }
         
         private static string FormatFileSize(long bytes)
         {

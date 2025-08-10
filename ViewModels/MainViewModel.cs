@@ -1,6 +1,8 @@
 using FFXIManager.Models;
 using FFXIManager.Services;
 using FFXIManager.Views;
+using FFXIManager.Infrastructure;
+using FFXIManager.Configuration;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -10,51 +12,82 @@ using System.Windows.Input;
 namespace FFXIManager.ViewModels
 {
     /// <summary>
-    /// ViewModel for the main window
+    /// SIMPLIFIED ViewModel for the main window - now focused only on UI state management
     /// </summary>
     public class MainViewModel : INotifyPropertyChanged
     {
-        private readonly ProfileService _profileService;
-        private readonly SettingsService _settingsService;
+        private readonly IProfileOperationsService _profileOperations;
+        private readonly IStatusMessageService _statusService;
+        private readonly ISettingsService _settingsService;
+        private readonly IProfileService _profileService;
+        private readonly IUICommandService _uiCommandService;
+        private readonly IDialogService _dialogService;
+        private readonly IConfigurationService _configService;
+        private readonly IValidationService _validationService;
+        private readonly ILoggingService _loggingService;
+        private readonly INotificationService _notificationService;
+        
         private ApplicationSettings _settings;
         private ProfileInfo? _selectedProfile;
         private bool _isLoading;
-        private string _statusMessage = string.Empty;
         private string _newBackupName = string.Empty;
 
-        public MainViewModel()
+        public MainViewModel() : this(
+            ServiceLocator.SettingsService,
+            ServiceLocator.ProfileService,
+            ServiceLocator.ProfileOperationsService,
+            ServiceLocator.StatusMessageService,
+            new UICommandService(),
+            new DialogService(),
+            ServiceLocator.ConfigurationService,
+            ServiceLocator.ValidationService,
+            ServiceLocator.LoggingService,
+            ServiceLocator.NotificationService)
         {
-            _settingsService = new SettingsService();
-            _settings = _settingsService.LoadSettings();
+        }
 
-            _profileService = new ProfileService
-            {
-                PlayOnlineDirectory = _settings.PlayOnlineDirectory,
-                SettingsService = _settingsService  // Pass settings service for smart tracking
-            };
+        // Constructor for dependency injection (testability)
+        public MainViewModel(
+            ISettingsService settingsService, 
+            IProfileService profileService,
+            IProfileOperationsService profileOperations,
+            IStatusMessageService statusService,
+            IUICommandService uiCommandService,
+            IDialogService dialogService,
+            IConfigurationService configService,
+            IValidationService validationService,
+            ILoggingService loggingService,
+            INotificationService notificationService)
+        {
+            _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+            _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
+            _profileOperations = profileOperations ?? throw new ArgumentNullException(nameof(profileOperations));
+            _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
+            _uiCommandService = uiCommandService ?? throw new ArgumentNullException(nameof(uiCommandService));
+            _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+            _configService = configService ?? throw new ArgumentNullException(nameof(configService));
+            _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
+            _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
+
+            _settings = _settingsService.LoadSettings();
+            _profileService.PlayOnlineDirectory = _settings.PlayOnlineDirectory;
 
             Profiles = new ObservableCollection<ProfileInfo>();
+            
+            // Subscribe to status message changes
+            _statusService.MessageChanged += (_, message) => OnPropertyChanged(nameof(StatusMessage));
 
-            // Initialize commands
-            RefreshCommand = new RelayCommand(async () => await RefreshProfilesAsync());
-            SwapProfileCommand = new RelayCommand(async () => await SwapProfileAsync(), () => SelectedProfile != null && !SelectedProfile.IsActive);
-            CreateBackupCommand = new RelayCommand(async () => await CreateBackupAsync(), () => !string.IsNullOrWhiteSpace(NewBackupName));
-            DeleteProfileCommand = new RelayCommand(async () => await DeleteProfileAsync(), () => SelectedProfile != null && !SelectedProfile.IsActive);
-            ChangeDirectoryCommand = new RelayCommand(ChangeDirectory);
-            CleanupAutoBackupsCommand = new RelayCommand(async () => await CleanupAutoBackupsAsync());
-            ResetTrackingCommand = new RelayCommand(async () => await ResetActiveTrackingAsync());
-
-            // Parameterized commands for inline actions
-            SwapProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(async (profile) => await SwapProfileAsync(profile), (profile) => profile != null && !profile.IsActive);
-            DeleteProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(async (profile) => await DeleteProfileAsync(profile), (profile) => profile != null && !profile.IsActive);
-            RenameProfileCommand = new RelayCommand(async () => await RenameProfileAsync(), () => SelectedProfile != null && !SelectedProfile.IsActive);
-
+            InitializeCommands();
+            
             // Load profiles on startup if auto-refresh is enabled
             if (_settings.AutoRefreshOnStartup)
             {
                 _ = Task.Run(async () => await RefreshProfilesAsync());
             }
         }
+
+        #region Properties
 
         public ObservableCollection<ProfileInfo> Profiles { get; }
 
@@ -65,16 +98,8 @@ namespace FFXIManager.ViewModels
             {
                 if (SetProperty(ref _selectedProfile, value))
                 {
-                    ((RelayCommand)SwapProfileCommand).RaiseCanExecuteChanged();
-                    ((RelayCommand)DeleteProfileCommand).RaiseCanExecuteChanged();
-                    ((RelayCommand)RenameProfileCommand).RaiseCanExecuteChanged();
-
-                    // Save last used profile
-                    if (value != null)
-                    {
-                        _settings.LastUsedProfile = value.Name;
-                        _settingsService.SaveSettings(_settings);
-                    }
+                    UpdateCommandStates();
+                    SaveLastUsedProfile(value);
                 }
             }
         }
@@ -87,8 +112,8 @@ namespace FFXIManager.ViewModels
 
         public string StatusMessage
         {
-            get => _statusMessage;
-            set => SetProperty(ref _statusMessage, value);
+            get => _statusService.CurrentMessage;
+            private set { } // Remove the setter that causes the loop
         }
 
         public string NewBackupName
@@ -134,115 +159,103 @@ namespace FFXIManager.ViewModels
             }
         }
 
-        public ICommand RefreshCommand { get; }
-        public ICommand SwapProfileCommand { get; }
-        public ICommand CreateBackupCommand { get; }
-        public ICommand DeleteProfileCommand { get; }
-        public ICommand ChangeDirectoryCommand { get; }
-        public ICommand CleanupAutoBackupsCommand { get; }
-        public ICommand ResetTrackingCommand { get; }
+        public string ApplicationTitle => _configService.UIConfig.ApplicationTitle;
 
-        // Add parameterized commands for inline actions
-        public ICommand SwapProfileParameterCommand { get; }
-        public ICommand DeleteProfileParameterCommand { get; }
-        public ICommand RenameProfileCommand { get; }
+        public ProfileInfo? ActiveLoginInfo { get; private set; }
+        
+        public string ActiveLoginStatus
+        {
+            get
+            {
+                if (ActiveLoginInfo == null)
+                    return "?? No active login file found";
+                
+                return $"?? Current: {ActiveLoginInfo.Name} ({ActiveLoginInfo.FileSizeFormatted}) - Modified: {ActiveLoginInfo.LastModified:yyyy-MM-dd HH:mm}";
+            }
+        }
+
+        #endregion
+
+        #region Commands
+
+        public ICommand RefreshCommand { get; private set; } = null!;
+        public ICommand SwapProfileCommand { get; private set; } = null!;
+        public ICommand CreateBackupCommand { get; private set; } = null!;
+        public ICommand DeleteProfileCommand { get; private set; } = null!;
+        public ICommand ChangeDirectoryCommand { get; private set; } = null!;
+        public ICommand CleanupAutoBackupsCommand { get; private set; } = null!;
+        public ICommand ResetTrackingCommand { get; private set; } = null!;
+        public ICommand SwapProfileParameterCommand { get; private set; } = null!;
+        public ICommand DeleteProfileParameterCommand { get; private set; } = null!;
+        public ICommand RenameProfileCommand { get; private set; } = null!;
+        public ICommand CopyProfileNameCommand { get; private set; } = null!;
+        public ICommand OpenFileLocationCommand { get; private set; } = null!;
+        public ICommand RenameProfileParameterCommand { get; private set; } = null!;
+        public ICommand CopyProfileNameParameterCommand { get; private set; } = null!;
+        public ICommand OpenFileLocationParameterCommand { get; private set; } = null!;
+
+        private void InitializeCommands()
+        {
+            RefreshCommand = new RelayCommand(async () => await RefreshProfilesAsync());
+            SwapProfileCommand = new RelayCommand(async () => await SwapProfileAsync(), CanSwapProfile);
+            CreateBackupCommand = new RelayCommand(async () => await CreateBackupAsync(), CanCreateBackup);
+            DeleteProfileCommand = new RelayCommand(async () => await DeleteProfileAsync(), CanDeleteProfile);
+            ChangeDirectoryCommand = new RelayCommand(ChangeDirectory);
+            CleanupAutoBackupsCommand = new RelayCommand(async () => await CleanupAutoBackupsAsync());
+            ResetTrackingCommand = new RelayCommand(async () => await ResetTrackingAsync());
+            RenameProfileCommand = new RelayCommand(async () => await RenameProfileAsync(), CanRenameProfile);
+
+            // Parameterized commands
+            SwapProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
+                async profile => await SwapProfileAsync(profile), 
+                profile => profile != null && !profile.IsSystemFile);
+            DeleteProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
+                async profile => await DeleteProfileAsync(profile), 
+                profile => profile != null && !profile.IsSystemFile);
+            RenameProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
+                async profile => await RenameProfileParameterAsync(profile), 
+                profile => profile != null && !profile.IsSystemFile);
+            
+            // UI Commands
+            CopyProfileNameCommand = new RelayCommand(CopyProfileName, () => SelectedProfile != null);
+            OpenFileLocationCommand = new RelayCommand(OpenFileLocation, () => SelectedProfile != null);
+            CopyProfileNameParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
+                profile => CopyProfileNameParameter(profile), 
+                profile => profile != null);
+            OpenFileLocationParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
+                profile => OpenFileLocationParameter(profile), 
+                profile => profile != null);
+        }
+
+        #endregion
+
+        #region Command Operations
 
         private async Task RefreshProfilesAsync()
         {
             try
             {
                 IsLoading = true;
-                StatusMessage = "Loading profiles...";
+                _statusService.SetMessage("Loading profiles...");
 
-                // Check for external changes first
-                var externalChangeDetected = await _profileService.DetectExternalChangesAsync();
+                var profiles = await _profileOperations.LoadProfilesAsync(_settings.ShowAutoBackupsInList);
+                var activeLoginInfo = await _profileOperations.GetActiveLoginInfoAsync();
 
-                // Get profiles based on user preferences
-                var profiles = _settings.ShowAutoBackupsInList
-                    ? await _profileService.GetProfilesAsync()
-                    : await _profileService.GetUserProfilesAsync();
+                await Application.Current.Dispatcher.InvokeAsync(() => UpdateProfilesCollection(profiles, activeLoginInfo));
 
-                var activeLoginInfo = await _profileService.GetActiveLoginInfoAsync();
-
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    Profiles.Clear();
-                    ProfileInfo? explicitActiveProfile = null;
-                    ProfileInfo? lastUsedProfile = null;
-
-                    // Add active login info for display purposes (but not selectable for swapping)
-                    if (activeLoginInfo != null)
-                    {
-                        Profiles.Add(activeLoginInfo);
-                    }
-
-                    // Add backup profiles
-                    foreach (var profile in profiles)
-                    {
-                        // Only one profile can be active at a time
-                        profile.IsActive = false;
-                        // If this profile matches the explicit active profile (name and hash), mark it as active
-                        if (!string.IsNullOrEmpty(_settings.CurrentActiveProfile) && !string.IsNullOrEmpty(_settings.ActiveProfileHash))
-                        {
-                            // Compute hash for this profile
-                            try
-                            {
-                                var backupContent = System.IO.File.ReadAllBytes(profile.FilePath);
-                                var backupHash = Convert.ToBase64String(FFXIManager.Services.ProfileService.GetFileHash(backupContent));
-                                if (profile.Name == _settings.CurrentActiveProfile && backupHash == _settings.ActiveProfileHash)
-                                {
-                                    profile.IsCurrentlyActive = true;
-                                    explicitActiveProfile = profile;
-                                }
-                                else
-                                {
-                                    profile.IsCurrentlyActive = false;
-                                }
-                            }
-                            catch
-                            {
-                                profile.IsCurrentlyActive = false;
-                            }
-                        }
-                        Profiles.Add(profile);
-
-                        // Try to restore last selected profile (only for backup profiles that are currently visible)
-                        if (profile.Name == _settings.LastUsedProfile && !profile.IsActive)
-                        {
-                            lastUsedProfile = profile;
-                        }
-                    }
-
-                    // Only restore selection if the profile is actually in the current view
-                    // This prevents selecting auto-backups when they're hidden
-                    if (explicitActiveProfile != null && profiles.Contains(explicitActiveProfile))
-                    {
-                        SelectedProfile = explicitActiveProfile;
-                    }
-                    else if (lastUsedProfile != null && profiles.Contains(lastUsedProfile))
-                    {
-                        SelectedProfile = lastUsedProfile;
-                    }
-                    else
-                    {
-                        // Clear selection if the last used profile is not in the current view
-                        SelectedProfile = null;
-                    }
-                });
-
-                var autoBackupCount = _settings.ShowAutoBackupsInList ? 0 : (await _profileService.GetAutoBackupsAsync()).Count;
+                var autoBackupCount = _settings.ShowAutoBackupsInList ? 0 : 
+                    (await _profileService.GetAutoBackupsAsync()).Count;
                 var statusSuffix = _settings.ShowAutoBackupsInList ? "" : $" ({autoBackupCount} auto-backups hidden)";
-                var externalChangeNote = externalChangeDetected ? " (External change detected)" : "";
-                StatusMessage = $"Loaded {profiles.Count} backup profiles{statusSuffix}{externalChangeNote}";
+                _statusService.SetMessage($"Loaded {profiles.Count} backup profiles{statusSuffix}");
 
                 if (activeLoginInfo == null)
                 {
-                    StatusMessage += " (Warning: No active login_w.bin file found)";
+                    _statusService.SetMessage(_statusService.CurrentMessage + " (Warning: No active login_w.bin file found)");
                 }
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error loading profiles: {ex.Message}";
+                _statusService.SetMessage($"Error loading profiles: {ex.Message}");
             }
             finally
             {
@@ -252,8 +265,8 @@ namespace FFXIManager.ViewModels
 
         private async Task SwapProfileAsync()
         {
-            if (SelectedProfile == null) return;
-            await SwapProfileAsync(SelectedProfile);
+            if (SelectedProfile != null)
+                await SwapProfileAsync(SelectedProfile);
         }
 
         private async Task SwapProfileAsync(ProfileInfo profile)
@@ -263,24 +276,15 @@ namespace FFXIManager.ViewModels
             try
             {
                 IsLoading = true;
-                StatusMessage = $"Swapping to profile: {profile.Name}";
+                _statusService.SetMessage($"Swapping to profile: {profile.Name}");
 
-                await _profileService.SwapProfileAsync(profile);
+                var (success, message) = await _profileOperations.SwapProfileAsync(profile);
+                _statusService.SetMessage(message);
 
-                // Track explicit active profile choice and hash
-                var backupContent = System.IO.File.ReadAllBytes(profile.FilePath);
-                var backupHash = Convert.ToBase64String(FFXIManager.Services.ProfileService.GetFileHash(backupContent));
-                _settings.CurrentActiveProfile = profile.Name;
-                _settings.ActiveProfileHash = backupHash;
-                _settings.ActiveProfileSetTime = DateTime.Now;
-                _settingsService.SaveSettings(_settings);
-
-                StatusMessage = $"Successfully swapped to profile: {profile.Name}";
-                await RefreshProfilesAsync();
-            }
-            catch (Exception ex)
-            {
-                StatusMessage = $"Error swapping profile: {ex.Message}";
+                if (success)
+                {
+                    await RefreshProfilesAsync();
+                }
             }
             finally
             {
@@ -292,22 +296,26 @@ namespace FFXIManager.ViewModels
         {
             try
             {
-                IsLoading = true;
-                StatusMessage = $"Creating backup: {NewBackupName}";
-
-                var newProfile = await _profileService.CreateBackupAsync(NewBackupName);
-
-                Application.Current.Dispatcher.Invoke(() =>
+                // Validate backup name first
+                var validation = _validationService.ValidateProfileName(NewBackupName);
+                if (!validation.IsValid)
                 {
-                    Profiles.Add(newProfile);
-                });
+                    _statusService.SetMessage($"? {validation.ErrorMessage}");
+                    return;
+                }
 
-                NewBackupName = string.Empty;
-                StatusMessage = $"Successfully created backup: {newProfile.Name}";
-            }
-            catch (Exception ex)
-            {
-                StatusMessage = $"Error creating backup: {ex.Message}";
+                IsLoading = true;
+                _statusService.SetMessage(_configService.UIConfig.StatusMessages.GetValueOrDefault(
+                    "CreatingBackup", $"Creating backup: {NewBackupName}"));
+
+                var (success, message, newProfile) = await _profileOperations.CreateBackupAsync(NewBackupName);
+                _statusService.SetMessage(message);
+
+                if (success && newProfile != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() => Profiles.Add(newProfile));
+                    NewBackupName = string.Empty;
+                }
             }
             finally
             {
@@ -317,158 +325,31 @@ namespace FFXIManager.ViewModels
 
         private async Task DeleteProfileAsync()
         {
-            if (SelectedProfile == null) return;
-            await DeleteProfileAsync(SelectedProfile);
+            if (SelectedProfile != null)
+                await DeleteProfileAsync(SelectedProfile);
         }
 
         private async Task DeleteProfileAsync(ProfileInfo profile)
         {
             if (profile == null) return;
 
-            MessageBoxResult result = MessageBoxResult.Yes;
-
-            if (_settings.ConfirmDeleteOperations)
-            {
-                result = MessageBox.Show(
-                    $"Are you sure you want to delete profile '{profile.Name}'?",
-                    "Confirm Delete",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning);
-            }
-
-            if (result != MessageBoxResult.Yes) return;
-
             try
             {
                 IsLoading = true;
-                StatusMessage = $"Deleting profile: {profile.Name}";
+                _statusService.SetMessage($"Deleting profile: {profile.Name}");
 
-                await _profileService.DeleteProfileAsync(profile);
+                var (success, message) = await _profileOperations.DeleteProfileAsync(profile);
+                _statusService.SetMessage(message);
 
-                Application.Current.Dispatcher.Invoke(() =>
+                if (success)
                 {
-                    Profiles.Remove(profile);
-                });
-
-                if (SelectedProfile == profile)
-                {
-                    SelectedProfile = null;
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        Profiles.Remove(profile);
+                        if (SelectedProfile == profile)
+                            SelectedProfile = null;
+                    });
                 }
-
-                StatusMessage = $"Profile '{profile.Name}' deleted successfully";
-            }
-            catch (Exception ex)
-            {
-                StatusMessage = $"Error deleting profile: {ex.Message}";
-            }
-            finally
-            {
-                IsLoading = false;
-            }
-        }
-
-        private void ChangeDirectory()
-        {
-            var dialog = new Microsoft.Win32.OpenFolderDialog
-            {
-                Title = "Select PlayOnline Directory",
-                InitialDirectory = PlayOnlineDirectory
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                PlayOnlineDirectory = dialog.FolderName;
-            }
-        }
-
-        private async Task CleanupAutoBackupsAsync()
-        {
-            try
-            {
-                IsLoading = true;
-                StatusMessage = "Cleaning up auto-backups...";
-
-                // Add a small delay to ensure user sees the loading state
-                await Task.Delay(300);
-
-                var autoBackups = await _profileService.GetAutoBackupsAsync();
-                var countBefore = autoBackups.Count;
-
-                await _profileService.CleanupAutoBackupsAsync();
-
-                var autoBackupsAfter = await _profileService.GetAutoBackupsAsync();
-                var countAfter = autoBackupsAfter.Count;
-                var deletedCount = countBefore - countAfter;
-
-                StatusMessage = "Refreshing profiles after cleanup...";
-                await RefreshProfilesAsync();
-
-                // Show success message
-                StatusMessage = $"Cleaned up {deletedCount} old auto-backup files";
-
-                // Keep the success message visible for 3 seconds
-                _ = Task.Run(async () =>
-                {
-                    await Task.Delay(3000);
-                    if (StatusMessage.StartsWith("? Cleaned up"))
-                    {
-                        await Application.Current.Dispatcher.InvokeAsync(() =>
-                        {
-                            // Return to standard status after 3 seconds
-                            var autoBackupCount = _settings.ShowAutoBackupsInList ? 0 : Profiles.Count(p => p.Name.StartsWith("backup_"));
-                            var statusSuffix = _settings.ShowAutoBackupsInList ? "" : $" ({autoBackupCount} auto-backups hidden)";
-                            StatusMessage = $"Loaded {Profiles.Count(p => !p.IsActive)} backup profiles{statusSuffix}";
-                        });
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                StatusMessage = $"Error cleaning up auto-backups: {ex.Message}";
-            }
-            finally
-            {
-                IsLoading = false;
-            }
-        }
-
-        private async Task ResetActiveTrackingAsync()
-        {
-            try
-            {
-                IsLoading = true;
-                StatusMessage = "?? Resetting active profile tracking...";
-
-                // Add a small delay to ensure user sees the loading state
-                await Task.Delay(300);
-
-                await _profileService.ClearActiveProfileTrackingAsync();
-
-                StatusMessage = "Refreshing profiles after reset...";
-                await RefreshProfilesAsync();
-
-                // Show success message for a reasonable duration
-                StatusMessage = "Active profile tracking reset successfully - will auto-detect on next swap";
-
-                // Keep the success message visible for 3 seconds
-                _ = Task.Run(async () =>
-                {
-                    await Task.Delay(3000);
-                    if (StatusMessage.StartsWith("? Active profile tracking"))
-                    {
-                        await Application.Current.Dispatcher.InvokeAsync(() =>
-                        {
-                            // Return to standard status after 3 seconds
-                            var autoBackupCount = _settings.ShowAutoBackupsInList ? 0 : Profiles.Count(p => p.Name.StartsWith("backup_"));
-                            var statusSuffix = _settings.ShowAutoBackupsInList ? "" : $" ({autoBackupCount} auto-backups hidden)";
-                            StatusMessage = $"Loaded {Profiles.Count(p => !p.IsActive)} backup profiles{statusSuffix}";
-                        });
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                StatusMessage = $"Error resetting tracking: {ex.Message}";
             }
             finally
             {
@@ -480,44 +361,284 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedProfile == null) return;
 
+            if (SelectedProfile.IsSystemFile)
+            {
+                _statusService.SetMessage(_configService.UIConfig.StatusMessages.GetValueOrDefault(
+                    "SystemFileRenameError", "Cannot rename the system login file."));
+                return;
+            }
+
             try
             {
-                // Prompt user for new name
-                var dialog = new RenameProfileDialog(SelectedProfile.Name);
-                if (dialog.ShowDialog() == true)
+                var newName = await _dialogService.ShowRenameDialogAsync(SelectedProfile.Name, SelectedProfile.IsSystemFile);
+                if (newName == null) return; // User cancelled
+                
+                // Validate new name
+                var validation = _validationService.ValidateProfileName(newName);
+                if (!validation.IsValid)
                 {
-                    var newName = dialog.NewProfileName;
-                    if (string.IsNullOrWhiteSpace(newName))
-                    {
-                        StatusMessage = "Profile name cannot be empty";
-                        return;
-                    }
+                    _statusService.SetMessage($"? {validation.ErrorMessage}");
+                    return;
+                }
 
-                    IsLoading = true;
-                    StatusMessage = $"Renaming profile '{SelectedProfile.Name}' to '{newName}'...";
+                IsLoading = true;
+                _statusService.SetMessage($"Renaming profile '{SelectedProfile.Name}' to '{newName}'...");
 
-                    await _profileService.RenameProfileAsync(SelectedProfile, newName);
+                var (success, message) = await _profileOperations.RenameProfileAsync(SelectedProfile, newName);
+                _statusService.SetMessage(message);
 
-                    StatusMessage = $"Profile renamed successfully to '{newName}'";
+                if (success)
+                {
                     await RefreshProfilesAsync();
-
+                    
                     // Try to reselect the renamed profile
                     var renamedProfile = Profiles.FirstOrDefault(p => p.Name == newName);
                     if (renamedProfile != null)
-                    {
                         SelectedProfile = renamedProfile;
-                    }
                 }
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error renaming profile: {ex.Message}";
+                _statusService.SetMessage($"Error renaming profile: {ex.Message}");
             }
             finally
             {
                 IsLoading = false;
             }
         }
+
+        private async Task CleanupAutoBackupsAsync()
+        {
+            try
+            {
+                IsLoading = true;
+                _statusService.SetMessage("Cleaning up auto-backups...");
+                
+                await Task.Delay(300); // Brief delay for user feedback
+
+                var (success, message, deletedCount) = await _profileOperations.CleanupAutoBackupsAsync();
+                
+                _statusService.SetMessage("Refreshing profiles after cleanup...");
+                await RefreshProfilesAsync();
+
+                if (success)
+                {
+                    _statusService.SetTemporaryMessage($"Cleaned up {deletedCount} old auto-backup files", TimeSpan.FromSeconds(3));
+                }
+                else
+                {
+                    _statusService.SetMessage(message);
+                }
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+
+        private async Task ResetTrackingAsync()
+        {
+            try
+            {
+                IsLoading = true;
+                _statusService.SetMessage("Resetting user profile choice...");
+                
+                await Task.Delay(300); // Brief delay for user feedback
+
+                var (success, message) = await _profileOperations.ResetTrackingAsync();
+                
+                _statusService.SetMessage("Refreshing profiles after reset...");
+                await RefreshProfilesAsync();
+
+                if (success)
+                {
+                    _statusService.SetTemporaryMessage(message, TimeSpan.FromSeconds(3));
+                }
+                else
+                {
+                    _statusService.SetMessage(message);
+                }
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+
+        private async void ChangeDirectory()
+        {
+            try
+            {
+                var selectedPath = await _dialogService.ShowFolderBrowserDialogAsync("Select PlayOnline Directory", PlayOnlineDirectory);
+                if (selectedPath != null)
+                {
+                    // Validate directory
+                    var validation = _validationService.ValidateDirectory(selectedPath);
+                    if (!validation.IsValid)
+                    {
+                        _statusService.SetMessage($"? {validation.ErrorMessage}");
+                        return;
+                    }
+
+                    PlayOnlineDirectory = selectedPath;
+                }
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"? Error selecting directory: {ex.Message}");
+            }
+        }
+
+        private void CopyProfileName()
+        {
+            if (SelectedProfile == null) return;
+            
+            try
+            {
+                _uiCommandService.CopyToClipboard(SelectedProfile.Name);
+                _statusService.SetMessage($"?? Copied profile name: {SelectedProfile.Name}");
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"? Error copying to clipboard: {ex.Message}");
+            }
+        }
+
+        private void OpenFileLocation()
+        {
+            if (SelectedProfile == null) return;
+            
+            try
+            {
+                _uiCommandService.OpenFileLocation(SelectedProfile.FilePath);
+                _statusService.SetMessage($"?? Opened file location for: {SelectedProfile.Name}");
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"? {ex.Message}");
+            }
+        }
+
+        private async Task RenameProfileParameterAsync(ProfileInfo profile)
+        {
+            if (profile == null) return;
+
+            if (profile.IsSystemFile)
+            {
+                _statusService.SetMessage("Cannot rename the system login file (login_w.bin).");
+                return;
+            }
+
+            // Temporarily select this profile for the operation
+            var originalSelection = SelectedProfile;
+            SelectedProfile = profile;
+            
+            try
+            {
+                await RenameProfileAsync();
+            }
+            finally
+            {
+                // Restore original selection if rename didn't change it
+                if (SelectedProfile == profile && originalSelection != profile)
+                {
+                    SelectedProfile = originalSelection;
+                }
+            }
+        }
+
+        private void CopyProfileNameParameter(ProfileInfo profile)
+        {
+            if (profile == null) return;
+            
+            try
+            {
+                _uiCommandService.CopyToClipboard(profile.Name);
+                _statusService.SetMessage($"?? Copied profile name: {profile.Name}");
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"? Error copying to clipboard: {ex.Message}");
+            }
+        }
+
+        private void OpenFileLocationParameter(ProfileInfo profile)
+        {
+            if (profile == null) return;
+            
+            try
+            {
+                _uiCommandService.OpenFileLocation(profile.FilePath);
+                _statusService.SetMessage($"?? Opened file location for: {profile.Name}");
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"? {ex.Message}");
+            }
+        }
+
+        #endregion
+
+        #region Helper Methods
+
+        private void UpdateProfilesCollection(List<ProfileInfo> profiles, ProfileInfo? activeLoginInfo)
+        {
+            Profiles.Clear();
+            ProfileInfo? lastUserChoice = null;
+            ProfileInfo? lastUsedProfile = null;
+
+            // Store active login info separately (don't add to profiles list)
+            ActiveLoginInfo = activeLoginInfo;
+            OnPropertyChanged(nameof(ActiveLoginInfo));
+            OnPropertyChanged(nameof(ActiveLoginStatus));
+
+            // Add only backup profiles (exclude system file)
+            foreach (var profile in profiles)
+            {
+                Profiles.Add(profile);
+
+                if (profile.IsLastUserChoice)
+                    lastUserChoice = profile;
+                
+                if (profile.Name == _settings.LastUsedProfile && !profile.IsSystemFile)
+                    lastUsedProfile = profile;
+            }
+
+            // Restore selection preference
+            if (lastUserChoice != null && profiles.Contains(lastUserChoice))
+                SelectedProfile = lastUserChoice;
+            else if (lastUsedProfile != null && profiles.Contains(lastUsedProfile))
+                SelectedProfile = lastUsedProfile;
+            else
+                SelectedProfile = null;
+        }
+
+        private void UpdateCommandStates()
+        {
+            ((RelayCommand)SwapProfileCommand).RaiseCanExecuteChanged();
+            ((RelayCommand)DeleteProfileCommand).RaiseCanExecuteChanged();
+            ((RelayCommand)RenameProfileCommand).RaiseCanExecuteChanged();
+            ((RelayCommand)CopyProfileNameCommand).RaiseCanExecuteChanged();
+            ((RelayCommand)OpenFileLocationCommand).RaiseCanExecuteChanged();
+        }
+
+        private void SaveLastUsedProfile(ProfileInfo? profile)
+        {
+            if (profile != null)
+            {
+                _settings.LastUsedProfile = profile.Name;
+                _settingsService.SaveSettings(_settings);
+            }
+        }
+
+        private bool CanSwapProfile() => SelectedProfile != null && !SelectedProfile.IsSystemFile;
+        private bool CanDeleteProfile() => SelectedProfile != null && !SelectedProfile.IsSystemFile;
+        private bool CanRenameProfile() => SelectedProfile != null && !SelectedProfile.IsSystemFile;
+        private bool CanCreateBackup() => !string.IsNullOrWhiteSpace(NewBackupName);
+
+        #endregion
+
+        #region INotifyPropertyChanged
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -533,5 +654,7 @@ namespace FFXIManager.ViewModels
             OnPropertyChanged(propertyName);
             return true;
         }
+
+        #endregion
     }
 }
