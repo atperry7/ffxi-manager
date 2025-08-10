@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FFXIManager"
+        xmlns:views="clr-namespace:FFXIManager.Views"
         xmlns:converters="clr-namespace:FFXIManager.Converters"
         mc:Ignorable="d"
         Title="{Binding ApplicationTitle}" Height="600" Width="1000"
@@ -26,11 +27,6 @@
         </Style>
         
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
-        <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisConverter"/>
-        <converters:BoolToActiveConverter x:Key="BoolToActiveConverter"/>
-        <converters:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
-        <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
-        <converters:ProfileStatusConverter x:Key="ProfileStatusConverter"/>
     </Window.Resources>
     
     <Grid>
@@ -42,70 +38,7 @@
         </Grid.RowDefinitions>
         
         <!-- Header Section -->
-        <Border Grid.Row="0" Background="#2C3E50" Padding="10">
-            <DockPanel>
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="FFXI Manager" FontSize="24" FontWeight="Bold" Foreground="White"/>
-                    <Border Background="#34495E" 
-                            CornerRadius="15" 
-                            Margin="15,0,0,0" 
-                            Padding="10,6"
-                            VerticalAlignment="Center"
-                            BorderBrush="#5D6D7E"
-                            BorderThickness="1"
-                            x:Name="HelpBorder"
-                            ToolTipService.InitialShowDelay="150"
-                            ToolTipService.ShowDuration="15000"
-                            ToolTipService.BetweenShowDelay="50">
-                        <Border.Style>
-                            <Style TargetType="Border">
-                                <Style.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#3F5771"/>
-                                        <Setter Property="BorderBrush" Value="#85929E"/>
-                                    </Trigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Border.Style>
-                        <Border.ToolTip>
-                            <ToolTip MaxWidth="450" 
-                                     Background="#F8F9FA" 
-                                     BorderBrush="#DEE2E6" 
-                                     BorderThickness="1">
-                                <StackPanel Margin="5">
-                                    <TextBlock Text="📋 Usage Tips" FontWeight="Bold" FontSize="14" Margin="0,0,0,8" Foreground="#495057"/>
-                                    <TextBlock Text="• Double-click any profile to swap to it instantly" 
-                                               TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
-                                    <TextBlock Text="• Right-click profiles for context menu with all actions" 
-                                               TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
-                                    <TextBlock Text="• Use inline 🔄 ✏️ 🗑️ buttons for direct actions" 
-                                               TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
-                                    <TextBlock Text="• Rename auto-backups (backup_*) to convert to user profiles" 
-                                               TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
-                                    <TextBlock Text="• Green highlight shows the currently active profile" 
-                                               TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
-                                    <TextBlock Text="• login_w.bin is read-only (shows current state)" 
-                                               TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
-                                    <TextBlock Text="• [EXT] indicates file was changed outside the app" 
-                                               TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
-                                    <TextBlock Text="• Toggle 'Show auto-backups' to see/hide automatic backups" 
-                                               TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
-                                    <TextBlock Text="• Expand 'Advanced' for maintenance tools" 
-                                               TextWrapping="Wrap" Margin="0,3" FontSize="12" Foreground="#212529"/>
-                                </StackPanel>
-                            </ToolTip>
-                        </Border.ToolTip>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="?" FontSize="16" FontWeight="Bold" Foreground="#3498DB" Margin="0,0,0,0"/>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-                
-                <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="Manage your PlayOnline Multi-Box Experience" FontSize="12" Foreground="LightGray" HorizontalAlignment="Center"/>
-                </StackPanel>
-            </DockPanel>
-        </Border>
+        <views:HeaderView Grid.Row="0" DataContext="{Binding}"/>
         
         <!-- Main Content -->
         <Grid Grid.Row="1" Margin="10">
@@ -116,284 +49,13 @@
             </Grid.ColumnDefinitions>
             
             <!-- Profiles List -->
-            <GroupBox Grid.Column="0" Header="Backup Profiles" Margin="0,0,5,0">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-                    
-                    <!-- Directory Settings -->
-                    <StackPanel Grid.Row="0" Orientation="Vertical" Margin="5">
-                        <Label Content="PlayOnline Directory:"/>
-                        <DockPanel>
-                            <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding ChangeDirectoryCommand}" Width="80"/>
-                            <TextBox Text="{Binding PlayOnlineDirectory}" IsReadOnly="True" Background="#F5F5F5"/>
-                        </DockPanel>
-                        
-                        <!-- Active Login File Status -->
-                        <Border Background="#E3F2FD" BorderBrush="#2196F3" BorderThickness="1" 
-                                CornerRadius="4" Padding="8" Margin="0,5,0,5">
-                            <StackPanel>
-                                <TextBlock Text="Active Login File:" FontWeight="Bold" FontSize="11" Foreground="#1976D2"/>
-                                <TextBlock Text="{Binding ActiveLoginStatus}" FontSize="11" Foreground="#333" 
-                                           TextWrapping="Wrap" Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </Border>
-                        
-                        <DockPanel>
-                            <CheckBox DockPanel.Dock="Right" 
-                                      Content="Show auto-backups" 
-                                      IsChecked="{Binding ShowAutoBackups}"
-                                      VerticalAlignment="Center"
-                                      Margin="5,0,0,0"/>
-                            <Button Content="Refresh" Command="{Binding RefreshCommand}" HorizontalAlignment="Left"/>
-                        </DockPanel>
-                    </StackPanel>
-                    
-                    <!-- Profiles DataGrid -->
-                    <DataGrid Grid.Row="1" 
-                              ItemsSource="{Binding Profiles}" 
-                              SelectedItem="{Binding SelectedProfile}"
-                              AutoGenerateColumns="False"
-                              SelectionMode="Single"
-                              IsReadOnly="True"
-                              GridLinesVisibility="Horizontal"
-                              AlternatingRowBackground="#F9F9F9"
-                              MouseDoubleClick="DataGrid_MouseDoubleClick">
-                        <DataGrid.ContextMenu>
-                            <ContextMenu>
-                                <MenuItem Header="🔄 Swap to This Profile" 
-                                          Command="{Binding SwapProfileCommand}"
-                                          FontWeight="Bold"/>
-                                <Separator/>
-                                <MenuItem Header="✏️ Rename Profile" 
-                                          Command="{Binding RenameProfileCommand}"/>
-                                <MenuItem Header="🗑️ Delete Profile" 
-                                          Command="{Binding DeleteProfileCommand}"/>
-                                <Separator/>
-                                <MenuItem Header="📋 Copy Profile Name" 
-                                          Command="{Binding CopyProfileNameCommand}"/>
-                                <MenuItem Header="📁 Open File Location" 
-                                          Command="{Binding OpenFileLocationCommand}"/>
-                            </ContextMenu>
-                        </DataGrid.ContextMenu>
-                        <DataGrid.RowStyle>
-                            <Style TargetType="DataGridRow">
-                                <Style.Triggers>
-                                    <!-- Highlight login_w.bin (system file) differently -->
-                                    <DataTrigger Binding="{Binding IsSystemFile, Mode=OneWay}" Value="True">
-                                        <Setter Property="Background" Value="#F0F8FF"/>
-                                        <Setter Property="FontWeight" Value="Bold"/>
-                                    </DataTrigger>
-                                    <!-- Highlight user's last choice more prominently -->
-                                    <DataTrigger Binding="{Binding IsLastUserChoice, Mode=OneWay}" Value="True">
-                                        <Setter Property="Background" Value="#E8F5E8"/>
-                                        <Setter Property="FontWeight" Value="SemiBold"/>
-                                        <Setter Property="BorderBrush" Value="DarkGreen"/>
-                                        <Setter Property="BorderThickness" Value="1"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </DataGrid.RowStyle>
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Profile Name" Binding="{Binding Name}" Width="*"/>
-                            <DataGridTextColumn Header="File Size" Binding="{Binding FileSizeFormatted, Mode=OneWay}" Width="80"/>
-                            <DataGridTextColumn Header="Last Modified" Binding="{Binding LastModified, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" Width="130"/>
-                            <DataGridTemplateColumn Header="Status" Width="120">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBlock FontWeight="{Binding IsSystemFile, Mode=OneWay, Converter={StaticResource BoolToFontWeightConverter}}"
-                                                   Foreground="{Binding IsLastUserChoice, Mode=OneWay, ConverterParameter=Status, Converter={StaticResource BoolToColorConverter}}">
-                                            <TextBlock.Text>
-                                                <MultiBinding Converter="{StaticResource ProfileStatusConverter}">
-                                                    <Binding Path="IsSystemFile" Mode="OneWay"/>
-                                                    <Binding Path="IsLastUserChoice" Mode="OneWay"/>
-                                                </MultiBinding>
-                                            </TextBlock.Text>
-                                        </TextBlock>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="Actions" Width="130">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
-                                                    Visibility="{Binding IsSystemFile, Mode=OneWay, Converter={StaticResource InverseBoolToVisConverter}}">
-                                            <!-- All action buttons hidden for system files -->
-                                            <Button Content="🔄" 
-                                                    Command="{Binding DataContext.SwapProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                                    CommandParameter="{Binding}"
-                                                    ToolTip="Swap to this profile"
-                                                    Width="25" Height="25" 
-                                                    Margin="2"
-                                                    Background="Transparent"
-                                                    BorderThickness="0"
-                                                    Style="{x:Null}"/>
-                                            <Button Content="✏️" 
-                                                    Command="{Binding DataContext.RenameProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                                    CommandParameter="{Binding}"
-                                                    ToolTip="Rename this profile"
-                                                    Width="25" Height="25" 
-                                                    Margin="2"
-                                                    Background="Transparent"
-                                                    BorderThickness="0"
-                                                    Style="{x:Null}"/>
-                                            <Button Content="🗑️" 
-                                                    Command="{Binding DataContext.DeleteProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                                    CommandParameter="{Binding}"
-                                                    ToolTip="Delete this profile"
-                                                    Width="25" Height="25" 
-                                                    Margin="2"
-                                                    Background="Transparent"
-                                                    BorderThickness="0"
-                                                    Style="{x:Null}"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Grid>
-            </GroupBox>
+            <views:ProfileListView Grid.Column="0" Margin="0,0,5,0" DataContext="{Binding}"/>
             
             <!-- Splitter -->
             <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="LightGray"/>
             
             <!-- Actions Panel -->
-            <GroupBox Grid.Column="2" Header="Actions" Margin="5,0,0,0">
-                <StackPanel>
-                    <!-- Profile Actions -->
-                    <GroupBox Header="Profile Management">
-                        <StackPanel>
-                            <!-- Create Backup Section -->
-                            <Label Content="Create New Backup:"/>
-                            <TextBox Text="{Binding NewBackupName, UpdateSourceTrigger=PropertyChanged}" 
-                                     x:Name="BackupNameTextBox"/>
-                            <Button Content="Create Backup from Active" 
-                                    Command="{Binding CreateBackupCommand}"
-                                    Background="#27AE60"
-                                    Foreground="White"/>
-                        </StackPanel>
-                    </GroupBox>
-                    
-                    <!-- Selected Profile Details -->
-                    <GroupBox Header="Selected Profile Details">
-                        <Grid>
-                            <!-- Profile Details -->
-                            <StackPanel DataContext="{Binding SelectedProfile}">
-                                <StackPanel.Style>
-                                    <Style TargetType="StackPanel">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding}" Value="{x:Null}">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </StackPanel.Style>
-                                
-                                <TextBlock>
-                                    <Run Text="Name: " FontWeight="Bold"/>
-                                    <Run Text="{Binding Name}"/>
-                                </TextBlock>
-                                
-                                <TextBlock>
-                                    <Run Text="File Size: " FontWeight="Bold"/>
-                                    <Run Text="{Binding FileSizeFormatted, Mode=OneWay}"/>
-                                </TextBlock>
-                                
-                                <TextBlock>
-                                    <Run Text="Last Modified: " FontWeight="Bold"/>
-                                    <Run Text="{Binding LastModified, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"/>
-                                </TextBlock>
-                                
-                                <TextBlock>
-                                    <Run Text="Status: " FontWeight="Bold"/>
-                                    <Run Foreground="{Binding IsLastUserChoice, Mode=OneWay, ConverterParameter=Status, Converter={StaticResource BoolToColorConverter}}">
-                                        <Run.Text>
-                                            <MultiBinding Converter="{StaticResource ProfileStatusConverter}">
-                                                <Binding Path="IsSystemFile" Mode="OneWay"/>
-                                                <Binding Path="IsLastUserChoice" Mode="OneWay"/>
-                                            </MultiBinding>
-                                        </Run.Text>
-                                    </Run>
-                                </TextBlock>
-                                
-                                <TextBlock Text="{Binding Description}" 
-                                           TextWrapping="Wrap" 
-                                           FontSize="11" 
-                                           Foreground="DarkBlue" 
-                                           Margin="0,5,0,5"/>
-                                
-                                <!-- Warning for system file -->
-                                <Border Background="#FFF3CD" 
-                                        BorderBrush="#FFEAA7" 
-                                        BorderThickness="1" 
-                                        Padding="8" 
-                                        Margin="0,5,0,5"
-                                        Visibility="{Binding IsSystemFile, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}">
-                                    <StackPanel>
-                                        <TextBlock Text="⚠ System Login File" 
-                                                   FontWeight="Bold" 
-                                                   Foreground="#856404"/>
-                                        <TextBlock Text="This is the system file used by PlayOnline. It cannot be deleted or swapped. Create backups from this file instead." 
-                                                   TextWrapping="Wrap" 
-                                                   FontSize="10" 
-                                                   Foreground="#856404" 
-                                                   Margin="0,2,0,0"/>
-                                    </StackPanel>
-                                </Border>
-                                
-                                <TextBlock Text="{Binding FilePath}" 
-                                           TextWrapping="Wrap" 
-                                           FontSize="10" 
-                                           Foreground="Gray" 
-                                           Margin="0,5,0,0"/>
-                            </StackPanel>
-                            
-                            <!-- No Selection Message -->
-                            <TextBlock Text="No profile selected" 
-                                       FontStyle="Italic" 
-                                       Foreground="Gray"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"
-                                       Margin="10">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding SelectedProfile}" Value="{x:Null}">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </Grid>
-                    </GroupBox>
-                    
-                    <!-- Advanced Options -->
-                    <GroupBox Header="Advanced" Margin="0,10,0,0">
-                        <Expander Header="Maintenance Tools" IsExpanded="False">
-                            <StackPanel Margin="0,5,0,0">
-                                <Button Content="Clean Up Auto-Backups" 
-                                        Command="{Binding CleanupAutoBackupsCommand}"
-                                        Background="#F39C12"
-                                        Foreground="White"
-                                        ToolTip="Remove old automatic backup files (keeps 5 most recent). Auto-backups are created automatically during profile swaps for safety."/>
-                                <Button Content="Reset Active Tracking" 
-                                        Command="{Binding ResetTrackingCommand}"
-                                        Background="#9B59B6"
-                                        Foreground="White"
-                                        ToolTip="Clear active profile tracking and start fresh. Use this if the app incorrectly identifies which profile is active."
-                                        ToolTipService.InitialShowDelay="150"
-                                        ToolTipService.ShowDuration="8000"
-                                        ToolTipService.BetweenShowDelay="50"/>
-                            </StackPanel>
-                        </Expander>
-                    </GroupBox>
-                </StackPanel>
-            </GroupBox>
+            <views:ProfileActionsView Grid.Column="2" Margin="5,0,0,0" DataContext="{Binding}"/>
         </Grid>
         
         <!-- Loading Indicator -->
@@ -406,11 +68,6 @@
         </Border>
         
         <!-- Status Bar -->
-        <Border Grid.Row="3" Background="#34495E" Padding="10">
-            <DockPanel>
-                <TextBlock Text="Status: " Foreground="White" FontWeight="Bold"/>
-                <TextBlock Text="{Binding StatusMessage}" Foreground="LightGray"/>
-            </DockPanel>
-        </Border>
+        <views:StatusBarView Grid.Row="3" DataContext="{Binding}"/>
     </Grid>
 </Window>

@@ -159,4 +159,21 @@ namespace FFXIManager.Converters
             throw new NotSupportedException("InverseBooleanConverter only supports OneWay binding");
         }
     }
+    
+    /// <summary>
+    /// Converter to show/hide active profile indicator
+    /// </summary>
+    public class ActiveProfileVisibilityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            // This will be handled by the MainViewModel to compare profile names
+            return Visibility.Collapsed; // Default to hidden, MainViewModel will handle the logic
+        }
+        
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
 }

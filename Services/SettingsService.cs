@@ -28,11 +28,21 @@ namespace FFXIManager.Services
                 {
                     var json = File.ReadAllText(_settingsPath);
                     var settings = JsonSerializer.Deserialize<ApplicationSettings>(json);
+                    
+                    // DEBUG: Show what was loaded
+                    System.Diagnostics.Debug.WriteLine($"?? SETTINGS LOADED from: {_settingsPath}");
+                    System.Diagnostics.Debug.WriteLine($"   - LastUsedProfile: '{settings?.LastUsedProfile ?? "null"}'");
+                    
                     return settings ?? new ApplicationSettings();
                 }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"?? SETTINGS FILE NOT FOUND: {_settingsPath}");
+                }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"? ERROR LOADING SETTINGS: {ex.Message}");
                 // If there's any error loading settings, return defaults
             }
             
@@ -48,9 +58,16 @@ namespace FFXIManager.Services
                     WriteIndented = true 
                 });
                 File.WriteAllText(_settingsPath, json);
+                
+                // DEBUG: Verify what was saved
+                System.Diagnostics.Debug.WriteLine($"?? SETTINGS SAVED to: {_settingsPath}");
+                System.Diagnostics.Debug.WriteLine($"   - LastUsedProfile: '{settings.LastUsedProfile}'");
+                System.Diagnostics.Debug.WriteLine($"   - Settings JSON:");
+                System.Diagnostics.Debug.WriteLine(json);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"? ERROR SAVING SETTINGS: {ex.Message}");
                 // Silently fail - settings are not critical
             }
         }

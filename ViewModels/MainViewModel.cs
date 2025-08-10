@@ -73,6 +73,9 @@ namespace FFXIManager.ViewModels
             _settings = _settingsService.LoadSettings();
             _profileService.PlayOnlineDirectory = _settings.PlayOnlineDirectory;
 
+            // DEBUG: Show what was loaded
+            System.Diagnostics.Debug.WriteLine($"?? CONSTRUCTOR: Loaded LastUsedProfile = '{_settings.LastUsedProfile}'");
+
             Profiles = new ObservableCollection<ProfileInfo>();
             
             // Subscribe to status message changes
@@ -170,7 +173,34 @@ namespace FFXIManager.ViewModels
                 if (ActiveLoginInfo == null)
                     return "?? No active login file found";
                 
-                return $"?? Current: {ActiveLoginInfo.Name} ({ActiveLoginInfo.FileSizeFormatted}) - Modified: {ActiveLoginInfo.LastModified:yyyy-MM-dd HH:mm}";
+                // Extract the "Last Set" information from the name if it exists
+                var displayText = ActiveLoginInfo.Name;
+                if (displayText.Contains("(Last Set:"))
+                {
+                    // Format: "login_w.bin (Last Set: char2)" -> show "?? Currently Active: char2 profile"
+                    var match = System.Text.RegularExpressions.Regex.Match(displayText, @"Last Set: ([^)]+)");
+                    if (match.Success)
+                    {
+                        var lastSetProfile = match.Groups[1].Value;
+                        return $"?? Currently Active: '{lastSetProfile}' profile ({ActiveLoginInfo.FileSizeFormatted}) - Modified: {ActiveLoginInfo.LastModified:yyyy-MM-dd HH:mm}";
+                    }
+                }
+                
+                // Fallback for system file without last set info
+                return $"?? Current: System file ({ActiveLoginInfo.FileSizeFormatted}) - Modified: {ActiveLoginInfo.LastModified:yyyy-MM-dd HH:mm}";
+            }
+        }
+        
+        public string? CurrentActiveProfileName
+        {
+            get
+            {
+                if (ActiveLoginInfo?.Name?.Contains("(Last Set:") == true)
+                {
+                    var match = System.Text.RegularExpressions.Regex.Match(ActiveLoginInfo.Name, @"Last Set: ([^)]+)");
+                    return match.Success ? match.Groups[1].Value : null;
+                }
+                return null;
             }
         }
 
@@ -283,6 +313,13 @@ namespace FFXIManager.ViewModels
 
                 if (success)
                 {
+                    // ENHANCED: Immediately update local settings for better persistence
+                    _settings.LastUsedProfile = profile.Name;
+                    _settings.LastActiveProfileName = profile.Name;
+                    _settingsService.SaveSettings(_settings);
+                    
+                    System.Diagnostics.Debug.WriteLine($"?? SWAP SUCCESS: Updated settings - LastUsedProfile = '{profile.Name}'");
+                    
                     await RefreshProfilesAsync();
                 }
             }
@@ -370,6 +407,7 @@ namespace FFXIManager.ViewModels
 
             try
             {
+                var oldName = SelectedProfile.Name;
                 var newName = await _dialogService.ShowRenameDialogAsync(SelectedProfile.Name, SelectedProfile.IsSystemFile);
                 if (newName == null) return; // User cancelled
                 
@@ -389,6 +427,13 @@ namespace FFXIManager.ViewModels
 
                 if (success)
                 {
+                    // Update local settings if this was the last used profile
+                    if (_settings.LastUsedProfile == oldName)
+                    {
+                        _settings.LastUsedProfile = newName;
+                        _settingsService.SaveSettings(_settings);
+                    }
+                    
                     await RefreshProfilesAsync();
                     
                     // Try to reselect the renamed profile
@@ -441,9 +486,14 @@ namespace FFXIManager.ViewModels
             try
             {
                 IsLoading = true;
-                _statusService.SetMessage("Resetting user profile choice...");
+                _statusService.SetMessage("Resetting user profile choice and cleaning up orphaned references...");
                 
                 await Task.Delay(300); // Brief delay for user feedback
+
+                // Clear local settings as well
+                _settings.LastUsedProfile = string.Empty;
+                _settings.LastActiveProfileName = string.Empty;
+                _settingsService.SaveSettings(_settings);
 
                 var (success, message) = await _profileOperations.ResetTrackingAsync();
                 
@@ -452,7 +502,7 @@ namespace FFXIManager.ViewModels
 
                 if (success)
                 {
-                    _statusService.SetTemporaryMessage(message, TimeSpan.FromSeconds(3));
+                    _statusService.SetTemporaryMessage("? All profile tracking reset - orphaned references cleaned up", TimeSpan.FromSeconds(4));
                 }
                 else
                 {
@@ -586,15 +636,43 @@ namespace FFXIManager.ViewModels
             Profiles.Clear();
             ProfileInfo? lastUserChoice = null;
             ProfileInfo? lastUsedProfile = null;
+            ProfileInfo? currentActiveProfile = null;
 
             // Store active login info separately (don't add to profiles list)
             ActiveLoginInfo = activeLoginInfo;
             OnPropertyChanged(nameof(ActiveLoginInfo));
             OnPropertyChanged(nameof(ActiveLoginStatus));
+            OnPropertyChanged(nameof(CurrentActiveProfileName));
+
+            // Get the currently active profile name from the login file
+            var activeProfileName = CurrentActiveProfileName;
+            
+            System.Diagnostics.Debug.WriteLine($"?? PERSISTENCE DEBUG:");
+            System.Diagnostics.Debug.WriteLine($"   - CurrentActiveProfileName (from login file): '{activeProfileName}'");
+            System.Diagnostics.Debug.WriteLine($"   - _settings.LastUsedProfile (from app settings): '{_settings.LastUsedProfile}'");
+            System.Diagnostics.Debug.WriteLine($"   - _settings.LastActiveProfileName (from app settings): '{_settings.LastActiveProfileName}'");
+
+            // Check if the active profile name references a profile that no longer exists
+            bool activeProfileExists = false;
+            if (!string.IsNullOrEmpty(activeProfileName))
+            {
+                activeProfileExists = profiles.Any(p => p.Name.Equals(activeProfileName, StringComparison.OrdinalIgnoreCase));
+                
+                // If the active profile no longer exists, we need to clean up the orphaned reference
+                if (!activeProfileExists)
+                {
+                    _statusService.SetMessage($"?? Previously active profile '{activeProfileName}' no longer exists - resetting tracking");
+                }
+            }
 
             // Add only backup profiles (exclude system file)
             foreach (var profile in profiles)
             {
+                // Set the IsCurrentlyActive property based on the active login file
+                profile.IsCurrentlyActive = !string.IsNullOrEmpty(activeProfileName) && 
+                                          profile.Name.Equals(activeProfileName, StringComparison.OrdinalIgnoreCase) &&
+                                          activeProfileExists; // Only mark as active if the profile actually exists
+                                
                 Profiles.Add(profile);
 
                 if (profile.IsLastUserChoice)
@@ -602,15 +680,56 @@ namespace FFXIManager.ViewModels
                 
                 if (profile.Name == _settings.LastUsedProfile && !profile.IsSystemFile)
                     lastUsedProfile = profile;
+                
+                // Check if this profile matches the currently active one
+                if (profile.IsCurrentlyActive)
+                {
+                    currentActiveProfile = profile;
+                }
             }
 
-            // Restore selection preference
-            if (lastUserChoice != null && profiles.Contains(lastUserChoice))
-                SelectedProfile = lastUserChoice;
+            // ENHANCED selection logic - prioritize the actually active profile
+            // Priority: 1. Currently active profile (from login file), 2. Last used profile (from settings), 3. Last user choice, 4. Most recent
+            System.Diagnostics.Debug.WriteLine($"?? SELECTION CANDIDATES:");
+            System.Diagnostics.Debug.WriteLine($"   - currentActiveProfile: {currentActiveProfile?.Name ?? "null"}");
+            System.Diagnostics.Debug.WriteLine($"   - lastUsedProfile: {lastUsedProfile?.Name ?? "null"}");
+            System.Diagnostics.Debug.WriteLine($"   - lastUserChoice: {lastUserChoice?.Name ?? "null"}");
+            
+            // NEW LOGIC: Prioritize the currently active profile first
+            if (currentActiveProfile != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"? SELECTED: currentActiveProfile = '{currentActiveProfile.Name}' (matches login file)");
+                SelectedProfile = currentActiveProfile;
+                
+                // Sync the settings to match the active profile
+                if (_settings.LastUsedProfile != currentActiveProfile.Name)
+                {
+                    _settings.LastUsedProfile = currentActiveProfile.Name;
+                    _settingsService.SaveSettings(_settings);
+                    System.Diagnostics.Debug.WriteLine($"?? SYNCED LastUsedProfile to match active: '{currentActiveProfile.Name}'");
+                }
+            }
             else if (lastUsedProfile != null && profiles.Contains(lastUsedProfile))
+            {
+                System.Diagnostics.Debug.WriteLine($"? SELECTED: lastUsedProfile = '{lastUsedProfile.Name}' (from settings)");
                 SelectedProfile = lastUsedProfile;
+            }
+            else if (lastUserChoice != null && profiles.Contains(lastUserChoice))
+            {
+                System.Diagnostics.Debug.WriteLine($"? SELECTED: lastUserChoice = '{lastUserChoice.Name}' (legacy flag)");
+                SelectedProfile = lastUserChoice;
+            }
             else
-                SelectedProfile = null;
+            {
+                // Fallback to most recent non-auto-backup profile
+                var fallbackProfile = profiles
+                    .Where(p => !p.Name.StartsWith("backup_", StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(p => p.LastModified)
+                    .FirstOrDefault();
+                
+                System.Diagnostics.Debug.WriteLine($"? SELECTED: fallback = '{fallbackProfile?.Name ?? "null"}' (most recent)");
+                SelectedProfile = fallbackProfile ?? profiles.FirstOrDefault();
+            }
         }
 
         private void UpdateCommandStates()
@@ -626,8 +745,10 @@ namespace FFXIManager.ViewModels
         {
             if (profile != null)
             {
+                System.Diagnostics.Debug.WriteLine($"?? SAVING LastUsedProfile: '{profile.Name}'");
                 _settings.LastUsedProfile = profile.Name;
                 _settingsService.SaveSettings(_settings);
+                System.Diagnostics.Debug.WriteLine($"? SAVED LastUsedProfile: '{_settings.LastUsedProfile}'");
             }
         }
 

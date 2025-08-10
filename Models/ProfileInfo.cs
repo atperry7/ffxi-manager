@@ -71,6 +71,11 @@ namespace FFXIManager.Models
         /// </summary>
         public bool IsLastUserChoice { get; set; }
         
+        /// <summary>
+        /// True if this profile is currently active (matches the active login file)
+        /// </summary>
+        public bool IsCurrentlyActive { get; set; }
+        
         private static string FormatFileSize(long bytes)
         {
             if (bytes < 1024) return $"{bytes} B";
