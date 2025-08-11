@@ -11,7 +11,7 @@ namespace FFXIManager
     /// </summary>
     public partial class MainWindow : Window
     {
-        private bool _isClosing = false;
+        private bool _isClosing;
 
         public MainWindow()
         {

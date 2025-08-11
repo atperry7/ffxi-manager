@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace FFXIManager.Infrastructure
@@ -37,6 +38,27 @@ namespace FFXIManager.Infrastructure
                 return;
             }
             dispatcher.BeginInvoke(action);
+        }
+
+        public Task InvokeAsync(Action action)
+        {
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.CheckAccess())
+            {
+                action();
+                return Task.CompletedTask;
+            }
+            return dispatcher.InvokeAsync(action).Task;
+        }
+
+        public Task<T> InvokeAsync<T>(Func<T> func)
+        {
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.CheckAccess())
+            {
+                return Task.FromResult(func());
+            }
+            return dispatcher.InvokeAsync(func).Task;
         }
     }
 }

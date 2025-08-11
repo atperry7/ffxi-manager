@@ -7,10 +7,24 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>ffxi-manager.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Enable analyzers and set strict analysis level -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <!-- Optional: Do not fail the build yet; we'll fix warnings and can tighten later -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="System.Management" Version="9.0.0" />
+    <!-- Ensure Microsoft.CodeAnalysis.NetAnalyzers is available even outside SDK default -->
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Exclude test sources from main application build -->
+  <ItemGroup>
+    <Compile Remove="Testing\**\*.cs" />
+    <None Remove="Testing\**\*" />
   </ItemGroup>
 
   <ItemGroup>

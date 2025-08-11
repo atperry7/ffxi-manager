@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 
 namespace FFXIManager.Infrastructure
 {
@@ -7,5 +8,7 @@ namespace FFXIManager.Infrastructure
         bool CheckAccess();
         void Invoke(Action action);
         void BeginInvoke(Action action);
+        Task InvokeAsync(Action action);
+        Task<T> InvokeAsync<T>(Func<T> func);
     }
 }

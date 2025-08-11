@@ -159,7 +159,7 @@ namespace FFXIManager.Services
                 {
                     _discoveryWatchId = _processManagementService.RegisterDiscoveryWatch(new DiscoveryFilter
                     {
-                        ProcessNames = _targetProcessNames
+                        IncludeNames = _targetProcessNames
                     });
                 }
                 catch { }
@@ -320,7 +320,7 @@ namespace FFXIManager.Services
 
         private bool IsTargetProcess(ProcessInfo processInfo)
         {
-            return _targetProcessNames.Contains(processInfo.ProcessName, StringComparer.OrdinalIgnoreCase);
+            return FFXIManager.Utilities.ProcessFilters.MatchesProcessName(processInfo.ProcessName, _targetProcessNames);
         }
 
         private async Task AddOrUpdateCharactersForProcessAsync(int processId)
@@ -523,6 +523,8 @@ namespace FFXIManager.Services
             _processManagementService.ProcessTerminated -= OnProcessTerminated;
             _processManagementService.ProcessUpdated -= OnProcessUpdated;
             _processManagementService.WindowTitleChanged -= OnWindowTitleChanged;
+
+            GC.SuppressFinalize(this);
         }
     }
 }

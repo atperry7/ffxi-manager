@@ -168,6 +168,8 @@ The application comes pre-configured with common FFXI tools:
 
 ### Application Monitoring
 
+- Process discovery settings are fully configurable via Settings → Discovery Settings (Include/Exclude patterns with * wildcard).
+
 - **Real-Time Status**: 3-second polling for application status changes
 - **External Detection**: Detects when applications are closed externally
 - **Multi-Instance Tracking**: Monitors multiple instances of the same application

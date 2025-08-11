@@ -265,7 +265,7 @@ public async Task RefreshApplicationStatusAsync(ExternalApplication application)
                     return;
                 }
 
-                var processName = Path.GetFileNameWithoutExtension(application.ExecutablePath);
+                var processName = FFXIManager.Utilities.ProcessFilters.ExtractProcessName(application.ExecutablePath);
                 
                 // Skip process check if we can't get a valid process name
                 if (string.IsNullOrWhiteSpace(processName))
@@ -376,8 +376,7 @@ private void OnProcessDetected(object? sender, ProcessInfo processInfo)
                     {
                         matchingApp = _applications.FirstOrDefault(app => 
                             !string.IsNullOrEmpty(app.ExecutablePath) &&
-                            string.Equals(Path.GetFileNameWithoutExtension(app.ExecutablePath), 
-                                         processName, StringComparison.OrdinalIgnoreCase));
+                            FFXIManager.Utilities.ProcessFilters.MatchesProcessName(processName, new[]{ app.ExecutablePath }));
                     }
 
                     if (matchingApp != null)
@@ -529,7 +528,7 @@ private void OnProcessTerminated(object? sender, ProcessInfo processInfo)
             }
         }
 
-        private List<ExternalApplication> GetDefaultApplications()
+        private static List<ExternalApplication> GetDefaultApplications()
         {
             var applications = new List<ExternalApplication>();
 
@@ -621,6 +620,8 @@ private void OnProcessTerminated(object? sender, ProcessInfo processInfo)
             _processManagementService.ProcessDetected -= OnProcessDetected;
             _processManagementService.ProcessTerminated -= OnProcessTerminated;
             _processManagementService.ProcessUpdated -= OnProcessUpdated;
+
+            GC.SuppressFinalize(this);
         }
     }
 }

@@ -16,7 +16,7 @@ namespace FFXIManager.ViewModels
         private readonly ILoggingService _loggingService;
         private bool _isMonitoring = true;
         private bool _autoRefresh = true;
-        private bool _disposed = false;
+        private bool _disposed;
 
         public PlayOnlineMonitorViewModel(
             IPlayOnlineMonitorService monitorService,
@@ -94,6 +94,9 @@ namespace FFXIManager.ViewModels
 
             ShowCharacterMonitorCommand = new RelayCommand(
                 () => ShowCharacterMonitorDialog());
+
+            // Prime the list on startup so the mini-UI shows existing characters
+            _ = LoadCharactersAsync();
         }
 
         #endregion
@@ -164,13 +167,12 @@ namespace FFXIManager.ViewModels
         {
             try
             {
-                var monitorWindow = new Views.CharacterMonitorWindow(this)
-                {
-                    Owner = System.Windows.Application.Current.MainWindow
-                };
+                var monitorWindow = new Views.CharacterMonitorWindow(this);
                 
                 _statusService.SetMessage("Opening character monitor window...");
-                monitorWindow.Show(); // Use Show() instead of ShowDialog() so it's non-modal
+                // Ensure characters are loaded at open time without blocking UI
+                _ = LoadCharactersAsync();
+                monitorWindow.Show(); // Non-modal; no Owner so the main window won't be forced to front
                 
                 _statusService.SetMessage("Character monitor window opened");
             }

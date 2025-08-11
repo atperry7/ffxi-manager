@@ -5,6 +5,7 @@ using FFXIManager.Views;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Input;
+using FFXIManager.Infrastructure;
 
 namespace FFXIManager.ViewModels
 {
@@ -16,6 +17,7 @@ namespace FFXIManager.ViewModels
         private readonly IExternalApplicationService _applicationService;
         private readonly IStatusMessageService _statusService;
         private readonly ILoggingService _loggingService;
+        private bool _isBusy;
 
         public ApplicationManagementViewModel(
             IExternalApplicationService applicationService,
@@ -38,6 +40,12 @@ namespace FFXIManager.ViewModels
         #region Properties
 
         public ObservableCollection<ExternalApplication> ExternalApplications { get; }
+
+        public bool IsBusy
+        {
+            get => _isBusy;
+            set => SetProperty(ref _isBusy, value);
+        }
 
         #endregion
 
@@ -76,10 +84,13 @@ namespace FFXIManager.ViewModels
         {
             try
             {
+                IsBusy = true;
+                _statusService.SetMessage("Loading external applications...");
+
                 var applications = await _applicationService.GetApplicationsAsync();
                 await _applicationService.RefreshApplicationStatusAsync();
 
-                await Application.Current.Dispatcher.InvokeAsync(() =>
+                await ServiceLocator.UiDispatcher.InvokeAsync(() =>
                 {
                     ExternalApplications.Clear();
                     foreach (var app in applications)
@@ -94,6 +105,10 @@ namespace FFXIManager.ViewModels
             {
                 _statusService.SetMessage($"Error loading applications: {ex.Message}");
             }
+            finally
+            {
+                IsBusy = false;
+            }
         }
 
         #endregion
@@ -106,6 +121,7 @@ namespace FFXIManager.ViewModels
 
             try
             {
+                IsBusy = true;
                 _statusService.SetMessage($"Launching {application.Name}...");
 
                 if (!application.ExecutableExists)
@@ -143,6 +159,10 @@ namespace FFXIManager.ViewModels
             {
                 _statusService.SetMessage($"Error launching {application.Name}: {ex.Message}");
             }
+            finally
+            {
+                IsBusy = false;
+            }
         }
 
         private async Task KillApplicationAsync(ExternalApplication application)
@@ -151,6 +171,7 @@ namespace FFXIManager.ViewModels
 
             try
             {
+                IsBusy = true;
                 _statusService.SetMessage($"Stopping {application.Name}...");
 
                 var success = await _applicationService.KillApplicationAsync(application);
@@ -168,6 +189,10 @@ namespace FFXIManager.ViewModels
             {
                 _statusService.SetMessage($"Error stopping {application.Name}: {ex.Message}");
             }
+            finally
+            {
+                IsBusy = false;
+            }
         }
 
         private async Task EditApplicationAsync(ExternalApplication application)
@@ -180,12 +205,11 @@ namespace FFXIManager.ViewModels
 
             try
             {
+                IsBusy = true;
                 _statusService.SetMessage($"Opening configuration for {application.Name}...");
 
                 // Create and show dialog on UI thread
-                bool? dialogResult = null;
-
-                Application.Current.Dispatcher.Invoke(() =>
+                var dialogResult = await ServiceLocator.UiDispatcher.InvokeAsync(() =>
                 {
                     try
                     {
@@ -193,14 +217,14 @@ namespace FFXIManager.ViewModels
                         {
                             Owner = Application.Current.MainWindow
                         };
-                        
-                        dialogResult = dialog.ShowDialog();
+                        return dialog.ShowDialog();
                     }
                     catch (Exception ex)
                     {
                         MessageBox.Show($"Error opening configuration dialog: {ex.Message}", "Dialog Error", 
                                       MessageBoxButton.OK, MessageBoxImage.Error);
                         _statusService.SetMessage($"Failed to open configuration dialog: {ex.Message}");
+                        return (bool?)false;
                     }
                 });
 
@@ -227,6 +251,10 @@ namespace FFXIManager.ViewModels
                 _statusService.SetMessage($"Error editing application: {ex.Message}");
                 await _loggingService.LogErrorAsync($"Error in EditApplicationAsync for {application.Name}", ex, "ApplicationManagementViewModel");
             }
+            finally
+            {
+                IsBusy = false;
+            }
         }
 
         private async Task RemoveApplicationAsync(ExternalApplication application)
@@ -235,6 +263,7 @@ namespace FFXIManager.ViewModels
 
             try
             {
+                IsBusy = true;
                 var result = MessageBox.Show(
                     $"Are you sure you want to remove '{application.Name}'?",
                     "Confirm Remove Application",
@@ -252,12 +281,17 @@ namespace FFXIManager.ViewModels
             {
                 _statusService.SetMessage($"Error removing application: {ex.Message}");
             }
+            finally
+            {
+                IsBusy = false;
+            }
         }
 
         private async Task AddApplicationAsync()
         {
             try
             {
+                IsBusy = true;
                 _statusService.SetMessage("Creating new application...");
 
                 var newApplication = new ExternalApplication
@@ -268,9 +302,7 @@ namespace FFXIManager.ViewModels
                 };
 
                 // Create and show dialog on UI thread
-                bool? dialogResult = null;
-
-                Application.Current.Dispatcher.Invoke(() =>
+                var dialogResult = await ServiceLocator.UiDispatcher.InvokeAsync(() =>
                 {
                     try
                     {
@@ -278,14 +310,14 @@ namespace FFXIManager.ViewModels
                         {
                             Owner = Application.Current.MainWindow
                         };
-                        
-                        dialogResult = dialog.ShowDialog();
+                        return dialog.ShowDialog();
                     }
                     catch (Exception ex)
                     {
                         MessageBox.Show($"Error opening application dialog: {ex.Message}", "Dialog Error", 
                                       MessageBoxButton.OK, MessageBoxImage.Error);
                         _statusService.SetMessage($"Failed to open application dialog: {ex.Message}");
+                        return (bool?)false;
                     }
                 });
 
@@ -306,12 +338,16 @@ namespace FFXIManager.ViewModels
                 _statusService.SetMessage($"Error adding application: {ex.Message}");
                 await _loggingService.LogErrorAsync("Error in AddApplicationAsync", ex, "ApplicationManagementViewModel");
             }
+            finally
+            {
+                IsBusy = false;
+            }
         }
 
         private void OnApplicationStatusChanged(object? sender, ExternalApplication application)
         {
             // Update UI on status changes - this runs on a background thread
-            Application.Current.Dispatcher.BeginInvoke(() =>
+            ServiceLocator.UiDispatcher.BeginInvoke(() =>
             {
                 // Force command CanExecute reevaluation when application status changes
                 ((RelayCommandWithParameter<ExternalApplication>)KillApplicationCommand).RaiseCanExecuteChanged();

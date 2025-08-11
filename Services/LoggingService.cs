@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace FFXIManager.Services
@@ -48,17 +47,60 @@ namespace FFXIManager.Services
     public class LoggingService : ILoggingService
     {
         private readonly string _logFilePath;
-        private readonly int _maxLogEntries;
+        private int _maxLogEntries;
         private readonly List<LogEntry> _logBuffer = new();
         private readonly object _lock = new();
+        private readonly ISettingsService? _settingsService;
 
-        public LoggingService(int maxLogEntries = 1000)
+        public LogLevel MinimumLevel { get; private set; } = LogLevel.Info;
+
+        public LoggingService() : this(null) { }
+
+        public LoggingService(ISettingsService? settingsService)
         {
-            _maxLogEntries = maxLogEntries;
+            _settingsService = settingsService;
             var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             var logDirectory = Path.Combine(appDataPath, "FFXIManager", "Logs");
             Directory.CreateDirectory(logDirectory);
             _logFilePath = Path.Combine(logDirectory, $"FFXIManager_{DateTime.Now:yyyyMMdd}.log");
+            // Initialize from settings if available
+            ApplySettings();
+        }
+
+        private void ApplySettings()
+        {
+            try
+            {
+                var settings = _settingsService?.LoadSettings();
+                if (settings != null)
+                {
+                    var diag = settings.Diagnostics ?? new Services.DiagnosticsOptions();
+                    _maxLogEntries = Math.Max(100, Math.Min(diag.MaxLogEntries, 100000));
+                    // Determine minimum level based on diagnostics toggles
+                    if (!diag.EnableDiagnostics)
+                    {
+                        MinimumLevel = LogLevel.Warning;
+                    }
+                    else if (diag.VerboseLogging)
+                    {
+                        MinimumLevel = LogLevel.Debug;
+                    }
+                    else
+                    {
+                        MinimumLevel = LogLevel.Info;
+                    }
+                }
+                else
+                {
+                    _maxLogEntries = 1000;
+                    MinimumLevel = LogLevel.Info;
+                }
+            }
+            catch
+            {
+                _maxLogEntries = 1000;
+                MinimumLevel = LogLevel.Info;
+            }
         }
 
         public async Task LogInfoAsync(string message, string? category = null)
@@ -119,6 +161,15 @@ namespace FFXIManager.Services
 
         private Task LogAsync(LogLevel level, string message, Exception? exception, string? category)
         {
+            // Refresh settings-derived thresholds lazily to reflect latest toggles
+            ApplySettings();
+
+            if (level < MinimumLevel)
+            {
+                // Suppress detailed events when below threshold
+                return Task.CompletedTask;
+            }
+
             var logEntry = new LogEntry
             {
                 Timestamp = DateTime.Now,

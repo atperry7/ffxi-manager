@@ -21,7 +21,7 @@ namespace FFXIManager.Services
     /// <summary>
     /// Cache entry with expiration support
     /// </summary>
-    internal class CacheEntry
+    internal sealed class CacheEntry
     {
         public object Value { get; set; } = null!;
         public DateTime CreatedAt { get; set; } = DateTime.Now;
@@ -32,7 +32,7 @@ namespace FFXIManager.Services
     /// <summary>
     /// In-memory caching service with TTL support
     /// </summary>
-    public class CachingService : ICachingService
+    public class CachingService : ICachingService, IDisposable
     {
         private readonly ConcurrentDictionary<string, CacheEntry> _cache = new();
         private readonly TimeSpan _defaultExpiration;
@@ -136,6 +136,7 @@ namespace FFXIManager.Services
         public void Dispose()
         {
             _cleanupTimer?.Dispose();
+            GC.SuppressFinalize(this);
         }
     }
 

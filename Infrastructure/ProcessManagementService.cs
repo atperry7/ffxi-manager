@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Management;
+using System.Diagnostics.CodeAnalysis;
 using FFXIManager.Services;
 
 namespace FFXIManager.Infrastructure
@@ -78,20 +79,22 @@ namespace FFXIManager.Infrastructure
 
     /// <summary>
     /// Discovery filter used to scope process discovery.
-    /// Currently supports process-name filtering (case-insensitive).
+    /// Supports simple include/exclude patterns with wildcard (*) matching (case-insensitive).
     /// </summary>
     public class DiscoveryFilter
     {
-        public IEnumerable<string> ProcessNames { get; init; } = Array.Empty<string>();
+        public IEnumerable<string> IncludeNames { get; init; } = Array.Empty<string>();
+        public IEnumerable<string> ExcludeNames { get; init; } = Array.Empty<string>();
     }
 
     /// <summary>
     /// Internal registration record for discovery filter
     /// </summary>
-    internal class DiscoveryWatch
+    internal sealed class DiscoveryWatch
     {
         public Guid Id { get; init; }
-        public HashSet<string> ProcessNames { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+        public List<string> IncludeNames { get; init; } = new List<string>();
+        public List<string> ExcludeNames { get; init; } = new List<string>();
     }
 
     /// <summary>
@@ -152,6 +155,8 @@ namespace FFXIManager.Infrastructure
         [DllImport("user32.dll")]
         private static extern bool IsWindowVisible(IntPtr hWnd);
 
+        // Suppress CA1838: StringBuilder is used here for simplicity and acceptable interop for window texts
+        [SuppressMessage("Performance", "CA1838:Avoid 'StringBuilder' parameters for P/Invokes", Justification = "Interop signature uses StringBuilder for simplicity and is sufficient here.")]
         [DllImport("user32.dll")]
         private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
 
@@ -215,7 +220,8 @@ namespace FFXIManager.Infrastructure
                 _discoveryWatches.Add(new DiscoveryWatch
                 {
                     Id = id,
-                    ProcessNames = new HashSet<string>(filter.ProcessNames ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase)
+                    IncludeNames = (filter.IncludeNames ?? Array.Empty<string>()).Select(FFXIManager.Utilities.ProcessFilters.ExtractProcessName).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                    ExcludeNames = (filter.ExcludeNames ?? Array.Empty<string>()).Select(FFXIManager.Utilities.ProcessFilters.ExtractProcessName).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
                 });
             }
             return id;
@@ -442,25 +448,26 @@ namespace FFXIManager.Infrastructure
 
                                 if (IsWindowVisible(hWnd))
                                 {
-                                    GetWindowThreadProcessId(hWnd, out uint windowProcessId);
+                                    var threadId = GetWindowThreadProcessId(hWnd, out uint windowProcessId);
+                                    if (threadId == 0)
+                                    {
+                                        return true; // continue enumeration
+                                    }
                                     
-                                    if (windowProcessId == processId)
+                                    if (windowProcessId == (uint)processId)
                                     {
                                         var title = GetWindowTitle(hWnd);
                                         
-                                        if (!string.IsNullOrEmpty(title) && 
-                                            !title.StartsWith("Default IME") && 
-                                            !title.StartsWith("MSCTFIME UI") &&
-                                            !title.Equals("Program Manager"))
-                                        {
-                                            windows.Add(new WindowInfo
+                                            if (FFXIManager.Utilities.ProcessFilters.IsAcceptableWindowTitle(title))
                                             {
-                                                Handle = hWnd,
-                                                Title = title,
-                                                IsVisible = true,
-                                                ProcessId = processId
-                                            });
-                                        }
+                                                windows.Add(new WindowInfo
+                                                {
+                                                    Handle = hWnd,
+                                                    Title = title,
+                                                    IsVisible = true,
+                                                    ProcessId = processId
+                                                });
+                                            }
                                     }
                                 }
                             }
@@ -603,7 +610,7 @@ namespace FFXIManager.Infrastructure
             return result;
         }
 
-        private bool IsValidProcess(Process? process)
+        private static bool IsValidProcess(Process? process)
         {
             if (process == null) return false;
             
@@ -623,7 +630,7 @@ namespace FFXIManager.Infrastructure
             }
         }
 
-        private string GetSafeProcessName(Process process)
+        private static string GetSafeProcessName(Process process)
         {
             try
             {
@@ -639,7 +646,7 @@ namespace FFXIManager.Infrastructure
             }
         }
 
-        private string GetSafeProcessPath(Process process)
+        private static string GetSafeProcessPath(Process process)
         {
             try
             {
@@ -656,7 +663,7 @@ namespace FFXIManager.Infrastructure
             }
         }
 
-        private IntPtr GetSafeMainWindowHandle(Process process)
+        private static IntPtr GetSafeMainWindowHandle(Process process)
         {
             try
             {
@@ -672,7 +679,7 @@ namespace FFXIManager.Infrastructure
             }
         }
 
-        private string GetSafeMainWindowTitle(Process process)
+        private static string GetSafeMainWindowTitle(Process process)
         {
             try
             {
@@ -688,7 +695,7 @@ namespace FFXIManager.Infrastructure
             }
         }
 
-        private bool GetSafeResponding(Process process)
+        private static bool GetSafeResponding(Process process)
         {
             try
             {
@@ -705,7 +712,7 @@ namespace FFXIManager.Infrastructure
             }
         }
 
-        private DateTime GetSafeStartTime(Process process)
+        private static DateTime GetSafeStartTime(Process process)
         {
             try
             {
@@ -722,14 +729,18 @@ namespace FFXIManager.Infrastructure
             }
         }
 
-        private string GetWindowTitle(IntPtr hWnd)
+        private static string GetWindowTitle(IntPtr hWnd)
         {
             try
             {
                 const int maxLength = 256;
                 var title = new StringBuilder(maxLength);
-                GetWindowText(hWnd, title, maxLength);
-                return title.ToString();
+                var len = GetWindowText(hWnd, title, maxLength);
+                if (len <= 0)
+                {
+                    return string.Empty;
+                }
+                return title.ToString(0, len);
             }
             catch
             {
@@ -769,23 +780,37 @@ namespace FFXIManager.Infrastructure
             
             try
             {
-                // Build discovery set = union of registered names + legacy defaults (for backward compatibility)
-                HashSet<string> targetProcessNames;
+                // Build composite discovery patterns from user settings and registered watches
+                List<string> includePatterns;
+                List<string> excludePatterns;
                 lock (_lockObject)
                 {
-                    targetProcessNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        // Legacy defaults to preserve previous behavior
-                        "pol", "ffxi", "PlayOnlineViewer", "Windower", "POLProxy", "Silmaril"
-                    };
+                    includePatterns = new List<string>();
+                    excludePatterns = new List<string>();
                     foreach (var w in _discoveryWatches)
                     {
-                        foreach (var n in w.ProcessNames)
-                            targetProcessNames.Add(n);
+                        includePatterns.AddRange(w.IncludeNames);
+                        excludePatterns.AddRange(w.ExcludeNames);
                     }
                 }
 
-                var relevantProcesses = await GetProcessesByNamesAsync(targetProcessNames);
+                // Augment with user settings-driven defaults (no hardcoded fallbacks)
+                try
+                {
+                    var settings = ServiceLocator.SettingsService.LoadSettings();
+                    if (settings.ProcessDiscovery != null)
+                    {
+                        if (settings.ProcessDiscovery.IncludeNames != null) includePatterns.AddRange(settings.ProcessDiscovery.IncludeNames);
+                        if (settings.ProcessDiscovery.ExcludeNames != null) excludePatterns.AddRange(settings.ProcessDiscovery.ExcludeNames);
+                    }
+                }
+                catch { }
+
+                // Get all processes and filter via patterns for flexibility (supports wildcards)
+                var allProcesses = await GetAllProcessesAsync();
+                var relevantProcesses = allProcesses
+                    .Where(p => FFXIManager.Utilities.ProcessFilters.MatchesNamePatterns(p.ProcessName, includePatterns, excludePatterns))
+                    .ToList();
                 
                 foreach (var proc in relevantProcesses)
                 {
@@ -817,21 +842,20 @@ namespace FFXIManager.Infrastructure
                     var processId = kvp.Key;
                     var processInfo = kvp.Value;
                     
-                    if (!_trackedProcesses.ContainsKey(processId))
-                    {
-                        _trackedProcesses[processId] = processInfo;
-                        ProcessDetected?.Invoke(this, processInfo);
-                    }
-                    else
+                    if (_trackedProcesses.TryGetValue(processId, out var existing))
                     {
                         // Update existing process
-                        var existing = _trackedProcesses[processId];
                         existing.LastSeen = processInfo.LastSeen;
                         existing.IsResponding = processInfo.IsResponding;
                         existing.MainWindowTitle = processInfo.MainWindowTitle;
                         existing.Windows = processInfo.Windows;
                         
                         ProcessUpdated?.Invoke(this, existing);
+                    }
+                    else
+                    {
+                        _trackedProcesses[processId] = processInfo;
+                        ProcessDetected?.Invoke(this, processInfo);
                     }
                 }
 
@@ -923,7 +947,11 @@ namespace FFXIManager.Infrastructure
 
                 // Filter by tracked PIDs if possible
                 uint pid;
-                GetWindowThreadProcessId(hwnd, out pid);
+                var threadId = GetWindowThreadProcessId(hwnd, out pid);
+                if (threadId == 0 || pid == 0)
+                {
+                    return;
+                }
 
                 bool shouldProcess = false;
                 lock (_lockObject)
@@ -1057,24 +1085,32 @@ namespace FFXIManager.Infrastructure
                 var name = nameObj.ToString() ?? string.Empty;
                 var pid = Convert.ToInt32((uint)pidObj);
 
-                // Check against discovery set quickly
+                // Check against discovery patterns quickly
                 bool interested = false;
-                lock (_lockObject)
+                try
                 {
-                    if (_discoveryWatches.Any(w => w.ProcessNames.Contains(name)))
+                    var include = new List<string>();
+                    var exclude = new List<string>();
+                    lock (_lockObject)
                     {
-                        interested = true;
+                        foreach (var w in _discoveryWatches)
+                        {
+                            include.AddRange(w.IncludeNames);
+                            exclude.AddRange(w.ExcludeNames);
+                        }
                     }
-                    else
+                    var settings = ServiceLocator.SettingsService.LoadSettings();
+                    if (settings.ProcessDiscovery != null)
                     {
-                        // Legacy defaults
-                        interested = name.Equals("pol", StringComparison.OrdinalIgnoreCase) ||
-                                     name.Equals("ffxi", StringComparison.OrdinalIgnoreCase) ||
-                                     name.Equals("PlayOnlineViewer", StringComparison.OrdinalIgnoreCase) ||
-                                     name.Equals("Windower", StringComparison.OrdinalIgnoreCase) ||
-                                     name.Equals("POLProxy", StringComparison.OrdinalIgnoreCase) ||
-                                     name.Equals("Silmaril", StringComparison.OrdinalIgnoreCase);
+                        if (settings.ProcessDiscovery.IncludeNames != null) include.AddRange(settings.ProcessDiscovery.IncludeNames);
+                        if (settings.ProcessDiscovery.ExcludeNames != null) exclude.AddRange(settings.ProcessDiscovery.ExcludeNames);
                     }
+                    var normalized = FFXIManager.Utilities.ProcessFilters.ExtractProcessName(name);
+                    interested = FFXIManager.Utilities.ProcessFilters.MatchesNamePatterns(normalized, include, exclude);
+                }
+                catch
+                {
+                    interested = false;
                 }
 
                 if (!interested) return;
@@ -1162,6 +1198,7 @@ namespace FFXIManager.Infrastructure
             StopGlobalMonitoring();
             _globalMonitoringTimer?.Dispose();
             _processLock?.Dispose();
+            GC.SuppressFinalize(this);
         }
     }
 }

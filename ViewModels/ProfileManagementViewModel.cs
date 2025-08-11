@@ -3,6 +3,7 @@ using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using FFXIManager.Infrastructure;
 
 namespace FFXIManager.ViewModels
 {
@@ -196,7 +197,7 @@ namespace FFXIManager.ViewModels
                 var profiles = await _profileOperations.LoadProfilesAsync(_settings.ShowAutoBackupsInList);
                 var activeLoginInfo = await _profileOperations.GetActiveLoginInfoAsync();
 
-                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => UpdateProfilesCollection(profiles, activeLoginInfo));
+                await ServiceLocator.UiDispatcher.InvokeAsync(() => UpdateProfilesCollection(profiles, activeLoginInfo));
 
                 var autoBackupCount = _settings.ShowAutoBackupsInList ? 0 : 
                     (await _profileService.GetAutoBackupsAsync()).Count;
@@ -274,7 +275,7 @@ namespace FFXIManager.ViewModels
 
                 if (success && newProfile != null)
                 {
-                    System.Windows.Application.Current.Dispatcher.Invoke(() => Profiles.Add(newProfile));
+                    await ServiceLocator.UiDispatcher.InvokeAsync(() => Profiles.Add(newProfile));
                     NewBackupName = string.Empty;
                 }
             }
@@ -304,7 +305,7 @@ namespace FFXIManager.ViewModels
 
                 if (success)
                 {
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    await ServiceLocator.UiDispatcher.InvokeAsync(() =>
                     {
                         Profiles.Remove(profile);
                         if (SelectedProfile == profile)

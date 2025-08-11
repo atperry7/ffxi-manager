@@ -15,7 +15,7 @@ namespace FFXIManager.Views
             
             // Set initial window properties
             ShowInTaskbar = true;
-            WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
         }
 
         private void AlwaysOnTopToggle_Checked(object sender, RoutedEventArgs e)

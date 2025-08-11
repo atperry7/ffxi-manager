@@ -7,25 +7,7 @@ using System.Windows.Media;
 namespace FFXIManager.Converters
 {
     /// <summary>
-    /// Converts boolean to Active/Backup status - UPDATED FOR SIMPLIFIED VERSION
-    /// </summary>
-    public class BoolToActiveConverter : IValueConverter
-    {
-        public static readonly BoolToActiveConverter Instance = new();
-        
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            return value is true ? "System File" : "Backup";
-        }
-        
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
-        }
-    }
-    
-    /// <summary>
-    /// Converts boolean to FontWeight (Bold for system file, Normal for backup)
+    /// Converts boolean to FontWeight (Bold for active items, Normal otherwise)
     /// </summary>
     public class BoolToFontWeightConverter : IValueConverter
     {
@@ -43,7 +25,7 @@ namespace FFXIManager.Converters
     }
     
     /// <summary>
-    /// Converts boolean to color - UPDATED FOR ACTIVE PROFILES
+    /// Converts boolean to color for status highlighting
     /// </summary>
     public class BoolToColorConverter : IValueConverter
     {
@@ -59,28 +41,6 @@ namespace FFXIManager.Converters
             
             // For other uses - blue for system files, black for others
             return value is true ? Brushes.DarkBlue : Brushes.Black;
-        }
-        
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
-        }
-    }
-    
-    /// <summary>
-    /// Converts IsLastUserChoice boolean to a visual indicator
-    /// </summary>
-    public class BoolToLastUserChoiceConverter : IValueConverter
-    {
-        public static readonly BoolToLastUserChoiceConverter Instance = new();
-        
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is true)
-            {
-                return "Last Choice";
-            }
-            return string.Empty;
         }
         
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -157,23 +117,6 @@ namespace FFXIManager.Converters
         {
             // Throw to prevent two-way binding on read-only properties
             throw new NotSupportedException("InverseBooleanConverter only supports OneWay binding");
-        }
-    }
-    
-    /// <summary>
-    /// Converter to show/hide active profile indicator
-    /// </summary>
-    public class ActiveProfileVisibilityConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            // This will be handled by the MainViewModel to compare profile names
-            return Visibility.Collapsed; // Default to hidden, MainViewModel will handle the logic
-        }
-        
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
         }
     }
 }

@@ -61,7 +61,10 @@
             </StackPanel>
             
             <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="Manage your PlayOnline Multi-Box Experience" FontSize="12" Foreground="LightGray" HorizontalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Manage your PlayOnline Multi-Box Experience" FontSize="12" Foreground="LightGray" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Button Content="Discovery Settings" Width="140" Height="26" Click="OpenDiscoverySettings_Click" Style="{StaticResource PrimaryButton}"/>
+                </StackPanel>
             </StackPanel>
         </DockPanel>
     </Border>

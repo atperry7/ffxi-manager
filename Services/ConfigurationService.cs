@@ -13,6 +13,12 @@ namespace FFXIManager.Services
     {
         private readonly string _configurationPath;
         private ApplicationConfiguration _configuration = null!;
+        private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
 
         public ProfileConfiguration ProfileConfig => _configuration.Profile;
         public UIConfiguration UIConfig => _configuration.UI;
@@ -39,12 +45,7 @@ namespace FFXIManager.Services
         {
             try
             {
-                var json = JsonSerializer.Serialize(_configuration, new JsonSerializerOptions
-                {
-                    WriteIndented = true,
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                    Converters = { new JsonStringEnumConverter() }
-                });
+                var json = JsonSerializer.Serialize(_configuration, SerializerOptions);
                 
                 File.WriteAllText(_configurationPath, json);
             }
@@ -62,11 +63,7 @@ namespace FFXIManager.Services
                 if (File.Exists(_configurationPath))
                 {
                     var json = File.ReadAllText(_configurationPath);
-                    var config = JsonSerializer.Deserialize<ApplicationConfiguration>(json, new JsonSerializerOptions
-                    {
-                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                        Converters = { new JsonStringEnumConverter() }
-                    });
+                    var config = JsonSerializer.Deserialize<ApplicationConfiguration>(json, SerializerOptions);
                     
                     _configuration = config ?? CreateDefaultConfiguration();
                 }
@@ -100,7 +97,7 @@ namespace FFXIManager.Services
     /// <summary>
     /// Root configuration container
     /// </summary>
-    internal class ApplicationConfiguration
+    internal sealed class ApplicationConfiguration
     {
         public ProfileConfiguration Profile { get; set; } = new();
         public UIConfiguration UI { get; set; } = new();

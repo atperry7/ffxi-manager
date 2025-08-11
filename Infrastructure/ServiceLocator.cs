@@ -44,7 +44,7 @@ namespace FFXIManager.Infrastructure
         {
             get
             {
-                _loggingService ??= new LoggingService();
+                _loggingService ??= new LoggingService(SettingsService);
                 return _loggingService;
             }
         }
