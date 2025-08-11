@@ -882,7 +882,7 @@ namespace FFXIManager.Infrastructure
                 }
                 else
                 {
-                    _ = _loggingService.LogInfoAsync("WinEvent hook started", "ProcessManagementService");
+                    _ = _loggingService.LogInfoAsync("WinEvent hook started (OBJECT_NAMECHANGE)", "ProcessManagementService");
                 }
             }
             catch (Exception ex)
@@ -900,13 +900,17 @@ namespace FFXIManager.Infrastructure
                     UnhookWinEvent(_winEventHookHandle);
                     _winEventHookHandle = IntPtr.Zero;
                     _winEventCallback = null;
+                    _ = _loggingService.LogInfoAsync("WinEvent hook stopped", "ProcessManagementService");
                 }
                 lock (_lockObject)
                 {
                     _lastWindowTitles.Clear();
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _ = _loggingService.LogDebugAsync($"Exception stopping WinEvent hook: {ex.Message}", "ProcessManagementService");
+            }
         }
 
         private void OnWinEvent(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
@@ -957,9 +961,19 @@ namespace FFXIManager.Infrastructure
                     WindowHandle = hwnd,
                     NewTitle = title
                 };
-                WindowTitleChanged?.Invoke(this, args);
+                try
+                {
+                    WindowTitleChanged?.Invoke(this, args);
+                }
+                catch (Exception ex)
+                {
+                    _ = _loggingService.LogDebugAsync($"Exception in WindowTitleChanged subscribers (PID {(int)pid}, HWND 0x{hwnd.ToInt64():X}): {ex.Message}", "ProcessManagementService");
+                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _ = _loggingService.LogDebugAsync($"Exception handling WinEvent (HWND 0x{hwnd.ToInt64():X}): {ex.Message}", "ProcessManagementService");
+            }
         }
 
         #endregion
@@ -980,6 +994,7 @@ namespace FFXIManager.Infrastructure
                 _processStartWatcher = new ManagementEventWatcher(new ManagementScope("root\\CIMV2"), creationQuery);
                 _processStartWatcher.EventArrived += OnProcessCreated;
                 _processStartWatcher.Start();
+                _ = _loggingService.LogInfoAsync("WMI creation watcher started", "ProcessManagementService");
 
                 // Deletion watcher
                 var deletionQuery = new WqlEventQuery
@@ -991,6 +1006,7 @@ namespace FFXIManager.Infrastructure
                 _processStopWatcher = new ManagementEventWatcher(new ManagementScope("root\\CIMV2"), deletionQuery);
                 _processStopWatcher.EventArrived += OnProcessDeleted;
                 _processStopWatcher.Start();
+                _ = _loggingService.LogInfoAsync("WMI deletion watcher started", "ProcessManagementService");
 
                 _ = _loggingService.LogInfoAsync("WMI process watchers started", "ProcessManagementService");
             }
@@ -1019,10 +1035,11 @@ namespace FFXIManager.Infrastructure
                     _processStopWatcher.Dispose();
                     _processStopWatcher = null;
                 }
+                _ = _loggingService.LogInfoAsync("WMI process watchers stopped", "ProcessManagementService");
             }
-            catch
+            catch (Exception ex)
             {
-                // ignore shutdown errors
+                _ = _loggingService.LogDebugAsync($"Exception stopping WMI watchers: {ex.Message}", "ProcessManagementService");
             }
         }
 
@@ -1074,12 +1091,25 @@ namespace FFXIManager.Infrastructure
                             if (_trackedProcesses.ContainsKey(pid)) return;
                             _trackedProcesses[pid] = pi;
                         }
-                        ProcessDetected?.Invoke(this, pi);
+                        try
+                        {
+                            ProcessDetected?.Invoke(this, pi);
+                        }
+                        catch (Exception ex)
+                        {
+                            _ = _loggingService.LogDebugAsync($"Exception in ProcessDetected subscribers (PID {pid}, Name {name}): {ex.Message}", "ProcessManagementService");
+                        }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        _ = _loggingService.LogDebugAsync($"Exception building ProcessInfo for PID {pid} on create: {ex.Message}", "ProcessManagementService");
+                    }
                 });
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _ = _loggingService.LogDebugAsync($"Exception handling WMI process creation: {ex.Message}", "ProcessManagementService");
+            }
         }
 
         private void OnProcessDeleted(object sender, EventArrivedEventArgs e)
@@ -1106,10 +1136,20 @@ namespace FFXIManager.Infrastructure
 
                 if (removed != null)
                 {
-                    ProcessTerminated?.Invoke(this, removed);
+                    try
+                    {
+                        ProcessTerminated?.Invoke(this, removed);
+                    }
+                    catch (Exception ex)
+                    {
+                        _ = _loggingService.LogDebugAsync($"Exception in ProcessTerminated subscribers (PID {pid}): {ex.Message}", "ProcessManagementService");
+                    }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _ = _loggingService.LogDebugAsync($"Exception handling WMI process deletion: {ex.Message}", "ProcessManagementService");
+            }
         }
 
         #endregion
