@@ -39,6 +39,7 @@ namespace FFXIManager.Services
         private readonly List<ExternalApplication> _applications = new();
         private readonly Dictionary<int, ExternalApplication> _processToAppMap = new();
         private readonly object _lockObject = new();
+        private readonly HashSet<string> _registeredProcessNames = new(StringComparer.OrdinalIgnoreCase);
         private bool _isMonitoring;
         private bool _disposed;
 
@@ -83,7 +84,9 @@ namespace FFXIManager.Services
                 _applications.Add(application);
             }
             await SaveApplicationsToSettings();
-            
+
+            RefreshRegisteredProcessNames();
+
             return application;
         }
 
@@ -94,6 +97,8 @@ namespace FFXIManager.Services
 
             await _loggingService.LogInfoAsync($"Updating application: {application.Name}", "ExternalApplicationService");
             await SaveApplicationsToSettings();
+
+            RefreshRegisteredProcessNames();
         }
 
         public async Task RemoveApplicationAsync(ExternalApplication application)
@@ -114,6 +119,8 @@ namespace FFXIManager.Services
                 _applications.Remove(application);
             }
             await SaveApplicationsToSettings();
+
+            RefreshRegisteredProcessNames();
         }
 
         public async Task<bool> LaunchApplicationAsync(ExternalApplication application)
@@ -462,10 +469,12 @@ namespace FFXIManager.Services
                     // First run - load default applications and save them immediately
                     _applications.AddRange(GetDefaultApplications());
                     _loggingService.LogInfoAsync($"First run - loaded {_applications.Count} default applications", "ExternalApplicationService");
-                    
+
                     // Save defaults to settings so they persist
                     _ = Task.Run(async () => await SaveApplicationsToSettings());
                 }
+
+                RefreshRegisteredProcessNames();
             }
             catch (Exception ex)
             {
@@ -473,9 +482,11 @@ namespace FFXIManager.Services
                 _applications.Clear();
                 _applications.AddRange(GetDefaultApplications());
                 _loggingService.LogErrorAsync($"Failed to load applications from settings, using defaults: {ex.Message}", ex, "ExternalApplicationService");
-                
+
                 // Try to save defaults
                 _ = Task.Run(async () => await SaveApplicationsToSettings());
+
+                RefreshRegisteredProcessNames();
             }
         }
 
@@ -510,6 +521,45 @@ namespace FFXIManager.Services
             catch (Exception ex)
             {
                 await _loggingService.LogErrorAsync("Failed to save applications to settings", ex, "ExternalApplicationService");
+            }
+        }
+
+        private string? GetProcessName(ExternalApplication application)
+        {
+            if (application == null || string.IsNullOrWhiteSpace(application.ExecutablePath))
+                return null;
+
+            try
+            {
+                return Path.GetFileNameWithoutExtension(application.ExecutablePath);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private void RefreshRegisteredProcessNames()
+        {
+            var desiredNames = _applications
+                .Select(GetProcessName)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Select(n => n!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var toAdd = desiredNames.Except(_registeredProcessNames, StringComparer.OrdinalIgnoreCase).ToList();
+            var toRemove = _registeredProcessNames.Except(desiredNames, StringComparer.OrdinalIgnoreCase).ToList();
+
+            if (toAdd.Count > 0)
+                _processManagementService.AddProcessNames(toAdd);
+            if (toRemove.Count > 0)
+                _processManagementService.RemoveProcessNames(toRemove);
+
+            _registeredProcessNames.Clear();
+            foreach (var name in desiredNames)
+            {
+                _registeredProcessNames.Add(name);
             }
         }
 
@@ -600,7 +650,13 @@ namespace FFXIManager.Services
             _disposed = true;
 
             StopMonitoring();
-            
+
+            if (_registeredProcessNames.Count > 0)
+            {
+                _processManagementService.RemoveProcessNames(_registeredProcessNames);
+                _registeredProcessNames.Clear();
+            }
+
             // Unsubscribe from process events
             _processManagementService.ProcessDetected -= OnProcessDetected;
             _processManagementService.ProcessTerminated -= OnProcessTerminated;

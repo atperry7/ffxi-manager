@@ -148,10 +148,11 @@ namespace FFXIManager.Services
             if (!_isMonitoring)
             {
                 _isMonitoring = true;
-                
+                _processManagementService.AddProcessNames(_targetProcessNames);
+
                 // Start global monitoring if not already started
                 _processManagementService.StartGlobalMonitoring(TimeSpan.FromSeconds(3));
-                
+
                 _loggingService.LogInfoAsync("Started PlayOnline character monitoring", "PlayOnlineMonitorService");
             }
         }
@@ -161,6 +162,7 @@ namespace FFXIManager.Services
             if (_isMonitoring)
             {
                 _isMonitoring = false;
+                _processManagementService.RemoveProcessNames(_targetProcessNames);
                 _loggingService.LogInfoAsync("Stopped PlayOnline character monitoring", "PlayOnlineMonitorService");
             }
         }

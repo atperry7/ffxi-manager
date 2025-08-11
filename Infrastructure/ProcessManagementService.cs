@@ -26,6 +26,8 @@ namespace FFXIManager.Infrastructure
         bool IsProcessRunning(int processId);
         void StartGlobalMonitoring(TimeSpan interval);
         void StopGlobalMonitoring();
+        void AddProcessNames(IEnumerable<string> processNames);
+        void RemoveProcessNames(IEnumerable<string> processNames);
         event EventHandler<ProcessInfo>? ProcessDetected;
         event EventHandler<ProcessInfo>? ProcessTerminated;
         event EventHandler<ProcessInfo>? ProcessUpdated;
@@ -72,6 +74,8 @@ namespace FFXIManager.Infrastructure
         private readonly SemaphoreSlim _processLock = new(1, 1);
         private readonly Timer? _globalMonitoringTimer;
         private readonly object _lockObject = new();
+        private readonly Dictionary<string, int> _monitoredProcessNames = new(StringComparer.OrdinalIgnoreCase);
+        private readonly object _nameLock = new();
         private bool _isGlobalMonitoring;
         private bool _disposed;
         
@@ -443,6 +447,53 @@ namespace FFXIManager.Infrastructure
             }
         }
 
+        public void AddProcessNames(IEnumerable<string> processNames)
+        {
+            if (processNames == null) return;
+
+            lock (_nameLock)
+            {
+                foreach (var name in processNames)
+                {
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+
+                    if (_monitoredProcessNames.TryGetValue(name, out var count))
+                    {
+                        _monitoredProcessNames[name] = count + 1;
+                    }
+                    else
+                    {
+                        _monitoredProcessNames[name] = 1;
+                    }
+                }
+            }
+        }
+
+        public void RemoveProcessNames(IEnumerable<string> processNames)
+        {
+            if (processNames == null) return;
+
+            lock (_nameLock)
+            {
+                foreach (var name in processNames)
+                {
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+
+                    if (_monitoredProcessNames.TryGetValue(name, out var count))
+                    {
+                        if (count <= 1)
+                        {
+                            _monitoredProcessNames.Remove(name);
+                        }
+                        else
+                        {
+                            _monitoredProcessNames[name] = count - 1;
+                        }
+                    }
+                }
+            }
+        }
+
         #endregion
 
         #region Private Methods
@@ -662,9 +713,18 @@ namespace FFXIManager.Infrastructure
             
             try
             {
-                // Get subset of processes instead of all processes to reduce Win32Exception frequency
-                // Focus on common process names that we're likely monitoring
-                var targetProcessNames = new[] { "pol", "ffxi", "PlayOnlineViewer", "Windower", "POLProxy", "Silmaril" };
+                // Get subset of processes based on currently monitored names
+                string[] targetProcessNames;
+                lock (_nameLock)
+                {
+                    targetProcessNames = _monitoredProcessNames.Keys.ToArray();
+                }
+
+                if (targetProcessNames.Length == 0)
+                {
+                    return; // Nothing to monitor
+                }
+
                 var relevantProcesses = await GetProcessesByNamesAsync(targetProcessNames);
                 
                 foreach (var proc in relevantProcesses)
