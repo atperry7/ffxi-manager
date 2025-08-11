@@ -6,7 +6,7 @@ using System.Text.Json;
 namespace FFXIManager.Services
 {
     /// <summary>
-    /// Service for managing application settings
+    /// Simple, reliable settings service without complex dependencies
     /// </summary>
     public class SettingsService : ISettingsService
     {
@@ -29,22 +29,11 @@ namespace FFXIManager.Services
                 {
                     var json = File.ReadAllText(_settingsPath);
                     var settings = JsonSerializer.Deserialize<ApplicationSettings>(json);
-                    
-                    // DEBUG: Show what was loaded
-                    System.Diagnostics.Debug.WriteLine($"SETTINGS LOADED from: {_settingsPath}");
-                    System.Diagnostics.Debug.WriteLine($"   - LastUsedProfile: '{settings?.LastUsedProfile ?? "null"}'");
-                    System.Diagnostics.Debug.WriteLine($"   - ExternalApplications count: {settings?.ExternalApplications?.Count ?? 0}");
-                    
                     return settings ?? new ApplicationSettings();
                 }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine($"SETTINGS FILE NOT FOUND: {_settingsPath}");
-                }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"ERROR LOADING SETTINGS: {ex.Message}");
                 // If there's any error loading settings, return defaults
             }
             
@@ -60,22 +49,16 @@ namespace FFXIManager.Services
                     WriteIndented = true 
                 });
                 File.WriteAllText(_settingsPath, json);
-                
-                // DEBUG: Verify what was saved
-                System.Diagnostics.Debug.WriteLine($"SETTINGS SAVED to: {_settingsPath}");
-                System.Diagnostics.Debug.WriteLine($"   - LastUsedProfile: '{settings.LastUsedProfile}'");
-                System.Diagnostics.Debug.WriteLine($"   - ExternalApplications count: {settings.ExternalApplications?.Count ?? 0}");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"ERROR SAVING SETTINGS: {ex.Message}");
                 // Silently fail - settings are not critical
             }
         }
     }
     
     /// <summary>
-    /// Application settings model with external applications support
+    /// Simple application settings model
     /// </summary>
     public class ApplicationSettings
     {

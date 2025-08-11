@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using FFXIManager.Models;
+using FFXIManager.Infrastructure;
 
 namespace FFXIManager.Services
 {
@@ -28,26 +29,31 @@ namespace FFXIManager.Services
 
     /// <summary>
     /// Service for managing and monitoring external applications
+    /// Uses shared ProcessManagementService for unified process handling
     /// </summary>
     public class ExternalApplicationService : IExternalApplicationService, IDisposable
     {
         private readonly ILoggingService _loggingService;
         private readonly ISettingsService _settingsService;
+        private readonly IProcessManagementService _processManagementService;
         private readonly List<ExternalApplication> _applications = new();
-        private readonly System.Threading.Timer? _monitoringTimer;
         private readonly Dictionary<int, ExternalApplication> _processToAppMap = new();
+        private readonly object _lockObject = new();
         private bool _isMonitoring;
+        private bool _disposed;
 
         public event EventHandler<ExternalApplication>? ApplicationStatusChanged;
 
-        public ExternalApplicationService(ILoggingService loggingService, ISettingsService settingsService)
+        public ExternalApplicationService(ILoggingService loggingService, ISettingsService settingsService, IProcessManagementService processManagementService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+            _processManagementService = processManagementService ?? throw new ArgumentNullException(nameof(processManagementService));
             
-            // Monitor processes every 10 seconds (reduced from 3 seconds to reduce file system stress)
-            _monitoringTimer = new System.Threading.Timer(MonitorProcesses, null, 
-                TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+            // Subscribe to global process events
+            _processManagementService.ProcessDetected += OnProcessDetected;
+            _processManagementService.ProcessTerminated += OnProcessTerminated;
+            _processManagementService.ProcessUpdated += OnProcessUpdated;
             
             LoadApplicationsFromSettings();
         }
@@ -59,7 +65,10 @@ namespace FFXIManager.Services
             // Immediately refresh status when applications are requested
             await RefreshApplicationStatusAsync();
             
-            return new List<ExternalApplication>(_applications);
+            lock (_lockObject)
+            {
+                return new List<ExternalApplication>(_applications);
+            }
         }
 
         public async Task<ExternalApplication> AddApplicationAsync(ExternalApplication application)
@@ -69,7 +78,10 @@ namespace FFXIManager.Services
 
             await _loggingService.LogInfoAsync($"Adding application: {application.Name}", "ExternalApplicationService");
             
-            _applications.Add(application);
+            lock (_lockObject)
+            {
+                _applications.Add(application);
+            }
             await SaveApplicationsToSettings();
             
             return application;
@@ -97,7 +109,10 @@ namespace FFXIManager.Services
                 await KillApplicationAsync(application);
             }
             
-            _applications.Remove(application);
+            lock (_lockObject)
+            {
+                _applications.Remove(application);
+            }
             await SaveApplicationsToSettings();
         }
 
@@ -139,7 +154,10 @@ namespace FFXIManager.Services
                     application.LastLaunched = DateTime.Now;
                     application.IsRunning = true;
                     
-                    _processToAppMap[process.Id] = application;
+                    lock (_lockObject)
+                    {
+                        _processToAppMap[process.Id] = application;
+                    }
                     
                     await _loggingService.LogInfoAsync($"Successfully launched {application.Name} (PID: {process.Id})", "ExternalApplicationService");
                     ApplicationStatusChanged?.Invoke(this, application);
@@ -169,29 +187,25 @@ namespace FFXIManager.Services
             try
             {
                 var oldProcessId = application.ProcessId;
-                var process = Process.GetProcessById(application.ProcessId);
-                process.Kill();
-                process.WaitForExit(5000); // Wait up to 5 seconds
                 
-                application.IsRunning = false;
-                application.ProcessId = 0;
-                _processToAppMap.Remove(oldProcessId); // Use the old ProcessId, not the current (which is now 0)
+                // Use shared process management service for killing processes
+                bool success = await _processManagementService.KillProcessAsync(application.ProcessId, 5000);
                 
-                await _loggingService.LogInfoAsync($"Successfully killed {application.Name}", "ExternalApplicationService");
-                ApplicationStatusChanged?.Invoke(this, application);
+                if (success)
+                {
+                    application.IsRunning = false;
+                    application.ProcessId = 0;
+                    
+                    lock (_lockObject)
+                    {
+                        _processToAppMap.Remove(oldProcessId);
+                    }
+                    
+                    await _loggingService.LogInfoAsync($"Successfully killed {application.Name}", "ExternalApplicationService");
+                    ApplicationStatusChanged?.Invoke(this, application);
+                }
                 
-                return true;
-            }
-            catch (ArgumentException)
-            {
-                // Process already exited
-                var oldProcessId = application.ProcessId;
-                application.IsRunning = false;
-                application.ProcessId = 0;
-                if (oldProcessId > 0)
-                    _processToAppMap.Remove(oldProcessId);
-                ApplicationStatusChanged?.Invoke(this, application);
-                return true;
+                return success;
             }
             catch (Exception ex)
             {
@@ -204,7 +218,13 @@ namespace FFXIManager.Services
         {
             await _loggingService.LogDebugAsync("Refreshing all application statuses", "ExternalApplicationService");
             
-            foreach (var app in _applications)
+            var applications = new List<ExternalApplication>();
+            lock (_lockObject)
+            {
+                applications.AddRange(_applications);
+            }
+            
+            foreach (var app in applications)
             {
                 await RefreshApplicationStatusAsync(app);
             }
@@ -236,72 +256,58 @@ namespace FFXIManager.Services
                     return;
                 }
 
-                Process[] runningProcesses = new Process[0];
-                try
-                {
-                    runningProcesses = Process.GetProcessesByName(processName);
-                }
-                catch (Exception ex)
-                {
-                    await _loggingService.LogDebugAsync($"Error getting processes for '{processName}': {ex.Message}", "ExternalApplicationService");
-                    application.IsRunning = false;
-                    application.ProcessId = 0;
-                    application.CurrentInstances = 0;
-                    return;
-                }
-                
                 var wasRunning = application.IsRunning;
                 var oldProcessId = application.ProcessId;
+                
+                // Use shared process management service to get processes
+                var processes = await _processManagementService.GetProcessesByNamesAsync(new[] { processName });
                 
                 // Check if our specific tracked process is still running
                 bool isOurProcessRunning = false;
                 if (application.ProcessId > 0)
                 {
-                    try
-                    {
-                        var trackedProcess = Process.GetProcessById(application.ProcessId);
-                        isOurProcessRunning = !trackedProcess.HasExited;
-                    }
-                    catch (ArgumentException)
-                    {
-                        // Process no longer exists
-                        isOurProcessRunning = false;
-                    }
-                    catch (Exception ex)
-                    {
-                        await _loggingService.LogDebugAsync($"Error checking tracked process {application.ProcessId}: {ex.Message}", "ExternalApplicationService");
-                        isOurProcessRunning = false;
-                    }
+                    isOurProcessRunning = _processManagementService.IsProcessRunning(application.ProcessId);
                 }
 
                 // Update the running status based on our tracked process or any running instance
-                bool hasRunningInstances = runningProcesses.Length > 0;
+                bool hasRunningInstances = processes.Count > 0;
                 
                 if (application.ProcessId > 0 && !isOurProcessRunning)
                 {
                     // Our specific process has stopped
                     application.IsRunning = false;
-                    _processToAppMap.Remove(oldProcessId);
+                    lock (_lockObject)
+                    {
+                        _processToAppMap.Remove(oldProcessId);
+                    }
                     application.ProcessId = 0;
                 }
                 else if (hasRunningInstances && !application.IsRunning)
                 {
                     // New instance detected
                     application.IsRunning = true;
-                    application.ProcessId = runningProcesses[0].Id;
-                    _processToAppMap[application.ProcessId] = application;
+                    application.ProcessId = processes[0].ProcessId;
+                    lock (_lockObject)
+                    {
+                        _processToAppMap[application.ProcessId] = application;
+                    }
                 }
                 else if (!hasRunningInstances && application.IsRunning)
                 {
                     // All instances stopped
                     application.IsRunning = false;
                     if (oldProcessId > 0)
-                        _processToAppMap.Remove(oldProcessId);
+                    {
+                        lock (_lockObject)
+                        {
+                            _processToAppMap.Remove(oldProcessId);
+                        }
+                    }
                     application.ProcessId = 0;
                 }
 
                 // Update current instances count
-                application.CurrentInstances = runningProcesses.Length;
+                application.CurrentInstances = processes.Count;
 
                 // Only trigger property notifications if status actually changed
                 if (wasRunning != application.IsRunning)
@@ -327,33 +333,102 @@ namespace FFXIManager.Services
 
         public void StartMonitoring()
         {
-            _isMonitoring = true;
-            _loggingService.LogInfoAsync("Started application monitoring", "ExternalApplicationService");
+            if (!_isMonitoring)
+            {
+                _isMonitoring = true;
+                
+                // Start global monitoring if not already started
+                _processManagementService.StartGlobalMonitoring(TimeSpan.FromSeconds(5));
+                
+                _loggingService.LogInfoAsync("Started application monitoring", "ExternalApplicationService");
+            }
         }
 
         public void StopMonitoring()
         {
-            _isMonitoring = false;
-            _loggingService.LogInfoAsync("Stopped application monitoring", "ExternalApplicationService");
+            if (_isMonitoring)
+            {
+                _isMonitoring = false;
+                _loggingService.LogInfoAsync("Stopped application monitoring", "ExternalApplicationService");
+            }
         }
 
-        private async void MonitorProcesses(object? state)
+        #region Process Event Handlers
+
+        private void OnProcessDetected(object? sender, ProcessInfo processInfo)
+        {
+            if (!_isMonitoring) return;
+            
+            Task.Run(async () =>
+            {
+                try
+                {
+                    // Check if this process matches any of our applications
+                    var processName = processInfo.ProcessName;
+                    ExternalApplication? matchingApp = null;
+                    
+                    lock (_lockObject)
+                    {
+                        matchingApp = _applications.FirstOrDefault(app => 
+                            !string.IsNullOrEmpty(app.ExecutablePath) &&
+                            string.Equals(Path.GetFileNameWithoutExtension(app.ExecutablePath), 
+                                         processName, StringComparison.OrdinalIgnoreCase));
+                    }
+
+                    if (matchingApp != null)
+                    {
+                        await RefreshApplicationStatusAsync(matchingApp);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await _loggingService.LogDebugAsync($"Error handling process detection: {ex.Message}", "ExternalApplicationService");
+                }
+            });
+        }
+
+        private void OnProcessTerminated(object? sender, ProcessInfo processInfo)
+        {
+            ExternalApplication? app = null;
+            
+            lock (_lockObject)
+            {
+                _processToAppMap.TryGetValue(processInfo.ProcessId, out app);
+                if (app != null)
+                {
+                    _processToAppMap.Remove(processInfo.ProcessId);
+                }
+            }
+
+            if (app != null)
+            {
+                app.IsRunning = false;
+                app.ProcessId = 0;
+                ApplicationStatusChanged?.Invoke(this, app);
+            }
+        }
+
+        private void OnProcessUpdated(object? sender, ProcessInfo processInfo)
         {
             if (!_isMonitoring) return;
 
-            try
+            ExternalApplication? app = null;
+            lock (_lockObject)
             {
-                await RefreshApplicationStatusAsync();
+                _processToAppMap.TryGetValue(processInfo.ProcessId, out app);
             }
-            catch (Exception ex)
+
+            if (app != null)
             {
-                // Reduce logging noise - only log significant errors
-                if (!(ex is IOException || ex is UnauthorizedAccessException))
-                {
-                    await _loggingService.LogErrorAsync("Error during process monitoring", ex, "ExternalApplicationService");
-                }
+                // Update application information based on process changes
+                // This could include responsiveness checks, etc.
+                app.OnPropertyChanged(nameof(app.StatusText));
             }
         }
+
+        #endregion
+
+        #region Settings Management
 
         private void LoadApplicationsFromSettings()
         {
@@ -410,8 +485,14 @@ namespace FFXIManager.Services
             {
                 var settings = _settingsService.LoadSettings();
                 
+                List<ExternalApplication> applicationsToSave;
+                lock (_lockObject)
+                {
+                    applicationsToSave = new List<ExternalApplication>(_applications);
+                }
+                
                 // Convert applications to serializable format
-                settings.ExternalApplications = _applications.Select(app => new ExternalApplicationData
+                settings.ExternalApplications = applicationsToSave.Select(app => new ExternalApplicationData
                 {
                     Name = app.Name,
                     ExecutablePath = app.ExecutablePath,
@@ -424,7 +505,7 @@ namespace FFXIManager.Services
                 
                 _settingsService.SaveSettings(settings);
                 
-                await _loggingService.LogInfoAsync($"Successfully saved {_applications.Count} applications to settings", "ExternalApplicationService");
+                await _loggingService.LogInfoAsync($"Successfully saved {applicationsToSave.Count} applications to settings", "ExternalApplicationService");
             }
             catch (Exception ex)
             {
@@ -511,10 +592,19 @@ namespace FFXIManager.Services
             return applications;
         }
 
+        #endregion
+
         public void Dispose()
         {
-            _monitoringTimer?.Dispose();
+            if (_disposed) return;
+            _disposed = true;
+
             StopMonitoring();
+            
+            // Unsubscribe from process events
+            _processManagementService.ProcessDetected -= OnProcessDetected;
+            _processManagementService.ProcessTerminated -= OnProcessTerminated;
+            _processManagementService.ProcessUpdated -= OnProcessUpdated;
         }
     }
 }

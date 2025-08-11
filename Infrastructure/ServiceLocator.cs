@@ -4,7 +4,7 @@ using FFXIManager.Configuration;
 namespace FFXIManager.Infrastructure
 {
     /// <summary>
-    /// Enhanced service locator with external application management services
+    /// Simple service locator without complex unified dependencies
     /// </summary>
     public static class ServiceLocator
     {
@@ -19,6 +19,7 @@ namespace FFXIManager.Infrastructure
         private static INotificationService? _notificationService;
         private static IExternalApplicationService? _externalApplicationService;
         private static IPlayOnlineMonitorService? _playOnlineMonitorService;
+        private static IProcessManagementService? _processManagementService;
         
         public static ISettingsService SettingsService 
         {
@@ -73,12 +74,21 @@ namespace FFXIManager.Infrastructure
                 return _validationService;
             }
         }
+
+        public static IProcessManagementService ProcessManagementService
+        {
+            get
+            {
+                _processManagementService ??= new ProcessManagementService(LoggingService);
+                return _processManagementService;
+            }
+        }
         
         public static IExternalApplicationService ExternalApplicationService
         {
             get
             {
-                _externalApplicationService ??= new ExternalApplicationService(LoggingService, SettingsService);
+                _externalApplicationService ??= new ExternalApplicationService(LoggingService, SettingsService, ProcessManagementService);
                 return _externalApplicationService;
             }
         }
@@ -87,7 +97,7 @@ namespace FFXIManager.Infrastructure
         {
             get
             {
-                _playOnlineMonitorService ??= new PlayOnlineMonitorService(LoggingService);
+                _playOnlineMonitorService ??= new PlayOnlineMonitorService(LoggingService, ProcessManagementService);
                 return _playOnlineMonitorService;
             }
         }
@@ -139,7 +149,8 @@ namespace FFXIManager.Infrastructure
             ICachingService? cachingService = null,
             INotificationService? notificationService = null,
             IExternalApplicationService? externalApplicationService = null,
-            IPlayOnlineMonitorService? playOnlineMonitorService = null)
+            IPlayOnlineMonitorService? playOnlineMonitorService = null,
+            IProcessManagementService? processManagementService = null)
         {
             _settingsService = settingsService;
             _profileService = profileService;
@@ -152,6 +163,7 @@ namespace FFXIManager.Infrastructure
             _notificationService = notificationService;
             _externalApplicationService = externalApplicationService;
             _playOnlineMonitorService = playOnlineMonitorService;
+            _processManagementService = processManagementService;
         }
         
         // For cleanup during testing
@@ -168,6 +180,7 @@ namespace FFXIManager.Infrastructure
             _notificationService = null;
             _externalApplicationService = null;
             _playOnlineMonitorService = null;
+            _processManagementService = null;
         }
     }
 }

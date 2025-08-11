@@ -1,0 +1,734 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using FFXIManager.Services;
+
+namespace FFXIManager.Infrastructure
+{
+    /// <summary>
+    /// Unified process monitoring and management infrastructure
+    /// Provides shared functionality for both Application Manager and Character Monitor
+    /// </summary>
+    public interface IProcessManagementService
+    {
+        Task<List<ProcessInfo>> GetProcessesByNamesAsync(IEnumerable<string> processNames);
+        Task<List<ProcessInfo>> GetAllProcessesAsync();
+        Task<ProcessInfo?> GetProcessByIdAsync(int processId);
+        Task<bool> KillProcessAsync(int processId, int timeoutMs = 5000);
+        Task<bool> ActivateWindowAsync(IntPtr windowHandle, int timeoutMs = 5000);
+        Task<List<WindowInfo>> GetProcessWindowsAsync(int processId);
+        bool IsProcessRunning(int processId);
+        void StartGlobalMonitoring(TimeSpan interval);
+        void StopGlobalMonitoring();
+        event EventHandler<ProcessInfo>? ProcessDetected;
+        event EventHandler<ProcessInfo>? ProcessTerminated;
+        event EventHandler<ProcessInfo>? ProcessUpdated;
+    }
+
+    /// <summary>
+    /// Represents basic process information
+    /// </summary>
+    public class ProcessInfo
+    {
+        public int ProcessId { get; set; }
+        public string ProcessName { get; set; } = string.Empty;
+        public string ExecutablePath { get; set; } = string.Empty;
+        public IntPtr MainWindowHandle { get; set; }
+        public string MainWindowTitle { get; set; } = string.Empty;
+        public bool IsResponding { get; set; }
+        public DateTime StartTime { get; set; }
+        public DateTime LastSeen { get; set; } = DateTime.UtcNow;
+        public List<WindowInfo> Windows { get; set; } = new();
+
+        public bool HasExited => ProcessId <= 0 || LastSeen < DateTime.UtcNow.AddMinutes(-2);
+    }
+
+    /// <summary>
+    /// Represents window information
+    /// </summary>
+    public class WindowInfo
+    {
+        public IntPtr Handle { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public bool IsVisible { get; set; }
+        public bool IsMainWindow { get; set; }
+        public int ProcessId { get; set; }
+    }
+
+    /// <summary>
+    /// Centralized process management service with shared Windows API functionality
+    /// Enhanced with Win32Exception handling for process access issues
+    /// </summary>
+    public class ProcessManagementService : IProcessManagementService, IDisposable
+    {
+        private readonly ILoggingService _loggingService;
+        private readonly Dictionary<int, ProcessInfo> _trackedProcesses = new();
+        private readonly SemaphoreSlim _processLock = new(1, 1);
+        private readonly Timer? _globalMonitoringTimer;
+        private readonly object _lockObject = new();
+        private bool _isGlobalMonitoring;
+        private bool _disposed;
+        
+        private const int DEFAULT_TIMEOUT_MS = 5000;
+        private const int GLOBAL_MONITOR_INTERVAL_MS = 2000; // Centralized polling interval
+
+        public event EventHandler<ProcessInfo>? ProcessDetected;
+        public event EventHandler<ProcessInfo>? ProcessTerminated;
+        public event EventHandler<ProcessInfo>? ProcessUpdated;
+
+        public ProcessManagementService(ILoggingService loggingService)
+        {
+            _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            
+            // Single global monitoring timer for all process tracking
+            _globalMonitoringTimer = new Timer(GlobalMonitoringCallback, null, 
+                Timeout.Infinite, Timeout.Infinite);
+        }
+
+        #region Windows API Imports - Centralized
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsIconic(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool BringWindowToTop(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool SwitchToThisWindow(IntPtr hWnd, bool fAltTab);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr processId);
+
+        [DllImport("kernel32.dll")]
+        private static extern uint GetCurrentThreadId();
+
+        [DllImport("user32.dll")]
+        private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        private const int SW_RESTORE = 9;
+        private const int SW_SHOW = 5;
+
+        #endregion
+
+        #region Public Interface
+
+        public async Task<List<ProcessInfo>> GetProcessesByNamesAsync(IEnumerable<string> processNames)
+        {
+            var result = new List<ProcessInfo>();
+            
+            foreach (var processName in processNames)
+            {
+                try
+                {
+                    var processes = Process.GetProcessesByName(processName);
+                    var processInfos = await ConvertToProcessInfoAsync(processes);
+                    result.AddRange(processInfos);
+                }
+                catch (Win32Exception ex)
+                {
+                    // Specific handling for Win32 access issues
+                    await _loggingService.LogDebugAsync($"Win32 access denied for process '{processName}': {ex.Message}", 
+                        "ProcessManagementService");
+                }
+                catch (Exception ex)
+                {
+                    await _loggingService.LogDebugAsync($"Error getting processes for {processName}: {ex.Message}", 
+                        "ProcessManagementService");
+                }
+            }
+
+            return result;
+        }
+
+        public async Task<List<ProcessInfo>> GetAllProcessesAsync()
+        {
+            try
+            {
+                var processes = Process.GetProcesses();
+                return await ConvertToProcessInfoAsync(processes);
+            }
+            catch (Win32Exception ex)
+            {
+                await _loggingService.LogDebugAsync($"Win32 access issue getting all processes: {ex.Message}", "ProcessManagementService");
+                return new List<ProcessInfo>();
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error getting all processes", ex, "ProcessManagementService");
+                return new List<ProcessInfo>();
+            }
+        }
+
+        public async Task<ProcessInfo?> GetProcessByIdAsync(int processId)
+        {
+            try
+            {
+                var process = Process.GetProcessById(processId);
+                if (process?.HasExited == false)
+                {
+                    var processInfos = await ConvertToProcessInfoAsync(new[] { process });
+                    return processInfos.FirstOrDefault();
+                }
+            }
+            catch (ArgumentException)
+            {
+                // Process not found - this is expected and not an error
+                return null;
+            }
+            catch (Win32Exception ex)
+            {
+                await _loggingService.LogDebugAsync($"Win32 access denied for process {processId}: {ex.Message}", 
+                    "ProcessManagementService");
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogDebugAsync($"Error getting process {processId}: {ex.Message}", 
+                    "ProcessManagementService");
+            }
+
+            return null;
+        }
+
+        public async Task<bool> KillProcessAsync(int processId, int timeoutMs = DEFAULT_TIMEOUT_MS)
+        {
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+                
+                var process = Process.GetProcessById(processId);
+                if (process?.HasExited == false)
+                {
+                    await Task.Run(() =>
+                    {
+                        process.Kill();
+                        process.WaitForExit(timeoutMs);
+                    }, cts.Token);
+
+                    await _loggingService.LogInfoAsync($"Successfully killed process {processId}", 
+                        "ProcessManagementService");
+                    return true;
+                }
+            }
+            catch (ArgumentException)
+            {
+                // Process already exited - consider this success
+                return true;
+            }
+            catch (Win32Exception ex)
+            {
+                await _loggingService.LogWarningAsync($"Win32 access denied killing process {processId}: {ex.Message}", 
+                    "ProcessManagementService");
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync($"Error killing process {processId}", ex, 
+                    "ProcessManagementService");
+            }
+
+            return false;
+        }
+
+        public async Task<bool> ActivateWindowAsync(IntPtr windowHandle, int timeoutMs = DEFAULT_TIMEOUT_MS)
+        {
+            if (windowHandle == IntPtr.Zero || !IsWindow(windowHandle))
+            {
+                return false;
+            }
+
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+                
+                bool success = await Task.Run(() =>
+                {
+                    // Method 1: Standard activation
+                    if (IsIconic(windowHandle))
+                    {
+                        ShowWindow(windowHandle, SW_RESTORE);
+                        Thread.Sleep(100);
+                    }
+                    else
+                    {
+                        ShowWindow(windowHandle, SW_SHOW);
+                    }
+
+                    bool result = SetForegroundWindow(windowHandle);
+                    
+                    // Method 2: Alternative if standard failed
+                    if (!result)
+                    {
+                        BringWindowToTop(windowHandle);
+                        SwitchToThisWindow(windowHandle, true);
+                        result = true; // Assume success for these methods
+                    }
+
+                    return result;
+                }, cts.Token);
+
+                if (success)
+                {
+                    await _loggingService.LogInfoAsync($"Successfully activated window {windowHandle:X8}", 
+                        "ProcessManagementService");
+                }
+
+                return success;
+            }
+            catch (Win32Exception ex)
+            {
+                await _loggingService.LogDebugAsync($"Win32 error activating window {windowHandle:X8}: {ex.Message}", 
+                    "ProcessManagementService");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync($"Error activating window {windowHandle:X8}", ex, 
+                    "ProcessManagementService");
+                return false;
+            }
+        }
+
+        public async Task<List<WindowInfo>> GetProcessWindowsAsync(int processId)
+        {
+            var windows = new List<WindowInfo>();
+            
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(DEFAULT_TIMEOUT_MS));
+
+                await Task.Run(() =>
+                {
+                    try
+                    {
+                        EnumWindows((hWnd, lParam) =>
+                        {
+                            try
+                            {
+                                if (cts.Token.IsCancellationRequested) return false;
+
+                                if (IsWindowVisible(hWnd))
+                                {
+                                    GetWindowThreadProcessId(hWnd, out uint windowProcessId);
+                                    
+                                    if (windowProcessId == processId)
+                                    {
+                                        var title = GetWindowTitle(hWnd);
+                                        
+                                        if (!string.IsNullOrEmpty(title) && 
+                                            !title.StartsWith("Default IME") && 
+                                            !title.StartsWith("MSCTFIME UI") &&
+                                            !title.Equals("Program Manager"))
+                                        {
+                                            windows.Add(new WindowInfo
+                                            {
+                                                Handle = hWnd,
+                                                Title = title,
+                                                IsVisible = true,
+                                                ProcessId = processId
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                            catch (Win32Exception)
+                            {
+                                // Ignore Win32 errors for individual windows
+                            }
+                            catch
+                            {
+                                // Ignore other individual window enumeration errors
+                            }
+                            return !cts.Token.IsCancellationRequested;
+                        }, IntPtr.Zero);
+                    }
+                    catch (Win32Exception ex)
+                    {
+                        // Log but don't throw - this is expected for some processes
+                        Debug.WriteLine($"Win32 error enumerating windows for process {processId}: {ex.Message}");
+                    }
+                }, cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                await _loggingService.LogDebugAsync($"Window enumeration timeout for process {processId}", 
+                    "ProcessManagementService");
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogDebugAsync($"Error enumerating windows for process {processId}: {ex.Message}", 
+                    "ProcessManagementService");
+            }
+
+            return windows;
+        }
+
+        public bool IsProcessRunning(int processId)
+        {
+            try
+            {
+                var process = Process.GetProcessById(processId);
+                return process?.HasExited == false;
+            }
+            catch (ArgumentException)
+            {
+                // Process not found
+                return false;
+            }
+            catch (Win32Exception)
+            {
+                // Access denied - assume running but inaccessible
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public void StartGlobalMonitoring(TimeSpan interval)
+        {
+            lock (_lockObject)
+            {
+                if (!_isGlobalMonitoring)
+                {
+                    _isGlobalMonitoring = true;
+                    var intervalMs = Math.Max((int)interval.TotalMilliseconds, 1000); // Minimum 1 second
+                    _globalMonitoringTimer?.Change(0, intervalMs);
+                    _loggingService.LogInfoAsync("Started global process monitoring", "ProcessManagementService");
+                }
+            }
+        }
+
+        public void StopGlobalMonitoring()
+        {
+            lock (_lockObject)
+            {
+                if (_isGlobalMonitoring)
+                {
+                    _isGlobalMonitoring = false;
+                    _globalMonitoringTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                    _loggingService.LogInfoAsync("Stopped global process monitoring", "ProcessManagementService");
+                }
+            }
+        }
+
+        #endregion
+
+        #region Private Methods
+
+        private async Task<List<ProcessInfo>> ConvertToProcessInfoAsync(IEnumerable<Process> processes)
+        {
+            var result = new List<ProcessInfo>();
+            
+            foreach (var process in processes)
+            {
+                try
+                {
+                    if (!IsValidProcess(process))
+                    {
+                        continue;
+                    }
+
+                    var processInfo = new ProcessInfo
+                    {
+                        ProcessId = process.Id,
+                        ProcessName = GetSafeProcessName(process),
+                        ExecutablePath = GetSafeProcessPath(process),
+                        MainWindowHandle = GetSafeMainWindowHandle(process),
+                        MainWindowTitle = GetSafeMainWindowTitle(process),
+                        IsResponding = GetSafeResponding(process),
+                        StartTime = GetSafeStartTime(process),
+                        LastSeen = DateTime.UtcNow
+                    };
+
+                    // Get windows for this process (with reduced frequency to avoid flooding)
+                    processInfo.Windows = await GetProcessWindowsAsync(process.Id);
+                    
+                    result.Add(processInfo);
+                }
+                catch (Win32Exception)
+                {
+                    // Silently skip processes we can't access
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    // Log but continue with other processes
+                    Debug.WriteLine($"Error converting process {process?.Id}: {ex.Message}");
+                }
+                finally
+                {
+                    try { process?.Dispose(); } catch { }
+                }
+            }
+
+            return result;
+        }
+
+        private bool IsValidProcess(Process? process)
+        {
+            if (process == null) return false;
+            
+            try
+            {
+                // Basic validation without accessing potentially restricted properties
+                return !process.HasExited && process.Id > 0;
+            }
+            catch (Win32Exception)
+            {
+                // Can't access process information - skip it
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private string GetSafeProcessName(Process process)
+        {
+            try
+            {
+                return process.ProcessName ?? string.Empty;
+            }
+            catch (Win32Exception)
+            {
+                return "Unknown";
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string GetSafeProcessPath(Process process)
+        {
+            try
+            {
+                return process.MainModule?.FileName ?? string.Empty;
+            }
+            catch (Win32Exception)
+            {
+                // Common for system processes and processes we don't have access to
+                return string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private IntPtr GetSafeMainWindowHandle(Process process)
+        {
+            try
+            {
+                return process.MainWindowHandle;
+            }
+            catch (Win32Exception)
+            {
+                return IntPtr.Zero;
+            }
+            catch
+            {
+                return IntPtr.Zero;
+            }
+        }
+
+        private string GetSafeMainWindowTitle(Process process)
+        {
+            try
+            {
+                return process.MainWindowTitle ?? string.Empty;
+            }
+            catch (Win32Exception)
+            {
+                return string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private bool GetSafeResponding(Process process)
+        {
+            try
+            {
+                return process.Responding;
+            }
+            catch (Win32Exception)
+            {
+                // Assume responsive if we can't check
+                return true;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        private DateTime GetSafeStartTime(Process process)
+        {
+            try
+            {
+                return process.StartTime;
+            }
+            catch (Win32Exception)
+            {
+                // Use current time if we can't get start time
+                return DateTime.UtcNow;
+            }
+            catch
+            {
+                return DateTime.UtcNow;
+            }
+        }
+
+        private string GetWindowTitle(IntPtr hWnd)
+        {
+            try
+            {
+                const int maxLength = 256;
+                var title = new StringBuilder(maxLength);
+                GetWindowText(hWnd, title, maxLength);
+                return title.ToString();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private async void GlobalMonitoringCallback(object? state)
+        {
+            if (!_isGlobalMonitoring || _disposed) return;
+
+            if (!await _processLock.WaitAsync(100)) return;
+
+            try
+            {
+                await UpdateTrackedProcessesAsync();
+            }
+            catch (Win32Exception)
+            {
+                // Silently ignore Win32 exceptions during monitoring
+                // These are expected when processes are restricted
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogDebugAsync($"Error in global monitoring: {ex.Message}", 
+                    "ProcessManagementService");
+            }
+            finally
+            {
+                _processLock.Release();
+            }
+        }
+
+        private async Task UpdateTrackedProcessesAsync()
+        {
+            var currentProcesses = new Dictionary<int, ProcessInfo>();
+            
+            try
+            {
+                // Get subset of processes instead of all processes to reduce Win32Exception frequency
+                // Focus on common process names that we're likely monitoring
+                var targetProcessNames = new[] { "pol", "ffxi", "PlayOnlineViewer", "Windower", "POLProxy", "Silmaril" };
+                var relevantProcesses = await GetProcessesByNamesAsync(targetProcessNames);
+                
+                foreach (var proc in relevantProcesses)
+                {
+                    currentProcesses[proc.ProcessId] = proc;
+                }
+
+                // Check for new processes
+                foreach (var kvp in currentProcesses)
+                {
+                    var processId = kvp.Key;
+                    var processInfo = kvp.Value;
+                    
+                    if (!_trackedProcesses.ContainsKey(processId))
+                    {
+                        _trackedProcesses[processId] = processInfo;
+                        ProcessDetected?.Invoke(this, processInfo);
+                    }
+                    else
+                    {
+                        // Update existing process
+                        var existing = _trackedProcesses[processId];
+                        existing.LastSeen = processInfo.LastSeen;
+                        existing.IsResponding = processInfo.IsResponding;
+                        existing.MainWindowTitle = processInfo.MainWindowTitle;
+                        existing.Windows = processInfo.Windows;
+                        
+                        ProcessUpdated?.Invoke(this, existing);
+                    }
+                }
+
+                // Check for terminated processes
+                var terminatedProcesses = _trackedProcesses.Keys
+                    .Where(pid => !currentProcesses.ContainsKey(pid))
+                    .ToList();
+
+                foreach (var processId in terminatedProcesses)
+                {
+                    var processInfo = _trackedProcesses[processId];
+                    _trackedProcesses.Remove(processId);
+                    ProcessTerminated?.Invoke(this, processInfo);
+                }
+            }
+            catch (Win32Exception)
+            {
+                // Silently handle Win32 access issues during tracking
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error updating tracked processes", ex, 
+                    "ProcessManagementService");
+            }
+        }
+
+        #endregion
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            StopGlobalMonitoring();
+            _globalMonitoringTimer?.Dispose();
+            _processLock?.Dispose();
+        }
+    }
+}

@@ -10,5 +10,4 @@ namespace FFXIManager
     public partial class App : Application
     {
     }
-
 }

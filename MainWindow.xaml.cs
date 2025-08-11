@@ -4,7 +4,7 @@ using FFXIManager.ViewModels;
 namespace FFXIManager
 {
     /// <summary>
-    /// MainWindow with ZERO business logic - pure MVVM implementation
+    /// MainWindow with simple, clean initialization
     /// </summary>
     public partial class MainWindow : Window
     {

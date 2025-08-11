@@ -7,12 +7,12 @@ using FFXIManager.Configuration;
 namespace FFXIManager.Services
 {
     /// <summary>
-    /// Service for managing application configuration with JSON persistence
+    /// Simple service for managing application configuration
     /// </summary>
     public class ConfigurationService : IConfigurationService
     {
         private readonly string _configurationPath;
-        private ApplicationConfiguration _configuration = null!; // Will be initialized in constructor
+        private ApplicationConfiguration _configuration = null!;
 
         public ProfileConfiguration ProfileConfig => _configuration.Profile;
         public UIConfiguration UIConfig => _configuration.UI;

@@ -1,7 +1,9 @@
+using System.Threading.Tasks;
+
 namespace FFXIManager.Services
 {
     /// <summary>
-    /// Interface for settings management
+    /// Simple interface for settings management
     /// </summary>
     public interface ISettingsService
     {

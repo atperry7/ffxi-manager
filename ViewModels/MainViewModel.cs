@@ -7,8 +7,7 @@ using FFXIManager.Views;
 namespace FFXIManager.ViewModels
 {
     /// <summary>
-    /// Clean, refactored Main ViewModel that coordinates between specialized ViewModels
-    /// Following Single Responsibility Principle and proper separation of concerns
+    /// Simple Main ViewModel that coordinates between specialized ViewModels
     /// </summary>
     public class MainViewModel : ViewModelBase
     {
@@ -186,10 +185,19 @@ namespace FFXIManager.ViewModels
 
         private async void InitializeAsync()
         {
-            // Load data asynchronously
-            await ProfileManagement.RefreshProfilesAsync();
-            await ApplicationManagement.LoadExternalApplicationsAsync();
-            await PlayOnlineMonitor.LoadCharactersAsync();
+            try
+            {
+                // Load data asynchronously without blocking the UI
+                await ProfileManagement.RefreshProfilesAsync();
+                await ApplicationManagement.LoadExternalApplicationsAsync();
+                
+                // Load character data using the public method
+                await PlayOnlineMonitor.LoadCharactersAsync();
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetMessage($"Error during initialization: {ex.Message}");
+            }
         }
 
         #endregion
