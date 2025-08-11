@@ -195,6 +195,22 @@ namespace FFXIManager.Services
 
         #region Private Methods
 
+        private void RaiseCharacterUpdated(PlayOnlineCharacter character)
+        {
+            _uiDispatcher.BeginInvoke(() => CharacterUpdated?.Invoke(this, character));
+        }
+
+        private bool UpdateTitleIfChanged(PlayOnlineCharacter character, string newTitle)
+        {
+            if (!string.Equals(character.WindowTitle, newTitle, StringComparison.Ordinal))
+            {
+                character.WindowTitle = newTitle;
+                RaiseCharacterUpdated(character);
+                return true;
+            }
+            return false;
+        }
+
         private void OnProcessDetected(object? sender, ProcessInfo processInfo)
         {
             if (!_isMonitoring || !IsTargetProcess(processInfo)) return;
@@ -253,10 +269,9 @@ namespace FFXIManager.Services
                         character.LastSeen = processInfo.LastSeen;
 
                         var matchingWindow = processInfo.Windows.FirstOrDefault(w => w.Handle == character.WindowHandle);
-                        if (matchingWindow != null && !string.Equals(matchingWindow.Title, character.WindowTitle, StringComparison.Ordinal))
+                        if (matchingWindow != null)
                         {
-                            character.WindowTitle = matchingWindow.Title;
-                            CharacterUpdated?.Invoke(this, character);
+                            UpdateTitleIfChanged(character, matchingWindow.Title);
                         }
                     }
                 }
@@ -277,11 +292,7 @@ namespace FFXIManager.Services
                     
                     if (updated != null)
                     {
-                        if (!string.Equals(updated.WindowTitle, e.NewTitle, StringComparison.Ordinal))
-                        {
-                            updated.WindowTitle = e.NewTitle;
-                            CharacterUpdated?.Invoke(this, updated);
-                        }
+                        UpdateTitleIfChanged(updated, e.NewTitle);
                         return;
                     }
 
@@ -293,8 +304,7 @@ namespace FFXIManager.Services
                         if (updated.WindowHandle != e.WindowHandle || !string.Equals(updated.WindowTitle, e.NewTitle, StringComparison.Ordinal))
                         {
                             updated.WindowHandle = e.WindowHandle;
-                            updated.WindowTitle = e.NewTitle;
-                            CharacterUpdated?.Invoke(this, updated);
+                            UpdateTitleIfChanged(updated, e.NewTitle);
                         }
                         return;
                     }
@@ -391,7 +401,7 @@ namespace FFXIManager.Services
             }
             foreach (var character in updated)
             {
-                CharacterUpdated?.Invoke(this, character);
+                RaiseCharacterUpdated(character);
             }
             foreach (var pid in removed.Distinct())
             {
@@ -487,7 +497,7 @@ namespace FFXIManager.Services
 
             foreach (var character in updated)
             {
-                CharacterUpdated?.Invoke(this, character);
+                RaiseCharacterUpdated(character);
             }
 
             foreach (var processId in removed.Distinct())

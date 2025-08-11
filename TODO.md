@@ -3,13 +3,13 @@
 Track progress here. Check items as we complete them, and add new items as needed.
 
 ## Core architecture and services
-- [ ] Centralize throttling/debouncing
-  - [ ] Introduce a small Throttle helper/service (e.g., `ThrottlePerKey(key, interval, action)`).
-  - [ ] Replace ad-hoc per-PID throttle dictionaries in PlayOnlineMonitorService.
+- [x] Centralize throttling/debouncing
+  - [x] Introduce a small Throttle helper/service (e.g., `ThrottlePerKey(key, interval, action)`).
+  - [x] Replace ad-hoc per-PID throttle dictionaries in PlayOnlineMonitorService.
   - [ ] Use for any fallback window enumeration in ProcessManagementService.
 - [ ] Event model and thread marshalling
-  - [ ] Introduce an `IUiDispatcher` abstraction with `Invoke/BeginInvoke`.
-  - [ ] Update services (ProcessManagementService, PlayOnlineMonitorService) to use it, avoiding direct `Application.Current` references.
+  - [x] Introduce an `IUiDispatcher` abstraction with `Invoke/BeginInvoke`.
+  - [ ] Update services (ProcessManagementService, PlayOnlineMonitorService) to use it, avoiding direct `Application.Current` references. (PlayOnlineMonitorService done; ProcessManagementService pending)
 - [ ] Avoid fire-and-forget `Task.Run`
   - [ ] Replace with explicit async handlers or background worker/queue; ensure try/catch with logging where fire-and-forget remains.
 - [ ] Cancellation and disposal
@@ -26,8 +26,8 @@ Track progress here. Check items as we complete them, and add new items as neede
 - [ ] Clarify update pathways
   - [ ] Document global vs per-PID update flows and ensure event handlers use per-PID path only.
 - [ ] Consolidate title updates
-  - [ ] Extract `UpdateTitleIfChanged` helper to update and raise `CharacterUpdated`.
-  - [ ] Centralize UI-thread dispatch for all `CharacterUpdated` raises.
+  - [x] Extract `UpdateTitleIfChanged` helper to update and raise `CharacterUpdated`.
+  - [x] Centralize UI-thread dispatch for all `CharacterUpdated` raises.
 - [ ] Reduce redundant refresh
   - [ ] After per-PID updates, consider marking that PID as fresh to skip next global refresh (optional).
 
