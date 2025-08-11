@@ -30,9 +30,9 @@ namespace FFXIManager.Services
     {
         private readonly ILoggingService _loggingService;
         private readonly IProcessManagementService _processManagementService;
+        private readonly IUiDispatcher _uiDispatcher;
         private readonly List<PlayOnlineCharacter> _characters = new();
         private readonly object _lockObject = new();
-        private readonly Dictionary<int, DateTime> _lastTitleRefreshByPid = new();
         private static readonly TimeSpan TitleRefreshThrottle = TimeSpan.FromSeconds(1);
         private bool _isMonitoring;
         private bool _disposed;
@@ -45,10 +45,11 @@ namespace FFXIManager.Services
         public event EventHandler<PlayOnlineCharacter>? CharacterUpdated;
         public event EventHandler<int>? CharacterRemoved;
 
-        public PlayOnlineMonitorService(ILoggingService loggingService, IProcessManagementService processManagementService)
+        public PlayOnlineMonitorService(ILoggingService loggingService, IProcessManagementService processManagementService, IUiDispatcher uiDispatcher)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _processManagementService = processManagementService ?? throw new ArgumentNullException(nameof(processManagementService));
+            _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
             
             // Subscribe to global process events
             _processManagementService.ProcessDetected += OnProcessDetected;
@@ -239,7 +240,7 @@ namespace FFXIManager.Services
             if (!_isMonitoring || !IsTargetProcess(processInfo)) return;
 
             // Use the periodic process update as a safe fallback to refresh titles
-            System.Windows.Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+            _uiDispatcher.BeginInvoke(() =>
             {
                 lock (_lockObject)
                 {
@@ -259,14 +260,14 @@ namespace FFXIManager.Services
                         }
                     }
                 }
-            }));
+            });
         }
 
         private void OnWindowTitleChanged(object? sender, WindowTitleChangedEventArgs e)
         {
             if (!_isMonitoring) return;
             // Update on UI thread to ensure WPF binding receives notifications safely
-            System.Windows.Application.Current?.Dispatcher?.BeginInvoke(new Action(async () =>
+            _uiDispatcher.BeginInvoke(async () =>
             {
                 PlayOnlineCharacter? updated = null;
                 lock (_lockObject)
@@ -300,21 +301,11 @@ namespace FFXIManager.Services
                 }
 
                 // Throttled fallback: refresh characters for this PID to align handles/titles
-                bool shouldRefresh = false;
-                lock (_lockObject)
-                {
-                    var now = DateTime.UtcNow;
-                    if (!_lastTitleRefreshByPid.TryGetValue(e.ProcessId, out var last) || now - last > TitleRefreshThrottle)
-                    {
-                        _lastTitleRefreshByPid[e.ProcessId] = now;
-                        shouldRefresh = true;
-                    }
-                }
-                if (shouldRefresh)
+                if (FFXIManager.Utilities.Throttle.ShouldRun($"pid:{e.ProcessId}", TitleRefreshThrottle))
                 {
                     try { await AddOrUpdateCharactersForProcessAsync(e.ProcessId); } catch { }
                 }
-            }));
+            });
         }
 
         private bool IsTargetProcess(ProcessInfo processInfo)

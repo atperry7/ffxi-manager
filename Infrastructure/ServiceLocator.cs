@@ -20,6 +20,7 @@ namespace FFXIManager.Infrastructure
         private static IExternalApplicationService? _externalApplicationService;
         private static IPlayOnlineMonitorService? _playOnlineMonitorService;
         private static IProcessManagementService? _processManagementService;
+        private static IUiDispatcher? _uiDispatcher;
         
         public static ISettingsService SettingsService 
         {
@@ -83,6 +84,15 @@ namespace FFXIManager.Infrastructure
                 return _processManagementService;
             }
         }
+
+        public static IUiDispatcher UiDispatcher
+        {
+            get
+            {
+                _uiDispatcher ??= new WpfUiDispatcher();
+                return _uiDispatcher;
+            }
+        }
         
         public static IExternalApplicationService ExternalApplicationService
         {
@@ -97,7 +107,7 @@ namespace FFXIManager.Infrastructure
         {
             get
             {
-                _playOnlineMonitorService ??= new PlayOnlineMonitorService(LoggingService, ProcessManagementService);
+                _playOnlineMonitorService ??= new PlayOnlineMonitorService(LoggingService, ProcessManagementService, UiDispatcher);
                 return _playOnlineMonitorService;
             }
         }
@@ -150,7 +160,8 @@ namespace FFXIManager.Infrastructure
             INotificationService? notificationService = null,
             IExternalApplicationService? externalApplicationService = null,
             IPlayOnlineMonitorService? playOnlineMonitorService = null,
-            IProcessManagementService? processManagementService = null)
+            IProcessManagementService? processManagementService = null,
+            IUiDispatcher? uiDispatcher = null)
         {
             _settingsService = settingsService;
             _profileService = profileService;
@@ -164,6 +175,7 @@ namespace FFXIManager.Infrastructure
             _externalApplicationService = externalApplicationService;
             _playOnlineMonitorService = playOnlineMonitorService;
             _processManagementService = processManagementService;
+            _uiDispatcher = uiDispatcher;
         }
         
         // For cleanup during testing
@@ -181,6 +193,7 @@ namespace FFXIManager.Infrastructure
             _externalApplicationService = null;
             _playOnlineMonitorService = null;
             _processManagementService = null;
+            _uiDispatcher = null;
         }
     }
 }
