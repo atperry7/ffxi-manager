@@ -76,6 +76,14 @@ namespace FFXIManager.Services
         
         // External applications persistence
         public List<ExternalApplicationData> ExternalApplications { get; set; } = new();
+        
+        // Window state persistence
+        public double MainWindowWidth { get; set; } = 1200; // Increased default width
+        public double MainWindowHeight { get; set; } = 700; // Increased default height
+        public double MainWindowLeft { get; set; } = double.NaN; // NaN = center on screen
+        public double MainWindowTop { get; set; } = double.NaN; // NaN = center on screen
+        public bool MainWindowMaximized { get; set; } = false;
+        public bool RememberWindowPosition { get; set; } = true;
     }
     
     /// <summary>

@@ -137,14 +137,17 @@
                                     Command="{Binding PlayOnlineMonitor.RefreshCharactersCommand}"
                                     Background="#27AE60" Foreground="White"
                                     ToolTip="Refresh Characters"
-                                    Width="25" Height="25" Margin="0,0,5,0"/>
+                                    Width="25" Height="25" Margin="0,0,5,0"
+                                    MinWidth="25" MaxWidth="25" MinHeight="25" MaxHeight="25"/>
                             <Button Content="📱" 
                                     Command="{Binding PlayOnlineMonitor.ShowCharacterMonitorCommand}"
                                     Background="#8E44AD" Foreground="White"
                                     ToolTip="Open Character Monitor Window"
-                                    Width="25" Height="25" Margin="0,0,5,0"/>
+                                    Width="25" Height="25" Margin="0,0,5,0"
+                                    MinWidth="25" MaxWidth="25" MinHeight="25" MaxHeight="25"/>
                             <ToggleButton IsChecked="{Binding PlayOnlineMonitor.IsMonitoring, FallbackValue=True}"
                                           Width="25" Height="25"
+                                          MinWidth="25" MaxWidth="25" MinHeight="25" MaxHeight="25"
                                           ToolTip="Toggle Monitoring">
                                 <ToggleButton.Style>
                                     <Style TargetType="ToggleButton">
@@ -163,8 +166,8 @@
                         </StackPanel>
                     </Grid>
 
-                    <!-- Character List -->
-                    <ItemsControl ItemsSource="{Binding PlayOnlineMonitor.Characters}" MaxHeight="200">
+                    <!-- Character List - Auto height -->
+                    <ItemsControl ItemsSource="{Binding PlayOnlineMonitor.Characters}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border BorderBrush="LightGray" BorderThickness="1" Margin="0,2" Padding="5">
