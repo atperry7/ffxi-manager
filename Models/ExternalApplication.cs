@@ -1,7 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace FFXIManager.Models
@@ -17,11 +18,11 @@ namespace FFXIManager.Models
         private string _workingDirectory = string.Empty;
         private bool _isRunning;
         private DateTime? _lastLaunched;
-        private int _processId;
         private bool _isEnabled = true;
         private string _description = string.Empty;
         private bool _allowMultipleInstances;
         private int _currentInstances;
+        private readonly List<int> _processIds = new();
         
         // Caching for ExecutableExists to reduce file system calls
         private bool? _cachedExecutableExists;
@@ -76,12 +77,6 @@ namespace FFXIManager.Models
             set => SetProperty(ref _lastLaunched, value);
         }
 
-        public int ProcessId
-        {
-            get => _processId;
-            set => SetProperty(ref _processId, value);
-        }
-
         public bool IsEnabled
         {
             get => _isEnabled;
@@ -104,6 +99,57 @@ namespace FFXIManager.Models
         {
             get => _currentInstances;
             set => SetProperty(ref _currentInstances, value);
+        }
+
+        /// <summary>
+        /// List of tracked Process IDs for this application
+        /// </summary>
+        public IReadOnlyList<int> ProcessIds => _processIds;
+
+        /// <summary>
+        /// Replace the entire PID list (keeps notifications consistent)
+        /// </summary>
+        public void SetProcessIds(IEnumerable<int> pids)
+        {
+            var newList = pids.Distinct().Where(pid => pid > 0).ToList();
+            bool changed = !_processIds.SequenceEqual(newList);
+            if (changed)
+            {
+                _processIds.Clear();
+                _processIds.AddRange(newList);
+                CurrentInstances = _processIds.Count;
+                IsRunning = _processIds.Count > 0;
+                OnPropertyChanged(nameof(ProcessIds));
+            }
+        }
+
+        /// <summary>
+        /// Add a PID if not already tracked
+        /// </summary>
+        public bool AddProcessId(int pid)
+        {
+            if (pid <= 0) return false;
+            if (_processIds.Contains(pid)) return false;
+            _processIds.Add(pid);
+            CurrentInstances = _processIds.Count;
+            IsRunning = true;
+            OnPropertyChanged(nameof(ProcessIds));
+            return true;
+        }
+
+        /// <summary>
+        /// Remove a PID if tracked
+        /// </summary>
+        public bool RemoveProcessId(int pid)
+        {
+            var removed = _processIds.Remove(pid);
+            if (removed)
+            {
+                CurrentInstances = _processIds.Count;
+                IsRunning = _processIds.Count > 0;
+                OnPropertyChanged(nameof(ProcessIds));
+            }
+            return removed;
         }
 
         /// <summary>

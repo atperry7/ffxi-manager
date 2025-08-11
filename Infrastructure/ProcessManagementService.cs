@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Management;
 using FFXIManager.Services;
 
 namespace FFXIManager.Infrastructure
@@ -26,6 +27,13 @@ namespace FFXIManager.Infrastructure
         bool IsProcessRunning(int processId);
         void StartGlobalMonitoring(TimeSpan interval);
         void StopGlobalMonitoring();
+        // New unified discovery/tracking API
+        Guid RegisterDiscoveryWatch(DiscoveryFilter filter);
+        void UnregisterDiscoveryWatch(Guid watchId);
+        void TrackPid(int processId);
+        void UntrackPid(int processId);
+        // Event-driven window title changes
+        event EventHandler<WindowTitleChangedEventArgs>? WindowTitleChanged;
         event EventHandler<ProcessInfo>? ProcessDetected;
         event EventHandler<ProcessInfo>? ProcessTerminated;
         event EventHandler<ProcessInfo>? ProcessUpdated;
@@ -61,6 +69,31 @@ namespace FFXIManager.Infrastructure
         public int ProcessId { get; set; }
     }
 
+    public class WindowTitleChangedEventArgs : EventArgs
+    {
+        public int ProcessId { get; init; }
+        public IntPtr WindowHandle { get; init; }
+        public string NewTitle { get; init; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Discovery filter used to scope process discovery.
+    /// Currently supports process-name filtering (case-insensitive).
+    /// </summary>
+    public class DiscoveryFilter
+    {
+        public IEnumerable<string> ProcessNames { get; init; } = Array.Empty<string>();
+    }
+
+    /// <summary>
+    /// Internal registration record for discovery filter
+    /// </summary>
+    internal class DiscoveryWatch
+    {
+        public Guid Id { get; init; }
+        public HashSet<string> ProcessNames { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// Centralized process management service with shared Windows API functionality
     /// Enhanced with Win32Exception handling for process access issues
@@ -74,10 +107,24 @@ namespace FFXIManager.Infrastructure
         private readonly object _lockObject = new();
         private bool _isGlobalMonitoring;
         private bool _disposed;
+
+        // Unified discovery/tracking state
+        private readonly List<DiscoveryWatch> _discoveryWatches = new();
+        private readonly HashSet<int> _explicitTrackedPids = new();
+
+        // WMI watchers for process start/stop
+        private ManagementEventWatcher? _processStartWatcher;
+        private ManagementEventWatcher? _processStopWatcher;
+
+        // WinEvent hook for window title changes
+        private IntPtr _winEventHookHandle = IntPtr.Zero;
+        private WinEventDelegate? _winEventCallback;
+        private readonly Dictionary<IntPtr, string> _lastWindowTitles = new();
         
         private const int DEFAULT_TIMEOUT_MS = 5000;
         private const int GLOBAL_MONITOR_INTERVAL_MS = 2000; // Centralized polling interval
 
+        public event EventHandler<WindowTitleChangedEventArgs>? WindowTitleChanged;
         public event EventHandler<ProcessInfo>? ProcessDetected;
         public event EventHandler<ProcessInfo>? ProcessTerminated;
         public event EventHandler<ProcessInfo>? ProcessUpdated;
@@ -135,14 +182,70 @@ namespace FFXIManager.Infrastructure
         [DllImport("user32.dll")]
         private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
 
+        // WinEvent hook imports
+        private delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+
+        [DllImport("user32.dll")]
+        private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
+
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
         private const int SW_RESTORE = 9;
         private const int SW_SHOW = 5;
 
+        // WinEvent constants
+        private const uint EVENT_OBJECT_NAMECHANGE = 0x800C;
+        private const int OBJID_WINDOW = 0;
+        private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
+        private const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
+
         #endregion
 
         #region Public Interface
+
+        public Guid RegisterDiscoveryWatch(DiscoveryFilter filter)
+        {
+            if (filter == null) throw new ArgumentNullException(nameof(filter));
+            var id = Guid.NewGuid();
+            lock (_lockObject)
+            {
+                _discoveryWatches.Add(new DiscoveryWatch
+                {
+                    Id = id,
+                    ProcessNames = new HashSet<string>(filter.ProcessNames ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase)
+                });
+            }
+            return id;
+        }
+
+        public void UnregisterDiscoveryWatch(Guid watchId)
+        {
+            lock (_lockObject)
+            {
+                var idx = _discoveryWatches.FindIndex(w => w.Id == watchId);
+                if (idx >= 0) _discoveryWatches.RemoveAt(idx);
+            }
+        }
+
+        public void TrackPid(int processId)
+        {
+            if (processId <= 0) return;
+            lock (_lockObject)
+            {
+                _explicitTrackedPids.Add(processId);
+            }
+        }
+
+        public void UntrackPid(int processId)
+        {
+            lock (_lockObject)
+            {
+                _explicitTrackedPids.Remove(processId);
+            }
+        }
 
         public async Task<List<ProcessInfo>> GetProcessesByNamesAsync(IEnumerable<string> processNames)
         {
@@ -425,6 +528,8 @@ namespace FFXIManager.Infrastructure
                     _isGlobalMonitoring = true;
                     var intervalMs = Math.Max((int)interval.TotalMilliseconds, 1000); // Minimum 1 second
                     _globalMonitoringTimer?.Change(0, intervalMs);
+                    StartWmiWatchers();
+                    StartWinEventHook();
                     _loggingService.LogInfoAsync("Started global process monitoring", "ProcessManagementService");
                 }
             }
@@ -438,6 +543,8 @@ namespace FFXIManager.Infrastructure
                 {
                     _isGlobalMonitoring = false;
                     _globalMonitoringTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                    StopWmiWatchers();
+                    StopWinEventHook();
                     _loggingService.LogInfoAsync("Stopped global process monitoring", "ProcessManagementService");
                 }
             }
@@ -662,14 +769,46 @@ namespace FFXIManager.Infrastructure
             
             try
             {
-                // Get subset of processes instead of all processes to reduce Win32Exception frequency
-                // Focus on common process names that we're likely monitoring
-                var targetProcessNames = new[] { "pol", "ffxi", "PlayOnlineViewer", "Windower", "POLProxy", "Silmaril" };
+                // Build discovery set = union of registered names + legacy defaults (for backward compatibility)
+                HashSet<string> targetProcessNames;
+                lock (_lockObject)
+                {
+                    targetProcessNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        // Legacy defaults to preserve previous behavior
+                        "pol", "ffxi", "PlayOnlineViewer", "Windower", "POLProxy", "Silmaril"
+                    };
+                    foreach (var w in _discoveryWatches)
+                    {
+                        foreach (var n in w.ProcessNames)
+                            targetProcessNames.Add(n);
+                    }
+                }
+
                 var relevantProcesses = await GetProcessesByNamesAsync(targetProcessNames);
                 
                 foreach (var proc in relevantProcesses)
                 {
                     currentProcesses[proc.ProcessId] = proc;
+                }
+
+                // Ensure explicitly tracked PIDs are included even if not in discovery set
+                List<int> trackedPids;
+                lock (_lockObject)
+                {
+                    trackedPids = _explicitTrackedPids.ToList();
+                }
+
+                foreach (var pid in trackedPids)
+                {
+                    if (!currentProcesses.ContainsKey(pid))
+                    {
+                        var pi = await GetProcessByIdAsync(pid);
+                        if (pi != null)
+                        {
+                            currentProcesses[pi.ProcessId] = pi;
+                        }
+                    }
                 }
 
                 // Check for new processes
@@ -717,6 +856,260 @@ namespace FFXIManager.Infrastructure
                 await _loggingService.LogErrorAsync("Error updating tracked processes", ex, 
                     "ProcessManagementService");
             }
+        }
+
+        #endregion
+
+        #region WinEvent Hook (Window Title Changes)
+
+        private void StartWinEventHook()
+        {
+            try
+            {
+                if (_winEventHookHandle != IntPtr.Zero) return;
+                _winEventCallback = OnWinEvent;
+                _winEventHookHandle = SetWinEventHook(
+                    EVENT_OBJECT_NAMECHANGE,
+                    EVENT_OBJECT_NAMECHANGE,
+                    IntPtr.Zero,
+                    _winEventCallback,
+                    0,
+                    0,
+                    WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+                if (_winEventHookHandle == IntPtr.Zero)
+                {
+                    _ = _loggingService.LogWarningAsync("Failed to set WinEvent hook for name changes", "ProcessManagementService");
+                }
+                else
+                {
+                    _ = _loggingService.LogInfoAsync("WinEvent hook started", "ProcessManagementService");
+                }
+            }
+            catch (Exception ex)
+            {
+                _ = _loggingService.LogWarningAsync($"Exception starting WinEvent hook: {ex.Message}", "ProcessManagementService");
+            }
+        }
+
+        private void StopWinEventHook()
+        {
+            try
+            {
+                if (_winEventHookHandle != IntPtr.Zero)
+                {
+                    UnhookWinEvent(_winEventHookHandle);
+                    _winEventHookHandle = IntPtr.Zero;
+                    _winEventCallback = null;
+                }
+                lock (_lockObject)
+                {
+                    _lastWindowTitles.Clear();
+                }
+            }
+            catch { }
+        }
+
+        private void OnWinEvent(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
+        {
+            try
+            {
+                if (eventType != EVENT_OBJECT_NAMECHANGE) return;
+                if (idObject != OBJID_WINDOW) return;
+                if (hwnd == IntPtr.Zero) return;
+
+                // Filter by tracked PIDs if possible
+                uint pid;
+                GetWindowThreadProcessId(hwnd, out pid);
+
+                bool shouldProcess = false;
+                lock (_lockObject)
+                {
+                    if (_explicitTrackedPids.Contains((int)pid))
+                    {
+                        shouldProcess = true;
+                    }
+                    else if (_trackedProcesses.ContainsKey((int)pid))
+                    {
+                        shouldProcess = true;
+                    }
+                }
+
+                if (!shouldProcess) return;
+
+                var title = GetWindowTitle(hwnd);
+                if (string.IsNullOrEmpty(title)) return;
+
+                bool changed = false;
+                lock (_lockObject)
+                {
+                    if (!_lastWindowTitles.TryGetValue(hwnd, out var last) || !string.Equals(last, title, StringComparison.Ordinal))
+                    {
+                        _lastWindowTitles[hwnd] = title;
+                        changed = true;
+                    }
+                }
+
+                if (!changed) return;
+
+                var args = new WindowTitleChangedEventArgs
+                {
+                    ProcessId = (int)pid,
+                    WindowHandle = hwnd,
+                    NewTitle = title
+                };
+                WindowTitleChanged?.Invoke(this, args);
+            }
+            catch { }
+        }
+
+        #endregion
+
+        #region WMI Watchers
+
+        private void StartWmiWatchers()
+        {
+            try
+            {
+                // Creation watcher
+                var creationQuery = new WqlEventQuery
+                {
+                    EventClassName = "__InstanceCreationEvent",
+                    WithinInterval = TimeSpan.FromSeconds(1),
+                    Condition = "TargetInstance ISA 'Win32_Process'"
+                };
+                _processStartWatcher = new ManagementEventWatcher(new ManagementScope("root\\CIMV2"), creationQuery);
+                _processStartWatcher.EventArrived += OnProcessCreated;
+                _processStartWatcher.Start();
+
+                // Deletion watcher
+                var deletionQuery = new WqlEventQuery
+                {
+                    EventClassName = "__InstanceDeletionEvent",
+                    WithinInterval = TimeSpan.FromSeconds(1),
+                    Condition = "TargetInstance ISA 'Win32_Process'"
+                };
+                _processStopWatcher = new ManagementEventWatcher(new ManagementScope("root\\CIMV2"), deletionQuery);
+                _processStopWatcher.EventArrived += OnProcessDeleted;
+                _processStopWatcher.Start();
+
+                _ = _loggingService.LogInfoAsync("WMI process watchers started", "ProcessManagementService");
+            }
+            catch (Exception ex)
+            {
+                _ = _loggingService.LogWarningAsync($"Failed to start WMI watchers: {ex.Message}", "ProcessManagementService");
+                StopWmiWatchers();
+            }
+        }
+
+        private void StopWmiWatchers()
+        {
+            try
+            {
+                if (_processStartWatcher != null)
+                {
+                    _processStartWatcher.EventArrived -= OnProcessCreated;
+                    _processStartWatcher.Stop();
+                    _processStartWatcher.Dispose();
+                    _processStartWatcher = null;
+                }
+                if (_processStopWatcher != null)
+                {
+                    _processStopWatcher.EventArrived -= OnProcessDeleted;
+                    _processStopWatcher.Stop();
+                    _processStopWatcher.Dispose();
+                    _processStopWatcher = null;
+                }
+            }
+            catch
+            {
+                // ignore shutdown errors
+            }
+        }
+
+        private void OnProcessCreated(object sender, EventArrivedEventArgs e)
+        {
+            try
+            {
+                if (!_isGlobalMonitoring) return;
+                var target = e.NewEvent?["TargetInstance"] as ManagementBaseObject;
+                if (target == null) return;
+
+                var nameObj = target["Name"];
+                var pidObj = target["ProcessId"];
+                if (nameObj == null || pidObj == null) return;
+                var name = nameObj.ToString() ?? string.Empty;
+                var pid = Convert.ToInt32((uint)pidObj);
+
+                // Check against discovery set quickly
+                bool interested = false;
+                lock (_lockObject)
+                {
+                    if (_discoveryWatches.Any(w => w.ProcessNames.Contains(name)))
+                    {
+                        interested = true;
+                    }
+                    else
+                    {
+                        // Legacy defaults
+                        interested = name.Equals("pol", StringComparison.OrdinalIgnoreCase) ||
+                                     name.Equals("ffxi", StringComparison.OrdinalIgnoreCase) ||
+                                     name.Equals("PlayOnlineViewer", StringComparison.OrdinalIgnoreCase) ||
+                                     name.Equals("Windower", StringComparison.OrdinalIgnoreCase) ||
+                                     name.Equals("POLProxy", StringComparison.OrdinalIgnoreCase) ||
+                                     name.Equals("Silmaril", StringComparison.OrdinalIgnoreCase);
+                    }
+                }
+
+                if (!interested) return;
+
+                // Build ProcessInfo asynchronously and emit ProcessDetected if new
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        var pi = await GetProcessByIdAsync(pid);
+                        if (pi == null) return;
+                        lock (_lockObject)
+                        {
+                            if (_trackedProcesses.ContainsKey(pid)) return;
+                            _trackedProcesses[pid] = pi;
+                        }
+                        ProcessDetected?.Invoke(this, pi);
+                    }
+                    catch { }
+                });
+            }
+            catch { }
+        }
+
+        private void OnProcessDeleted(object sender, EventArrivedEventArgs e)
+        {
+            try
+            {
+                if (!_isGlobalMonitoring) return;
+                var target = e.NewEvent?["TargetInstance"] as ManagementBaseObject;
+                if (target == null) return;
+
+                var pidObj = target["ProcessId"];
+                if (pidObj == null) return;
+                var pid = Convert.ToInt32((uint)pidObj);
+
+                ProcessInfo? removed = null;
+                lock (_lockObject)
+                {
+                    if (_trackedProcesses.TryGetValue(pid, out var pi))
+                    {
+                        removed = pi;
+                        _trackedProcesses.Remove(pid);
+                    }
+                }
+
+                if (removed != null)
+                {
+                    ProcessTerminated?.Invoke(this, removed);
+                }
+            }
+            catch { }
         }
 
         #endregion

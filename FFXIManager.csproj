@@ -1,5 +1,5 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
+  
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
@@ -8,6 +8,10 @@
     <UseWPF>true</UseWPF>
     <ApplicationIcon>ffxi-manager.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Management" Version="9.0.0" />
+  </ItemGroup>
 
   <ItemGroup>
     <Content Include="ffxi-manager.ico" />

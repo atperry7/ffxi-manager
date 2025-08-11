@@ -118,13 +118,13 @@
                                                 <Trigger Property="IsMouseOver" Value="True">
                                                     <Setter Property="Background" Value="{StaticResource SuccessHoverBrush}"/>
                                                 </Trigger>
-                                                <MultiTrigger>
-                                                    <MultiTrigger.Conditions>
-                                                        <Condition Property="IsMouseOver" Value="True"/>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/>
                                                         <Condition Binding="{Binding IsActive}" Value="True"/>
-                                                    </MultiTrigger.Conditions>
+                                                    </MultiDataTrigger.Conditions>
                                                     <Setter Property="Background" Value="{StaticResource PrimaryHoverBrush}"/>
-                                                </MultiTrigger>
+                                                </MultiDataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </Button.Style>

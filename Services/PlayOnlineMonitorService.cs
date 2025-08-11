@@ -32,11 +32,14 @@ namespace FFXIManager.Services
         private readonly IProcessManagementService _processManagementService;
         private readonly List<PlayOnlineCharacter> _characters = new();
         private readonly object _lockObject = new();
+        private readonly Dictionary<int, DateTime> _lastTitleRefreshByPid = new();
+        private static readonly TimeSpan TitleRefreshThrottle = TimeSpan.FromSeconds(1);
         private bool _isMonitoring;
         private bool _disposed;
 
         // Target process names for PlayOnline/FFXI monitoring
         private readonly string[] _targetProcessNames = { "pol", "ffxi", "PlayOnlineViewer" };
+        private Guid? _discoveryWatchId;
 
         public event EventHandler<PlayOnlineCharacter>? CharacterDetected;
         public event EventHandler<PlayOnlineCharacter>? CharacterUpdated;
@@ -51,6 +54,7 @@ namespace FFXIManager.Services
             _processManagementService.ProcessDetected += OnProcessDetected;
             _processManagementService.ProcessTerminated += OnProcessTerminated;
             _processManagementService.ProcessUpdated += OnProcessUpdated;
+            _processManagementService.WindowTitleChanged += OnWindowTitleChanged;
         }
 
         public async Task<List<PlayOnlineCharacter>> GetRunningCharactersAsync()
@@ -149,8 +153,21 @@ namespace FFXIManager.Services
             {
                 _isMonitoring = true;
                 
+                // Register discovery for PlayOnline/FFXI processes
+                try
+                {
+                    _discoveryWatchId = _processManagementService.RegisterDiscoveryWatch(new DiscoveryFilter
+                    {
+                        ProcessNames = _targetProcessNames
+                    });
+                }
+                catch { }
+                
                 // Start global monitoring if not already started
                 _processManagementService.StartGlobalMonitoring(TimeSpan.FromSeconds(3));
+
+                // Start lightweight title refresh timer
+                // Title changes will be driven by WindowTitleChanged event; fallback timer not required.
                 
                 _loggingService.LogInfoAsync("Started PlayOnline character monitoring", "PlayOnlineMonitorService");
             }
@@ -161,6 +178,16 @@ namespace FFXIManager.Services
             if (_isMonitoring)
             {
                 _isMonitoring = false;
+                try
+                {
+                    if (_discoveryWatchId.HasValue)
+                    {
+                        _processManagementService.UnregisterDiscoveryWatch(_discoveryWatchId.Value);
+                        _discoveryWatchId = null;
+                    }
+                }
+                catch { }
+                // No timer cleanup needed if not used
                 _loggingService.LogInfoAsync("Stopped PlayOnline character monitoring", "PlayOnlineMonitorService");
             }
         }
@@ -170,12 +197,15 @@ namespace FFXIManager.Services
         private void OnProcessDetected(object? sender, ProcessInfo processInfo)
         {
             if (!_isMonitoring || !IsTargetProcess(processInfo)) return;
-            
+
+            // Explicitly track this PID for faster updates
+            try { _processManagementService.TrackPid(processInfo.ProcessId); } catch { }
+
             Task.Run(async () =>
             {
                 try
                 {
-                    await RefreshCharacterDataAsync();
+                    await AddOrUpdateCharactersForProcessAsync(processInfo.ProcessId);
                 }
                 catch (Exception ex)
                 {
@@ -187,6 +217,8 @@ namespace FFXIManager.Services
         private void OnProcessTerminated(object? sender, ProcessInfo processInfo)
         {
             if (!IsTargetProcess(processInfo)) return;
+
+            try { _processManagementService.UntrackPid(processInfo.ProcessId); } catch { }
 
             lock (_lockObject)
             {
@@ -206,27 +238,83 @@ namespace FFXIManager.Services
         {
             if (!_isMonitoring || !IsTargetProcess(processInfo)) return;
 
-            lock (_lockObject)
+            // Use the periodic process update as a safe fallback to refresh titles
+            System.Windows.Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
             {
-                var existingCharacters = _characters
-                    .Where(c => c.ProcessId == processInfo.ProcessId)
-                    .ToList();
-
-                foreach (var character in existingCharacters)
+                lock (_lockObject)
                 {
-                    character.LastSeen = processInfo.LastSeen;
-                    
-                    // Update window information if needed
-                    var matchingWindow = processInfo.Windows
-                        .FirstOrDefault(w => w.Handle == character.WindowHandle);
-                    
-                    if (matchingWindow != null)
+                    var existingCharacters = _characters
+                        .Where(c => c.ProcessId == processInfo.ProcessId)
+                        .ToList();
+
+                    foreach (var character in existingCharacters)
                     {
-                        character.WindowTitle = matchingWindow.Title;
-                        CharacterUpdated?.Invoke(this, character);
+                        character.LastSeen = processInfo.LastSeen;
+
+                        var matchingWindow = processInfo.Windows.FirstOrDefault(w => w.Handle == character.WindowHandle);
+                        if (matchingWindow != null && !string.Equals(matchingWindow.Title, character.WindowTitle, StringComparison.Ordinal))
+                        {
+                            character.WindowTitle = matchingWindow.Title;
+                            CharacterUpdated?.Invoke(this, character);
+                        }
                     }
                 }
-            }
+            }));
+        }
+
+        private void OnWindowTitleChanged(object? sender, WindowTitleChangedEventArgs e)
+        {
+            if (!_isMonitoring) return;
+            // Update on UI thread to ensure WPF binding receives notifications safely
+            System.Windows.Application.Current?.Dispatcher?.BeginInvoke(new Action(async () =>
+            {
+                PlayOnlineCharacter? updated = null;
+                lock (_lockObject)
+                {
+                    // First try exact window handle match
+                    updated = _characters.FirstOrDefault(c => c.ProcessId == e.ProcessId && c.WindowHandle == e.WindowHandle);
+                    
+                    if (updated != null)
+                    {
+                        if (!string.Equals(updated.WindowTitle, e.NewTitle, StringComparison.Ordinal))
+                        {
+                            updated.WindowTitle = e.NewTitle;
+                            CharacterUpdated?.Invoke(this, updated);
+                        }
+                        return;
+                    }
+
+                    // No exact handle match. Try to map by PID if there's a single character for this PID
+                    var byPid = _characters.Where(c => c.ProcessId == e.ProcessId).ToList();
+                    if (byPid.Count == 1)
+                    {
+                        updated = byPid[0];
+                        if (updated.WindowHandle != e.WindowHandle || !string.Equals(updated.WindowTitle, e.NewTitle, StringComparison.Ordinal))
+                        {
+                            updated.WindowHandle = e.WindowHandle;
+                            updated.WindowTitle = e.NewTitle;
+                            CharacterUpdated?.Invoke(this, updated);
+                        }
+                        return;
+                    }
+                }
+
+                // Throttled fallback: refresh characters for this PID to align handles/titles
+                bool shouldRefresh = false;
+                lock (_lockObject)
+                {
+                    var now = DateTime.UtcNow;
+                    if (!_lastTitleRefreshByPid.TryGetValue(e.ProcessId, out var last) || now - last > TitleRefreshThrottle)
+                    {
+                        _lastTitleRefreshByPid[e.ProcessId] = now;
+                        shouldRefresh = true;
+                    }
+                }
+                if (shouldRefresh)
+                {
+                    try { await AddOrUpdateCharactersForProcessAsync(e.ProcessId); } catch { }
+                }
+            }));
         }
 
         private bool IsTargetProcess(ProcessInfo processInfo)
@@ -234,20 +322,104 @@ namespace FFXIManager.Services
             return _targetProcessNames.Contains(processInfo.ProcessName, StringComparer.OrdinalIgnoreCase);
         }
 
+        private async Task AddOrUpdateCharactersForProcessAsync(int processId)
+        {
+            try
+            {
+                var processInfo = await _processManagementService.GetProcessByIdAsync(processId);
+                if (processInfo == null) return;
+
+                var newCharacters = new List<PlayOnlineCharacter>();
+                foreach (var window in processInfo.Windows)
+                {
+                    var ch = CreateCharacterFromWindow(window, processInfo);
+                    if (ch != null) newCharacters.Add(ch);
+                }
+
+                await UpdateCharacterListForProcessAsync(processId, newCharacters);
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogDebugAsync($"Error updating characters for PID {processId}: {ex.Message}", "PlayOnlineMonitorService");
+            }
+        }
+
+        private async Task UpdateCharacterListForProcessAsync(int processId, List<PlayOnlineCharacter> newCharacters)
+        {
+            if (_disposed) return;
+
+            var added = new List<PlayOnlineCharacter>();
+            var updated = new List<PlayOnlineCharacter>();
+            var removed = new List<int>();
+
+            lock (_lockObject)
+            {
+                // Add or update characters for this process only
+                foreach (var newChar in newCharacters)
+                {
+                    var existing = _characters.Find(c => c.ProcessId == newChar.ProcessId && c.WindowHandle == newChar.WindowHandle);
+                    if (existing == null)
+                    {
+                        _characters.Add(newChar);
+                        added.Add(newChar);
+                    }
+                    else
+                    {
+                        bool hasChanges = false;
+                        if (existing.WindowTitle != newChar.WindowTitle)
+                        {
+                            existing.WindowTitle = newChar.WindowTitle;
+                            hasChanges = true;
+                        }
+                        existing.LastSeen = newChar.LastSeen;
+                        if (hasChanges)
+                        {
+                            updated.Add(existing);
+                        }
+                    }
+                }
+
+                // Remove characters for this process that are no longer present
+                var existingForPid = _characters.Where(c => c.ProcessId == processId).ToList();
+                foreach (var existing in existingForPid)
+                {
+                    var stillExists = newCharacters.Any(c => c.ProcessId == existing.ProcessId && c.WindowHandle == existing.WindowHandle);
+                    if (!stillExists)
+                    {
+                        removed.Add(existing.ProcessId);
+                        _characters.Remove(existing);
+                    }
+                }
+            }
+
+            // Fire events
+            foreach (var character in added)
+            {
+                CharacterDetected?.Invoke(this, character);
+                await _loggingService.LogInfoAsync($"New character detected: {character.DisplayName}", "PlayOnlineMonitorService");
+            }
+            foreach (var character in updated)
+            {
+                CharacterUpdated?.Invoke(this, character);
+            }
+            foreach (var pid in removed.Distinct())
+            {
+                CharacterRemoved?.Invoke(this, pid);
+                await _loggingService.LogInfoAsync($"Character removed: Process {pid}", "PlayOnlineMonitorService");
+            }
+        }
+
         private PlayOnlineCharacter? CreateCharacterFromWindow(WindowInfo window, ProcessInfo processInfo)
         {
             try
             {
-                // Parse character name from window title
-                var (characterName, serverName) = ParseCharacterFromTitle(window.Title);
-                
                 var character = new PlayOnlineCharacter
                 {
                     ProcessId = processInfo.ProcessId,
                     WindowHandle = window.Handle,
                     WindowTitle = window.Title,
-                    CharacterName = characterName,
-                    ServerName = serverName,
+                    CharacterName = string.Empty,
+                    ServerName = string.Empty,
                     ProcessName = processInfo.ProcessName,
                     LastSeen = processInfo.LastSeen
                 };
@@ -261,70 +433,6 @@ namespace FFXIManager.Services
             }
         }
 
-        private (string CharacterName, string ServerName) ParseCharacterFromTitle(string windowTitle)
-        {
-            var characterName = string.Empty;
-            var serverName = string.Empty;
-
-            if (string.IsNullOrEmpty(windowTitle))
-                return (characterName, serverName);
-
-            try
-            {
-                // Remove common prefixes first
-                var title = windowTitle
-                    .Replace("FINAL FANTASY XI - ", "")
-                    .Replace("PlayOnline Viewer - ", "")
-                    .Replace("FFXI - ", "")
-                    .Trim();
-
-                // Look for pattern: [Character] - [Server]
-                if (title.Contains(" - "))
-                {
-                    var parts = title.Split(" - ", StringSplitOptions.RemoveEmptyEntries);
-                    
-                    if (parts.Length >= 2)
-                    {
-                        characterName = parts[0].Trim();
-                        serverName = parts[1].Trim();
-                        
-                        // Handle cases where server name might be "PlayOnline" or similar
-                        if (serverName.Equals("PlayOnline", StringComparison.OrdinalIgnoreCase) ||
-                            serverName.Equals("Viewer", StringComparison.OrdinalIgnoreCase))
-                        {
-                            serverName = string.Empty;
-                        }
-                    }
-                    else if (parts.Length == 1)
-                    {
-                        characterName = parts[0].Trim();
-                    }
-                }
-                else
-                {
-                    // No " - " separator, assume entire title is character name
-                    characterName = title;
-                }
-
-                // Clean up bracketed names [CharacterName] -> CharacterName
-                characterName = characterName.Trim('[', ']', ' ');
-                serverName = serverName.Trim('[', ']', ' ');
-
-                // If character name is still empty, use the window title
-                if (string.IsNullOrEmpty(characterName))
-                {
-                    characterName = windowTitle;
-                }
-            }
-            catch (Exception ex)
-            {
-                // If parsing fails, just use the window title as character name
-                characterName = windowTitle;
-                System.Diagnostics.Debug.WriteLine($"Error parsing window title '{windowTitle}': {ex.Message}");
-            }
-
-            return (characterName, serverName);
-        }
 
         private async Task UpdateCharacterListAsync(List<PlayOnlineCharacter> newCharacters)
         {
@@ -336,7 +444,7 @@ namespace FFXIManager.Services
 
             lock (_lockObject)
             {
-                // Find new characters
+                // Find new characters (global refresh)
                 foreach (var newChar in newCharacters)
                 {
                     var existing = _characters.Find(c => c.ProcessId == newChar.ProcessId && c.WindowHandle == newChar.WindowHandle);
@@ -355,18 +463,6 @@ namespace FFXIManager.Services
                             existing.WindowTitle = newChar.WindowTitle;
                             hasChanges = true;
                         }
-                        
-                        if (existing.CharacterName != newChar.CharacterName)
-                        {
-                            existing.CharacterName = newChar.CharacterName;
-                            hasChanges = true;
-                        }
-                        
-                        if (existing.ServerName != newChar.ServerName)
-                        {
-                            existing.ServerName = newChar.ServerName;
-                            hasChanges = true;
-                        }
 
                         existing.LastSeen = newChar.LastSeen;
                         
@@ -377,7 +473,7 @@ namespace FFXIManager.Services
                     }
                 }
 
-                // Find removed characters
+                // Find removed characters across all processes (global refresh)
                 for (int i = _characters.Count - 1; i >= 0; i--)
                 {
                     var existing = _characters[i];
@@ -398,7 +494,7 @@ namespace FFXIManager.Services
                 await _loggingService.LogInfoAsync($"New character detected: {character.DisplayName}", "PlayOnlineMonitorService");
             }
 
-            foreach (var character in updated.Where(c => !string.IsNullOrEmpty(c.CharacterName)))
+            foreach (var character in updated)
             {
                 CharacterUpdated?.Invoke(this, character);
             }
@@ -412,6 +508,8 @@ namespace FFXIManager.Services
 
         #endregion
 
+        // Event-driven title updates handled by OnWindowTitleChanged
+
         public void Dispose()
         {
             if (_disposed) return;
@@ -423,6 +521,7 @@ namespace FFXIManager.Services
             _processManagementService.ProcessDetected -= OnProcessDetected;
             _processManagementService.ProcessTerminated -= OnProcessTerminated;
             _processManagementService.ProcessUpdated -= OnProcessUpdated;
+            _processManagementService.WindowTitleChanged -= OnWindowTitleChanged;
         }
     }
 }

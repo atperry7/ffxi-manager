@@ -31,7 +31,7 @@ namespace FFXIManager.Services
     /// Service for managing and monitoring external applications
     /// Uses shared ProcessManagementService for unified process handling
     /// </summary>
-    public class ExternalApplicationService : IExternalApplicationService, IDisposable
+public class ExternalApplicationService : IExternalApplicationService, IDisposable
     {
         private readonly ILoggingService _loggingService;
         private readonly ISettingsService _settingsService;
@@ -116,7 +116,7 @@ namespace FFXIManager.Services
             await SaveApplicationsToSettings();
         }
 
-        public async Task<bool> LaunchApplicationAsync(ExternalApplication application)
+public async Task<bool> LaunchApplicationAsync(ExternalApplication application)
         {
             if (application == null)
                 throw new ArgumentNullException(nameof(application));
@@ -150,9 +150,11 @@ namespace FFXIManager.Services
                 var process = Process.Start(startInfo);
                 if (process != null)
                 {
-                    application.ProcessId = process.Id;
+                    application.AddProcessId(process.Id);
                     application.LastLaunched = DateTime.Now;
-                    application.IsRunning = true;
+
+                    // Explicitly track the new PID for faster updates
+                    _processManagementService.TrackPid(process.Id);
                     
                     lock (_lockObject)
                     {
@@ -177,7 +179,7 @@ namespace FFXIManager.Services
             }
         }
 
-        public async Task<bool> KillApplicationAsync(ExternalApplication application)
+public async Task<bool> KillApplicationAsync(ExternalApplication application)
         {
             if (application == null || !application.IsRunning)
                 return false;
@@ -186,26 +188,45 @@ namespace FFXIManager.Services
 
             try
             {
-                var oldProcessId = application.ProcessId;
-                
-                // Use shared process management service for killing processes
-                bool success = await _processManagementService.KillProcessAsync(application.ProcessId, 5000);
-                
-                if (success)
+                bool anyFailed = false;
+                List<int> pids;
+                lock (_lockObject)
                 {
-                    application.IsRunning = false;
-                    application.ProcessId = 0;
-                    
-                    lock (_lockObject)
+                    pids = application.ProcessIds.ToList();
+                }
+
+                foreach (var pid in pids)
+                {
+                    try
                     {
-                        _processToAppMap.Remove(oldProcessId);
+                        bool success = await _processManagementService.KillProcessAsync(pid, 5000);
+                        if (success)
+                        {
+                            lock (_lockObject)
+                            {
+                                _processToAppMap.Remove(pid);
+                            }
+                            _processManagementService.UntrackPid(pid);
+                            application.RemoveProcessId(pid);
+                        }
+                        else
+                        {
+                            anyFailed = true;
+                        }
                     }
-                    
+                    catch
+                    {
+                        anyFailed = true;
+                    }
+                }
+
+                if (!application.ProcessIds.Any())
+                {
                     await _loggingService.LogInfoAsync($"Successfully killed {application.Name}", "ExternalApplicationService");
                     ApplicationStatusChanged?.Invoke(this, application);
                 }
-                
-                return success;
+
+                return !anyFailed;
             }
             catch (Exception ex)
             {
@@ -230,7 +251,7 @@ namespace FFXIManager.Services
             }
         }
 
-        public async Task RefreshApplicationStatusAsync(ExternalApplication application)
+public async Task RefreshApplicationStatusAsync(ExternalApplication application)
         {
             if (application == null) return;
 
@@ -239,8 +260,7 @@ namespace FFXIManager.Services
                 // Skip if executable path is empty or invalid
                 if (string.IsNullOrWhiteSpace(application.ExecutablePath))
                 {
-                    application.IsRunning = false;
-                    application.ProcessId = 0;
+                    application.SetProcessIds(Array.Empty<int>());
                     application.CurrentInstances = 0;
                     return;
                 }
@@ -250,64 +270,49 @@ namespace FFXIManager.Services
                 // Skip process check if we can't get a valid process name
                 if (string.IsNullOrWhiteSpace(processName))
                 {
-                    application.IsRunning = false;
-                    application.ProcessId = 0;
+                    application.SetProcessIds(Array.Empty<int>());
                     application.CurrentInstances = 0;
                     return;
                 }
 
                 var wasRunning = application.IsRunning;
-                var oldProcessId = application.ProcessId;
                 
                 // Use shared process management service to get processes
                 var processes = await _processManagementService.GetProcessesByNamesAsync(new[] { processName });
-                
-                // Check if our specific tracked process is still running
-                bool isOurProcessRunning = false;
-                if (application.ProcessId > 0)
+                var discoveredPids = processes.Select(p => p.ProcessId).ToList();
+
+                // Sync PID list and map
+                List<int> previousPids;
+                lock (_lockObject)
                 {
-                    isOurProcessRunning = _processManagementService.IsProcessRunning(application.ProcessId);
+                    previousPids = application.ProcessIds.ToList();
                 }
 
-                // Update the running status based on our tracked process or any running instance
-                bool hasRunningInstances = processes.Count > 0;
-                
-                if (application.ProcessId > 0 && !isOurProcessRunning)
+                var removed = previousPids.Except(discoveredPids).ToList();
+                var added = discoveredPids.Except(previousPids).ToList();
+
+                foreach (var pid in removed)
                 {
-                    // Our specific process has stopped
-                    application.IsRunning = false;
                     lock (_lockObject)
                     {
-                        _processToAppMap.Remove(oldProcessId);
+                        _processToAppMap.Remove(pid);
                     }
-                    application.ProcessId = 0;
-                }
-                else if (hasRunningInstances && !application.IsRunning)
-                {
-                    // New instance detected
-                    application.IsRunning = true;
-                    application.ProcessId = processes[0].ProcessId;
-                    lock (_lockObject)
-                    {
-                        _processToAppMap[application.ProcessId] = application;
-                    }
-                }
-                else if (!hasRunningInstances && application.IsRunning)
-                {
-                    // All instances stopped
-                    application.IsRunning = false;
-                    if (oldProcessId > 0)
-                    {
-                        lock (_lockObject)
-                        {
-                            _processToAppMap.Remove(oldProcessId);
-                        }
-                    }
-                    application.ProcessId = 0;
+                    _processManagementService.UntrackPid(pid);
+                    application.RemoveProcessId(pid);
                 }
 
-                // Update current instances count
-                application.CurrentInstances = processes.Count;
+                foreach (var pid in added)
+                {
+                    lock (_lockObject)
+                    {
+                        _processToAppMap[pid] = application;
+                    }
+                    _processManagementService.TrackPid(pid);
+                    application.AddProcessId(pid);
+                }
+
+                // Ensure CurrentInstances reflects processes found
+                application.CurrentInstances = discoveredPids.Count;
 
                 // Only trigger property notifications if status actually changed
                 if (wasRunning != application.IsRunning)
@@ -355,7 +360,7 @@ namespace FFXIManager.Services
 
         #region Process Event Handlers
 
-        private void OnProcessDetected(object? sender, ProcessInfo processInfo)
+private void OnProcessDetected(object? sender, ProcessInfo processInfo)
         {
             if (!_isMonitoring) return;
             
@@ -377,6 +382,16 @@ namespace FFXIManager.Services
 
                     if (matchingApp != null)
                     {
+                        // Map and track this specific PID immediately for responsiveness
+                        lock (_lockObject)
+                        {
+                            _processToAppMap[processInfo.ProcessId] = matchingApp;
+                        }
+                        _processManagementService.TrackPid(processInfo.ProcessId);
+                        matchingApp.AddProcessId(processInfo.ProcessId);
+                        ApplicationStatusChanged?.Invoke(this, matchingApp);
+
+                        // Then reconcile against full process list
                         await RefreshApplicationStatusAsync(matchingApp);
                     }
                 }
@@ -387,7 +402,7 @@ namespace FFXIManager.Services
             });
         }
 
-        private void OnProcessTerminated(object? sender, ProcessInfo processInfo)
+private void OnProcessTerminated(object? sender, ProcessInfo processInfo)
         {
             ExternalApplication? app = null;
             
@@ -402,8 +417,9 @@ namespace FFXIManager.Services
 
             if (app != null)
             {
-                app.IsRunning = false;
-                app.ProcessId = 0;
+                // Remove only the terminated PID and update running state based on remaining instances
+                _processManagementService.UntrackPid(processInfo.ProcessId);
+                app.RemoveProcessId(processInfo.ProcessId);
                 ApplicationStatusChanged?.Invoke(this, app);
             }
         }
