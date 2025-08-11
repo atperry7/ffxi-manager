@@ -8,14 +8,6 @@
     
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
-        <!-- Compact styles for minimal UI -->
-        <Style x:Key="CompactButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="20"/>
-            <Setter Property="FontSize" Value="10"/>
-            <Setter Property="Padding" Value="3,1"/>
-            <Setter Property="Margin" Value="1"/>
-            <Setter Property="BorderThickness" Value="1"/>
-        </Style>
     </Window.Resources>
     
     <Grid>
@@ -43,35 +35,19 @@
                     <ToggleButton x:Name="AlwaysOnTopToggle" 
                                   Content="📌" 
                                   ToolTip="Always On Top"
+                                  Style="{StaticResource IconToggleButton}"
                                   Width="20" Height="20" 
                                   FontSize="9"
                                   Margin="0,0,2,0"
                                   Checked="AlwaysOnTopToggle_Checked"
-                                  Unchecked="AlwaysOnTopToggle_Unchecked">
-                        <ToggleButton.Style>
-                            <Style TargetType="ToggleButton">
-                                <Setter Property="Background" Value="Transparent"/>
-                                <Setter Property="Foreground" Value="White"/>
-                                <Setter Property="BorderBrush" Value="White"/>
-                                <Setter Property="BorderThickness" Value="1"/>
-                                <Style.Triggers>
-                                    <Trigger Property="IsChecked" Value="True">
-                                        <Setter Property="Background" Value="#3498DB"/>
-                                    </Trigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ToggleButton.Style>
-                    </ToggleButton>
+                                  Unchecked="AlwaysOnTopToggle_Unchecked"/>
                     
                     <Button Content="❌" 
                             Click="CloseButton_Click"
                             ToolTip="Close"
+                            Style="{StaticResource DangerIconButton}"
                             Width="20" Height="20"
-                            FontSize="9"
-                            Background="Transparent" 
-                            Foreground="White" 
-                            BorderBrush="White"
-                            BorderThickness="1"/>
+                            FontSize="9"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -119,29 +95,36 @@
                                 <!-- Compact Activate Button -->
                                 <Button Grid.Row="1" 
                                         Margin="0,2,0,0"
-                                        Background="#4CAF50" 
-                                        Foreground="White"
-                                        BorderThickness="0"
-                                        Padding="2"
                                         FontSize="9"
                                         Height="18"
                                         HorizontalAlignment="Stretch"
                                         Command="{Binding DataContext.ActivateCharacterCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                         CommandParameter="{Binding}">
                                     <Button.Style>
-                                        <Style TargetType="Button">
+                                        <Style TargetType="Button" BasedOn="{StaticResource ModernButtonBase}">
                                             <Setter Property="Content" Value="🎯 Switch"/>
-                                            <Setter Property="Background" Value="#4CAF50"/>
+                                            <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
+                                            <Setter Property="Padding" Value="2"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                    <Setter Property="Background" Value="#2196F3"/>
+                                                    <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/>
                                                     <Setter Property="Content" Value="✓ Active"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding IsResponding}" Value="False">
-                                                    <Setter Property="Background" Value="#F44336"/>
+                                                    <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
                                                     <Setter Property="Content" Value="⚠️ Dead"/>
                                                     <Setter Property="IsEnabled" Value="False"/>
                                                 </DataTrigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="{StaticResource SuccessHoverBrush}"/>
+                                                </Trigger>
+                                                <MultiTrigger>
+                                                    <MultiTrigger.Conditions>
+                                                        <Condition Property="IsMouseOver" Value="True"/>
+                                                        <Condition Binding="{Binding IsActive}" Value="True"/>
+                                                    </MultiTrigger.Conditions>
+                                                    <Setter Property="Background" Value="{StaticResource PrimaryHoverBrush}"/>
+                                                </MultiTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </Button.Style>
@@ -196,15 +179,11 @@
                               ToolTip="Toggle Monitoring"
                               FontSize="8">
                     <ToggleButton.Style>
-                        <Style TargetType="ToggleButton">
+                        <Style TargetType="ToggleButton" BasedOn="{StaticResource IconToggleButton}">
                             <Setter Property="Content" Value="⏸"/>
-                            <Setter Property="Background" Value="#E74C3C"/>
-                            <Setter Property="Foreground" Value="White"/>
-                            <Setter Property="BorderThickness" Value="0"/>
                             <Style.Triggers>
                                 <Trigger Property="IsChecked" Value="True">
                                     <Setter Property="Content" Value="▶"/>
-                                    <Setter Property="Background" Value="#27AE60"/>
                                 </Trigger>
                             </Style.Triggers>
                         </Style>
@@ -221,9 +200,7 @@
                 <Button Grid.Column="2" 
                         Content="🔄"
                         Command="{Binding RefreshCharactersCommand}"
-                        Background="#3498DB" 
-                        Foreground="White"
-                        BorderThickness="0"
+                        Style="{StaticResource InfoIconButton}"
                         Width="16" Height="16"
                         FontSize="8"
                         ToolTip="Refresh"/>

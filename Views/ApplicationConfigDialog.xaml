@@ -38,9 +38,11 @@
             <TextBox x:Name="ExecutablePathTextBox" Grid.Column="0"
                      Text="{Binding ExecutablePath, UpdateSourceTrigger=PropertyChanged}" 
                      Height="28" Margin="0,0,5,0"/>
-            <Button Grid.Column="1" Content="Browse..." 
+            <Button Grid.Column="1" 
+                    Content="Browse..." 
+                    Style="{StaticResource InfoButton}"
                     Click="BrowseExecutable_Click" 
-                    Width="80" Height="28"/>
+                    Width="90" Height="32"/>
         </Grid>
         
         <!-- Command Line Arguments -->
@@ -65,10 +67,17 @@
         
         <!-- Buttons -->
         <StackPanel Grid.Row="8" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
-            <Button Content="Cancel" Width="80" Margin="0,0,10,0" 
-                    Click="Cancel_Click" IsCancel="True"/>
-            <Button Content="OK" Width="80" 
-                    Click="OK_Click" IsDefault="True"/>
+            <Button Content="Cancel" 
+                    Style="{StaticResource SecondaryButton}"
+                    Width="80" 
+                    Margin="0,0,10,0" 
+                    Click="Cancel_Click" 
+                    IsCancel="True"/>
+            <Button Content="OK" 
+                    Style="{StaticResource SuccessButton}"
+                    Width="80" 
+                    Click="OK_Click" 
+                    IsDefault="True"/>
         </StackPanel>
     </Grid>
 </Window>

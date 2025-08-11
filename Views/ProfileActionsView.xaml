@@ -5,12 +5,44 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
         <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
-        <Style x:Key="AppButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="28"/>
-            <Setter Property="Margin" Value="2"/>
-            <Setter Property="Padding" Value="5,2"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="BorderThickness" Value="1"/>
+        
+        <!-- Custom styles for conditional formatting -->
+        <Style x:Key="LaunchButtonStyle" TargetType="Button" BasedOn="{StaticResource SuccessIconButton}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                    <Setter Property="Background" Value="#9CA3AF"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ExecutableExists}" Value="False">
+                    <Setter Property="Background" Value="#F59E0B"/>
+                    <Setter Property="ToolTip" Value="Executable not found - click to configure path"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        
+        <Style x:Key="MonitorToggleStyle" TargetType="ToggleButton" BasedOn="{StaticResource IconToggleButton}">
+            <Setter Property="Content" Value="⏸️"/>
+            <Setter Property="ToolTip" Value="Auto-monitoring paused (click to resume)"/>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Content" Value="▶️"/>
+                    <Setter Property="ToolTip" Value="Auto-monitoring active (click to pause)"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        
+        <Style x:Key="ActivateButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryIconButton}">
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsActive, FallbackValue=False}" Value="True">
+                    <Setter Property="Background" Value="#10B981"/>
+                    <Setter Property="ToolTip" Value="Currently Active"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsResponding, FallbackValue=True}" Value="False">
+                    <Setter Property="Background" Value="#EF4444"/>
+                    <Setter Property="ToolTip" Value="Character Not Responding"/>
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
     </UserControl.Resources>
     
@@ -23,75 +55,42 @@
                     <ItemsControl ItemsSource="{Binding ExternalApplications}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border BorderBrush="LightGray" BorderThickness="1" Margin="0,2" Padding="5" Background="AliceBlue">
+                                <Border BorderBrush="#E5E7EB" BorderThickness="1" Margin="0,4" Padding="12" Background="#F9FAFB" CornerRadius="8">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,8,0"
+                                        <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,12,0"
                                                  VerticalAlignment="Center"
                                                  Fill="{Binding StatusColor}"/>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12"/>
-                                            <TextBlock Text="{Binding StatusText}" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" FontFamily="Segoe UI" Foreground="#111827"/>
+                                            <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="#6B7280" Margin="0,2,0,0" FontFamily="Segoe UI"/>
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" Orientation="Horizontal">
                                             <Button Content="▶️"
+                                                    Style="{StaticResource LaunchButtonStyle}"
                                                     Command="{Binding DataContext.LaunchApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"
-                                                    ToolTip="Launch Application"
-                                                    Width="25" Height="28" Margin="2" Padding="5,2" FontSize="11" BorderThickness="1"
-                                                    Background="#2ECC71" Foreground="White">
-                                                <Button.Style>
-                                                    <Style TargetType="Button">
-                                                        <Setter Property="Background" Value="#2ECC71"/>
-                                                        <Setter Property="Foreground" Value="White"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsEnabled}" Value="False">
-                                                                <Setter Property="IsEnabled" Value="False"/>
-                                                                <Setter Property="Background" Value="Gray"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ExecutableExists}" Value="False">
-                                                                <Setter Property="Background" Value="Orange"/>
-                                                                <Setter Property="ToolTip" Value="Executable not found - click to configure path"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
+                                                    ToolTip="Launch Application"/>
                                             <Button Content="⏹️"
+                                                    Style="{StaticResource DangerIconButton}"
                                                     Command="{Binding DataContext.KillApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"
                                                     ToolTip="Stop Application"
-                                                    Width="25" Height="28" Margin="2" Padding="5,2" FontSize="11" BorderThickness="1"
-                                                    Background="#E74C3C" Foreground="White">
-                                                <Button.Style>
-                                                    <Style TargetType="Button">
-                                                        <Setter Property="Background" Value="#E74C3C"/>
-                                                        <Setter Property="Foreground" Value="White"/>
-                                                        <Setter Property="IsEnabled" Value="{Binding IsRunning}"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsRunning}" Value="False">
-                                                                <Setter Property="Background" Value="Gray"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
-                                            <Button Content="⚙️" Style="{StaticResource AppButtonStyle}"
+                                                    IsEnabled="{Binding IsRunning}"/>
+                                            <Button Content="⚙️"
+                                                    Style="{StaticResource WarningIconButton}"
                                                     Command="{Binding DataContext.EditApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"
-                                                    ToolTip="Edit Application"
-                                                    Background="#F39C12" Foreground="White"
-                                                    Width="25"/>
-                                            <Button Content="🗑️" Style="{StaticResource AppButtonStyle}"
+                                                    ToolTip="Edit Application"/>
+                                            <Button Content="🗑️"
+                                                    Style="{StaticResource SecondaryIconButton}"
                                                     Command="{Binding DataContext.RemoveApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"
-                                                    ToolTip="Remove Application"
-                                                    Background="#95A5A6" Foreground="White"
-                                                    Width="25"/>
+                                                    ToolTip="Remove Application"/>
                                         </StackPanel>
                                     </Grid>
                                 </Border>
@@ -99,17 +98,15 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     <!-- Application control buttons -->
-                    <StackPanel Orientation="Horizontal" Margin="0,5,0,0" HorizontalAlignment="Right">
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0" HorizontalAlignment="Right">
                         <Button Content="➕" 
+                                Style="{StaticResource PrimaryIconButton}"
                                 Command="{Binding AddApplicationCommand}"
-                                Background="#3498DB" Foreground="White"
-                                ToolTip="Add Application"
-                                Margin="0,0,5,0" Width="25" Height="28"/>
+                                ToolTip="Add Application"/>
                         <Button Content="🔄" 
+                                Style="{StaticResource InfoIconButton}"
                                 Command="{Binding RefreshApplicationsCommand}"
-                                Background="#9B59B6" Foreground="White"
-                                ToolTip="Refresh Status"
-                                Width="25" Height="28"/>
+                                ToolTip="Refresh Status"/>
                     </StackPanel>
                 </StackPanel>
             </GroupBox>
@@ -118,51 +115,31 @@
             <GroupBox Header="🎮 Character Monitor">
                 <StackPanel>
                     <!-- Monitor Status -->
-                    <Grid Margin="0,0,0,10">
+                    <Grid Margin="0,0,0,12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Orientation="Horizontal">
-                            <TextBlock Text="📊 " FontSize="14" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="📊 " FontSize="14" VerticalAlignment="Center" FontFamily="Segoe UI"/>
                             <TextBlock Text="{Binding PlayOnlineMonitor.MonitoringStatus, FallbackValue='Not Available'}" 
-                                       FontWeight="Bold" VerticalAlignment="Center" FontSize="12"/>
-                            <TextBlock Text=" | " Margin="5,0" VerticalAlignment="Center"/>
+                                       FontWeight="SemiBold" VerticalAlignment="Center" FontSize="13" FontFamily="Segoe UI" Foreground="#111827"/>
+                            <TextBlock Text=" | " Margin="8,0" VerticalAlignment="Center" Foreground="#6B7280"/>
                             <TextBlock Text="{Binding PlayOnlineMonitor.CharacterCount, FallbackValue=0}" 
-                                       FontWeight="Bold" VerticalAlignment="Center" FontSize="12"/>
-                            <TextBlock Text=" character(s)" VerticalAlignment="Center" FontSize="12"/>
+                                       FontWeight="SemiBold" VerticalAlignment="Center" FontSize="13" FontFamily="Segoe UI" Foreground="#059669"/>
+                            <TextBlock Text=" character(s)" VerticalAlignment="Center" FontSize="13" FontFamily="Segoe UI" Foreground="#6B7280"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
                             <Button Content="🔄" 
+                                    Style="{StaticResource SuccessIconButton}"
                                     Command="{Binding PlayOnlineMonitor.RefreshCharactersCommand}"
-                                    Background="#27AE60" Foreground="White"
-                                    ToolTip="Refresh Characters"
-                                    Width="25" Height="25" Margin="0,0,5,0"
-                                    MinWidth="25" MaxWidth="25" MinHeight="25" MaxHeight="25"/>
+                                    ToolTip="Refresh Characters"/>
                             <Button Content="📱" 
+                                    Style="{StaticResource InfoIconButton}"
                                     Command="{Binding PlayOnlineMonitor.ShowCharacterMonitorCommand}"
-                                    Background="#8E44AD" Foreground="White"
-                                    ToolTip="Open Character Monitor Window"
-                                    Width="25" Height="25" Margin="0,0,5,0"
-                                    MinWidth="25" MaxWidth="25" MinHeight="25" MaxHeight="25"/>
+                                    ToolTip="Open Character Monitor Window"/>
                             <ToggleButton IsChecked="{Binding PlayOnlineMonitor.IsMonitoring, FallbackValue=True}"
-                                          Width="25" Height="25"
-                                          MinWidth="25" MaxWidth="25" MinHeight="25" MaxHeight="25"
-                                          ToolTip="Toggle Monitoring">
-                                <ToggleButton.Style>
-                                    <Style TargetType="ToggleButton">
-                                        <Setter Property="Content" Value="⏸️"/>
-                                        <Setter Property="Background" Value="#E74C3C"/>
-                                        <Setter Property="Foreground" Value="White"/>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsChecked" Value="True">
-                                                <Setter Property="Content" Value="▶️"/>
-                                                <Setter Property="Background" Value="#27AE60"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </ToggleButton.Style>
-                            </ToggleButton>
+                                          Style="{StaticResource MonitorToggleStyle}"/>
                         </StackPanel>
                     </Grid>
 
@@ -170,16 +147,18 @@
                     <ItemsControl ItemsSource="{Binding PlayOnlineMonitor.Characters}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border BorderBrush="LightGray" BorderThickness="1" Margin="0,2" Padding="5">
+                                <Border BorderBrush="#E5E7EB" BorderThickness="1" Margin="0,4" Padding="12" CornerRadius="8">
                                     <Border.Style>
                                         <Style TargetType="Border">
-                                            <Setter Property="Background" Value="LightCyan"/>
+                                            <Setter Property="Background" Value="#F0F9FF"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsActive, FallbackValue=False}" Value="True">
-                                                    <Setter Property="Background" Value="LightBlue"/>
+                                                    <Setter Property="Background" Value="#DBEAFE"/>
+                                                    <Setter Property="BorderBrush" Value="#3B82F6"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding IsResponding, FallbackValue=True}" Value="False">
-                                                    <Setter Property="Background" Value="LightGray"/>
+                                                    <Setter Property="Background" Value="#F3F4F6"/>
+                                                    <Setter Property="BorderBrush" Value="#9CA3AF"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -192,47 +171,29 @@
                                         </Grid.ColumnDefinitions>
                                                                                 
                                         <!-- Status Indicator -->
-                                        <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,8,0"
+                                        <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,12,0"
                                                  VerticalAlignment="Center"
                                                  Fill="{Binding StatusBrush, FallbackValue=Gray}"/>
                                         
                                         <!-- Character Info -->
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding DisplayName, FallbackValue='Unknown Character'}" 
-                                                       FontWeight="Bold" FontSize="12"/>
+                                                       FontWeight="SemiBold" FontSize="13" FontFamily="Segoe UI" Foreground="#111827"/>
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="{Binding StatusText, FallbackValue='Unknown'}" 
-                                                           FontSize="10" Foreground="Gray"/>
-                                                <TextBlock Text=" | PID: " FontSize="10" Foreground="Gray"/>
+                                                           FontSize="11" Foreground="#6B7280" FontFamily="Segoe UI"/>
+                                                <TextBlock Text=" | PID: " FontSize="11" Foreground="#6B7280" FontFamily="Segoe UI"/>
                                                 <TextBlock Text="{Binding ProcessId, FallbackValue=0}" 
-                                                           FontSize="10" Foreground="Gray"/>
+                                                           FontSize="11" Foreground="#6B7280" FontFamily="Segoe UI"/>
                                             </StackPanel>
                                         </StackPanel>
                                         
                                         <!-- Activate Button -->
                                         <Button Grid.Column="2" Content="🎯"
+                                                Style="{StaticResource ActivateButtonStyle}"
                                                 Command="{Binding DataContext.PlayOnlineMonitor.ActivateCharacterCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 CommandParameter="{Binding}"
-                                                ToolTip="Activate Character Window"
-                                                Width="25" Height="25"
-                                                Background="#3498DB" Foreground="White">
-                                            <Button.Style>
-                                                <Style TargetType="Button">
-                                                    <Setter Property="Background" Value="#3498DB"/>
-                                                    <Setter Property="Foreground" Value="White"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsActive, FallbackValue=False}" Value="True">
-                                                            <Setter Property="Background" Value="#2ECC71"/>
-                                                            <Setter Property="ToolTip" Value="Currently Active"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsResponding, FallbackValue=True}" Value="False">
-                                                            <Setter Property="Background" Value="#E74C3C"/>
-                                                            <Setter Property="ToolTip" Value="Character Not Responding"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Button.Style>
-                                        </Button>
+                                                ToolTip="Activate Character Window"/>
                                     </Grid>
                                 </Border>
                             </DataTemplate>
@@ -240,23 +201,27 @@
                     </ItemsControl>
 
                     <!-- No Characters Message -->
-                    <TextBlock Text="No PlayOnline characters detected. Launch FFXI to see character instances here."
-                               HorizontalAlignment="Center"
-                               Margin="10"
-                               FontStyle="Italic"
-                               Foreground="Gray"
-                               TextWrapping="Wrap">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding PlayOnlineMonitor.CharacterCount, FallbackValue=0}" Value="0">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
+                    <Border BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="8" Padding="24" Background="#F9FAFB">
+                        <TextBlock Text="No PlayOnline characters detected. Launch FFXI to see character instances here."
+                                   HorizontalAlignment="Center"
+                                   FontStyle="Italic"
+                                   Foreground="#6B7280"
+                                   FontFamily="Segoe UI"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   TextAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding PlayOnlineMonitor.CharacterCount, FallbackValue=0}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Border>
                 </StackPanel>
             </GroupBox>
         </StackPanel>

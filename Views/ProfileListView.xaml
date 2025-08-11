@@ -22,7 +22,11 @@
             <StackPanel Grid.Row="0" Orientation="Vertical" Margin="5">
                 <Label Content="PlayOnline Directory:"/>
                 <DockPanel>
-                    <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding ChangeDirectoryCommand}" Width="80"/>
+                    <Button DockPanel.Dock="Right" 
+                            Content="Browse..." 
+                            Style="{StaticResource InfoButton}"
+                            Command="{Binding ChangeDirectoryCommand}" 
+                            Width="90"/>
                     <TextBox Text="{Binding PlayOnlineDirectory}" IsReadOnly="True" Background="#F5F5F5"/>
                 </DockPanel>
                 
@@ -32,7 +36,10 @@
                               IsChecked="{Binding ShowAutoBackups}"
                               VerticalAlignment="Center"
                               Margin="5,0,0,0"/>
-                    <Button Content="Refresh" Command="{Binding RefreshCommand}" HorizontalAlignment="Left"/>
+                    <Button Content="Refresh" 
+                            Style="{StaticResource SuccessButton}"
+                            Command="{Binding RefreshCommand}" 
+                            HorizontalAlignment="Left"/>
                 </DockPanel>
             </StackPanel>
             
@@ -103,39 +110,30 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Actions" Width="130">
+                    <DataGridTemplateColumn Header="Actions" Width="150">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
                                             Visibility="{Binding IsSystemFile, Mode=OneWay, Converter={StaticResource InverseBoolToVisConverter}}">
                                     <!-- All action buttons hidden for system files -->
                                     <Button Content="🔄" 
+                                            Style="{StaticResource PrimaryIconButton}"
                                             Command="{Binding DataContext.SwapProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                             CommandParameter="{Binding}"
                                             ToolTip="Swap to this profile"
-                                            Width="35" Height="25" 
-                                            Margin="2"
-                                            Background="Transparent"
-                                            BorderThickness="0"
-                                            Style="{x:Null}"/>
+                                            Margin="1"/>
                                     <Button Content="✏️" 
+                                            Style="{StaticResource WarningIconButton}"
                                             Command="{Binding DataContext.RenameProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                             CommandParameter="{Binding}"
                                             ToolTip="Rename this profile"
-                                            Width="35" Height="25" 
-                                            Margin="2"
-                                            Background="Transparent"
-                                            BorderThickness="0"
-                                            Style="{x:Null}"/>
+                                            Margin="1"/>
                                     <Button Content="🗑️" 
+                                            Style="{StaticResource DangerIconButton}"
                                             Command="{Binding DataContext.DeleteProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                             CommandParameter="{Binding}"
                                             ToolTip="Delete this profile"
-                                            Width="35" Height="25" 
-                                            Margin="2"
-                                            Background="Transparent"
-                                            BorderThickness="0"
-                                            Style="{x:Null}"/>
+                                            Margin="1"/>
                                 </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
@@ -145,9 +143,11 @@
             <!-- Add Profile Button moved below DataGrid -->
             <Button Grid.Row="2"
                     Content="➕ Add Profile" 
+                    Style="{StaticResource PrimaryButton}"
                     Command="{Binding ShowAddProfileDialogCommand}"
-                    Background="#3498DB" Foreground="White"
-                    Margin="10,10,0,0" Width="120" HorizontalAlignment="Left"/>
+                    Margin="10,10,0,0" 
+                    Width="140" 
+                    HorizontalAlignment="Left"/>
         </Grid>
     </GroupBox>
 </UserControl>
