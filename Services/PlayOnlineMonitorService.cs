@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using FFXIManager.Models;
 using FFXIManager.Infrastructure;
@@ -12,10 +13,10 @@ namespace FFXIManager.Services
     /// </summary>
     public interface IPlayOnlineMonitorService
     {
-        Task<List<PlayOnlineCharacter>> GetRunningCharactersAsync();
-        Task<bool> ActivateCharacterWindowAsync(PlayOnlineCharacter character);
-        Task RefreshCharacterDataAsync();
-        void StartMonitoring();
+        Task<List<PlayOnlineCharacter>> GetRunningCharactersAsync(CancellationToken cancellationToken = default);
+        Task<bool> ActivateCharacterWindowAsync(PlayOnlineCharacter character, CancellationToken cancellationToken = default);
+        Task RefreshCharacterDataAsync(CancellationToken cancellationToken = default);
+        void StartMonitoring(CancellationToken cancellationToken = default);
         void StopMonitoring();
         event EventHandler<PlayOnlineCharacter>? CharacterDetected;
         event EventHandler<PlayOnlineCharacter>? CharacterUpdated;
@@ -36,10 +37,16 @@ namespace FFXIManager.Services
         private static readonly TimeSpan TitleRefreshThrottle = TimeSpan.FromSeconds(1);
         private bool _isMonitoring;
         private bool _disposed;
+        private CancellationTokenSource? _cts;
 
         // Target process names for PlayOnline/FFXI monitoring
         private readonly string[] _targetProcessNames = { "pol", "ffxi", "PlayOnlineViewer" };
+        private readonly HashSet<string> _targetProcessNameSetLoose = FFXIManager.Utilities.ProcessFilters.ToLooseNameSet(new[]
+        {
+            "pol", "ffxi", "PlayOnlineViewer"
+        });
         private Guid? _discoveryWatchId;
+        private HashSet<string> _excludedProcessNamesLoose = new(StringComparer.Ordinal);
 
         public event EventHandler<PlayOnlineCharacter>? CharacterDetected;
         public event EventHandler<PlayOnlineCharacter>? CharacterUpdated;
@@ -56,18 +63,21 @@ namespace FFXIManager.Services
             _processManagementService.ProcessTerminated += OnProcessTerminated;
             _processManagementService.ProcessUpdated += OnProcessUpdated;
             _processManagementService.WindowTitleChanged += OnWindowTitleChanged;
+
+            // Initialize exclusion list from configured external applications
+            RefreshExclusionsFromSettings();
         }
 
-        public async Task<List<PlayOnlineCharacter>> GetRunningCharactersAsync()
+        public async Task<List<PlayOnlineCharacter>> GetRunningCharactersAsync(CancellationToken cancellationToken = default)
         {
-            await RefreshCharacterDataAsync();
+            await RefreshCharacterDataAsync(cancellationToken);
             lock (_lockObject)
             {
                 return new List<PlayOnlineCharacter>(_characters);
             }
         }
 
-        public async Task<bool> ActivateCharacterWindowAsync(PlayOnlineCharacter character)
+        public async Task<bool> ActivateCharacterWindowAsync(PlayOnlineCharacter character, CancellationToken cancellationToken = default)
         {
             if (character == null || character.WindowHandle == IntPtr.Zero)
             {
@@ -80,6 +90,7 @@ namespace FFXIManager.Services
                 await _loggingService.LogInfoAsync($"Attempting to activate window for character: {character.DisplayName} (Handle: {character.WindowHandle:X8}, PID: {character.ProcessId})", "PlayOnlineMonitorService");
 
                 // Use shared process management service for activation
+                cancellationToken.ThrowIfCancellationRequested();
                 var success = await _processManagementService.ActivateWindowAsync(character.WindowHandle, 5000);
 
                 if (success)
@@ -109,14 +120,16 @@ namespace FFXIManager.Services
             }
         }
 
-        public async Task RefreshCharacterDataAsync()
+        public async Task RefreshCharacterDataAsync(CancellationToken cancellationToken = default)
         {
             if (_disposed) return;
+            cancellationToken.ThrowIfCancellationRequested();
 
             try
             {
                 // Get PlayOnline/FFXI processes using shared service
                 var processes = await _processManagementService.GetProcessesByNamesAsync(_targetProcessNames);
+                cancellationToken.ThrowIfCancellationRequested();
                 var currentCharacters = new List<PlayOnlineCharacter>();
 
                 foreach (var processInfo in processes)
@@ -141,6 +154,7 @@ namespace FFXIManager.Services
 
                 // Update character list
                 await UpdateCharacterListAsync(currentCharacters);
+                cancellationToken.ThrowIfCancellationRequested();
             }
             catch (Exception ex)
             {
@@ -148,12 +162,18 @@ namespace FFXIManager.Services
             }
         }
 
-        public void StartMonitoring()
+        public void StartMonitoring(CancellationToken cancellationToken = default)
         {
             if (!_isMonitoring)
             {
                 _isMonitoring = true;
+                _cts?.Cancel();
+                _cts?.Dispose();
+                _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 
+                // Refresh exclusions on start
+                RefreshExclusionsFromSettings();
+
                 // Register discovery for PlayOnline/FFXI processes
                 try
                 {
@@ -179,6 +199,9 @@ namespace FFXIManager.Services
             if (_isMonitoring)
             {
                 _isMonitoring = false;
+                _cts?.Cancel();
+                _cts?.Dispose();
+                _cts = null;
                 try
                 {
                     if (_discoveryWatchId.HasValue)
@@ -313,14 +336,26 @@ namespace FFXIManager.Services
                 // Throttled fallback: refresh characters for this PID to align handles/titles
                 if (FFXIManager.Utilities.Throttle.ShouldRun($"pid:{e.ProcessId}", TitleRefreshThrottle))
                 {
-                    try { await AddOrUpdateCharactersForProcessAsync(e.ProcessId); } catch { }
+                    try 
+                    { 
+                        var pi = await _processManagementService.GetProcessByIdAsync(e.ProcessId);
+                        if (pi != null && IsTargetProcess(pi))
+                        {
+                            await AddOrUpdateCharactersForProcessAsync(e.ProcessId);
+                        }
+                    } 
+                    catch { }
                 }
             });
         }
 
         private bool IsTargetProcess(ProcessInfo processInfo)
         {
-            return FFXIManager.Utilities.ProcessFilters.MatchesProcessName(processInfo.ProcessName, _targetProcessNames);
+            var nameLoose = FFXIManager.Utilities.ProcessFilters.NormalizeComparable(processInfo.ProcessName);
+            var exeLoose = FFXIManager.Utilities.ProcessFilters.NormalizeComparable(processInfo.ExecutablePath);
+            if (!_targetProcessNameSetLoose.Contains(nameLoose) && !_targetProcessNameSetLoose.Contains(exeLoose)) return false;
+            if (_excludedProcessNamesLoose.Contains(nameLoose) || _excludedProcessNamesLoose.Contains(exeLoose)) return false;
+            return true;
         }
 
         private async Task AddOrUpdateCharactersForProcessAsync(int processId)
@@ -343,6 +378,28 @@ namespace FFXIManager.Services
             {
                 await _loggingService.LogDebugAsync($"Error updating characters for PID {processId}: {ex.Message}", "PlayOnlineMonitorService");
             }
+        }
+
+        private void RefreshExclusionsFromSettings()
+        {
+            try
+            {
+                var settings = ServiceLocator.SettingsService.LoadSettings();
+                var names = new HashSet<string>(StringComparer.Ordinal);
+                if (settings.ExternalApplications != null)
+                {
+                    foreach (var app in settings.ExternalApplications)
+                    {
+                        if (!string.IsNullOrWhiteSpace(app.ExecutablePath))
+                        {
+                            var n = FFXIManager.Utilities.ProcessFilters.NormalizeComparable(app.ExecutablePath);
+                            if (!string.IsNullOrWhiteSpace(n)) names.Add(n);
+                        }
+                    }
+                }
+                _excludedProcessNamesLoose = names;
+            }
+            catch { _excludedProcessNamesLoose = new HashSet<string>(StringComparer.Ordinal); }
         }
 
         private async Task UpdateCharacterListForProcessAsync(int processId, List<PlayOnlineCharacter> newCharacters)
@@ -520,6 +577,9 @@ namespace FFXIManager.Services
             
             // Unsubscribe from process events
             _processManagementService.ProcessDetected -= OnProcessDetected;
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _cts = null;
             _processManagementService.ProcessTerminated -= OnProcessTerminated;
             _processManagementService.ProcessUpdated -= OnProcessUpdated;
             _processManagementService.WindowTitleChanged -= OnWindowTitleChanged;

@@ -1,4 +1,6 @@
 using System.Windows.Controls;
+using FFXIManager.Infrastructure;
+using FFXIManager.ViewModels;
 
 namespace FFXIManager.Views
 {
@@ -7,14 +9,12 @@ namespace FFXIManager.Views
         public HeaderView()
         {
             InitializeComponent();
-        }
-
-        private void OpenDiscoverySettings_Click(object sender, System.Windows.RoutedEventArgs e)
-        {
-            var dlg = new DiscoverySettingsDialog();
-            dlg.Owner = System.Windows.Window.GetWindow(this);
-            dlg.DataContext = new ViewModels.DiscoverySettingsViewModel();
-            dlg.ShowDialog();
+            // Ensure DataContext is set to the HeaderViewModel so bindings and commands work
+            DataContext = new HeaderViewModel(
+                ServiceLocator.UiDispatcher,
+                ServiceLocator.SettingsService,
+                ServiceLocator.ExternalApplicationService,
+                ServiceLocator.PlayOnlineMonitorService);
         }
     }
 }

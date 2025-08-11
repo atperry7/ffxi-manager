@@ -26,7 +26,7 @@ namespace FFXIManager.Configuration
         public string DefaultLoginFileName { get; set; } = "login_w.bin";
         public string BackupFileExtension { get; set; } = ".bin";
         public string AutoBackupPrefix { get; set; } = "backup_";
-        public IReadOnlySet<string> ExcludedFiles { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        public HashSet<string> ExcludedFiles { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "login_w.bin", "inet_w.bin", "noramim.bin"
         };

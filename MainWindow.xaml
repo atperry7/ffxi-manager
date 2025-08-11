@@ -59,12 +59,12 @@
         </Grid.RowDefinitions>
         
         <!-- Header Section -->
-        <views:HeaderView Grid.Row="0" DataContext="{Binding}"/>
+        <views:HeaderView Grid.Row="0"/>
         
         <!-- Main Content -->
         <Grid Grid.Row="1" Margin="10">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>

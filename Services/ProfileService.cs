@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text;
 using FFXIManager.Models;
 using FFXIManager.Configuration;
 
@@ -241,7 +242,7 @@ namespace FFXIManager.Services
                 
                 // Copy target profile to active location
                 await _loggingService.LogDebugAsync($"Copying profile from {targetProfile.FilePath} to {activeLoginPath}", "ProfileService");
-                File.Copy(targetProfile.FilePath, activeLoginPath, true);
+                await RetryIOAsync(() => { File.Copy(targetProfile.FilePath, activeLoginPath, true); return Task.CompletedTask; });
                 
                 // Remember user's choice
                 UpdateLastActiveProfile(targetProfile.Name);
@@ -291,7 +292,7 @@ namespace FFXIManager.Services
             {
                 try
                 {
-                    File.Copy(activeLoginPath, backupPath);
+                    await RetryIOAsync(() => { File.Copy(activeLoginPath, backupPath); return Task.CompletedTask; });
                     var fileInfo = new FileInfo(backupPath);
                     
                     var profile = new ProfileInfo
@@ -353,7 +354,7 @@ namespace FFXIManager.Services
             {
                 try
                 {
-                    File.Delete(profile.FilePath);
+                    await RetryIOAsync(() => { File.Delete(profile.FilePath); return Task.CompletedTask; });
                     
                     // Invalidate caches since we removed a profile
                     await InvalidateProfileCaches();
@@ -408,7 +409,7 @@ namespace FFXIManager.Services
             {
                 try
                 {
-                    File.Move(profile.FilePath, newFilePath);
+                    await RetryIOAsync(() => { File.Move(profile.FilePath, newFilePath); return Task.CompletedTask; });
                     
                     // Update settings if this was the user's last active profile
                     var settings = SettingsService?.LoadSettings();
@@ -495,14 +496,14 @@ namespace FFXIManager.Services
         /// <summary>
         /// Always returns false - external change detection removed for simplicity
         /// </summary>
-        public async Task<bool> DetectExternalChangesAsync() => await Task.FromResult(false);
+        public static async Task<bool> DetectExternalChangesAsync() => await Task.FromResult(false);
         
         /// <summary>
         /// Validates if the PlayOnline directory exists with caching
         /// </summary>
         public bool ValidatePlayOnlineDirectory()
         {
-            var cacheKey = string.Format(CacheKeys.DirectoryValidation, PlayOnlineDirectory);
+            var cacheKey = string.Format(provider: null, format: CompositeFormats.DirectoryValidationFormat, PlayOnlineDirectory);
             
             // Use synchronous check for validation - can be cached if needed
             var exists = Directory.Exists(PlayOnlineDirectory);
@@ -515,6 +516,11 @@ namespace FFXIManager.Services
             return exists;
         }
         
+        private static class CompositeFormats
+        {
+            public static readonly CompositeFormat DirectoryValidationFormat = CompositeFormat.Parse(CacheKeys.DirectoryValidation);
+        }
+
         // Helper methods
         private string GetProfileDescription(string profileName)
         {
@@ -558,6 +564,29 @@ namespace FFXIManager.Services
             await _cachingService.RemoveAsync(CacheKeys.UserProfilesList);
             await _cachingService.RemoveAsync(CacheKeys.AutoBackupsList);
             await _cachingService.RemoveAsync(CacheKeys.ActiveLoginInfo);
+        }
+
+        private static async Task RetryIOAsync(Func<Task> action, int retries = 5, int initialDelayMs = 50)
+        {
+            var delay = initialDelayMs;
+            for (int attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    await action();
+                    return;
+                }
+                catch (IOException) when (attempt < retries)
+                {
+                    await Task.Delay(delay);
+                    delay = Math.Min(delay * 2, 1000);
+                }
+                catch (UnauthorizedAccessException) when (attempt < retries)
+                {
+                    await Task.Delay(delay);
+                    delay = Math.Min(delay * 2, 1000);
+                }
+            }
         }
     }
 }

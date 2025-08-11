@@ -1,10 +1,10 @@
 <Window x:Class="FFXIManager.Views.CharacterMonitorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="FFXI Characters" Height="300" Width="180"
+        Title="FFXI Characters" Height="300" Width="100"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResize"
-        MinHeight="150" MinWidth="180">
+        MinHeight="300" MinWidth="100">
     
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
@@ -24,19 +24,13 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                
-                <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <TextBlock Text="🎮" Foreground="White" FontSize="12" VerticalAlignment="Center" Margin="0,0,3,0"/>
-                    <TextBlock Text="{Binding CharacterCount}" Foreground="White" FontWeight="Bold" FontSize="11" VerticalAlignment="Center"/>
-                    <TextBlock Text=" chars" Foreground="LightGray" FontSize="10" VerticalAlignment="Center"/>
-                </StackPanel>
-                
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center">
                     <ToggleButton x:Name="AlwaysOnTopToggle" 
                                   Content="📌" 
                                   ToolTip="Always On Top"
                                   Style="{StaticResource IconToggleButton}"
-                                  Width="20" Height="20" 
+                                  Width="25" Height="15" 
                                   FontSize="9"
                                   Margin="0,0,2,0"
                                   Checked="AlwaysOnTopToggle_Checked"
@@ -46,8 +40,15 @@
                             Click="CloseButton_Click"
                             ToolTip="Close"
                             Style="{StaticResource DangerIconButton}"
-                            Width="20" Height="20"
+                            Width="25" Height="15"
                             FontSize="9"/>
+
+                    <Button Content="🔄"
+                        Command="{Binding RefreshCharactersCommand}"
+                        Style="{StaticResource InfoIconButton}"
+                        Width="25" Height="15"
+                        FontSize="8"
+                        ToolTip="Refresh"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -97,6 +98,7 @@
                                         Margin="0,2,0,0"
                                         FontSize="9"
                                         Height="18"
+                                        Width="80"
                                         HorizontalAlignment="Stretch"
                                         Command="{Binding DataContext.ActivateCharacterCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                         CommandParameter="{Binding}">
@@ -162,49 +164,6 @@
                            TextWrapping="Wrap" 
                            TextAlignment="Center"/>
             </StackPanel>
-        </Border>
-        
-        <!-- Compact Footer Controls -->
-        <Border Grid.Row="2" Background="#2C3E50" Padding="3">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                
-                <ToggleButton Grid.Column="0" 
-                              IsChecked="{Binding IsMonitoring}"
-                              Width="16" Height="16" 
-                              ToolTip="Toggle Monitoring"
-                              FontSize="8">
-                    <ToggleButton.Style>
-                        <Style TargetType="ToggleButton" BasedOn="{StaticResource IconToggleButton}">
-                            <Setter Property="Content" Value="⏸"/>
-                            <Style.Triggers>
-                                <Trigger Property="IsChecked" Value="True">
-                                    <Setter Property="Content" Value="▶"/>
-                                </Trigger>
-                            </Style.Triggers>
-                        </Style>
-                    </ToggleButton.Style>
-                </ToggleButton>
-                
-                <TextBlock Grid.Column="1" 
-                           Text="{Binding MonitoringStatus}" 
-                           Foreground="LightGray" 
-                           FontSize="8" 
-                           VerticalAlignment="Center" 
-                           HorizontalAlignment="Center"/>
-                
-                <Button Grid.Column="2" 
-                        Content="🔄"
-                        Command="{Binding RefreshCharactersCommand}"
-                        Style="{StaticResource InfoIconButton}"
-                        Width="16" Height="16"
-                        FontSize="8"
-                        ToolTip="Refresh"/>
-            </Grid>
         </Border>
     </Grid>
 </Window>

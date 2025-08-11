@@ -33,6 +33,8 @@ namespace FFXIManager.Infrastructure
         void UnregisterDiscoveryWatch(Guid watchId);
         void TrackPid(int processId);
         void UntrackPid(int processId);
+        // Nudge monitoring to run an immediate refresh (e.g., after settings changes)
+        void RequestImmediateRefresh();
         // Event-driven window title changes
         event EventHandler<WindowTitleChangedEventArgs>? WindowTitleChanged;
         event EventHandler<ProcessInfo>? ProcessDetected;
@@ -104,12 +106,15 @@ namespace FFXIManager.Infrastructure
     public class ProcessManagementService : IProcessManagementService, IDisposable
     {
         private readonly ILoggingService _loggingService;
+        private readonly IUiDispatcher _uiDispatcher;
         private readonly Dictionary<int, ProcessInfo> _trackedProcesses = new();
         private readonly SemaphoreSlim _processLock = new(1, 1);
         private readonly Timer? _globalMonitoringTimer;
         private readonly object _lockObject = new();
         private bool _isGlobalMonitoring;
         private bool _disposed;
+        private CancellationTokenSource? _monitoringCts;
+        private int _monitorIntervalMs = GLOBAL_MONITOR_INTERVAL_MS;
 
         // Unified discovery/tracking state
         private readonly List<DiscoveryWatch> _discoveryWatches = new();
@@ -132,9 +137,10 @@ namespace FFXIManager.Infrastructure
         public event EventHandler<ProcessInfo>? ProcessTerminated;
         public event EventHandler<ProcessInfo>? ProcessUpdated;
 
-        public ProcessManagementService(ILoggingService loggingService)
+        public ProcessManagementService(ILoggingService loggingService, IUiDispatcher uiDispatcher)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
             
             // Single global monitoring timer for all process tracking
             _globalMonitoringTimer = new Timer(GlobalMonitoringCallback, null, 
@@ -485,7 +491,7 @@ namespace FFXIManager.Infrastructure
                     catch (Win32Exception ex)
                     {
                         // Log but don't throw - this is expected for some processes
-                        Debug.WriteLine($"Win32 error enumerating windows for process {processId}: {ex.Message}");
+                        _ = _loggingService.LogDebugAsync($"Win32 error enumerating windows for process {processId}: {ex.Message}", "ProcessManagementService");
                     }
                 }, cts.Token);
             }
@@ -533,8 +539,11 @@ namespace FFXIManager.Infrastructure
                 if (!_isGlobalMonitoring)
                 {
                     _isGlobalMonitoring = true;
-                    var intervalMs = Math.Max((int)interval.TotalMilliseconds, 1000); // Minimum 1 second
-                    _globalMonitoringTimer?.Change(0, intervalMs);
+                    _monitoringCts?.Cancel();
+                    _monitoringCts?.Dispose();
+                    _monitoringCts = new CancellationTokenSource();
+                    _monitorIntervalMs = Math.Max((int)interval.TotalMilliseconds, 1000); // Minimum 1 second
+                    _globalMonitoringTimer?.Change(0, _monitorIntervalMs);
                     StartWmiWatchers();
                     StartWinEventHook();
                     _loggingService.LogInfoAsync("Started global process monitoring", "ProcessManagementService");
@@ -550,9 +559,23 @@ namespace FFXIManager.Infrastructure
                 {
                     _isGlobalMonitoring = false;
                     _globalMonitoringTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                    _monitoringCts?.Cancel();
+                    _monitoringCts?.Dispose();
+                    _monitoringCts = null;
                     StopWmiWatchers();
                     StopWinEventHook();
                     _loggingService.LogInfoAsync("Stopped global process monitoring", "ProcessManagementService");
+                }
+            }
+        }
+
+        public void RequestImmediateRefresh()
+        {
+            lock (_lockObject)
+            {
+                if (_isGlobalMonitoring)
+                {
+                    _globalMonitoringTimer?.Change(0, _monitorIntervalMs);
                 }
             }
         }
@@ -574,15 +597,17 @@ namespace FFXIManager.Infrastructure
                         continue;
                     }
 
+                    bool debugging = Debugger.IsAttached;
+
                     var processInfo = new ProcessInfo
                     {
                         ProcessId = process.Id,
                         ProcessName = GetSafeProcessName(process),
-                        ExecutablePath = GetSafeProcessPath(process),
+                        ExecutablePath = debugging ? string.Empty : GetSafeProcessPath(process),
                         MainWindowHandle = GetSafeMainWindowHandle(process),
-                        MainWindowTitle = GetSafeMainWindowTitle(process),
-                        IsResponding = GetSafeResponding(process),
-                        StartTime = GetSafeStartTime(process),
+                        MainWindowTitle = debugging ? string.Empty : GetSafeMainWindowTitle(process),
+                        IsResponding = debugging ? true : GetSafeResponding(process),
+                        StartTime = debugging ? DateTime.UtcNow : GetSafeStartTime(process),
                         LastSeen = DateTime.UtcNow
                     };
 
@@ -599,7 +624,7 @@ namespace FFXIManager.Infrastructure
                 catch (Exception ex)
                 {
                     // Log but continue with other processes
-                    Debug.WriteLine($"Error converting process {process?.Id}: {ex.Message}");
+                    await _loggingService.LogDebugAsync($"Error converting process {process?.Id}: {ex.Message}", "ProcessManagementService");
                 }
                 finally
                 {
@@ -811,6 +836,16 @@ namespace FFXIManager.Infrastructure
                 var relevantProcesses = allProcesses
                     .Where(p => FFXIManager.Utilities.ProcessFilters.MatchesNamePatterns(p.ProcessName, includePatterns, excludePatterns))
                     .ToList();
+
+                try
+                {
+                    var diag = ServiceLocator.SettingsService.LoadSettings()?.Diagnostics;
+                    if (diag?.EnableDiagnostics == true)
+                    {
+                        await _loggingService.LogDebugAsync($"Discovery matched {relevantProcesses.Count} processes (includes={includePatterns.Count}, excludes={excludePatterns.Count})", "ProcessManagementService");
+                    }
+                }
+                catch { }
                 
                 foreach (var proc in relevantProcesses)
                 {
@@ -850,12 +885,12 @@ namespace FFXIManager.Infrastructure
                         existing.MainWindowTitle = processInfo.MainWindowTitle;
                         existing.Windows = processInfo.Windows;
                         
-                        ProcessUpdated?.Invoke(this, existing);
+                        _ = _uiDispatcher.InvokeAsync(() => ProcessUpdated?.Invoke(this, existing));
                     }
                     else
                     {
                         _trackedProcesses[processId] = processInfo;
-                        ProcessDetected?.Invoke(this, processInfo);
+                        _ = _uiDispatcher.InvokeAsync(() => ProcessDetected?.Invoke(this, processInfo));
                     }
                 }
 
@@ -868,7 +903,7 @@ namespace FFXIManager.Infrastructure
                 {
                     var processInfo = _trackedProcesses[processId];
                     _trackedProcesses.Remove(processId);
-                    ProcessTerminated?.Invoke(this, processInfo);
+                    _ = _uiDispatcher.InvokeAsync(() => ProcessTerminated?.Invoke(this, processInfo));
                 }
             }
             catch (Win32Exception)
@@ -991,7 +1026,7 @@ namespace FFXIManager.Infrastructure
                 };
                 try
                 {
-                    WindowTitleChanged?.Invoke(this, args);
+                    _ = _uiDispatcher.InvokeAsync(() => WindowTitleChanged?.Invoke(this, args));
                 }
                 catch (Exception ex)
                 {
@@ -1116,8 +1151,10 @@ namespace FFXIManager.Infrastructure
                 if (!interested) return;
 
                 // Build ProcessInfo asynchronously and emit ProcessDetected if new
+                var token = _monitoringCts?.Token ?? CancellationToken.None;
                 Task.Run(async () =>
                 {
+                    if (token.IsCancellationRequested) return;
                     try
                     {
                         var pi = await GetProcessByIdAsync(pid);
@@ -1129,7 +1166,7 @@ namespace FFXIManager.Infrastructure
                         }
                         try
                         {
-                            ProcessDetected?.Invoke(this, pi);
+                            _ = _uiDispatcher.InvokeAsync(() => ProcessDetected?.Invoke(this, pi));
                         }
                         catch (Exception ex)
                         {
@@ -1174,7 +1211,7 @@ namespace FFXIManager.Infrastructure
                 {
                     try
                     {
-                        ProcessTerminated?.Invoke(this, removed);
+                        _ = _uiDispatcher.InvokeAsync(() => ProcessTerminated?.Invoke(this, removed));
                     }
                     catch (Exception ex)
                     {
@@ -1198,6 +1235,7 @@ namespace FFXIManager.Infrastructure
             StopGlobalMonitoring();
             _globalMonitoringTimer?.Dispose();
             _processLock?.Dispose();
+            _monitoringCts?.Dispose();
             GC.SuppressFinalize(this);
         }
     }

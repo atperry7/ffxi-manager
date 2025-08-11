@@ -6,23 +6,30 @@
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
     </UserControl.Resources>
     
-    <Border Background="#34495E" Padding="10">
-        <DockPanel>
-            <!-- Loading Indicator with animated spinner -->
-            <StackPanel DockPanel.Dock="Left" 
+    <Border Background="#2C3E50" Padding="6">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            
+            <!-- Loading Indicator -->
+            <StackPanel Grid.Column="0" 
                         Orientation="Horizontal" 
                         Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisConverter}}"
-                        Margin="0,0,15,0">
-                
+                        Margin="0,0,10,0">
                 <!-- Animated Loading Spinner -->
-                <Border Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center">
-                    <Ellipse Width="12" Height="12" 
-                             Stroke="LightBlue" 
+                <Border Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center">
+                    <Ellipse Width="10" Height="10" 
+                             Stroke="#3DAEE9" 
                              StrokeThickness="2" 
-                             StrokeDashArray="6,4" 
+                             StrokeDashArray="4,2" 
                              StrokeDashOffset="0">
                         <Ellipse.RenderTransform>
-                            <RotateTransform CenterX="6" CenterY="6"/>
+                            <RotateTransform CenterX="5" CenterY="5"/>
                         </Ellipse.RenderTransform>
                         <Ellipse.Triggers>
                             <EventTrigger RoutedEvent="Loaded">
@@ -37,25 +44,44 @@
                         </Ellipse.Triggers>
                     </Ellipse>
                 </Border>
-                
-                <TextBlock Text="Working..." 
-                           Foreground="LightBlue" 
-                           FontWeight="Bold" 
-                           VerticalAlignment="Center"
-                           FontSize="12"/>
             </StackPanel>
             
-            <!-- Status Label and Message -->
-            <TextBlock Text="Status: " 
-                       Foreground="White" 
-                       FontWeight="Bold" 
-                       VerticalAlignment="Center"
-                       FontSize="12"/>
-            <TextBlock Text="{Binding StatusMessage}" 
-                       Foreground="LightGray" 
-                       VerticalAlignment="Center"
-                       FontSize="12"
-                       TextTrimming="CharacterEllipsis"/>
-        </DockPanel>
+            <!-- Status Message -->
+            <DockPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="{Binding StatusMessage}" 
+                           Foreground="#C9D1D9" 
+                           VerticalAlignment="Center"
+                           FontSize="11"
+                           TextTrimming="CharacterEllipsis"/>
+            </DockPanel>
+            
+            <!-- Backup Info -->
+            <Border Grid.Column="2" BorderBrush="#4B5563" BorderThickness="1,0,0,0" 
+                    Padding="10,0,10,0" Margin="10,0,0,0">
+                <TextBlock Text="{Binding BackupInfo}" 
+                           Foreground="#9CA3AF" 
+                           FontSize="11"
+                           VerticalAlignment="Center"/>
+            </Border>
+            
+            <!-- Disk Space -->
+            <Border Grid.Column="3" BorderBrush="#4B5563" BorderThickness="1,0,0,0" 
+                    Padding="10,0,10,0">
+                <TextBlock Text="{Binding DiskSpaceInfo}" 
+                           Foreground="#9CA3AF" 
+                           FontSize="11"
+                           VerticalAlignment="Center"/>
+            </Border>
+            
+            <!-- Last Refresh Time -->
+            <Border Grid.Column="4" BorderBrush="#4B5563" BorderThickness="1,0,0,0" 
+                    Padding="10,0,6,0">
+                <TextBlock Text="{Binding LastRefreshTime}" 
+                           Foreground="#6B7280" 
+                           FontSize="10"
+                           FontStyle="Italic"
+                           VerticalAlignment="Center"/>
+            </Border>
+        </Grid>
     </Border>
 </UserControl>

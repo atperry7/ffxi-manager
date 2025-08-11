@@ -62,6 +62,19 @@ namespace FFXIManager.Utilities
             }
         }
 
+        // Loose normalization: lowercase and remove non-alphanumeric characters
+        public static string NormalizeComparable(string? nameOrPath)
+        {
+            var core = ExtractProcessName(nameOrPath);
+            if (string.IsNullOrWhiteSpace(core)) return string.Empty;
+            var sb = new System.Text.StringBuilder(core.Length);
+            foreach (var ch in core)
+            {
+                if (char.IsLetterOrDigit(ch)) sb.Append(char.ToLowerInvariant(ch));
+            }
+            return sb.ToString();
+        }
+
         public static HashSet<string> ToNameSet(IEnumerable<string> names)
         {
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -73,12 +86,32 @@ namespace FFXIManager.Utilities
             return set;
         }
 
+        public static HashSet<string> ToLooseNameSet(IEnumerable<string> names)
+        {
+            var set = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var n in names ?? Array.Empty<string>())
+            {
+                var normalized = NormalizeComparable(n);
+                if (!string.IsNullOrWhiteSpace(normalized)) set.Add(normalized);
+            }
+            return set;
+        }
+
         public static bool MatchesProcessName(string? candidate, IEnumerable<string> names)
         {
             if (string.IsNullOrWhiteSpace(candidate)) return false;
             var normalized = ExtractProcessName(candidate);
             if (string.IsNullOrWhiteSpace(normalized)) return false;
             var set = ToNameSet(names);
+            return set.Contains(normalized);
+        }
+
+        public static bool MatchesProcessNameLoose(string? candidate, IEnumerable<string> names)
+        {
+            if (string.IsNullOrWhiteSpace(candidate)) return false;
+            var normalized = NormalizeComparable(candidate);
+            if (string.IsNullOrWhiteSpace(normalized)) return false;
+            var set = ToLooseNameSet(names);
             return set.Contains(normalized);
         }
 

@@ -67,10 +67,12 @@ namespace FFXIManager.ViewModels
             set { _maxLogEntries = value; OnPropertyChanged(); }
         }
 
+        private static readonly char[] CsvSplitChars = new[] { ',', ';', '\n', '\r' };
+
         private static List<string> SplitCsv(string text)
         {
             return (text ?? string.Empty)
-                .Split(new[] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                .Split(CsvSplitChars, StringSplitOptions.RemoveEmptyEntries)
                 .Select(s => s.Trim())
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .Distinct(StringComparer.OrdinalIgnoreCase)

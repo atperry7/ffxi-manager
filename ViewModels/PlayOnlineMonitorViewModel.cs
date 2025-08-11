@@ -2,6 +2,7 @@ using FFXIManager.Models;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 using System.Collections.ObjectModel;
+using System.Threading;
 using System.Windows.Input;
 
 namespace FFXIManager.ViewModels
@@ -17,6 +18,7 @@ namespace FFXIManager.ViewModels
         private bool _isMonitoring = true;
         private bool _autoRefresh = true;
         private bool _disposed;
+        private CancellationTokenSource _cts = new();
 
         public PlayOnlineMonitorViewModel(
             IPlayOnlineMonitorService monitorService,
@@ -37,7 +39,7 @@ namespace FFXIManager.ViewModels
             InitializeCommands();
             
             // Start monitoring
-            _monitorService.StartMonitoring();
+            _monitorService.StartMonitoring(_cts.Token);
         }
 
         #region Properties
@@ -52,7 +54,7 @@ namespace FFXIManager.ViewModels
                 if (SetProperty(ref _isMonitoring, value))
                 {
                     if (value)
-                        _monitorService.StartMonitoring();
+                        _monitorService.StartMonitoring(_cts.Token);
                     else
                         _monitorService.StopMonitoring();
                     
@@ -107,7 +109,7 @@ namespace FFXIManager.ViewModels
         {
             try
             {
-                var characters = await _monitorService.GetRunningCharactersAsync();
+                var characters = await _monitorService.GetRunningCharactersAsync(_cts.Token);
                 
                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
@@ -140,7 +142,7 @@ namespace FFXIManager.ViewModels
             {
                 _statusService.SetMessage($"Activating {character.DisplayName}...");
 
-                var success = await _monitorService.ActivateCharacterWindowAsync(character);
+                var success = await _monitorService.ActivateCharacterWindowAsync(character, _cts.Token);
                 
                 if (success)
                 {
@@ -224,6 +226,8 @@ namespace FFXIManager.ViewModels
                 _monitorService.CharacterUpdated -= OnCharacterUpdated;
                 _monitorService.CharacterRemoved -= OnCharacterRemoved;
                 _monitorService.StopMonitoring();
+                _cts.Cancel();
+                _cts.Dispose();
                 _disposed = true;
             }
         }

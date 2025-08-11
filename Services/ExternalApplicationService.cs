@@ -31,7 +31,7 @@ namespace FFXIManager.Services
     /// Service for managing and monitoring external applications
     /// Uses shared ProcessManagementService for unified process handling
     /// </summary>
-public class ExternalApplicationService : IExternalApplicationService, IDisposable
+    public class ExternalApplicationService : IExternalApplicationService, IDisposable
     {
         private readonly ILoggingService _loggingService;
         private readonly ISettingsService _settingsService;
@@ -41,6 +41,7 @@ public class ExternalApplicationService : IExternalApplicationService, IDisposab
         private readonly object _lockObject = new();
         private bool _isMonitoring;
         private bool _disposed;
+        private Guid? _discoveryWatchId;
 
         public event EventHandler<ExternalApplication>? ApplicationStatusChanged;
 
@@ -116,7 +117,7 @@ public class ExternalApplicationService : IExternalApplicationService, IDisposab
             await SaveApplicationsToSettings();
         }
 
-public async Task<bool> LaunchApplicationAsync(ExternalApplication application)
+        public async Task<bool> LaunchApplicationAsync(ExternalApplication application)
         {
             if (application == null)
                 throw new ArgumentNullException(nameof(application));
@@ -179,7 +180,7 @@ public async Task<bool> LaunchApplicationAsync(ExternalApplication application)
             }
         }
 
-public async Task<bool> KillApplicationAsync(ExternalApplication application)
+        public async Task<bool> KillApplicationAsync(ExternalApplication application)
         {
             if (application == null || !application.IsRunning)
                 return false;
@@ -251,7 +252,7 @@ public async Task<bool> KillApplicationAsync(ExternalApplication application)
             }
         }
 
-public async Task RefreshApplicationStatusAsync(ExternalApplication application)
+        public async Task RefreshApplicationStatusAsync(ExternalApplication application)
         {
             if (application == null) return;
 
@@ -341,9 +342,37 @@ public async Task RefreshApplicationStatusAsync(ExternalApplication application)
             if (!_isMonitoring)
             {
                 _isMonitoring = true;
+
+                // Register discovery watch for all known application process names
+                try
+                {
+                    var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    lock (_lockObject)
+                    {
+                        foreach (var app in _applications)
+                        {
+                            if (!string.IsNullOrWhiteSpace(app.ExecutablePath))
+                            {
+                                var n = FFXIManager.Utilities.ProcessFilters.ExtractProcessName(app.ExecutablePath);
+                                if (!string.IsNullOrWhiteSpace(n)) names.Add(n);
+                            }
+                        }
+                    }
+                    if (names.Count > 0)
+                    {
+                        _discoveryWatchId = _processManagementService.RegisterDiscoveryWatch(new Infrastructure.DiscoveryFilter
+                        {
+                            IncludeNames = names
+                        });
+                    }
+                }
+                catch { }
                 
                 // Start global monitoring if not already started
                 _processManagementService.StartGlobalMonitoring(TimeSpan.FromSeconds(5));
+                
+                // Initial status refresh
+                _ = RefreshApplicationStatusAsync();
                 
                 _loggingService.LogInfoAsync("Started application monitoring", "ExternalApplicationService");
             }
@@ -354,6 +383,15 @@ public async Task RefreshApplicationStatusAsync(ExternalApplication application)
             if (_isMonitoring)
             {
                 _isMonitoring = false;
+                try
+                {
+                    if (_discoveryWatchId.HasValue)
+                    {
+                        _processManagementService.UnregisterDiscoveryWatch(_discoveryWatchId.Value);
+                        _discoveryWatchId = null;
+                    }
+                }
+                catch { }
                 _loggingService.LogInfoAsync("Stopped application monitoring", "ExternalApplicationService");
             }
         }
@@ -420,6 +458,11 @@ private void OnProcessTerminated(object? sender, ProcessInfo processInfo)
                 _processManagementService.UntrackPid(processInfo.ProcessId);
                 app.RemoveProcessId(processInfo.ProcessId);
                 ApplicationStatusChanged?.Invoke(this, app);
+            }
+            else if (_isMonitoring)
+            {
+                // Fallback: refresh all applications to detect external shutdowns not mapped yet
+                _ = Task.Run(async () => await RefreshApplicationStatusAsync());
             }
         }
 

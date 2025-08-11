@@ -7,10 +7,11 @@ using FFXIManager.Infrastructure;
 
 namespace FFXIManager.ViewModels
 {
+    using System.Text.RegularExpressions;
     /// <summary>
     /// ViewModel responsible for Profile Management operations
     /// </summary>
-    public class ProfileManagementViewModel : ViewModelBase
+    public partial class ProfileManagementViewModel : ViewModelBase
     {
         private readonly IProfileOperationsService _profileOperations;
         private readonly IStatusMessageService _statusService;
@@ -124,7 +125,7 @@ namespace FFXIManager.ViewModels
                 var displayText = ActiveLoginInfo.Name;
                 if (displayText.Contains("(Last Set:"))
                 {
-                    var match = System.Text.RegularExpressions.Regex.Match(displayText, @"Last Set: ([^)]+)");
+                    var match = LastSetRegex().Match(displayText);
                     if (match.Success)
                     {
                         var lastSetProfile = match.Groups[1].Value;
@@ -142,7 +143,7 @@ namespace FFXIManager.ViewModels
             {
                 if (ActiveLoginInfo?.Name?.Contains("(Last Set:") == true)
                 {
-                    var match = System.Text.RegularExpressions.Regex.Match(ActiveLoginInfo.Name, @"Last Set: ([^)]+)");
+                    var match = LastSetRegex().Match(ActiveLoginInfo.Name);
                     return match.Success ? match.Groups[1].Value : null;
                 }
                 return null;
@@ -150,6 +151,9 @@ namespace FFXIManager.ViewModels
         }
 
         #endregion
+
+        [GeneratedRegex("Last Set: ([^)]+)")]
+        private static partial Regex LastSetRegex();
 
         #region Commands
 

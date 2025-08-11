@@ -68,6 +68,9 @@ namespace FFXIManager.Services
             public bool ShowAutoBackupsInList { get; set; }
             public bool EnableSmartBackupDeduplication { get; set; } = true;
             
+            // Theme and personalization
+            public bool IsDarkTheme { get; set; }
+            
             // Profile tracking
             public string LastActiveProfileName { get; set; } = string.Empty;
             public string LastUsedProfile { get; set; } = string.Empty;

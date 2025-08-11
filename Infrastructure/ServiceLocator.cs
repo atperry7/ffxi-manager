@@ -80,7 +80,7 @@ namespace FFXIManager.Infrastructure
         {
             get
             {
-                _processManagementService ??= new ProcessManagementService(LoggingService);
+                _processManagementService ??= new ProcessManagementService(LoggingService, UiDispatcher);
                 return _processManagementService;
             }
         }
