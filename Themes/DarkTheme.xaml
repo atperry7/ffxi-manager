@@ -42,14 +42,39 @@
     <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource AccentHoverColor}"/>
     <SolidColorBrush x:Key="AccentPressedBrush" Color="{StaticResource AccentPressedColor}"/>
 
-    <!-- Button Foreground Brushes (theme-configurable) -->
-    <SolidColorBrush x:Key="ButtonBaseForegroundBrush" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="ButtonOnPrimaryForegroundBrush" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="ButtonOnSuccessForegroundBrush" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="ButtonOnWarningForegroundBrush" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="ButtonOnDangerForegroundBrush" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="ButtonOnSecondaryForegroundBrush" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="ButtonOnInfoForegroundBrush" Color="#FFFFFF"/>
+    <!-- Button Text Brush - white text for dark theme buttons -->
+    <SolidColorBrush x:Key="ButtonTextBrush" Color="#FFFFFF"/>
+    
+    <!-- Button Background Colors for Dark Theme -->
+    <!-- Primary Button - Blue -->
+    <SolidColorBrush x:Key="PrimaryBrush" Color="#2563EB"/>
+    <SolidColorBrush x:Key="PrimaryHoverBrush" Color="#1D4ED8"/>
+    <SolidColorBrush x:Key="PrimaryPressedBrush" Color="#1E40AF"/>
+    
+    <!-- Success Button - Green -->
+    <SolidColorBrush x:Key="SuccessBrush" Color="#10B981"/>
+    <SolidColorBrush x:Key="SuccessHoverBrush" Color="#059669"/>
+    <SolidColorBrush x:Key="SuccessPressedBrush" Color="#047857"/>
+    
+    <!-- Warning Button - Orange -->
+    <SolidColorBrush x:Key="WarningBrush" Color="#F59E0B"/>
+    <SolidColorBrush x:Key="WarningHoverBrush" Color="#D97706"/>
+    <SolidColorBrush x:Key="WarningPressedBrush" Color="#B45309"/>
+    
+    <!-- Danger Button - Red -->
+    <SolidColorBrush x:Key="DangerBrush" Color="#EF4444"/>
+    <SolidColorBrush x:Key="DangerHoverBrush" Color="#DC2626"/>
+    <SolidColorBrush x:Key="DangerPressedBrush" Color="#B91C1C"/>
+    
+    <!-- Secondary Button - Gray -->
+    <SolidColorBrush x:Key="SecondaryBrush" Color="#6B7280"/>
+    <SolidColorBrush x:Key="SecondaryHoverBrush" Color="#4B5563"/>
+    <SolidColorBrush x:Key="SecondaryPressedBrush" Color="#374151"/>
+    
+    <!-- Info Button - Purple -->
+    <SolidColorBrush x:Key="InfoBrush" Color="#8B5CF6"/>
+    <SolidColorBrush x:Key="InfoHoverBrush" Color="#7C3AED"/>
+    <SolidColorBrush x:Key="InfoPressedBrush" Color="#6D28D9"/>
     
     <!-- Additional DataGrid Brushes -->
     <SolidColorBrush x:Key="AlternatingRowBrush" Color="{StaticResource AlternatingRowColor}"/>

@@ -39,14 +39,16 @@ namespace FFXIManager
 
             var themeUri = isDarkTheme ? DarkThemeUri : LightThemeUri;
             
-            // Find and replace the theme dictionary
+            // Find and replace the theme dictionary - it should always be at index 0
             ResourceDictionary? oldTheme = null;
-            foreach (var dict in app.Resources.MergedDictionaries)
+            if (app.Resources.MergedDictionaries.Count > 0)
             {
-                if (dict.Source?.OriginalString.Contains("Theme.xaml") == true)
+                var firstDict = app.Resources.MergedDictionaries[0];
+                if (firstDict.Source != null && 
+                    (firstDict.Source.OriginalString.Contains("LightTheme.xaml") || 
+                     firstDict.Source.OriginalString.Contains("DarkTheme.xaml")))
                 {
-                    oldTheme = dict;
-                    break;
+                    oldTheme = firstDict;
                 }
             }
 
@@ -54,13 +56,12 @@ namespace FFXIManager
             
             if (oldTheme != null)
             {
-                var index = app.Resources.MergedDictionaries.IndexOf(oldTheme);
-                app.Resources.MergedDictionaries.RemoveAt(index);
-                app.Resources.MergedDictionaries.Insert(index, newTheme);
+                // Replace the first dictionary (theme)
+                app.Resources.MergedDictionaries[0] = newTheme;
             }
             else
             {
-                // Insert at the beginning to ensure theme resources have lowest priority
+                // Insert at the beginning
                 app.Resources.MergedDictionaries.Insert(0, newTheme);
             }
         }

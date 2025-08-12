@@ -17,38 +17,13 @@
             <Setter Property="ToolTipService.BetweenShowDelay" Value="50"/>
         </Style>
 
-        <!-- Modern Color Palette -->
-        <SolidColorBrush x:Key="PrimaryBrush" Color="#2563EB"/>
-        <SolidColorBrush x:Key="PrimaryHoverBrush" Color="#1D4ED8"/>
-        <SolidColorBrush x:Key="PrimaryPressedBrush" Color="#1E40AF"/>
-        
-        <SolidColorBrush x:Key="SuccessBrush" Color="#10B981"/>
-        <SolidColorBrush x:Key="SuccessHoverBrush" Color="#059669"/>
-        <SolidColorBrush x:Key="SuccessPressedBrush" Color="#047857"/>
-        
-        <SolidColorBrush x:Key="WarningBrush" Color="#F59E0B"/>
-        <SolidColorBrush x:Key="WarningHoverBrush" Color="#D97706"/>
-        <SolidColorBrush x:Key="WarningPressedBrush" Color="#B45309"/>
-        
-        <SolidColorBrush x:Key="DangerBrush" Color="#EF4444"/>
-        <SolidColorBrush x:Key="DangerHoverBrush" Color="#DC2626"/>
-        <SolidColorBrush x:Key="DangerPressedBrush" Color="#B91C1C"/>
-        
-        <SolidColorBrush x:Key="SecondaryBrush" Color="#6B7280"/>
-        <SolidColorBrush x:Key="SecondaryHoverBrush" Color="#4B5563"/>
-        <SolidColorBrush x:Key="SecondaryPressedBrush" Color="#374151"/>
-        
-        <SolidColorBrush x:Key="InfoBrush" Color="#8B5CF6"/>
-        <SolidColorBrush x:Key="InfoHoverBrush" Color="#7C3AED"/>
-        <SolidColorBrush x:Key="InfoPressedBrush" Color="#6D28D9"/>
-
         <!-- Base Modern Button Style -->
         <Style x:Key="ModernButtonBase" TargetType="ButtonBase">
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="Medium"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonBaseForegroundBrush}"/>
-            <Setter Property="TextElement.Foreground" Value="{DynamicResource ButtonBaseForegroundBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonTextBrush}"/>
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource ButtonTextBrush}"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="12,8"/>
             <Setter Property="Margin" Value="4"/>
@@ -57,6 +32,15 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ButtonBase">
+                        <ControlTemplate.Resources>
+                            <!-- Override implicit TextBlock style for button content -->
+                            <Style TargetType="TextBlock" BasedOn="{x:Null}">
+                                <Setter Property="Foreground" Value="{Binding RelativeSource={RelativeSource AncestorType=ButtonBase}, Path=Foreground}"/>
+                                <Setter Property="FontFamily" Value="{Binding RelativeSource={RelativeSource AncestorType=ButtonBase}, Path=FontFamily}"/>
+                                <Setter Property="FontSize" Value="{Binding RelativeSource={RelativeSource AncestorType=ButtonBase}, Path=FontSize}"/>
+                                <Setter Property="FontWeight" Value="{Binding RelativeSource={RelativeSource AncestorType=ButtonBase}, Path=FontWeight}"/>
+                            </Style>
+                        </ControlTemplate.Resources>
                         <Border x:Name="Border"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
@@ -67,7 +51,8 @@
                                             VerticalAlignment="Center"
                                             Content="{TemplateBinding Content}"
                                             ContentTemplate="{TemplateBinding ContentTemplate}"
-                                            TextBlock.Foreground="{TemplateBinding Foreground}"/>
+                                            TextBlock.Foreground="{TemplateBinding Foreground}"
+                                            TextElement.Foreground="{TemplateBinding Foreground}"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -97,84 +82,78 @@
 
         <!-- Primary Button Style -->
         <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ModernButtonBase}">
-            <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonOnPrimaryForegroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource PrimaryHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="{StaticResource PrimaryPressedBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource PrimaryPressedBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- Success Button Style -->
         <Style x:Key="SuccessButton" TargetType="Button" BasedOn="{StaticResource ModernButtonBase}">
-            <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonOnSuccessForegroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource SuccessBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource SuccessHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource SuccessHoverBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="{StaticResource SuccessPressedBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource SuccessPressedBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- Warning Button Style -->
         <Style x:Key="WarningButton" TargetType="Button" BasedOn="{StaticResource ModernButtonBase}">
-            <Setter Property="Background" Value="{StaticResource WarningBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonOnWarningForegroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource WarningBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource WarningHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource WarningHoverBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="{StaticResource WarningPressedBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource WarningPressedBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- Danger Button Style -->
         <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ModernButtonBase}">
-            <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonOnDangerForegroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource DangerHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource DangerHoverBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="{StaticResource DangerPressedBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource DangerPressedBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- Secondary Button Style -->
         <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource ModernButtonBase}">
-            <Setter Property="Background" Value="{StaticResource SecondaryBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonOnSecondaryForegroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource SecondaryBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource SecondaryHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource SecondaryHoverBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="{StaticResource SecondaryPressedBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource SecondaryPressedBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- Info Button Style -->
         <Style x:Key="InfoButton" TargetType="Button" BasedOn="{StaticResource ModernButtonBase}">
-            <Setter Property="Background" Value="{StaticResource InfoBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonOnInfoForegroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource InfoBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource InfoHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource InfoHoverBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="{StaticResource InfoPressedBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource InfoPressedBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -191,104 +170,98 @@
 
         <!-- Primary Icon Button -->
         <Style x:Key="PrimaryIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
-            <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonOnPrimaryForegroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource PrimaryHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="{StaticResource PrimaryPressedBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource PrimaryPressedBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- Success Icon Button -->
         <Style x:Key="SuccessIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
-            <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonOnSuccessForegroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource SuccessBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource SuccessHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource SuccessHoverBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="{StaticResource SuccessPressedBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource SuccessPressedBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- Warning Icon Button -->
         <Style x:Key="WarningIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
-            <Setter Property="Background" Value="{StaticResource WarningBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonOnWarningForegroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource WarningBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource WarningHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource WarningHoverBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="{StaticResource WarningPressedBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource WarningPressedBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- Danger Icon Button -->
         <Style x:Key="DangerIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
-            <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonOnDangerForegroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource DangerHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource DangerHoverBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="{StaticResource DangerPressedBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource DangerPressedBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- Secondary Icon Button -->
         <Style x:Key="SecondaryIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
-            <Setter Property="Background" Value="{StaticResource SecondaryBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonOnSecondaryForegroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource SecondaryBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource SecondaryHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource SecondaryHoverBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="{StaticResource SecondaryPressedBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource SecondaryPressedBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- Info Icon Button -->
         <Style x:Key="InfoIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
-            <Setter Property="Background" Value="{StaticResource InfoBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonOnInfoForegroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource InfoBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource InfoHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource InfoHoverBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="{StaticResource InfoPressedBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource InfoPressedBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- Toggle Button Style -->
         <Style x:Key="ModernToggleButton" TargetType="ToggleButton" BasedOn="{StaticResource ModernButtonBase}">
-            <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource SuccessBrush}"/>
                 </Trigger>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource DangerHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource DangerHoverBrush}"/>
                 </Trigger>
                 <MultiTrigger>
                     <MultiTrigger.Conditions>
                         <Condition Property="IsChecked" Value="True"/>
                         <Condition Property="IsMouseOver" Value="True"/>
                     </MultiTrigger.Conditions>
-                    <Setter Property="Background" Value="{StaticResource SuccessHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource SuccessHoverBrush}"/>
                 </MultiTrigger>
             </Style.Triggers>
         </Style>
