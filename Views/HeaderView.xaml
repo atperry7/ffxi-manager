@@ -17,16 +17,9 @@
                 <Ellipse Width="18" Height="18" Fill="{DynamicResource AccentBrush}"/>
                 <TextBlock Text="{Binding CurrentSectionTitle}" FontSize="14" Margin="8,0,0,0" 
                            Foreground="White"/>
+                <TextBlock Text=": Because /login and /logout is NOT endgame content." FontSize="14" Margin="1,0,2,0" 
+                           Foreground="White"/>
             </StackPanel>
-
-            <!-- Center: optional global search placeholder -->
-            <Grid Grid.Column="1" VerticalAlignment="Center">
-                <TextBox MinWidth="220" Height="26" Margin="8,0" VerticalAlignment="Center"
-                         x:Name="GlobalSearchBox"
-                         ToolTip="Search (Ctrl+K)"
-                         Text=""
-                         Visibility="Collapsed"/>
-            </Grid>
 
             <!-- Right: status chips and actions -->
             	<StackPanel Orientation="Horizontal" Grid.Column="2" VerticalAlignment="Center">

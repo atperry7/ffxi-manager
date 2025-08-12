@@ -63,25 +63,6 @@
                            FontSize="11"
                            VerticalAlignment="Center"/>
             </Border>
-            
-            <!-- Disk Space -->
-            <Border Grid.Column="3" BorderBrush="#4A5568" BorderThickness="1,0,0,0"
-                    Padding="10,0,10,0">
-                <TextBlock Text="{Binding DiskSpaceInfo}" 
-                           Foreground="#C1C7CD"
-                           FontSize="11"
-                           VerticalAlignment="Center"/>
-            </Border>
-            
-            <!-- Last Refresh Time -->
-            <Border Grid.Column="4" BorderBrush="#4A5568" BorderThickness="1,0,0,0"
-                    Padding="10,0,6,0">
-                <TextBlock Text="{Binding LastRefreshTime}" 
-                           Foreground="#9CA3AF"
-                           FontSize="10"
-                           FontStyle="Italic"
-                           VerticalAlignment="Center"/>
-            </Border>
         </Grid>
     </Border>
 </UserControl>

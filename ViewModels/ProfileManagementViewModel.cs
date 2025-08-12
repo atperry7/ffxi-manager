@@ -203,10 +203,8 @@ namespace FFXIManager.ViewModels
 
                 await ServiceLocator.UiDispatcher.InvokeAsync(() => UpdateProfilesCollection(profiles, activeLoginInfo));
 
-                var autoBackupCount = _settings.ShowAutoBackupsInList ? 0 : 
-                    (await _profileService.GetAutoBackupsAsync()).Count;
-                var statusSuffix = _settings.ShowAutoBackupsInList ? "" : $" ({autoBackupCount} auto-backups hidden)";
-                _statusService.SetMessage($"Loaded {profiles.Count} backup profiles{statusSuffix}");
+                // Keep the status concise; detailed counts are shown in the status bar's backup info
+                _statusService.SetMessage("Profiles loaded.");
 
                 if (activeLoginInfo == null)
                 {
