@@ -27,7 +27,7 @@
                             Style="{StaticResource InfoButton}"
                             Command="{Binding ChangeDirectoryCommand}" 
                             Width="90"/>
-                    <TextBox Text="{Binding PlayOnlineDirectory}" IsReadOnly="True" Background="#F5F5F5"/>
+                    <TextBox Text="{Binding PlayOnlineDirectory}" IsReadOnly="True"/>
                 </DockPanel>
                 
                 <DockPanel>
@@ -45,13 +45,12 @@
             
             <!-- Profiles DataGrid -->
             <DataGrid Grid.Row="1" 
+                      Style="{StaticResource DataGridBase}"
                       ItemsSource="{Binding Profiles}" 
                       SelectedItem="{Binding SelectedProfile}"
                       AutoGenerateColumns="False"
                       SelectionMode="Single"
                       IsReadOnly="True"
-                      GridLinesVisibility="Horizontal"
-                      AlternatingRowBackground="#F9F9F9"
                       MouseDoubleClick="DataGrid_MouseDoubleClick">
                 <DataGrid.ContextMenu>
                     <ContextMenu>
@@ -70,26 +69,32 @@
                                   Command="{Binding OpenFileLocationCommand}"/>
                     </ContextMenu>
                 </DataGrid.ContextMenu>
-                <DataGrid.RowStyle>
-                    <Style TargetType="DataGridRow">
-                        <Style.Triggers>
-                            <!-- Highlight currently active profile more prominently -->
-                            <DataTrigger Binding="{Binding IsCurrentlyActive, Mode=OneWay}" Value="True">
-                                <Setter Property="Background" Value="#C8E6C9"/>
-                                <Setter Property="FontWeight" Value="Bold"/>
-                                <Setter Property="BorderBrush" Value="#4CAF50"/>
-                                <Setter Property="BorderThickness" Value="2"/>
-                            </DataTrigger>
-                            <!-- Highlight user's last choice -->
-                            <DataTrigger Binding="{Binding IsLastUserChoice, Mode=OneWay}" Value="True">
-                                <Setter Property="Background" Value="#E8F5E8"/>
-                                <Setter Property="FontWeight" Value="SemiBold"/>
-                                <Setter Property="BorderBrush" Value="DarkGreen"/>
-                                <Setter Property="BorderThickness" Value="1"/>
-                            </DataTrigger>
-                        </Style.Triggers>
+                <DataGrid.ColumnHeaderStyle>
+                    <Style TargetType="DataGridColumnHeader">
+                        <Setter Property="Background" Value="{DynamicResource HeaderBackgroundBrush}"/>
+                        <Setter Property="Foreground" Value="White"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                        <Setter Property="Padding" Value="12,8"/>
+                        <Setter Property="FontWeight" Value="SemiBold"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                        <Setter Property="VerticalContentAlignment" Value="Center"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="DataGridColumnHeader">
+                                    <Border Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                          TextBlock.Foreground="White"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
                     </Style>
-                </DataGrid.RowStyle>
+                </DataGrid.ColumnHeaderStyle>
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Profile Name" Binding="{Binding Name}" Width="*"/>
                     <DataGridTextColumn Header="File Size" Binding="{Binding FileSizeFormatted, Mode=OneWay}" Width="80"/>

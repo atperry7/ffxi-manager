@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Application Configuration" Height="440" Width="500"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="CanResize">
+        ResizeMode="CanResize"
+        Background="{DynamicResource BackgroundBrush}">
     
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -19,17 +20,17 @@
         </Grid.RowDefinitions>
         
         <!-- Application Name -->
-        <Label Grid.Row="0" Content="Application Name:" FontWeight="Bold" Margin="0,0,0,5"/>
+        <Label Grid.Row="0" Content="Application Name:" FontWeight="Bold" Margin="0,0,0,5" Foreground="{DynamicResource PrimaryTextBrush}"/>
         <TextBox Grid.Row="1" x:Name="NameTextBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" 
                  Height="28" Margin="0,0,0,10"/>
         
         <!-- Description -->
-        <Label Grid.Row="2" Content="Description (optional):" FontWeight="Bold" Margin="0,0,0,5"/>
+        <Label Grid.Row="2" Content="Description (optional):" FontWeight="Bold" Margin="0,0,0,5" Foreground="{DynamicResource PrimaryTextBrush}"/>
         <TextBox Grid.Row="3" x:Name="DescriptionTextBox" Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" 
                  Height="28" Margin="0,0,0,10"/>
         
         <!-- Executable Path -->
-        <Label Grid.Row="4" Content="Executable Path:" FontWeight="Bold" Margin="0,0,0,5"/>
+        <Label Grid.Row="4" Content="Executable Path:" FontWeight="Bold" Margin="0,0,0,5" Foreground="{DynamicResource PrimaryTextBrush}"/>
         <Grid Grid.Row="5" Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
@@ -46,7 +47,7 @@
         </Grid>
         
         <!-- Command Line Arguments -->
-        <Label Grid.Row="6" Content="Command Line Arguments (optional):" FontWeight="Bold" Margin="0,0,0,5"/>
+        <Label Grid.Row="6" Content="Command Line Arguments (optional):" FontWeight="Bold" Margin="0,0,0,5" Foreground="{DynamicResource PrimaryTextBrush}"/>
         <TextBox Grid.Row="7" x:Name="ArgumentsTextBox" Text="{Binding Arguments, UpdateSourceTrigger=PropertyChanged}" 
                  Height="28" Margin="0,0,0,10"/>
 

@@ -4,7 +4,8 @@
         xmlns:conv="clr-namespace:FFXIManager.Converters"
         Title="Rename Profile" Height="230" Width="420"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize">
+        ResizeMode="NoResize"
+        Background="{DynamicResource BackgroundBrush}">
     <Window.Resources>
         <conv:InverseBooleanConverter x:Key="InverseBooleanConverter" />
     </Window.Resources>
@@ -22,20 +23,20 @@
         </Grid.ColumnDefinitions>
 
         <!-- Current name row -->
-        <TextBlock Grid.Row="0" Grid.Column="0" Text="Current name:" FontWeight="Bold" Margin="0,0,10,5" VerticalAlignment="Center"/>
-        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="CurrentNameTextBlock" Text="{Binding CurrentName}" Foreground="Gray" Margin="0,0,0,5" VerticalAlignment="Center"/>
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="Current name:" FontWeight="Bold" Margin="0,0,10,5" VerticalAlignment="Center" Foreground="{DynamicResource PrimaryTextBrush}"/>
+        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="CurrentNameTextBlock" Text="{Binding CurrentName}" Margin="0,0,0,5" VerticalAlignment="Center" Style="{StaticResource SecondaryTextBlock}"/>
 
         <!-- New name row -->
-        <TextBlock Grid.Row="1" Grid.Column="0" Text="New name:" FontWeight="Bold" Margin="0,0,10,5" VerticalAlignment="Center"/>
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="New name:" FontWeight="Bold" Margin="0,0,10,5" VerticalAlignment="Center" Foreground="{DynamicResource PrimaryTextBrush}"/>
         <TextBox Grid.Row="1" Grid.Column="1" x:Name="NewNameTextBox" Text="{Binding NewProfileName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" Height="28" FontSize="14" VerticalAlignment="Center"/>
 
         <!-- Status message -->
         <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding ButtonStatusMessage}" 
-                   Foreground="DarkBlue" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                   FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0" Foreground="{DynamicResource PrimaryTextBrush}"/>
 
         <!-- Tip -->
         <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Text="Tip: This will convert auto-backups (backup_*) to user profiles" 
-                   Foreground="Gray" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                   FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0" Style="{StaticResource SecondaryTextBlock}"/>
 
         <!-- Buttons -->
         <StackPanel Grid.Row="4" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">

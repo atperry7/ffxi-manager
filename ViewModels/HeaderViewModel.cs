@@ -194,7 +194,9 @@ namespace FFXIManager.ViewModels
                 var s = _settings.LoadSettings();
                 s.IsDarkTheme = IsDarkTheme;
                 _settings.SaveSettings(s);
-                // For now, just toggle a resource flag consumers can react to later.
+                
+                // Apply the theme change immediately
+                App.ApplyTheme(IsDarkTheme);
             }
             catch { }
         }

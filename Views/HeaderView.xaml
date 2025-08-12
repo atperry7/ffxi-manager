@@ -4,7 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
-    <Border Background="#1F2430" Padding="8">
+    <Border Background="{DynamicResource HeaderBackgroundBrush}" Padding="8">
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
@@ -14,8 +14,9 @@
 
             <!-- Left: minimal icon and current section title -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Grid.Column="0">
-                <Ellipse Width="18" Height="18" Fill="#3DAEE9"/>
-                <TextBlock Text="{Binding CurrentSectionTitle}" Foreground="#DDE2E7" FontSize="14" Margin="8,0,0,0"/>
+                <Ellipse Width="18" Height="18" Fill="{DynamicResource AccentBrush}"/>
+                <TextBlock Text="{Binding CurrentSectionTitle}" FontSize="14" Margin="8,0,0,0" 
+                           Foreground="White"/>
             </StackPanel>
 
             <!-- Center: optional global search placeholder -->
@@ -29,16 +30,16 @@
 
             <!-- Right: status chips and actions -->
             	<StackPanel Orientation="Horizontal" Grid.Column="2" VerticalAlignment="Center">
-                	<Border CornerRadius="12" Background="#263043" Padding="8,4" Margin="0,0,6,0">
-                    	<StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Chars: " Foreground="#C9D1D9"/>
-                        <TextBlock Text="{Binding RunningCharacters, FallbackValue=0}" Foreground="#C9D1D9"/>
+                	<Border CornerRadius="12" Background="{DynamicResource PillBackgroundBrush}" Padding="8,4" Margin="0,0,6,0">
+                    	<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Chars: " Foreground="{DynamicResource PrimaryTextBrush}"/>
+                        <TextBlock Text="{Binding RunningCharacters, FallbackValue=0}" Foreground="{DynamicResource PrimaryTextBrush}"/>
                     </StackPanel>
                 	</Border>
-                	<Border CornerRadius="12" Background="#263043" Padding="8,4" Margin="0,0,6,0">
-                    	<StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Apps: " Foreground="#C9D1D9"/>
-                        <TextBlock Text="{Binding RunningApps, FallbackValue=0}" Foreground="#C9D1D9"/>
+                	<Border CornerRadius="12" Background="{DynamicResource PillBackgroundBrush}" Padding="8,4" Margin="0,0,6,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Apps: " Foreground="{DynamicResource PrimaryTextBrush}"/>
+                        <TextBlock Text="{Binding RunningApps, FallbackValue=0}" Foreground="{DynamicResource PrimaryTextBrush}"/>
                     </StackPanel>
                 	</Border>
                 	<ToggleButton Content="Monitor"

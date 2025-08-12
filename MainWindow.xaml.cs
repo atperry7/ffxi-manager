@@ -125,5 +125,10 @@ namespace FFXIManager
         {
             SaveWindowState();
         }
+
+        private void HeaderView_Loaded(object sender, RoutedEventArgs e)
+        {
+
+        }
     }
 }

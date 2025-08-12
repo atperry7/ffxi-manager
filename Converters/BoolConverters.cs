@@ -35,12 +35,32 @@ namespace FFXIManager.Converters
         {
             if (parameter?.ToString() == "Status")
             {
-                // For status column - green for active profiles, black for others
-                return value is true ? Brushes.DarkGreen : Brushes.Black;
+                // For status column - use theme-aware colors instead of hard-coded colors
+                if (value is true)
+                {
+                    // Active profiles get a success/green color
+                    var successBrush = System.Windows.Application.Current.TryFindResource("SuccessBrush") as SolidColorBrush;
+                    return successBrush ?? Brushes.DarkGreen;
+                }
+                else
+                {
+                    // Non-active profiles use primary text color for good contrast
+                    var primaryTextBrush = System.Windows.Application.Current.TryFindResource("PrimaryTextBrush") as SolidColorBrush;
+                    return primaryTextBrush ?? Brushes.Black;
+                }
             }
             
-            // For other uses - blue for system files, black for others
-            return value is true ? Brushes.DarkBlue : Brushes.Black;
+            // For other uses - use theme-aware colors
+            if (value is true)
+            {
+                var accentBrush = System.Windows.Application.Current.TryFindResource("AccentBrush") as SolidColorBrush;
+                return accentBrush ?? Brushes.DarkBlue;
+            }
+            else
+            {
+                var primaryTextBrush = System.Windows.Application.Current.TryFindResource("PrimaryTextBrush") as SolidColorBrush;
+                return primaryTextBrush ?? Brushes.Black;
+            }
         }
         
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

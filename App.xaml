@@ -4,6 +4,12 @@
              xmlns:local="clr-namespace:FFXIManager"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Theme dictionary will be loaded dynamically -->
+                <ResourceDictionary x:Name="ThemeDictionary" Source="Themes/DarkTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            
         <!-- Global Tooltip Timing Configuration for Snappy Responsiveness -->
         <Style TargetType="{x:Type FrameworkElement}">
             <Setter Property="ToolTipService.InitialShowDelay" Value="150"/>
@@ -41,7 +47,8 @@
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="Medium"/>
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonBaseForegroundBrush}"/>
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource ButtonBaseForegroundBrush}"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="12,8"/>
             <Setter Property="Margin" Value="4"/>
@@ -59,7 +66,8 @@
                             <ContentPresenter HorizontalAlignment="Center" 
                                             VerticalAlignment="Center"
                                             Content="{TemplateBinding Content}"
-                                            ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                                            TextBlock.Foreground="{TemplateBinding Foreground}"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -77,8 +85,8 @@
                                 </Setter>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Border" Property="Background" Value="#D1D5DB"/>
-                                <Setter Property="Foreground" Value="#9CA3AF"/>
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}"/>
                                 <Setter Property="Cursor" Value="Arrow"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -90,6 +98,7 @@
         <!-- Primary Button Style -->
         <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ModernButtonBase}">
             <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonOnPrimaryForegroundBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource PrimaryHoverBrush}"/>
@@ -103,6 +112,7 @@
         <!-- Success Button Style -->
         <Style x:Key="SuccessButton" TargetType="Button" BasedOn="{StaticResource ModernButtonBase}">
             <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonOnSuccessForegroundBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource SuccessHoverBrush}"/>
@@ -116,6 +126,7 @@
         <!-- Warning Button Style -->
         <Style x:Key="WarningButton" TargetType="Button" BasedOn="{StaticResource ModernButtonBase}">
             <Setter Property="Background" Value="{StaticResource WarningBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonOnWarningForegroundBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource WarningHoverBrush}"/>
@@ -129,6 +140,7 @@
         <!-- Danger Button Style -->
         <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ModernButtonBase}">
             <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonOnDangerForegroundBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource DangerHoverBrush}"/>
@@ -142,6 +154,7 @@
         <!-- Secondary Button Style -->
         <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource ModernButtonBase}">
             <Setter Property="Background" Value="{StaticResource SecondaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonOnSecondaryForegroundBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource SecondaryHoverBrush}"/>
@@ -155,6 +168,7 @@
         <!-- Info Button Style -->
         <Style x:Key="InfoButton" TargetType="Button" BasedOn="{StaticResource ModernButtonBase}">
             <Setter Property="Background" Value="{StaticResource InfoBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonOnInfoForegroundBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource InfoHoverBrush}"/>
@@ -178,6 +192,7 @@
         <!-- Primary Icon Button -->
         <Style x:Key="PrimaryIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
             <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonOnPrimaryForegroundBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource PrimaryHoverBrush}"/>
@@ -191,6 +206,7 @@
         <!-- Success Icon Button -->
         <Style x:Key="SuccessIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
             <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonOnSuccessForegroundBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource SuccessHoverBrush}"/>
@@ -204,6 +220,7 @@
         <!-- Warning Icon Button -->
         <Style x:Key="WarningIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
             <Setter Property="Background" Value="{StaticResource WarningBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonOnWarningForegroundBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource WarningHoverBrush}"/>
@@ -217,6 +234,7 @@
         <!-- Danger Icon Button -->
         <Style x:Key="DangerIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
             <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonOnDangerForegroundBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource DangerHoverBrush}"/>
@@ -230,6 +248,7 @@
         <!-- Secondary Icon Button -->
         <Style x:Key="SecondaryIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
             <Setter Property="Background" Value="{StaticResource SecondaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonOnSecondaryForegroundBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource SecondaryHoverBrush}"/>
@@ -243,6 +262,7 @@
         <!-- Info Icon Button -->
         <Style x:Key="InfoIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
             <Setter Property="Background" Value="{StaticResource InfoBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonOnInfoForegroundBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource InfoHoverBrush}"/>
@@ -282,5 +302,52 @@
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Margin" Value="2"/>
         </Style>
+
+        <!-- Implicit Styles for Text Controls -->
+        <!-- TextBlock implicit style -->
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <!-- Label implicit style -->
+        <Style TargetType="Label">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+
+        <!-- Named style for secondary text -->
+        <Style x:Key="SecondaryTextBlock" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+        </Style>
+
+        <!-- Named style for disabled/muted text -->
+        <Style x:Key="DisabledTextBlock" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}"/>
+        </Style>
+
+        <!-- TextBox implicit style -->
+        <Style TargetType="TextBox">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource PrimaryTextBrush}"/>
+            <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Style.Triggers>
+                <Trigger Property="IsReadOnly" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

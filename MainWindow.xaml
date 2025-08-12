@@ -8,33 +8,21 @@
         xmlns:converters="clr-namespace:FFXIManager.Converters"
         mc:Ignorable="d"
         Title="{Binding ApplicationTitle}" Height="700" Width="1200" MinHeight="500" MinWidth="800"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource BackgroundBrush}">
     
     <Window.Resources>
         <!-- Modern TextBox and Label styles to complement buttons -->
-        <Style TargetType="TextBox">
+        <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
             <Setter Property="Margin" Value="4"/>
             <Setter Property="Padding" Value="8"/>
-            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="TextBox">
-                        <Border Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4"
-                                Padding="{TemplateBinding Padding}">
-                            <ScrollViewer x:Name="PART_ContentHost"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
             <Style.Triggers>
-                <Trigger Property="IsFocused" Value="True">
-                    <Setter Property="BorderBrush" Value="#2563EB"/>
+                <Trigger Property="IsKeyboardFocused" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}"/>
                     <Setter Property="BorderThickness" Value="2"/>
                 </Trigger>
             </Style.Triggers>
@@ -45,7 +33,7 @@
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="Medium"/>
-            <Setter Property="Foreground" Value="#374151"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
         </Style>
         
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
@@ -59,7 +47,7 @@
         </Grid.RowDefinitions>
         
         <!-- Header Section -->
-        <views:HeaderView Grid.Row="0"/>
+        <views:HeaderView Grid.Row="0" Loaded="HeaderView_Loaded"/>
         
         <!-- Main Content -->
         <Grid Grid.Row="1" Margin="10">
@@ -73,7 +61,7 @@
             <views:ProfileListView Grid.Column="0" Margin="0,0,5,0" DataContext="{Binding}"/>
             
             <!-- Splitter -->
-            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="LightGray"/>
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource DividerBrush}"/>
             
             <!-- Actions Panel -->
             <views:ProfileActionsView Grid.Column="2" Margin="5,0,0,0" DataContext="{Binding}"/>

@@ -6,7 +6,7 @@
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
     </UserControl.Resources>
     
-    <Border Background="#2C3E50" Padding="6">
+    <Border Background="{DynamicResource HeaderBackgroundBrush}" Padding="6">
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
@@ -24,8 +24,8 @@
                 <!-- Animated Loading Spinner -->
                 <Border Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center">
                     <Ellipse Width="10" Height="10" 
-                             Stroke="#3DAEE9" 
-                             StrokeThickness="2" 
+                             Stroke="{DynamicResource AccentBrush}" 
+                             StrokeThickness="2"
                              StrokeDashArray="4,2" 
                              StrokeDashOffset="0">
                         <Ellipse.RenderTransform>
@@ -49,35 +49,35 @@
             <!-- Status Message -->
             <DockPanel Grid.Column="1" VerticalAlignment="Center">
                 <TextBlock Text="{Binding StatusMessage}" 
-                           Foreground="#C9D1D9" 
+                           Foreground="White"
                            VerticalAlignment="Center"
                            FontSize="11"
                            TextTrimming="CharacterEllipsis"/>
             </DockPanel>
             
             <!-- Backup Info -->
-            <Border Grid.Column="2" BorderBrush="#4B5563" BorderThickness="1,0,0,0" 
+            <Border Grid.Column="2" BorderBrush="#4A5568" BorderThickness="1,0,0,0"
                     Padding="10,0,10,0" Margin="10,0,0,0">
                 <TextBlock Text="{Binding BackupInfo}" 
-                           Foreground="#9CA3AF" 
+                           Foreground="#C1C7CD"
                            FontSize="11"
                            VerticalAlignment="Center"/>
             </Border>
             
             <!-- Disk Space -->
-            <Border Grid.Column="3" BorderBrush="#4B5563" BorderThickness="1,0,0,0" 
+            <Border Grid.Column="3" BorderBrush="#4A5568" BorderThickness="1,0,0,0"
                     Padding="10,0,10,0">
                 <TextBlock Text="{Binding DiskSpaceInfo}" 
-                           Foreground="#9CA3AF" 
+                           Foreground="#C1C7CD"
                            FontSize="11"
                            VerticalAlignment="Center"/>
             </Border>
             
             <!-- Last Refresh Time -->
-            <Border Grid.Column="4" BorderBrush="#4B5563" BorderThickness="1,0,0,0" 
+            <Border Grid.Column="4" BorderBrush="#4A5568" BorderThickness="1,0,0,0"
                     Padding="10,0,6,0">
                 <TextBlock Text="{Binding LastRefreshTime}" 
-                           Foreground="#6B7280" 
+                           Foreground="#9CA3AF"
                            FontSize="10"
                            FontStyle="Italic"
                            VerticalAlignment="Center"/>

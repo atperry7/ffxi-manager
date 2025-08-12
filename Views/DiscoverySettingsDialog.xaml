@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Process Discovery Settings" Height="360" Width="560"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="CanResizeWithGrip">
+        ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource BackgroundBrush}">
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
@@ -15,25 +16,25 @@
 
         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="0,0,0,10">
-                <TextBlock Text="Include process names (comma or newline separated, supports * wildcards):" Margin="0,0,0,4"/>
+                <TextBlock Text="Include process names (comma or newline separated, supports * wildcards):" Margin="0,0,0,4" Foreground="{DynamicResource PrimaryTextBrush}"/>
                 <TextBox Text="{Binding IncludeNamesText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="70"/>
 
-                <TextBlock Text="Exclude process names (comma or newline separated, supports * wildcards):" Margin="0,10,0,4"/>
+                <TextBlock Text="Exclude process names (comma or newline separated, supports * wildcards):" Margin="0,10,0,4" Foreground="{DynamicResource PrimaryTextBrush}"/>
                 <TextBox Text="{Binding ExcludeNamesText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="70"/>
 
-                <TextBlock Text="Ignored window title prefixes (comma or newline separated):" Margin="0,10,0,4"/>
+                <TextBlock Text="Ignored window title prefixes (comma or newline separated):" Margin="0,10,0,4" Foreground="{DynamicResource PrimaryTextBrush}"/>
                 <TextBox Text="{Binding IgnoredPrefixesText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="70"/>
 
-                <Separator Margin="0,12,0,12"/>
-                <GroupBox Header="Diagnostics">
+                <Separator Margin="0,12,0,12" Background="{DynamicResource DividerBrush}"/>
+                <GroupBox Header="Diagnostics" BorderBrush="{DynamicResource BorderBrush}" Foreground="{DynamicResource PrimaryTextBrush}">
                     <StackPanel Margin="8">
-                        <CheckBox Content="Enable diagnostics (capture info)" IsChecked="{Binding EnableDiagnostics, Mode=TwoWay}"/>
-                        <CheckBox Content="Verbose logging (include debug)" IsChecked="{Binding VerboseLogging, Mode=TwoWay}" Margin="0,6,0,0"/>
+                        <CheckBox Content="Enable diagnostics (capture info)" IsChecked="{Binding EnableDiagnostics, Mode=TwoWay}" Foreground="{DynamicResource PrimaryTextBrush}"/>
+                        <CheckBox Content="Verbose logging (include debug)" IsChecked="{Binding VerboseLogging, Mode=TwoWay}" Margin="0,6,0,0" Foreground="{DynamicResource PrimaryTextBrush}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                            <TextBlock Text="Max log entries:" VerticalAlignment="Center"/>
+                            <TextBlock Text="Max log entries:" VerticalAlignment="Center" Foreground="{DynamicResource PrimaryTextBrush}"/>
                             <TextBox Text="{Binding MaxLogEntries, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="80" Margin="8,0,0,0"/>
                         </StackPanel>
-                        <TextBlock Text="When diagnostics is off, only warnings and errors are kept." Foreground="Gray" FontSize="11" Margin="0,6,0,0"/>
+                        <TextBlock Text="When diagnostics is off, only warnings and errors are kept." FontSize="11" Margin="0,6,0,0" Style="{StaticResource SecondaryTextBlock}"/>
                     </StackPanel>
                 </GroupBox>
             </StackPanel>

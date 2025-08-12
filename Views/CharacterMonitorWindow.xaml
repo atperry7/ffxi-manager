@@ -4,7 +4,8 @@
         Title="FFXI Characters" Height="300" Width="100"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResize"
-        MinHeight="300" MinWidth="100">
+        MinHeight="300" MinWidth="100"
+        Background="{DynamicResource BackgroundBrush}">
     
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
@@ -18,7 +19,7 @@
         </Grid.RowDefinitions>
         
         <!-- Compact Header -->
-        <Border Grid.Row="0" Background="#34495E" Padding="5">
+        <Border Grid.Row="0" Background="{DynamicResource HeaderBackgroundBrush}" Padding="5">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -58,19 +59,19 @@
             <ItemsControl ItemsSource="{Binding Characters}" Margin="3">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border BorderBrush="LightGray" BorderThickness="1" Margin="0,0,0,2" Padding="3" CornerRadius="2">
+                        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="0,0,0,2" Padding="3" CornerRadius="2">
                             <Border.Style>
                                 <Style TargetType="Border">
-                                    <Setter Property="Background" Value="White"/>
+                                    <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                            <Setter Property="Background" Value="#E3F2FD"/>
-                                            <Setter Property="BorderBrush" Value="#2196F3"/>
+                                            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                                             <Setter Property="BorderThickness" Value="2"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsResponding}" Value="False">
-                                            <Setter Property="Background" Value="#FFEBEE"/>
-                                            <Setter Property="BorderBrush" Value="#F44336"/>
+                                            <Setter Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -90,7 +91,8 @@
                                     <TextBlock Text="{Binding DisplayName}" 
                                                FontWeight="Bold" FontSize="10" 
                                                TextTrimming="CharacterEllipsis"
-                                               VerticalAlignment="Center"/>
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource PrimaryTextBrush}"/>
                                 </StackPanel>
                                 
                                 <!-- Compact Activate Button -->
@@ -140,7 +142,7 @@
         
         <!-- No Characters Message - Compact -->
         <Border Grid.Row="1" 
-                Background="#F8F9FA" 
+                Background="{DynamicResource SurfaceBrush}"
                 Margin="5"
                 Padding="10">
             <Border.Style>
@@ -157,9 +159,10 @@
                 <TextBlock Text="🎮" FontSize="24" HorizontalAlignment="Center" Opacity="0.5"/>
                 <TextBlock Text="No characters" 
                            FontSize="10" FontWeight="Bold" 
-                           HorizontalAlignment="Center" Margin="0,5,0,2"/>
+                           HorizontalAlignment="Center" Margin="0,5,0,2"
+                           Foreground="{DynamicResource PrimaryTextBrush}"/>
                 <TextBlock Text="Launch FFXI"
-                           FontSize="9" Foreground="Gray"
+                           FontSize="9" Foreground="{DynamicResource SecondaryTextBrush}"
                            HorizontalAlignment="Center" 
                            TextWrapping="Wrap" 
                            TextAlignment="Center"/>
