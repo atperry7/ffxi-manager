@@ -30,13 +30,13 @@
 
             <!-- Right: status chips and actions -->
             	<StackPanel Orientation="Horizontal" Grid.Column="2" VerticalAlignment="Center">
-                	<Border CornerRadius="12" Background="{DynamicResource PillBackgroundBrush}" Padding="8,4" Margin="0,0,6,0">
+                <Border CornerRadius="12" Background="{DynamicResource PillBackgroundBrush}" Padding="8,4" Margin="0,0,6,0" Height="30">
                     	<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="Chars: " Foreground="{DynamicResource PrimaryTextBrush}"/>
                         <TextBlock Text="{Binding RunningCharacters, FallbackValue=0}" Foreground="{DynamicResource PrimaryTextBrush}"/>
                     </StackPanel>
                 	</Border>
-                	<Border CornerRadius="12" Background="{DynamicResource PillBackgroundBrush}" Padding="8,4" Margin="0,0,6,0">
+                	<Border CornerRadius="12" Background="{DynamicResource PillBackgroundBrush}" Padding="8,4" Margin="0,0,6,0" Height="30">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="Apps: " Foreground="{DynamicResource PrimaryTextBrush}"/>
                         <TextBlock Text="{Binding RunningApps, FallbackValue=0}" Foreground="{DynamicResource PrimaryTextBrush}"/>

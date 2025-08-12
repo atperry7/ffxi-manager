@@ -69,7 +69,7 @@ namespace FFXIManager.Services
             public bool EnableSmartBackupDeduplication { get; set; } = true;
             
             // Theme and personalization
-            public bool IsDarkTheme { get; set; }
+            public bool IsDarkTheme { get; set; } = true; // Default to dark theme
             
             // Profile tracking
             public string LastActiveProfileName { get; set; } = string.Empty;
