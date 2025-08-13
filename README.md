@@ -1,6 +1,4 @@
-﻿# FFXI Manager - Profile & Application Management Suite
-
-# 📜 ADVENTURER'S QUEST LOG: The Path to Mastery
+﻿# 📜 FFXI Manager - Profile & Application Management Suite
 
 *Welcome, brave adventurer! Your journey to becoming a master of the multibox arts begins here. Complete these quests to earn your **Signet of Basics** and unlock the power of unlimited profile management!*
 
@@ -68,11 +66,10 @@ Before embarking on this epic quest, ensure your adventurer's satchel contains:
 *Difficulty: Easy | EXP: 250 | Time: 1 minute*
 
 **Objective:** Link the Manager to your PlayOnline realm
-1. **Navigate** to the Settings scroll (look for the ⚙️ rune)
+1. **Navigate** to the Browse Button for the PlayOnline Directory
 2. **Cast "Browse"** to locate your PlayOnline installation
    - *Typical location: `C:\Program Files (x86)\PlayOnline\SquareEnix\PlayOnlineViewer`*
 3. **Confirm** the path contains the sacred `login_w.bin` artifact
-4. **Save** your configuration to bind the connection
 
 ✨ **Quest Complete!** /hurray *Your Mog House base of operations is now established! Time to check your delivery box!*
 
@@ -97,7 +94,7 @@ Before embarking on this epic quest, ensure your adventurer's satchel contains:
 
 **Objective:** Execute your first profile transformation
 1. **Select** a different profile from your collection
-2. **Invoke** "Swap to Selected Profile" with confidence
+2. **Invoke** "Swap to Selected Profile" with confidence (double-click or right-click for context menu)
 3. **Watch** the status messages confirm your success
 4. **Marvel** as the active indicator shifts to your chosen profile
 
@@ -109,7 +106,7 @@ Before embarking on this epic quest, ensure your adventurer's satchel contains:
 *Difficulty: Moderate | EXP: 1000 | Time: 3 minutes*
 
 **Objective:** Register and launch your adventuring tools
-1. **Click** the "➕" rune in the Applications panel
+1. **Click** the "➕" rune in the Application Management panel
 2. **Configure** your primary launcher:
    - **Name:** "Windower" (or your preferred ally)
    - **Path:** Browse to windower.exe
@@ -145,6 +142,7 @@ Before embarking on this epic quest, ensure your adventurer's satchel contains:
 - ✅ Swap between account sets instantly
 - ✅ Launch and manage multiple applications
 - ✅ Monitor application status in real-time
+- ✅ Monitor character instances in real-time
 - ✅ Automatic backup protection
 
 ---
@@ -272,42 +270,6 @@ If your quest goes awry: /panic
 - **Status Feedback**: Comprehensive status messages and operation feedback
 - **Error Handling**: Robust error handling with descriptive messages
 
-## Typical Workflow
-
-### Profile Setup & Management
-
-1. **Initial Configuration**:
-   - Launch FFXI Manager
-   - Configure your PlayOnline directory path
-   - Set up your first 4 accounts in PlayOnline
-
-2. **Create Profile Sets**:
-   - Create backup: "Main Characters" → Click "Add Profile"
-   - Configure different accounts in PlayOnline
-   - Create backup: "Alt Characters" → Click "Add Profile"
-
-3. **Switch Between Profiles**:
-   - Select desired profile from the list
-   - Click "Swap to Selected Profile"
-   - Launch Windower with the selected account set
-
-### Application Management
-
-1. **Add Applications**:
-   - Click "➕" to add new external applications
-   - Configure paths for Windower, POL Proxy, or custom tools
-   - Set launch parameters and working directories
-
-2. **Launch & Monitor**:
-   - Click "▶️" to launch applications
-   - Monitor real-time status (Running/Stopped)
-   - Click "⏹️" to stop running applications
-
-3. **Configuration**:
-   - Click "⚙️" to edit application settings
-   - Update paths, arguments, and options
-   - Configure multi-instance behavior
-
 ## Application Features
 
 ### Profile Operations
@@ -328,7 +290,7 @@ If your quest goes awry: /panic
 - **Remove**: Unregister applications from management
 - **Monitor**: Real-time process status monitoring
 
-### Built-in Applications
+### Built-in Application Management
 
 The application comes pre-configured with common FFXI tools:
 
@@ -394,12 +356,6 @@ The application comes pre-configured with common FFXI tools:
 
 ## Advanced Features
 
-### Smart Profile Detection
-
-- **Auto-Detection**: Automatically detects currently active profile
-- **Persistence Tracking**: Remembers last used profile across sessions
-- **Conflict Resolution**: Handles orphaned profile references
-
 ### Application Monitoring
 
 - Process discovery settings are fully configurable via Settings → Discovery Settings (Include/Exclude patterns with * wildcard).
@@ -407,12 +363,6 @@ The application comes pre-configured with common FFXI tools:
 - **Real-Time Status**: polls every few seconds (3–5s) for application status changes
 - **External Detection**: Detects when applications are closed externally
 - **Multi-Instance Tracking**: Monitors multiple instances of the same application
-
-### Clean Architecture
-
-- **Modular Design**: Separate ViewModels for different concerns
-- **Extensible**: Easy to add new features and capabilities
-- **Maintainable**: Well-organized codebase following SOLID principles
 
 ## Troubleshooting
 
@@ -458,8 +408,11 @@ If you encounter issues or have questions:
 2. Search existing [GitHub Issues](https://github.com/atperry7/FFXIManager/issues)
 3. Create a new issue with detailed information about your problem
 
+
 ---
 
 **FFXI Manager** - Streamlining your Final Fantasy XI experience with modern tools and intelligent automation.
 
 *Made with ❤️ for the FFXI community*
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/L4L21JMRTW)
