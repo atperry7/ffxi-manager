@@ -118,26 +118,10 @@ namespace FFXIManager.Utilities
         public static bool IsAcceptableWindowTitle(string? title)
         {
             if (string.IsNullOrWhiteSpace(title)) return false;
-            // Allow settings-driven ignore list extension
-            try
+            // Use default ignore list only
+            foreach (var ignored in DefaultIgnoredWindowTitles)
             {
-                var settings = FFXIManager.Infrastructure.ServiceLocator.SettingsService.LoadSettings();
-                var ignores = new List<string>(DefaultIgnoredWindowTitles);
-                if (settings.ProcessDiscovery?.IgnoredWindowTitlePrefixes != null)
-                {
-                    ignores.AddRange(settings.ProcessDiscovery.IgnoredWindowTitlePrefixes);
-                }
-                foreach (var ignored in ignores)
-                {
-                    if (title!.StartsWith(ignored, StringComparison.Ordinal)) return false;
-                }
-            }
-            catch
-            {
-                foreach (var ignored in DefaultIgnoredWindowTitles)
-                {
-                    if (title!.StartsWith(ignored, StringComparison.Ordinal)) return false;
-                }
+                if (title!.StartsWith(ignored, StringComparison.Ordinal)) return false;
             }
             return true;
         }

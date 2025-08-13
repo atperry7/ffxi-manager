@@ -77,9 +77,6 @@ namespace FFXIManager.Services
             
             // External applications persistence
             public List<ExternalApplicationData> ExternalApplications { get; set; } = new();
-
-            // Process discovery configuration (drives discovery filters)
-            public ProcessDiscoverySettings ProcessDiscovery { get; set; } = new ProcessDiscoverySettings();
             
             // Diagnostics and logging options
             public DiagnosticsOptions Diagnostics { get; set; } = new DiagnosticsOptions();
@@ -103,15 +100,6 @@ namespace FFXIManager.Services
             public int MaxLogEntries { get; set; } = 1000;
         }
 
-    public class ProcessDiscoverySettings
-    {
-        // Simple, expressive filters: wildcard-capable include/exclude; case-insensitive
-        public List<string> IncludeNames { get; set; } = new List<string> { "pol", "ffxi", "PlayOnlineViewer", "Windower", "POLProxy", "Silmaril" };
-        public List<string> ExcludeNames { get; set; } = new List<string>();
-        // Window title ignore prefixes (in addition to sensible defaults)
-        public List<string> IgnoredWindowTitlePrefixes { get; set; } = new List<string>();
-    }
-    
     /// <summary>
     /// Simplified external application data for persistence
     /// </summary>

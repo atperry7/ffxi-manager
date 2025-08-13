@@ -1,19 +1,6 @@
 ﻿# FFXI Manager - Profile & Application Management Suite
 
-# 📜 ADVENTURER'S QUEST LOG: The Path to Profile Mastery
-
-```
-    _______________
-   |,----------.  |\
-   ||           |=| |
-   ||  Welcome  |=| |
-   ||    to     |=| |
-   || Vana'diel |=| |
-   ||           |=| |
-   |`-----------'  |/
-    ~~~~~~~~~~~~~~~
-     Mog House Door
-```
+# 📜 ADVENTURER'S QUEST LOG: The Path to Mastery
 
 *Welcome, brave adventurer! Your journey to becoming a master of the multibox arts begins here. Complete these quests to earn your **Signet of Basics** and unlock the power of unlimited profile management!*
 

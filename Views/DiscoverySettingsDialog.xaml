@@ -1,7 +1,7 @@
 <Window x:Class="FFXIManager.Views.DiscoverySettingsDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Process Discovery Settings" Height="360" Width="560"
+        Title="Diagnostics Settings" Height="220" Width="560"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip"
         Background="{DynamicResource BackgroundBrush}">
@@ -16,16 +16,6 @@
 
         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="0,0,0,10">
-                <TextBlock Text="Include process names (comma or newline separated, supports * wildcards):" Margin="0,0,0,4" Foreground="{DynamicResource PrimaryTextBrush}"/>
-                <TextBox Text="{Binding IncludeNamesText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="70"/>
-
-                <TextBlock Text="Exclude process names (comma or newline separated, supports * wildcards):" Margin="0,10,0,4" Foreground="{DynamicResource PrimaryTextBrush}"/>
-                <TextBox Text="{Binding ExcludeNamesText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="70"/>
-
-                <TextBlock Text="Ignored window title prefixes (comma or newline separated):" Margin="0,10,0,4" Foreground="{DynamicResource PrimaryTextBrush}"/>
-                <TextBox Text="{Binding IgnoredPrefixesText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="70"/>
-
-                <Separator Margin="0,12,0,12" Background="{DynamicResource DividerBrush}"/>
                 <GroupBox Header="Diagnostics" BorderBrush="{DynamicResource BorderBrush}" Foreground="{DynamicResource PrimaryTextBrush}">
                     <StackPanel Margin="8">
                         <CheckBox Content="Enable diagnostics (capture info)" IsChecked="{Binding EnableDiagnostics, Mode=TwoWay}" Foreground="{DynamicResource PrimaryTextBrush}"/>

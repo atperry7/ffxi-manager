@@ -113,7 +113,7 @@ namespace FFXIManager.ViewModels
                 var apps = await _apps.GetApplicationsAsync();
                 RunningApps = apps.Count(a => a.IsRunning);
                 // Characters
-                var chars = await _pol.GetRunningCharactersAsync();
+                var chars = await _pol.GetCharactersAsync();
                 RunningCharacters = chars?.Count ?? 0;
                 MonitoringActive = true; // We currently run global monitor by default
             }
@@ -144,7 +144,7 @@ namespace FFXIManager.ViewModels
         {
             try
             {
-                var chars = await _pol.GetRunningCharactersAsync();
+                var chars = await _pol.GetCharactersAsync();
                 RunningCharacters = chars?.Count ?? 0;
             }
             catch { }

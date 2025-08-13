@@ -10,494 +10,447 @@ using FFXIManager.Infrastructure;
 namespace FFXIManager.Services
 {
     /// <summary>
-    /// Interface for managing external applications
-    /// </summary>
-    public interface IExternalApplicationService
-    {
-        Task<List<ExternalApplication>> GetApplicationsAsync();
-        Task<ExternalApplication> AddApplicationAsync(ExternalApplication application);
-        Task UpdateApplicationAsync(ExternalApplication application);
-        Task RemoveApplicationAsync(ExternalApplication application);
-        Task<bool> LaunchApplicationAsync(ExternalApplication application);
-        Task<bool> KillApplicationAsync(ExternalApplication application);
-        Task RefreshApplicationStatusAsync();
-        Task RefreshApplicationStatusAsync(ExternalApplication application);
-        void StartMonitoring();
-        void StopMonitoring();
-        event EventHandler<ExternalApplication>? ApplicationStatusChanged;
-    }
-
-    /// <summary>
-    /// Service for managing and monitoring external applications
-    /// Uses shared ProcessManagementService for unified process handling
+    /// Simplified external application service using UnifiedMonitoringService
     /// </summary>
     public class ExternalApplicationService : IExternalApplicationService, IDisposable
     {
-        private readonly ILoggingService _loggingService;
-        private readonly ISettingsService _settingsService;
-        private readonly IProcessManagementService _processManagementService;
+        private readonly IUnifiedMonitoringService _unifiedMonitoring;
+        private readonly ILoggingService _logging;
+        private readonly ISettingsService _settings;
+        
         private readonly List<ExternalApplication> _applications = new();
-        private readonly Dictionary<int, ExternalApplication> _processToAppMap = new();
-        private readonly object _lockObject = new();
+        private readonly Dictionary<Guid, ExternalApplication> _monitorToAppMap = new();
+        private readonly object _lock = new();
+        
         private bool _isMonitoring;
         private bool _disposed;
-        private Guid? _discoveryWatchId;
-
+        
         public event EventHandler<ExternalApplication>? ApplicationStatusChanged;
-
-        public ExternalApplicationService(ILoggingService loggingService, ISettingsService settingsService, IProcessManagementService processManagementService)
+        
+        public ExternalApplicationService(
+            IUnifiedMonitoringService unifiedMonitoring,
+            ILoggingService logging,
+            ISettingsService settings)
         {
-            _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
-            _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-            _processManagementService = processManagementService ?? throw new ArgumentNullException(nameof(processManagementService));
+            _unifiedMonitoring = unifiedMonitoring ?? throw new ArgumentNullException(nameof(unifiedMonitoring));
+            _logging = logging ?? throw new ArgumentNullException(nameof(logging));
+            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             
-            // Subscribe to global process events
-            _processManagementService.ProcessDetected += OnProcessDetected;
-            _processManagementService.ProcessTerminated += OnProcessTerminated;
-            _processManagementService.ProcessUpdated += OnProcessUpdated;
-            
+            // Load applications from settings
             LoadApplicationsFromSettings();
+            
+            // Register monitoring profiles for each application
+            RegisterApplicationProfiles();
+            
+            // Subscribe to unified monitoring events
+            _unifiedMonitoring.ProcessDetected += OnProcessDetected;
+            _unifiedMonitoring.ProcessUpdated += OnProcessUpdated;
+            _unifiedMonitoring.ProcessRemoved += OnProcessRemoved;
         }
-
+        
         public async Task<List<ExternalApplication>> GetApplicationsAsync()
         {
-            await _loggingService.LogDebugAsync("Getting applications list", "ExternalApplicationService");
+            await Task.Yield(); // Ensure async context
             
-            // Immediately refresh status when applications are requested
+            // Refresh status from unified monitoring
             await RefreshApplicationStatusAsync();
             
-            lock (_lockObject)
+            lock (_lock)
             {
                 return new List<ExternalApplication>(_applications);
             }
         }
-
+        
         public async Task<ExternalApplication> AddApplicationAsync(ExternalApplication application)
         {
-            if (application == null)
-                throw new ArgumentNullException(nameof(application));
-
-            await _loggingService.LogInfoAsync($"Adding application: {application.Name}", "ExternalApplicationService");
+            if (application == null) throw new ArgumentNullException(nameof(application));
             
-            lock (_lockObject)
+            await _logging.LogInfoAsync($"Adding application: {application.Name}", "ExternalApplicationService");
+            
+            lock (_lock)
             {
                 _applications.Add(application);
             }
+            
+            // Register monitoring profile for this application
+            RegisterApplicationProfile(application);
+            
+            // Save to settings
             await SaveApplicationsToSettings();
+            
+            // Check if it's already running
+            await RefreshApplicationStatusAsync(application);
             
             return application;
         }
-
+        
         public async Task UpdateApplicationAsync(ExternalApplication application)
         {
-            if (application == null)
-                throw new ArgumentNullException(nameof(application));
-
-            await _loggingService.LogInfoAsync($"Updating application: {application.Name}", "ExternalApplicationService");
+            if (application == null) throw new ArgumentNullException(nameof(application));
+            
+            await _logging.LogInfoAsync($"Updating application: {application.Name}", "ExternalApplicationService");
+            
+            // Update monitoring profile
+            UpdateApplicationProfile(application);
+            
+            // Save to settings
             await SaveApplicationsToSettings();
+            
+            // Refresh status
+            await RefreshApplicationStatusAsync(application);
         }
-
+        
         public async Task RemoveApplicationAsync(ExternalApplication application)
         {
-            if (application == null)
-                throw new ArgumentNullException(nameof(application));
-
-            await _loggingService.LogInfoAsync($"Removing application: {application.Name}", "ExternalApplicationService");
+            if (application == null) throw new ArgumentNullException(nameof(application));
             
-            // Kill the application if it's running
+            await _logging.LogInfoAsync($"Removing application: {application.Name}", "ExternalApplicationService");
+            
+            // Kill if running
             if (application.IsRunning)
             {
                 await KillApplicationAsync(application);
             }
             
-            lock (_lockObject)
+            // Unregister monitoring profile
+            UnregisterApplicationProfile(application);
+            
+            lock (_lock)
             {
                 _applications.Remove(application);
             }
+            
+            // Save to settings
             await SaveApplicationsToSettings();
         }
-
+        
         public async Task<bool> LaunchApplicationAsync(ExternalApplication application)
         {
-            if (application == null)
-                throw new ArgumentNullException(nameof(application));
-
-            await _loggingService.LogInfoAsync($"Launching application: {application.Name}", "ExternalApplicationService");
-
+            if (application == null) throw new ArgumentNullException(nameof(application));
+            
+            await _logging.LogInfoAsync($"Launching application: {application.Name}", "ExternalApplicationService");
+            
             if (!application.ExecutableExists)
             {
-                await _loggingService.LogWarningAsync($"Application executable not found: {application.ExecutablePath}", "ExternalApplicationService");
+                await _logging.LogWarningAsync($"Application executable not found: {application.ExecutablePath}", 
+                    "ExternalApplicationService");
                 return false;
             }
-
+            
             if (!application.AllowMultipleInstances && application.IsRunning)
             {
-                await _loggingService.LogWarningAsync($"Application {application.Name} is already running and multiple instances are not allowed", "ExternalApplicationService");
+                await _logging.LogWarningAsync($"Application {application.Name} is already running", 
+                    "ExternalApplicationService");
                 return false;
             }
-
+            
             try
             {
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = application.ExecutablePath,
                     Arguments = application.Arguments,
-                    WorkingDirectory = string.IsNullOrEmpty(application.WorkingDirectory) 
+                    WorkingDirectory = string.IsNullOrEmpty(application.WorkingDirectory)
                         ? Path.GetDirectoryName(application.ExecutablePath) ?? Environment.CurrentDirectory
                         : application.WorkingDirectory,
                     UseShellExecute = true
                 };
-
+                
                 var process = Process.Start(startInfo);
                 if (process != null)
                 {
                     application.AddProcessId(process.Id);
                     application.LastLaunched = DateTime.Now;
-
-                    // Explicitly track the new PID for faster updates
-                    _processManagementService.TrackPid(process.Id);
                     
-                    lock (_lockObject)
-                    {
-                        _processToAppMap[process.Id] = application;
-                    }
+                    await _logging.LogInfoAsync($"Successfully launched {application.Name} (PID: {process.Id})", 
+                        "ExternalApplicationService");
                     
-                    await _loggingService.LogInfoAsync($"Successfully launched {application.Name} (PID: {process.Id})", "ExternalApplicationService");
                     ApplicationStatusChanged?.Invoke(this, application);
-                    
                     return true;
                 }
-                else
-                {
-                    await _loggingService.LogErrorAsync($"Failed to start process for {application.Name}", null, "ExternalApplicationService");
-                    return false;
-                }
+                
+                return false;
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync($"Error launching {application.Name}", ex, "ExternalApplicationService");
+                await _logging.LogErrorAsync($"Error launching {application.Name}", ex, "ExternalApplicationService");
                 return false;
             }
         }
-
+        
         public async Task<bool> KillApplicationAsync(ExternalApplication application)
         {
             if (application == null || !application.IsRunning)
                 return false;
-
-            await _loggingService.LogInfoAsync($"Killing application: {application.Name}", "ExternalApplicationService");
-
+            
+            await _logging.LogInfoAsync($"Killing application: {application.Name}", "ExternalApplicationService");
+            
             try
             {
+                var processManagement = ServiceLocator.ProcessManagementService;
                 bool anyFailed = false;
-                List<int> pids;
-                lock (_lockObject)
-                {
-                    pids = application.ProcessIds.ToList();
-                }
-
+                
+                var pids = application.ProcessIds.ToList();
                 foreach (var pid in pids)
                 {
-                    try
-                    {
-                        bool success = await _processManagementService.KillProcessAsync(pid, 5000);
-                        if (success)
-                        {
-                            lock (_lockObject)
-                            {
-                                _processToAppMap.Remove(pid);
-                            }
-                            _processManagementService.UntrackPid(pid);
-                            application.RemoveProcessId(pid);
-                        }
-                        else
-                        {
-                            anyFailed = true;
-                        }
-                    }
-                    catch
+                    var success = await processManagement.KillProcessAsync(pid, 5000);
+                    if (!success)
                     {
                         anyFailed = true;
                     }
+                    else
+                    {
+                        application.RemoveProcessId(pid);
+                    }
                 }
-
-                if (!application.ProcessIds.Any())
+                
+                if (!application.IsRunning)
                 {
-                    await _loggingService.LogInfoAsync($"Successfully killed {application.Name}", "ExternalApplicationService");
+                    await _logging.LogInfoAsync($"Successfully killed {application.Name}", "ExternalApplicationService");
                     ApplicationStatusChanged?.Invoke(this, application);
                 }
-
+                
                 return !anyFailed;
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync($"Error killing {application.Name}", ex, "ExternalApplicationService");
+                await _logging.LogErrorAsync($"Error killing {application.Name}", ex, "ExternalApplicationService");
                 return false;
             }
         }
-
+        
         public async Task RefreshApplicationStatusAsync()
         {
-            await _loggingService.LogDebugAsync("Refreshing all application statuses", "ExternalApplicationService");
+            await _logging.LogDebugAsync("Refreshing all application statuses", "ExternalApplicationService");
             
-            var applications = new List<ExternalApplication>();
-            lock (_lockObject)
+            List<ExternalApplication> apps;
+            lock (_lock)
             {
-                applications.AddRange(_applications);
+                apps = _applications.ToList();
             }
             
-            foreach (var app in applications)
+            foreach (var app in apps)
             {
                 await RefreshApplicationStatusAsync(app);
             }
         }
-
+        
         public async Task RefreshApplicationStatusAsync(ExternalApplication application)
         {
             if (application == null) return;
-
+            
             try
             {
-                // Skip if executable path is empty or invalid
-                if (string.IsNullOrWhiteSpace(application.ExecutablePath))
+                // Get the monitor ID for this application
+                Guid? monitorId = null;
+                lock (_lock)
                 {
-                    application.SetProcessIds(Array.Empty<int>());
-                    application.CurrentInstances = 0;
-                    return;
+                    monitorId = _monitorToAppMap.FirstOrDefault(kvp => kvp.Value == application).Key;
                 }
-
-                var processName = FFXIManager.Utilities.ProcessFilters.ExtractProcessName(application.ExecutablePath);
                 
-                // Skip process check if we can't get a valid process name
-                if (string.IsNullOrWhiteSpace(processName))
-                {
-                    application.SetProcessIds(Array.Empty<int>());
-                    application.CurrentInstances = 0;
-                    return;
-                }
-
+                if (monitorId == null) return;
+                
+                // Get processes from unified monitoring
+                var processes = await _unifiedMonitoring.GetProcessesAsync(monitorId.Value);
+                
                 var wasRunning = application.IsRunning;
                 
-                // Use shared process management service to get processes
-                var processes = await _processManagementService.GetProcessesByNamesAsync(new[] { processName });
-                var discoveredPids = processes.Select(p => p.ProcessId).ToList();
-
-                // Sync PID list and map
-                List<int> previousPids;
-                lock (_lockObject)
-                {
-                    previousPids = application.ProcessIds.ToList();
-                }
-
-                var removed = previousPids.Except(discoveredPids).ToList();
-                var added = discoveredPids.Except(previousPids).ToList();
-
-                foreach (var pid in removed)
-                {
-                    lock (_lockObject)
-                    {
-                        _processToAppMap.Remove(pid);
-                    }
-                    _processManagementService.UntrackPid(pid);
-                    application.RemoveProcessId(pid);
-                }
-
-                foreach (var pid in added)
-                {
-                    lock (_lockObject)
-                    {
-                        _processToAppMap[pid] = application;
-                    }
-                    _processManagementService.TrackPid(pid);
-                    application.AddProcessId(pid);
-                }
-
-                // Ensure CurrentInstances reflects processes found
-                application.CurrentInstances = discoveredPids.Count;
-
-                // Only trigger property notifications if status actually changed
+                // Update application process list
+                application.SetProcessIds(processes.Select(p => p.ProcessId));
+                application.CurrentInstances = processes.Count;
+                
+                // Fire event if status changed
                 if (wasRunning != application.IsRunning)
                 {
                     application.OnPropertyChanged(nameof(application.IsRunning));
                     application.OnPropertyChanged(nameof(application.StatusColor));
                     application.OnPropertyChanged(nameof(application.StatusText));
                     
-                    await _loggingService.LogInfoAsync($"Application {application.Name} status changed: {(application.IsRunning ? "STARTED" : "STOPPED")}", "ExternalApplicationService");
+                    await _logging.LogInfoAsync($"Application {application.Name} status changed: {(application.IsRunning ? "STARTED" : "STOPPED")}", 
+                        "ExternalApplicationService");
+                    
                     ApplicationStatusChanged?.Invoke(this, application);
-                }
-                else
-                {
-                    // Still notify CurrentInstances if it changed
-                    application.OnPropertyChanged(nameof(application.CurrentInstances));
                 }
             }
             catch (Exception ex)
             {
-                await _loggingService.LogWarningAsync($"Error refreshing status for {application.Name}: {ex.Message}", "ExternalApplicationService");
+                await _logging.LogWarningAsync($"Error refreshing status for {application.Name}: {ex.Message}", 
+                    "ExternalApplicationService");
             }
         }
-
+        
         public void StartMonitoring()
         {
-            if (!_isMonitoring)
+            if (_isMonitoring) return;
+            
+            _isMonitoring = true;
+            
+            // Start unified monitoring if not already started
+            if (!_unifiedMonitoring.IsMonitoring)
             {
-                _isMonitoring = true;
-
-                // Register discovery watch for all known application process names
-                try
-                {
-                    var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    lock (_lockObject)
-                    {
-                        foreach (var app in _applications)
-                        {
-                            if (!string.IsNullOrWhiteSpace(app.ExecutablePath))
-                            {
-                                var n = FFXIManager.Utilities.ProcessFilters.ExtractProcessName(app.ExecutablePath);
-                                if (!string.IsNullOrWhiteSpace(n)) names.Add(n);
-                            }
-                        }
-                    }
-                    if (names.Count > 0)
-                    {
-                        _discoveryWatchId = _processManagementService.RegisterDiscoveryWatch(new Infrastructure.DiscoveryFilter
-                        {
-                            IncludeNames = names
-                        });
-                    }
-                }
-                catch { }
-                
-                // Start global monitoring if not already started
-                _processManagementService.StartGlobalMonitoring(TimeSpan.FromSeconds(5));
-                
-                // Initial status refresh
-                _ = RefreshApplicationStatusAsync();
-                
-                _loggingService.LogInfoAsync("Started application monitoring", "ExternalApplicationService");
+                _unifiedMonitoring.StartMonitoring();
             }
+            
+            // Initial status refresh
+            _ = RefreshApplicationStatusAsync();
+            
+            _ = _logging.LogInfoAsync("Started application monitoring", "ExternalApplicationService");
         }
-
+        
         public void StopMonitoring()
         {
-            if (_isMonitoring)
+            if (!_isMonitoring) return;
+            
+            _isMonitoring = false;
+            
+            // We don't stop unified monitoring as other services might be using it
+            
+            _ = _logging.LogInfoAsync("Stopped application monitoring", "ExternalApplicationService");
+        }
+        
+        private void RegisterApplicationProfiles()
+        {
+            lock (_lock)
             {
-                _isMonitoring = false;
-                try
+                foreach (var app in _applications)
                 {
-                    if (_discoveryWatchId.HasValue)
-                    {
-                        _processManagementService.UnregisterDiscoveryWatch(_discoveryWatchId.Value);
-                        _discoveryWatchId = null;
-                    }
+                    RegisterApplicationProfile(app);
                 }
-                catch { }
-                _loggingService.LogInfoAsync("Stopped application monitoring", "ExternalApplicationService");
             }
         }
-
-        #region Process Event Handlers
-
-private void OnProcessDetected(object? sender, ProcessInfo processInfo)
+        
+        private void RegisterApplicationProfile(ExternalApplication app)
+        {
+            if (string.IsNullOrWhiteSpace(app.ExecutablePath)) return;
+            
+            var processName = FFXIManager.Utilities.ProcessFilters.ExtractProcessName(app.ExecutablePath);
+            if (string.IsNullOrWhiteSpace(processName)) return;
+            
+            var profile = new MonitoringProfile
+            {
+                Name = $"External App: {app.Name}",
+                ProcessNames = new[] { processName },
+                TrackWindows = false,        // Don't need windows
+                TrackWindowTitles = false,   // Don't need titles
+                IncludeProcessPath = true,   // Include path for validation
+                Context = app                // Store app reference
+            };
+            
+            var monitorId = _unifiedMonitoring.RegisterMonitor(profile);
+            
+            lock (_lock)
+            {
+                _monitorToAppMap[monitorId] = app;
+            }
+            
+            _ = _logging.LogDebugAsync($"Registered monitoring profile for {app.Name} (Monitor: {monitorId})", 
+                "ExternalApplicationService");
+        }
+        
+        private void UpdateApplicationProfile(ExternalApplication app)
+        {
+            // Find existing monitor
+            Guid? monitorId = null;
+            lock (_lock)
+            {
+                monitorId = _monitorToAppMap.FirstOrDefault(kvp => kvp.Value == app).Key;
+            }
+            
+            if (monitorId == null)
+            {
+                // No existing profile, register new one
+                RegisterApplicationProfile(app);
+                return;
+            }
+            
+            // Update existing profile
+            var processName = FFXIManager.Utilities.ProcessFilters.ExtractProcessName(app.ExecutablePath);
+            if (string.IsNullOrWhiteSpace(processName)) return;
+            
+            var profile = new MonitoringProfile
+            {
+                Name = $"External App: {app.Name}",
+                ProcessNames = new[] { processName },
+                TrackWindows = false,
+                TrackWindowTitles = false,
+                IncludeProcessPath = true,
+                Context = app
+            };
+            
+            _unifiedMonitoring.UpdateMonitorProfile(monitorId.Value, profile);
+        }
+        
+        private void UnregisterApplicationProfile(ExternalApplication app)
+        {
+            Guid? monitorId = null;
+            lock (_lock)
+            {
+                monitorId = _monitorToAppMap.FirstOrDefault(kvp => kvp.Value == app).Key;
+                if (monitorId != null)
+                {
+                    _monitorToAppMap.Remove(monitorId.Value);
+                }
+            }
+            
+            if (monitorId != null)
+            {
+                _unifiedMonitoring.UnregisterMonitor(monitorId.Value);
+            }
+        }
+        
+        private void OnProcessDetected(object? sender, MonitoredProcessEventArgs e)
         {
             if (!_isMonitoring) return;
             
-            Task.Run(async () =>
-            {
-                try
-                {
-                    // Check if this process matches any of our applications
-                    var processName = processInfo.ProcessName;
-                    ExternalApplication? matchingApp = null;
-                    
-                    lock (_lockObject)
-                    {
-                        matchingApp = _applications.FirstOrDefault(app => 
-                            !string.IsNullOrEmpty(app.ExecutablePath) &&
-                            FFXIManager.Utilities.ProcessFilters.MatchesProcessName(processName, new[]{ app.ExecutablePath }));
-                    }
-
-                    if (matchingApp != null)
-                    {
-                        // Map and track this specific PID immediately for responsiveness
-                        lock (_lockObject)
-                        {
-                            _processToAppMap[processInfo.ProcessId] = matchingApp;
-                        }
-                        _processManagementService.TrackPid(processInfo.ProcessId);
-                        matchingApp.AddProcessId(processInfo.ProcessId);
-                        ApplicationStatusChanged?.Invoke(this, matchingApp);
-
-                        // Then reconcile against full process list
-                        await RefreshApplicationStatusAsync(matchingApp);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    await _loggingService.LogDebugAsync($"Error handling process detection: {ex.Message}", "ExternalApplicationService");
-                }
-            });
-        }
-
-private void OnProcessTerminated(object? sender, ProcessInfo processInfo)
-        {
             ExternalApplication? app = null;
-            
-            lock (_lockObject)
+            lock (_lock)
             {
-                _processToAppMap.TryGetValue(processInfo.ProcessId, out app);
-                if (app != null)
-                {
-                    _processToAppMap.Remove(processInfo.ProcessId);
-                }
+                _monitorToAppMap.TryGetValue(e.MonitorId, out app);
             }
-
+            
             if (app != null)
             {
-                // Remove only the terminated PID and update running state based on remaining instances
-                _processManagementService.UntrackPid(processInfo.ProcessId);
-                app.RemoveProcessId(processInfo.ProcessId);
+                app.AddProcessId(e.Process.ProcessId);
                 ApplicationStatusChanged?.Invoke(this, app);
-            }
-            else if (_isMonitoring)
-            {
-                // Fallback: refresh all applications to detect external shutdowns not mapped yet
-                _ = Task.Run(async () => await RefreshApplicationStatusAsync());
+                
+                _ = _logging.LogInfoAsync($"Process detected for {app.Name}: PID {e.Process.ProcessId}", 
+                    "ExternalApplicationService");
             }
         }
-
-        private void OnProcessUpdated(object? sender, ProcessInfo processInfo)
+        
+        private void OnProcessUpdated(object? sender, MonitoredProcessEventArgs e)
+        {
+            // We don't need to handle updates for external applications
+        }
+        
+        private void OnProcessRemoved(object? sender, MonitoredProcessEventArgs e)
         {
             if (!_isMonitoring) return;
-
+            
             ExternalApplication? app = null;
-            lock (_lockObject)
+            lock (_lock)
             {
-                _processToAppMap.TryGetValue(processInfo.ProcessId, out app);
+                _monitorToAppMap.TryGetValue(e.MonitorId, out app);
             }
-
+            
             if (app != null)
             {
-                // Update application information based on process changes
-                // This could include responsiveness checks, etc.
-                app.OnPropertyChanged(nameof(app.StatusText));
+                app.RemoveProcessId(e.Process.ProcessId);
+                ApplicationStatusChanged?.Invoke(this, app);
+                
+                _ = _logging.LogInfoAsync($"Process terminated for {app.Name}: PID {e.Process.ProcessId}", 
+                    "ExternalApplicationService");
             }
         }
-
-        #endregion
-
-        #region Settings Management
-
+        
         private void LoadApplicationsFromSettings()
         {
             try
             {
-                var settings = _settingsService.LoadSettings();
+                var settings = _settings.LoadSettings();
                 
-                // If we have saved applications, load them directly
                 if (settings.ExternalApplications != null && settings.ExternalApplications.Count > 0)
                 {
-                    // Load all applications from settings (including previously saved defaults)
                     foreach (var appData in settings.ExternalApplications)
                     {
                         var application = new ExternalApplication
@@ -513,44 +466,40 @@ private void OnProcessTerminated(object? sender, ProcessInfo processInfo)
                         _applications.Add(application);
                     }
                     
-                    _loggingService.LogInfoAsync($"Loaded {_applications.Count} applications from settings", "ExternalApplicationService");
+                    _ = _logging.LogInfoAsync($"Loaded {_applications.Count} applications from settings", 
+                        "ExternalApplicationService");
                 }
                 else
                 {
-                    // First run - load default applications and save them immediately
+                    // Load defaults on first run
                     _applications.AddRange(GetDefaultApplications());
-                    _loggingService.LogInfoAsync($"First run - loaded {_applications.Count} default applications", "ExternalApplicationService");
+                    _ = _logging.LogInfoAsync("First run - loaded default applications", "ExternalApplicationService");
                     
-                    // Save defaults to settings so they persist
+                    // Save defaults
                     _ = Task.Run(async () => await SaveApplicationsToSettings());
                 }
             }
             catch (Exception ex)
             {
-                // If loading fails, fall back to default applications only
                 _applications.Clear();
                 _applications.AddRange(GetDefaultApplications());
-                _loggingService.LogErrorAsync($"Failed to load applications from settings, using defaults: {ex.Message}", ex, "ExternalApplicationService");
-                
-                // Try to save defaults
-                _ = Task.Run(async () => await SaveApplicationsToSettings());
+                _ = _logging.LogErrorAsync("Failed to load applications from settings", ex, "ExternalApplicationService");
             }
         }
-
+        
         private async Task SaveApplicationsToSettings()
         {
             try
             {
-                var settings = _settingsService.LoadSettings();
+                var settings = _settings.LoadSettings();
                 
-                List<ExternalApplication> applicationsToSave;
-                lock (_lockObject)
+                List<ExternalApplication> apps;
+                lock (_lock)
                 {
-                    applicationsToSave = new List<ExternalApplication>(_applications);
+                    apps = _applications.ToList();
                 }
                 
-                // Convert applications to serializable format
-                settings.ExternalApplications = applicationsToSave.Select(app => new ExternalApplicationData
+                settings.ExternalApplications = apps.Select(app => new ExternalApplicationData
                 {
                     Name = app.Name,
                     ExecutablePath = app.ExecutablePath,
@@ -561,73 +510,50 @@ private void OnProcessTerminated(object? sender, ProcessInfo processInfo)
                     AllowMultipleInstances = app.AllowMultipleInstances
                 }).ToList();
                 
-                _settingsService.SaveSettings(settings);
+                _settings.SaveSettings(settings);
                 
-                await _loggingService.LogInfoAsync($"Successfully saved {applicationsToSave.Count} applications to settings", "ExternalApplicationService");
+                await _logging.LogInfoAsync($"Saved {apps.Count} applications to settings", "ExternalApplicationService");
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync("Failed to save applications to settings", ex, "ExternalApplicationService");
+                await _logging.LogErrorAsync("Failed to save applications to settings", ex, "ExternalApplicationService");
             }
         }
-
+        
         private static List<ExternalApplication> GetDefaultApplications()
         {
             var applications = new List<ExternalApplication>();
-
-            // Try to find common installation paths for applications
+            
             var potentialPaths = new Dictionary<string, string[]>
             {
                 ["POL Proxy"] = new[]
                 {
                     @"C:\Program Files\POLProxy\POLProxy.exe",
-                    @"C:\Program Files (x86)\POLProxy\POLProxy.exe",
-                    @"C:\POLProxy\POLProxy.exe",
-                    @"D:\POLProxy\POLProxy.exe"
+                    @"C:\Program Files (x86)\POLProxy\POLProxy.exe"
                 },
                 ["Windower"] = new[]
                 {
                     @"C:\Windower4\Windower.exe",
-                    @"C:\Program Files\Windower4\Windower.exe",
-                    @"C:\Program Files (x86)\Windower4\Windower.exe",
-                    @"D:\Windower4\Windower.exe"
+                    @"C:\Program Files\Windower4\Windower.exe"
                 },
                 ["Silmaril"] = new[]
                 {
                     @"C:\Program Files\Silmaril\Silmaril.exe",
-                    @"C:\Program Files (x86)\Silmaril\Silmaril.exe",
-                    @"C:\Silmaril\Silmaril.exe",
-                    @"D:\Silmaril\Silmaril.exe"
+                    @"C:\Silmaril\Silmaril.exe"
                 }
             };
-
+            
             foreach (var app in potentialPaths)
             {
-                var foundPath = string.Empty;
+                var foundPath = app.Value.FirstOrDefault(File.Exists) ?? app.Value[0];
                 
-                // Try to find an existing path
-                foreach (var path in app.Value)
-                {
-                    if (File.Exists(path))
-                    {
-                        foundPath = path;
-                        break;
-                    }
-                }
-
-                // Use first path as default even if not found (user can edit it)
-                if (string.IsNullOrEmpty(foundPath))
-                {
-                    foundPath = app.Value[0];
-                }
-
                 var application = new ExternalApplication
                 {
                     Name = app.Key,
                     ExecutablePath = foundPath,
                     IsEnabled = true
                 };
-
+                
                 switch (app.Key)
                 {
                     case "POL Proxy":
@@ -636,34 +562,44 @@ private void OnProcessTerminated(object? sender, ProcessInfo processInfo)
                         break;
                     case "Windower":
                         application.Description = "FFXI Game Launcher";
-                        application.AllowMultipleInstances = true; // Allow multiple characters
+                        application.AllowMultipleInstances = true;
                         break;
                     case "Silmaril":
                         application.Description = "FFXI Utility Tool";
                         application.AllowMultipleInstances = false;
                         break;
                 }
-
+                
                 applications.Add(application);
             }
-
+            
             return applications;
         }
-
-        #endregion
-
+        
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
-
+            
             StopMonitoring();
             
-            // Unsubscribe from process events
-            _processManagementService.ProcessDetected -= OnProcessDetected;
-            _processManagementService.ProcessTerminated -= OnProcessTerminated;
-            _processManagementService.ProcessUpdated -= OnProcessUpdated;
-
+            // Unregister all monitoring profiles
+            List<Guid> monitorIds;
+            lock (_lock)
+            {
+                monitorIds = _monitorToAppMap.Keys.ToList();
+            }
+            
+            foreach (var monitorId in monitorIds)
+            {
+                _unifiedMonitoring.UnregisterMonitor(monitorId);
+            }
+            
+            // Unsubscribe from events
+            _unifiedMonitoring.ProcessDetected -= OnProcessDetected;
+            _unifiedMonitoring.ProcessUpdated -= OnProcessUpdated;
+            _unifiedMonitoring.ProcessRemoved -= OnProcessRemoved;
+            
             GC.SuppressFinalize(this);
         }
     }

@@ -38,8 +38,8 @@ namespace FFXIManager.ViewModels
 
             InitializeCommands();
             
-            // Start monitoring
-            _monitorService.StartMonitoring(_cts.Token);
+            // Start monitoring AFTER UI is ready to receive events
+            _monitorService.StartMonitoring();
         }
 
         #region Properties
@@ -54,7 +54,7 @@ namespace FFXIManager.ViewModels
                 if (SetProperty(ref _isMonitoring, value))
                 {
                     if (value)
-                        _monitorService.StartMonitoring(_cts.Token);
+                        _monitorService.StartMonitoring();
                     else
                         _monitorService.StopMonitoring();
                     
@@ -109,14 +109,39 @@ namespace FFXIManager.ViewModels
         {
             try
             {
-                var characters = await _monitorService.GetRunningCharactersAsync(_cts.Token);
+                var characters = await _monitorService.GetCharactersAsync();
                 
                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    Characters.Clear();
-                    foreach (var character in characters)
+                    // If monitoring is active, merge characters instead of clearing
+                    // This prevents overwriting real-time event updates during manual refresh
+                    if (IsMonitoring)
                     {
-                        Characters.Add(character);
+                        // Add new characters that aren't already in the collection
+                        foreach (var character in characters)
+                        {
+                            var existing = Characters.FirstOrDefault(c => c.ProcessId == character.ProcessId && c.WindowHandle == character.WindowHandle);
+                            if (existing == null)
+                            {
+                                Characters.Add(character);
+                            }
+                        }
+                        
+                        // Remove characters that are no longer running
+                        var toRemove = Characters.Where(c => !characters.Any(ch => ch.ProcessId == c.ProcessId && ch.WindowHandle == c.WindowHandle)).ToList();
+                        foreach (var character in toRemove)
+                        {
+                            Characters.Remove(character);
+                        }
+                    }
+                    else
+                    {
+                        // If monitoring is disabled, do a full refresh
+                        Characters.Clear();
+                        foreach (var character in characters)
+                        {
+                            Characters.Add(character);
+                        }
                     }
                 });
 
@@ -185,33 +210,80 @@ namespace FFXIManager.ViewModels
             }
         }
 
-        private void OnCharacterDetected(object? sender, PlayOnlineCharacter character)
+        private void OnCharacterDetected(object? sender, PlayOnlineCharacterEventArgs e)
         {
-            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+            var character = e.Character;
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
-                Characters.Add(character);
-                OnPropertyChanged(nameof(CharacterCount));
+                // Prevent duplicates
+                var existing = Characters.FirstOrDefault(c => c.ProcessId == character.ProcessId && c.WindowHandle == character.WindowHandle);
+                if (existing == null)
+                {
+                    Characters.Add(character);
+                    OnPropertyChanged(nameof(CharacterCount));
+                    OnPropertyChanged(nameof(MonitoringStatus));
+                    _statusService.SetMessage($"PlayOnline character detected: {character.DisplayName}");
+                }
             });
         }
 
-        private void OnCharacterUpdated(object? sender, PlayOnlineCharacter character)
+        private void OnCharacterUpdated(object? sender, PlayOnlineCharacterEventArgs e)
         {
-            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+            var updatedCharacter = e.Character;
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
-                // Character object is already updated due to reference
-                // Just trigger any UI updates if needed
+                // First try to find by PID and window handle (exact match)
+                var existing = Characters.FirstOrDefault(c => c.ProcessId == updatedCharacter.ProcessId && c.WindowHandle == updatedCharacter.WindowHandle);
+                
+                // If not found by handle, the window handle may have changed - find by PID only
+                // This handles cases where the game creates new windows or changes handles
+                if (existing == null)
+                {
+                    existing = Characters.FirstOrDefault(c => c.ProcessId == updatedCharacter.ProcessId);
+                    if (existing != null)
+                    {
+                        _loggingService.LogInfoAsync($"[UI] Window handle changed for PID {updatedCharacter.ProcessId}: 0x{existing.WindowHandle.ToInt64():X} -> 0x{updatedCharacter.WindowHandle.ToInt64():X}", 
+                            "PlayOnlineMonitorViewModel");
+                        // Update the handle since it changed
+                        existing.WindowHandle = updatedCharacter.WindowHandle;
+                    }
+                }
+                
+                if (existing != null)
+                {
+                    _loggingService.LogInfoAsync($"[UI] Updating character - Old Title: '{existing.WindowTitle}', New Title: '{updatedCharacter.WindowTitle}'", 
+                        "PlayOnlineMonitorViewModel");
+                    
+                    // Update the properties - the setters will trigger property change notifications
+                    existing.WindowTitle = updatedCharacter.WindowTitle;
+                    existing.CharacterName = updatedCharacter.CharacterName;
+                    existing.ServerName = updatedCharacter.ServerName;
+                    existing.LastSeen = updatedCharacter.LastSeen;
+                    existing.IsActive = updatedCharacter.IsActive;
+                }
+                else
+                {
+                    // Character truly not found - might be a new window, add it
+                    _loggingService.LogInfoAsync($"[UI] New window detected for existing process - PID: {updatedCharacter.ProcessId}, Handle: 0x{updatedCharacter.WindowHandle.ToInt64():X}, Title: '{updatedCharacter.WindowTitle}'", 
+                        "PlayOnlineMonitorViewModel");
+                    Characters.Add(updatedCharacter);
+                    OnPropertyChanged(nameof(CharacterCount));
+                }
             });
         }
 
-        private void OnCharacterRemoved(object? sender, int processId)
+        private void OnCharacterRemoved(object? sender, PlayOnlineCharacterEventArgs e)
         {
-            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+            var processId = e.Character.ProcessId;
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
                 var character = Characters.FirstOrDefault(c => c.ProcessId == processId);
                 if (character != null)
                 {
                     Characters.Remove(character);
                     OnPropertyChanged(nameof(CharacterCount));
+                    OnPropertyChanged(nameof(MonitoringStatus));
+                    _statusService.SetMessage($"PlayOnline character removed: {character.DisplayName}");
                 }
             });
         }

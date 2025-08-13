@@ -22,26 +22,6 @@ namespace FFXIManager.ViewModels
             CancelCommand = new RelayCommand(() => { /* handled by dialog */ });
         }
 
-        private string _includeNamesText = string.Empty;
-        public string IncludeNamesText
-        {
-            get => _includeNamesText;
-            set { _includeNamesText = value; OnPropertyChanged(); }
-        }
-
-        private string _excludeNamesText = string.Empty;
-        public string ExcludeNamesText
-        {
-            get => _excludeNamesText;
-            set { _excludeNamesText = value; OnPropertyChanged(); }
-        }
-
-        private string _ignoredPrefixesText = string.Empty;
-        public string IgnoredPrefixesText
-        {
-            get => _ignoredPrefixesText;
-            set { _ignoredPrefixesText = value; OnPropertyChanged(); }
-        }
 
         public ICommand SaveCommand { get; }
         public ICommand CancelCommand { get; }
@@ -67,29 +47,10 @@ namespace FFXIManager.ViewModels
             set { _maxLogEntries = value; OnPropertyChanged(); }
         }
 
-        private static readonly char[] CsvSplitChars = new[] { ',', ';', '\n', '\r' };
-
-        private static List<string> SplitCsv(string text)
-        {
-            return (text ?? string.Empty)
-                .Split(CsvSplitChars, StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-        }
-
-        private static string JoinCsv(IEnumerable<string> items)
-        {
-            return string.Join(", ", items ?? Array.Empty<string>());
-        }
 
         private void LoadFromSettings()
         {
             var settings = _settingsService.LoadSettings();
-            IncludeNamesText = JoinCsv(settings.ProcessDiscovery?.IncludeNames ?? new List<string>());
-            ExcludeNamesText = JoinCsv(settings.ProcessDiscovery?.ExcludeNames ?? new List<string>());
-            IgnoredPrefixesText = JoinCsv(settings.ProcessDiscovery?.IgnoredWindowTitlePrefixes ?? new List<string>());
 
             // Diagnostics
             EnableDiagnostics = settings.Diagnostics?.EnableDiagnostics ?? false;
@@ -100,10 +61,6 @@ namespace FFXIManager.ViewModels
         public void Save()
         {
             var settings = _settingsService.LoadSettings();
-            settings.ProcessDiscovery ??= new ProcessDiscoverySettings();
-            settings.ProcessDiscovery.IncludeNames = SplitCsv(IncludeNamesText);
-            settings.ProcessDiscovery.ExcludeNames = SplitCsv(ExcludeNamesText);
-            settings.ProcessDiscovery.IgnoredWindowTitlePrefixes = SplitCsv(IgnoredPrefixesText);
 
             // Diagnostics
             settings.Diagnostics ??= new DiagnosticsOptions();

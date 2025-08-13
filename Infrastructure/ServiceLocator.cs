@@ -20,6 +20,8 @@ namespace FFXIManager.Infrastructure
         private static IExternalApplicationService? _externalApplicationService;
         private static IPlayOnlineMonitorService? _playOnlineMonitorService;
         private static IProcessManagementService? _processManagementService;
+        private static IProcessUtilityService? _processUtilityService;
+        private static IUnifiedMonitoringService? _unifiedMonitoringService;
         private static IUiDispatcher? _uiDispatcher;
         
         public static ISettingsService SettingsService 
@@ -85,6 +87,15 @@ namespace FFXIManager.Infrastructure
             }
         }
 
+        public static IProcessUtilityService ProcessUtilityService
+        {
+            get
+            {
+                _processUtilityService ??= new ProcessUtilityService(LoggingService);
+                return _processUtilityService;
+            }
+        }
+
         public static IUiDispatcher UiDispatcher
         {
             get
@@ -98,16 +109,31 @@ namespace FFXIManager.Infrastructure
         {
             get
             {
-                _externalApplicationService ??= new ExternalApplicationService(LoggingService, SettingsService, ProcessManagementService);
+                _externalApplicationService ??= new ExternalApplicationService(
+                    UnifiedMonitoringService,
+                    LoggingService,
+                    SettingsService);
                 return _externalApplicationService;
             }
         }
 
+        public static IUnifiedMonitoringService UnifiedMonitoringService
+        {
+            get
+            {
+                _unifiedMonitoringService ??= new UnifiedMonitoringService(ProcessUtilityService, LoggingService, UiDispatcher);
+                return _unifiedMonitoringService;
+            }
+        }
+        
         public static IPlayOnlineMonitorService PlayOnlineMonitorService
         {
             get
             {
-                _playOnlineMonitorService ??= new PlayOnlineMonitorService(LoggingService, ProcessManagementService, UiDispatcher);
+                _playOnlineMonitorService ??= new PlayOnlineMonitorService(
+                    UnifiedMonitoringService,
+                    LoggingService,
+                    UiDispatcher);
                 return _playOnlineMonitorService;
             }
         }

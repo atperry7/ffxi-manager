@@ -819,17 +819,6 @@ namespace FFXIManager.Infrastructure
                     }
                 }
 
-                // Augment with user settings-driven defaults (no hardcoded fallbacks)
-                try
-                {
-                    var settings = ServiceLocator.SettingsService.LoadSettings();
-                    if (settings.ProcessDiscovery != null)
-                    {
-                        if (settings.ProcessDiscovery.IncludeNames != null) includePatterns.AddRange(settings.ProcessDiscovery.IncludeNames);
-                        if (settings.ProcessDiscovery.ExcludeNames != null) excludePatterns.AddRange(settings.ProcessDiscovery.ExcludeNames);
-                    }
-                }
-                catch { }
 
                 // Get all processes and filter via patterns for flexibility (supports wildcards)
                 var allProcesses = await GetAllProcessesAsync();
@@ -1133,12 +1122,6 @@ namespace FFXIManager.Infrastructure
                             include.AddRange(w.IncludeNames);
                             exclude.AddRange(w.ExcludeNames);
                         }
-                    }
-                    var settings = ServiceLocator.SettingsService.LoadSettings();
-                    if (settings.ProcessDiscovery != null)
-                    {
-                        if (settings.ProcessDiscovery.IncludeNames != null) include.AddRange(settings.ProcessDiscovery.IncludeNames);
-                        if (settings.ProcessDiscovery.ExcludeNames != null) exclude.AddRange(settings.ProcessDiscovery.ExcludeNames);
                     }
                     var normalized = FFXIManager.Utilities.ProcessFilters.ExtractProcessName(name);
                     interested = FFXIManager.Utilities.ProcessFilters.MatchesNamePatterns(normalized, include, exclude);
