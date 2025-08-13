@@ -78,6 +78,8 @@
     
     <!-- Additional DataGrid Brushes -->
     <SolidColorBrush x:Key="AlternatingRowBrush" Color="{StaticResource AlternatingRowColor}"/>
+    <SolidColorBrush x:Key="DataGridSelectionBrush" Color="#30008CFF"/> <!-- Semi-transparent blue for light theme -->
+    <SolidColorBrush x:Key="DataGridSelectionBorderBrush" Color="#008CFF"/> <!-- Bright blue border -->
     
     <!-- DataGrid Cell Text Style -->
     <Style x:Key="DataGridCellTextBlock" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource {x:Type TextBlock}}">
@@ -141,9 +143,21 @@
                             <Setter Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-                            <Setter Property="Foreground" Value="{DynamicResource BackgroundBrush}"/>
+                            <Setter Property="Background" Value="{DynamicResource DataGridSelectionBrush}"/>
+                            <Setter Property="BorderBrush" Value="{DynamicResource DataGridSelectionBorderBrush}"/>
+                            <Setter Property="BorderThickness" Value="2,0,0,0"/>
+                            <!-- Keep text the normal color for better readability -->
+                            <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
                         </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsSelected" Value="True"/>
+                                <Condition Property="IsMouseOver" Value="True"/>
+                            </MultiTrigger.Conditions>
+                            <Setter Property="Background" Value="{DynamicResource DataGridSelectionBrush}"/>
+                            <Setter Property="Opacity" Value="1.0"/>
+                            <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+                        </MultiTrigger>
                     </Style.Triggers>
                 </Style>
             </Setter.Value>
@@ -173,7 +187,8 @@
                     <Style.Triggers>
                         <Trigger Property="IsSelected" Value="True">
                             <Setter Property="Background" Value="Transparent"/>
-                            <Setter Property="Foreground" Value="{DynamicResource BackgroundBrush}"/>
+                            <!-- Keep text the normal color for better readability -->
+                            <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
                             <Setter Property="BorderBrush" Value="Transparent"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocusWithin" Value="True">
@@ -181,6 +196,296 @@
                         </Trigger>
                     </Style.Triggers>
                 </Style>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    
+    <!-- Modern ScrollBar Style -->
+    <Style x:Key="ModernScrollBar" TargetType="{x:Type ScrollBar}">
+        <Setter Property="Width" Value="12"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Margin" Value="0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ScrollBar}">
+                    <Grid x:Name="GridRoot" Width="12" Background="{TemplateBinding Background}">
+                        <Track x:Name="PART_Track" IsDirectionReversed="true" Focusable="false">
+                            <Track.Thumb>
+                                <Thumb x:Name="Thumb" Background="{DynamicResource SecondaryTextBrush}" 
+                                       Opacity="0.3" 
+                                       Style="{DynamicResource ScrollBarThumbStyle}"/>
+                            </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton x:Name="PageUp" Command="ScrollBar.PageDownCommand" 
+                                              Opacity="0" Focusable="false"/>
+                            </Track.IncreaseRepeatButton>
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton x:Name="PageDown" Command="ScrollBar.PageUpCommand" 
+                                              Opacity="0" Focusable="false"/>
+                            </Track.DecreaseRepeatButton>
+                        </Track>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="true">
+                            <Setter TargetName="Thumb" Property="Opacity" Value="0.6"/>
+                        </Trigger>
+                        <Trigger SourceName="Thumb" Property="IsMouseOver" Value="true">
+                            <Setter TargetName="Thumb" Property="Opacity" Value="0.8"/>
+                        </Trigger>
+                        <Trigger SourceName="Thumb" Property="IsDragging" Value="true">
+                            <Setter TargetName="Thumb" Property="Opacity" Value="1.0"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Horizontal ScrollBar Style -->
+    <Style x:Key="ModernHorizontalScrollBar" TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ModernScrollBar}">
+        <Setter Property="Height" Value="12"/>
+        <Setter Property="Width" Value="Auto"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ScrollBar}">
+                    <Grid x:Name="GridRoot" Height="12" Background="{TemplateBinding Background}">
+                        <Track x:Name="PART_Track" IsDirectionReversed="false" Focusable="false">
+                            <Track.Thumb>
+                                <Thumb x:Name="Thumb" Background="{DynamicResource SecondaryTextBrush}" 
+                                       Opacity="0.3" 
+                                       Style="{DynamicResource ScrollBarThumbHorizontalStyle}"/>
+                            </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton x:Name="PageLeft" Command="ScrollBar.PageRightCommand" 
+                                              Opacity="0" Focusable="false"/>
+                            </Track.IncreaseRepeatButton>
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton x:Name="PageRight" Command="ScrollBar.PageLeftCommand" 
+                                              Opacity="0" Focusable="false"/>
+                            </Track.DecreaseRepeatButton>
+                        </Track>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="true">
+                            <Setter TargetName="Thumb" Property="Opacity" Value="0.6"/>
+                        </Trigger>
+                        <Trigger SourceName="Thumb" Property="IsMouseOver" Value="true">
+                            <Setter TargetName="Thumb" Property="Opacity" Value="0.8"/>
+                        </Trigger>
+                        <Trigger SourceName="Thumb" Property="IsDragging" Value="true">
+                            <Setter TargetName="Thumb" Property="Opacity" Value="1.0"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ScrollBar Thumb Style -->
+    <Style x:Key="ScrollBarThumbStyle" TargetType="{x:Type Thumb}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Thumb}">
+                    <Border x:Name="Rectangle"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="4"
+                            Margin="2,0"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ScrollBar Thumb Horizontal Style -->
+    <Style x:Key="ScrollBarThumbHorizontalStyle" TargetType="{x:Type Thumb}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Thumb}">
+                    <Border x:Name="Rectangle"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="4"
+                            Margin="0,2"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Apply modern scrollbar style globally -->
+    <Style TargetType="{x:Type ScrollBar}">
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto"/>
+                <Setter Property="Height" Value="12"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type ScrollBar}">
+                            <Grid x:Name="GridRoot" Height="12" Background="Transparent">
+                                <Track x:Name="PART_Track" IsDirectionReversed="false" Focusable="false">
+                                    <Track.Thumb>
+                                        <Thumb x:Name="Thumb" Background="{DynamicResource SecondaryTextBrush}" 
+                                               Opacity="0.3" 
+                                               Style="{StaticResource ScrollBarThumbHorizontalStyle}"/>
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton x:Name="PageLeft" Command="ScrollBar.PageRightCommand" 
+                                                      Opacity="0" Focusable="false"/>
+                                    </Track.IncreaseRepeatButton>
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton x:Name="PageRight" Command="ScrollBar.PageLeftCommand" 
+                                                      Opacity="0" Focusable="false"/>
+                                    </Track.DecreaseRepeatButton>
+                                </Track>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="true">
+                                    <Setter TargetName="Thumb" Property="Opacity" Value="0.6"/>
+                                </Trigger>
+                                <Trigger SourceName="Thumb" Property="IsMouseOver" Value="true">
+                                    <Setter TargetName="Thumb" Property="Opacity" Value="0.8"/>
+                                </Trigger>
+                                <Trigger SourceName="Thumb" Property="IsDragging" Value="true">
+                                    <Setter TargetName="Thumb" Property="Opacity" Value="1.0"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+            <Trigger Property="Orientation" Value="Vertical">
+                <Setter Property="Width" Value="12"/>
+                <Setter Property="Height" Value="Auto"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type ScrollBar}">
+                            <Grid x:Name="GridRoot" Width="12" Background="Transparent">
+                                <Track x:Name="PART_Track" IsDirectionReversed="true" Focusable="false">
+                                    <Track.Thumb>
+                                        <Thumb x:Name="Thumb" Background="{DynamicResource SecondaryTextBrush}" 
+                                               Opacity="0.3" 
+                                               Style="{StaticResource ScrollBarThumbStyle}"/>
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton x:Name="PageUp" Command="ScrollBar.PageDownCommand" 
+                                                      Opacity="0" Focusable="false"/>
+                                    </Track.IncreaseRepeatButton>
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton x:Name="PageDown" Command="ScrollBar.PageUpCommand" 
+                                                      Opacity="0" Focusable="false"/>
+                                    </Track.DecreaseRepeatButton>
+                                </Track>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="true">
+                                    <Setter TargetName="Thumb" Property="Opacity" Value="0.6"/>
+                                </Trigger>
+                                <Trigger SourceName="Thumb" Property="IsMouseOver" Value="true">
+                                    <Setter TargetName="Thumb" Property="Opacity" Value="0.8"/>
+                                </Trigger>
+                                <Trigger SourceName="Thumb" Property="IsDragging" Value="true">
+                                    <Setter TargetName="Thumb" Property="Opacity" Value="1.0"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ScrollViewer Style -->
+    <Style TargetType="{x:Type ScrollViewer}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ScrollViewer}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                                Grid.Column="0" Grid.Row="0"
+                                                CanContentScroll="{TemplateBinding CanContentScroll}"
+                                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                Content="{TemplateBinding Content}"
+                                                Margin="{TemplateBinding Padding}"/>
+                        <ScrollBar x:Name="PART_VerticalScrollBar"
+                                   Grid.Column="1" Grid.Row="0"
+                                   AutomationProperties.AutomationId="VerticalScrollBar"
+                                   Cursor="Arrow"
+                                   Maximum="{TemplateBinding ScrollableHeight}"
+                                   Minimum="0"
+                                   Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"
+                                   ViewportSize="{TemplateBinding ViewportHeight}"
+                                   Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"/>
+                        <ScrollBar x:Name="PART_HorizontalScrollBar"
+                                   Grid.Column="0" Grid.Row="1"
+                                   AutomationProperties.AutomationId="HorizontalScrollBar"
+                                   Cursor="Arrow"
+                                   Maximum="{TemplateBinding ScrollableWidth}"
+                                   Minimum="0"
+                                   Orientation="Horizontal"
+                                   Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}"
+                                   ViewportSize="{TemplateBinding ViewportWidth}"
+                                   Value="{Binding HorizontalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"/>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    
+    <!-- Hover Card Border Style - For list items and cards -->
+    <Style x:Key="HoverCardBorder" TargetType="{x:Type Border}">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="12"/>
+        <Setter Property="Margin" Value="0,4"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
+                <!-- No text color change needed in light theme -->
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Surface Card Border Style - Uses surface background -->
+    <Style x:Key="SurfaceCardBorder" TargetType="{x:Type Border}" BasedOn="{StaticResource HoverCardBorder}">
+        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    </Style>
+    
+    <!-- ToolTip Style -->
+    <Style TargetType="{x:Type ToolTip}">
+        <Setter Property="Background" Value="#F3F4F6"/>
+        <Setter Property="Foreground" Value="#111827"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="8,6"/>
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ToolTip}">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <Border.Effect>
+                            <DropShadowEffect ShadowDepth="2" 
+                                              BlurRadius="8" 
+                                              Opacity="0.2" 
+                                              Color="Black"/>
+                        </Border.Effect>
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                    </Border>
+                </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>

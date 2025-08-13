@@ -55,7 +55,7 @@
                     <ItemsControl ItemsSource="{Binding ExternalApplications}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="0,4" Padding="12" Background="{DynamicResource SurfaceBrush}" CornerRadius="8">
+                                <Border Style="{StaticResource SurfaceCardBorder}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
@@ -145,10 +145,9 @@
                     <ItemsControl ItemsSource="{Binding PlayOnlineMonitor.Characters}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="0,4" Padding="12" CornerRadius="8">
+                                <Border>
                                     <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+                                        <Style TargetType="Border" BasedOn="{StaticResource HoverCardBorder}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsActive, FallbackValue=False}" Value="True">
                                                     <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
