@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using FFXIManager.Models;
+using FFXIManager.Models.Settings;
 using FFXIManager.Infrastructure;
 
 namespace FFXIManager.Services

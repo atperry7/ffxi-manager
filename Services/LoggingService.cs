@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using FFXIManager.Models.Settings;
 
 namespace FFXIManager.Services
 {
@@ -74,7 +75,7 @@ namespace FFXIManager.Services
                 var settings = _settingsService?.LoadSettings();
                 if (settings != null)
                 {
-                    var diag = settings.Diagnostics ?? new Services.DiagnosticsOptions();
+var diag = settings.Diagnostics ?? new DiagnosticsOptions();
                     _maxLogEntries = Math.Max(100, Math.Min(diag.MaxLogEntries, 100000));
                     // Determine minimum level based on diagnostics toggles
                     if (!diag.EnableDiagnostics)

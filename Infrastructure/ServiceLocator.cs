@@ -207,6 +207,12 @@ namespace FFXIManager.Infrastructure
         // For cleanup during testing
         public static void Reset()
         {
+            // Dispose SettingsService if it implements IDisposable
+            if (_settingsService is IDisposable disposableSettings)
+            {
+                disposableSettings.Dispose();
+            }
+            
             _settingsService = null;
             _profileService = null;
             _profileOperationsService = null;
@@ -220,6 +226,19 @@ namespace FFXIManager.Infrastructure
             _playOnlineMonitorService = null;
             _processManagementService = null;
             _uiDispatcher = null;
+        }
+        
+        /// <summary>
+        /// Properly dispose of all disposable services
+        /// </summary>
+        public static void DisposeAll()
+        {
+            if (_settingsService is IDisposable disposableSettings)
+            {
+                disposableSettings.Dispose();
+            }
+            
+            // Dispose other services as needed in the future
         }
     }
 }

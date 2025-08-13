@@ -1,18 +1,30 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using FFXIManager.Models.Settings;
 
 namespace FFXIManager.Services
 {
     /// <summary>
-    /// Simple, reliable settings service without complex dependencies
+    /// Enhanced settings service with caching, atomic saves, and debounced operations
     /// </summary>
-    public class SettingsService : ISettingsService
+    public class SettingsService : ISettingsService, IDisposable
     {
         private const string SETTINGS_FILE = "FFXIManagerSettings.json";
+        private const string BACKUP_FILE = "FFXIManagerSettings.json.bak";
+        private const int DEBOUNCE_DELAY_MS = 1000; // 1 second debounce
+        
         private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions { WriteIndented = true };
+        
         private readonly string _settingsPath;
+        private readonly string _backupPath;
+        private readonly SemaphoreSlim _writeSemaphore = new SemaphoreSlim(1, 1);
+        private Timer? _saveTimer;
+        private ApplicationSettings? _cachedSettings;
+        private ApplicationSettings? _pendingSaveSettings;
+        private bool _disposed;
         
         public SettingsService()
         {
@@ -20,98 +32,211 @@ namespace FFXIManager.Services
             var appFolder = Path.Combine(appDataPath, "FFXIManager");
             Directory.CreateDirectory(appFolder);
             _settingsPath = Path.Combine(appFolder, SETTINGS_FILE);
+            _backupPath = Path.Combine(appFolder, BACKUP_FILE);
         }
         
         public ApplicationSettings LoadSettings()
         {
+            // Return cached settings if available
+            if (_cachedSettings != null)
+            {
+                return _cachedSettings;
+            }
+
+            ApplicationSettings? settings = null;
+
+            // Try to load from primary settings file
             try
             {
                 if (File.Exists(_settingsPath))
                 {
                     var json = File.ReadAllText(_settingsPath);
-                    var settings = JsonSerializer.Deserialize<ApplicationSettings>(json);
-                    return settings ?? new ApplicationSettings();
+                    settings = JsonSerializer.Deserialize<ApplicationSettings>(json);
                 }
             }
             catch (Exception)
             {
-                // If there's any error loading settings, return defaults
+                // Primary file failed, try backup
+                try
+                {
+                    if (File.Exists(_backupPath))
+                    {
+                        var json = File.ReadAllText(_backupPath);
+                        settings = JsonSerializer.Deserialize<ApplicationSettings>(json);
+                    }
+                }
+                catch (Exception)
+                {
+                    // Both files failed, will use defaults
+                }
             }
+
+            // Use defaults if loading failed
+            settings ??= new ApplicationSettings();
             
-            return new ApplicationSettings();
+            // Cache the loaded settings
+            _cachedSettings = settings;
+            
+            return _cachedSettings;
         }
         
         public void SaveSettings(ApplicationSettings settings)
         {
+            if (_disposed)
+                return;
+
+            // Update cached settings
+            _cachedSettings = settings;
+            _pendingSaveSettings = settings;
+
+            // Reset the debounce timer
+            _saveTimer?.Dispose();
+            _saveTimer = new Timer(DebouncedSave, null, DEBOUNCE_DELAY_MS, Timeout.Infinite);
+        }
+        
+        public void UpdateTheme(bool isDarkTheme, double characterMonitorOpacity)
+        {
+            if (_disposed)
+                return;
+
+            // Load current settings if not cached
+            var settings = _cachedSettings ?? LoadSettings();
+            
+            // Update theme properties
+            settings.IsDarkTheme = isDarkTheme;
+            settings.CharacterMonitorOpacity = characterMonitorOpacity;
+            
+            // Update cached settings
+            _cachedSettings = settings;
+            _pendingSaveSettings = settings;
+
+            // Reset the debounce timer to schedule a write
+            _saveTimer?.Dispose();
+            _saveTimer = new Timer(DebouncedSave, null, DEBOUNCE_DELAY_MS, Timeout.Infinite);
+        }
+        
+        public void UpdateWindowBounds(double width, double height, double left, double top, bool isMaximized, bool rememberPosition)
+        {
+            if (_disposed)
+                return;
+
+            // Load current settings if not cached
+            var settings = _cachedSettings ?? LoadSettings();
+            
+            // Update window bounds properties
+            settings.MainWindowWidth = width;
+            settings.MainWindowHeight = height;
+            settings.MainWindowLeft = left;
+            settings.MainWindowTop = top;
+            settings.MainWindowMaximized = isMaximized;
+            settings.RememberWindowPosition = rememberPosition;
+            
+            // Update cached settings
+            _cachedSettings = settings;
+            _pendingSaveSettings = settings;
+
+            // Reset the debounce timer to schedule a write
+            _saveTimer?.Dispose();
+            _saveTimer = new Timer(DebouncedSave, null, DEBOUNCE_DELAY_MS, Timeout.Infinite);
+        }
+        
+        public void UpdateDiagnostics(bool enableDiagnostics, bool verboseLogging, int maxLogEntries)
+        {
+            if (_disposed)
+                return;
+
+            // Load current settings if not cached
+            var settings = _cachedSettings ?? LoadSettings();
+            
+            // Update diagnostics properties
+            settings.Diagnostics ??= new DiagnosticsOptions();
+            settings.Diagnostics.EnableDiagnostics = enableDiagnostics;
+            settings.Diagnostics.VerboseLogging = verboseLogging;
+            settings.Diagnostics.MaxLogEntries = maxLogEntries;
+            
+            // Update cached settings
+            _cachedSettings = settings;
+            _pendingSaveSettings = settings;
+
+            // Reset the debounce timer to schedule a write
+            _saveTimer?.Dispose();
+            _saveTimer = new Timer(DebouncedSave, null, DEBOUNCE_DELAY_MS, Timeout.Infinite);
+        }
+
+        private void DebouncedSave(object? state)
+        {
+            if (_disposed || _pendingSaveSettings == null)
+                return;
+
+            var settingsToSave = _pendingSaveSettings;
+            _pendingSaveSettings = null;
+
+            // Perform atomic save in background
+            _ = Task.Run(() => AtomicSave(settingsToSave));
+        }
+
+        private async Task AtomicSave(ApplicationSettings settings)
+        {
+            if (_disposed)
+                return;
+
+            await _writeSemaphore.WaitAsync();
             try
             {
                 var json = JsonSerializer.Serialize(settings, SerializerOptions);
-                File.WriteAllText(_settingsPath, json);
+                var tempPath = _settingsPath + ".tmp";
+
+                // Write to temporary file
+                await File.WriteAllTextAsync(tempPath, json);
+
+                // Backup existing settings file if it exists
+                if (File.Exists(_settingsPath))
+                {
+                    File.Copy(_settingsPath, _backupPath, true);
+                }
+
+                // Atomically replace the settings file
+                File.Replace(tempPath, _settingsPath, null);
             }
             catch (Exception)
             {
                 // Silently fail - settings are not critical
             }
+            finally
+            {
+                _writeSemaphore.Release();
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+
+            _disposed = true;
+
+            // Dispose the timer and wait for any pending save
+            _saveTimer?.Dispose();
+
+            // If there's a pending save, perform it synchronously before disposing
+            if (_pendingSaveSettings != null)
+            {
+                try
+                {
+                    AtomicSave(_pendingSaveSettings).Wait(5000); // Wait up to 5 seconds
+                }
+                catch (Exception)
+                {
+                    // Ignore errors during disposal
+                }
+            }
+
+            _writeSemaphore?.Dispose();
+            GC.SuppressFinalize(this);
         }
     }
     
     /// <summary>
     /// Simple application settings model
     /// </summary>
-        public class ApplicationSettings
-        {
-            public string PlayOnlineDirectory { get; set; } = @"C:\\Program Files (x86)\\PlayOnline\\SquareEnix\\PlayOnlineViewer\\usr\\all";
-            public bool AutoRefreshOnStartup { get; set; } = true;
-            public bool ConfirmDeleteOperations { get; set; } = true;
-            public bool CreateAutoBackups { get; set; } = true;
-            public int MaxAutoBackups { get; set; } = 5;
-            public bool ShowAutoBackupsInList { get; set; }
-            public bool EnableSmartBackupDeduplication { get; set; } = true;
-            
-            // Theme and personalization
-            public bool IsDarkTheme { get; set; } = true; // Default to dark theme
-            public double CharacterMonitorOpacity { get; set; } = 0.95; // Default to 95% opacity
-            
-            // Profile tracking
-            public string LastActiveProfileName { get; set; } = string.Empty;
-            public string LastUsedProfile { get; set; } = string.Empty;
-            
-            // External applications persistence
-            public List<ExternalApplicationData> ExternalApplications { get; set; } = new();
-            
-            // Diagnostics and logging options
-            public DiagnosticsOptions Diagnostics { get; set; } = new DiagnosticsOptions();
-            
-            // Window state persistence
-            public double MainWindowWidth { get; set; } = 1200; // Increased default width
-            public double MainWindowHeight { get; set; } = 700; // Increased default height
-            public double MainWindowLeft { get; set; } = double.NaN; // NaN = center on screen
-            public double MainWindowTop { get; set; } = double.NaN; // NaN = center on screen
-            public bool MainWindowMaximized { get; set; }
-            public bool RememberWindowPosition { get; set; } = true;
-        }
-
-        public class DiagnosticsOptions
-        {
-            // Master toggle for diagnostics. When off, only Warning and Error are persisted
-            public bool EnableDiagnostics { get; set; }
-            // When diagnostics are enabled, include Debug-level events
-            public bool VerboseLogging { get; set; }
-            // Upper bound for in-memory log buffer and recent persisted entries to prevent flooding
-            public int MaxLogEntries { get; set; } = 1000;
-        }
-
-    /// <summary>
-    /// Simplified external application data for persistence
-    /// </summary>
-    public class ExternalApplicationData
-    {
-        public string Name { get; set; } = string.Empty;
-        public string ExecutablePath { get; set; } = string.Empty;
-        public string Arguments { get; set; } = string.Empty;
-        public string WorkingDirectory { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public bool IsEnabled { get; set; } = true;
-        public bool AllowMultipleInstances { get; set; }
-    }
 }

@@ -76,26 +76,27 @@ namespace FFXIManager
                 
                 if (settings.RememberWindowPosition)
                 {
-                    // Save current state
-                    settings.MainWindowMaximized = WindowState == WindowState.Maximized;
+                    // Get current window bounds (use RestoreBounds when maximized)
+                    double width, height, left, top;
+                    bool isMaximized = WindowState == WindowState.Maximized;
                     
-                    // Save size and position (use RestoreBounds when maximized)
-                    if (WindowState == WindowState.Maximized)
+                    if (isMaximized)
                     {
-                        settings.MainWindowWidth = RestoreBounds.Width;
-                        settings.MainWindowHeight = RestoreBounds.Height;
-                        settings.MainWindowLeft = RestoreBounds.Left;
-                        settings.MainWindowTop = RestoreBounds.Top;
+                        width = RestoreBounds.Width;
+                        height = RestoreBounds.Height;
+                        left = RestoreBounds.Left;
+                        top = RestoreBounds.Top;
                     }
                     else
                     {
-                        settings.MainWindowWidth = Width;
-                        settings.MainWindowHeight = Height;
-                        settings.MainWindowLeft = Left;
-                        settings.MainWindowTop = Top;
+                        width = Width;
+                        height = Height;
+                        left = Left;
+                        top = Top;
                     }
                     
-                    ServiceLocator.SettingsService.SaveSettings(settings);
+                    // Use SettingsService.UpdateWindowBounds with debounce mechanism
+                    ServiceLocator.SettingsService.UpdateWindowBounds(width, height, left, top, isMaximized, settings.RememberWindowPosition);
                 }
             }
             catch (Exception ex)

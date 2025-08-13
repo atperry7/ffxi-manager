@@ -65,5 +65,12 @@ namespace FFXIManager
                 app.Resources.MergedDictionaries.Insert(0, newTheme);
             }
         }
+        
+        protected override void OnExit(ExitEventArgs e)
+        {
+            // Properly dispose of all services before exiting
+            ServiceLocator.DisposeAll();
+            base.OnExit(e);
+        }
     }
 }

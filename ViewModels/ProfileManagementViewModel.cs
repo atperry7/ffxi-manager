@@ -1,4 +1,5 @@
 using FFXIManager.Models;
+using FFXIManager.Models.Settings;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 using System.Collections.ObjectModel;

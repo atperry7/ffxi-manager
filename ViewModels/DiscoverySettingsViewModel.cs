@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Input;
 using FFXIManager.Infrastructure;
+using FFXIManager.Models.Settings;
 using FFXIManager.Services;
 using FFXIManager.ViewModels;
 
@@ -50,6 +51,7 @@ namespace FFXIManager.ViewModels
 
         private void LoadFromSettings()
         {
+            // Use the cached settings property from SettingsService
             var settings = _settingsService.LoadSettings();
 
             // Diagnostics
@@ -60,15 +62,9 @@ namespace FFXIManager.ViewModels
 
         public void Save()
         {
-            var settings = _settingsService.LoadSettings();
-
-            // Diagnostics
-            settings.Diagnostics ??= new DiagnosticsOptions();
-            settings.Diagnostics.EnableDiagnostics = EnableDiagnostics;
-            settings.Diagnostics.VerboseLogging = VerboseLogging;
-            settings.Diagnostics.MaxLogEntries = MaxLogEntries > 0 ? MaxLogEntries : 1000;
-
-            _settingsService.SaveSettings(settings);
+            // Use the specific update method instead of saving the entire settings object
+            var validMaxLogEntries = MaxLogEntries > 0 ? MaxLogEntries : 1000;
+            _settingsService.UpdateDiagnostics(EnableDiagnostics, VerboseLogging, validMaxLogEntries);
         }
     }
 }
