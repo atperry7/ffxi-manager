@@ -14,7 +14,6 @@ namespace FFXIManager.ViewModels
         private readonly ISettingsService _settings;
         private readonly IExternalApplicationService _apps;
         private readonly IPlayOnlineMonitorService _pol;
-        private bool _monitoringActive;
         private int _runningApps;
         private int _runningChars;
         private string _activeProfile = string.Empty;
@@ -48,7 +47,6 @@ namespace FFXIManager.ViewModels
             _pol.CharacterRemoved += (_, __) => _ui.BeginInvoke(UpdateRunningChars);
             _pol.CharacterUpdated += (_, __) => _ui.BeginInvoke(UpdateRunningChars);
 
-            ToggleMonitoringCommand = new RelayCommand(ToggleMonitoring);
             OpenSettingsCommand = new RelayCommand(OpenSettings);
             ToggleThemeCommand = new RelayCommand(ToggleTheme);
             GlobalSearchCommand = new RelayCommand(ExecuteGlobalSearch);
@@ -57,18 +55,6 @@ namespace FFXIManager.ViewModels
             _ = RefreshAsync();
         }
 
-        public bool MonitoringActive
-        {
-            get => _monitoringActive;
-            set
-            {
-                if (SetProperty(ref _monitoringActive, value))
-                {
-                    // When the property changes, toggle monitoring
-                    ToggleMonitoringState(value);
-                }
-            }
-        }
 
         public int RunningApps
         {
@@ -100,7 +86,6 @@ namespace FFXIManager.ViewModels
             set => SetProperty(ref _currentSectionTitle, value);
         }
 
-        public ICommand ToggleMonitoringCommand { get; }
         public ICommand OpenSettingsCommand { get; }
         public ICommand ToggleThemeCommand { get; }
         public ICommand GlobalSearchCommand { get; }
@@ -115,7 +100,6 @@ namespace FFXIManager.ViewModels
                 // Characters
                 var chars = await _pol.GetCharactersAsync();
                 RunningCharacters = chars?.Count ?? 0;
-                MonitoringActive = true; // We currently run global monitor by default
             }
             catch { }
         }
@@ -150,29 +134,6 @@ namespace FFXIManager.ViewModels
             catch { }
         }
 
-        private void ToggleMonitoring()
-        {
-            // Toggle the property, which will trigger the actual monitoring state change
-            MonitoringActive = !MonitoringActive;
-        }
-
-        private void ToggleMonitoringState(bool enable)
-        {
-            try
-            {
-                if (enable)
-                {
-                    _pol.StartMonitoring();
-                    ServiceLocator.ProcessManagementService.StartGlobalMonitoring(TimeSpan.FromSeconds(3));
-                }
-                else
-                {
-                    _pol.StopMonitoring();
-                    ServiceLocator.ProcessManagementService.StopGlobalMonitoring();
-                }
-            }
-            catch { }
-        }
 
         private void OpenSettings()
         {

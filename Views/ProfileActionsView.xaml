@@ -138,8 +138,6 @@
                                     Style="{StaticResource InfoIconButton}"
                                     Command="{Binding PlayOnlineMonitor.ShowCharacterMonitorCommand}"
                                     ToolTip="Open Character Monitor Window"/>
-                            <ToggleButton IsChecked="{Binding PlayOnlineMonitor.IsMonitoring, FallbackValue=True}"
-                                          Style="{StaticResource MonitorToggleStyle}"/>
                         </StackPanel>
                     </Grid>
 
