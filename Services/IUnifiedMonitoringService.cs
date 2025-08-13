@@ -20,8 +20,8 @@ namespace FFXIManager.Services
         Task<MonitoredProcess?> GetProcessAsync(Guid monitorId, int processId);
         
         // Control
-        void StartMonitoring();
-        void StopMonitoring();
+    void StartMonitoring();
+    void StopMonitoring();
         bool IsMonitoring { get; }
         
         // Events - filtered per monitor

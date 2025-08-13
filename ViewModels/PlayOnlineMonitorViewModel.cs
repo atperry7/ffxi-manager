@@ -166,12 +166,16 @@ namespace FFXIManager.ViewModels
             try
             {
                 _statusService.SetMessage($"Activating {character.DisplayName}...");
-
+                
+                // Simply activate the window - the monitoring service will detect the change
+                // and fire events that will update our UI automatically
                 var success = await _monitorService.ActivateCharacterWindowAsync(character, _cts.Token);
                 
                 if (success)
                 {
                     _statusService.SetMessage($"Activated {character.DisplayName}");
+                    // The UnifiedMonitoringService will detect the active window change within 500ms
+                    // and fire ProcessUpdated events that will update our Characters collection
                 }
                 else
                 {

@@ -3,53 +3,91 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="FFXI Characters" Height="300" Width="100"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="CanResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        ResizeMode="CanResizeWithGrip"
         MinHeight="300" MinWidth="100"
-        Background="{DynamicResource BackgroundBrush}">
+        Background="Transparent">
     
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
     </Window.Resources>
     
-    <Grid>
+    <!-- Main border with background and opacity -->
+    <Border x:Name="MainBorder" 
+            Background="{DynamicResource BackgroundBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="8">
+        <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         
-        <!-- Compact Header -->
-        <Border Grid.Row="0" Background="{DynamicResource HeaderBackgroundBrush}" Padding="5">
+        <!-- Custom Title Bar with Drag Support -->
+        <Border Grid.Row="0" 
+                Background="{DynamicResource HeaderBackgroundBrush}" 
+                Padding="5"
+                CornerRadius="8,8,0,0"
+                MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center">
+                <!-- Left Side Controls -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="2,0,0,0">
                     <ToggleButton x:Name="AlwaysOnTopToggle" 
                                   Content="📌" 
                                   ToolTip="Always On Top"
                                   Style="{StaticResource IconToggleButton}"
-                                  Width="25" Height="15" 
+                                  Width="20" Height="15" 
                                   FontSize="9"
                                   Margin="0,0,2,0"
                                   Checked="AlwaysOnTopToggle_Checked"
                                   Unchecked="AlwaysOnTopToggle_Unchecked"/>
                     
-                    <Button Content="❌" 
+                    <Button Content="🔄"
+                            Command="{Binding RefreshCharactersCommand}"
+                            Style="{StaticResource InfoIconButton}"
+                            Width="20" Height="15"
+                            FontSize="8"
+                            Margin="0,0,2,0"
+                            ToolTip="Refresh"/>
+                </StackPanel>
+                
+                <!-- Title (Center) -->
+                <TextBlock Grid.Column="1" 
+                           Text="FFXI" 
+                           FontSize="10" 
+                           FontWeight="Bold"
+                           HorizontalAlignment="Center" 
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource PrimaryTextBrush}"/>
+
+                <!-- Right Side Controls -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,2,0">
+                    <!-- Minimize Button -->
+                    <Button Content="—" 
+                            Click="MinimizeButton_Click"
+                            ToolTip="Minimize"
+                            Style="{StaticResource InfoIconButton}"
+                            Width="20" Height="15"
+                            FontSize="9"
+                            Margin="0,0,2,0"/>
+                    
+                    <!-- Close Button -->
+                    <Button Content="✕" 
                             Click="CloseButton_Click"
                             ToolTip="Close"
                             Style="{StaticResource DangerIconButton}"
-                            Width="25" Height="15"
+                            Width="20" Height="15"
                             FontSize="9"/>
-
-                    <Button Content="🔄"
-                        Command="{Binding RefreshCharactersCommand}"
-                        Style="{StaticResource InfoIconButton}"
-                        Width="25" Height="15"
-                        FontSize="8"
-                        ToolTip="Refresh"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -168,5 +206,44 @@
                            TextAlignment="Center"/>
             </StackPanel>
         </Border>
-    </Grid>
+        
+        <!-- Opacity Slider -->
+        <Border Grid.Row="3" 
+                Background="{DynamicResource SurfaceBrush}" 
+                Padding="5"
+                CornerRadius="0,0,8,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <TextBlock Grid.Column="0" 
+                           Text="👁" 
+                           FontSize="10" 
+                           VerticalAlignment="Center"
+                           Margin="0,0,5,0"
+                           ToolTip="Transparency"/>
+                
+                <Slider Grid.Column="1" 
+                        x:Name="OpacitySlider"
+                        Minimum="0.3" 
+                        Maximum="1.0" 
+                        Value="{Binding ElementName=MainBorder, Path=Opacity, Mode=TwoWay}"
+                        VerticalAlignment="Center"
+                        Height="15"
+                        ToolTip="Adjust window transparency"/>
+                
+                <TextBlock Grid.Column="2" 
+                           Text="{Binding ElementName=OpacitySlider, Path=Value, StringFormat='{}{0:P0}'}"
+                           FontSize="9" 
+                           Width="30"
+                           TextAlignment="Right"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource SecondaryTextBrush}"/>
+            </Grid>
+        </Border>
+        </Grid>
+    </Border>
 </Window>

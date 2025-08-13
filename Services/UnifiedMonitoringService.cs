@@ -37,8 +37,9 @@ namespace FFXIManager.Services
         
         // For window title tracking - we'll use polling for reliability
         private readonly Dictionary<IntPtr, string> _lastWindowTitles = new();
+        private IntPtr _lastActiveWindow = IntPtr.Zero; // Track the last active window
         
-        private const int WINDOW_TITLE_POLL_MS = 500; // Poll every 500ms for window title changes
+        private const int WINDOW_TITLE_POLL_MS = 250; // Poll every 250ms for more responsive active window detection
         private const int PERIODIC_SCAN_MS = 10000;   // Safety scan every 10 seconds
         
         public bool IsMonitoring => _isMonitoring;
@@ -410,6 +411,9 @@ namespace FFXIManager.Services
             {
                 try
                 {
+                    // First, check active window
+                    await CheckActiveWindowAsync();
+                    
                     List<MonitoredProcess> processesToCheck;
                     lock (_lock)
                     {
@@ -516,6 +520,112 @@ namespace FFXIManager.Services
             catch (Exception ex)
             {
                 await _logging.LogDebugAsync($"Error updating windows for process {process.ProcessId}: {ex.Message}", 
+                    "UnifiedMonitoringService");
+            }
+        }
+        
+        #endregion
+        
+        #region Active Window Detection
+        
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+        
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+        
+        private async Task CheckActiveWindowAsync()
+        {
+            try
+            {
+                IntPtr activeWindowHandle = GetForegroundWindow();
+                
+                if (activeWindowHandle == IntPtr.Zero || activeWindowHandle == _lastActiveWindow)
+                    return;
+                
+                // Get the process ID of the active window
+                uint activeProcessId;
+                uint threadId = GetWindowThreadProcessId(activeWindowHandle, out activeProcessId);
+                
+                if (threadId == 0)
+                    return;
+                
+                bool hasChanges = false;
+                List<(MonitoredProcess process, List<MonitoringProfile> profiles)> toUpdate = new();
+                
+                lock (_lock)
+                {
+                    // First, clear IsActive flag on previously active process
+                    if (_lastActiveWindow != IntPtr.Zero)
+                    {
+                        foreach (var process in _processes.Values)
+                        {
+                            var activeWindow = process.Windows.FirstOrDefault(w => w.Handle == _lastActiveWindow);
+                            if (activeWindow != null && activeWindow.IsActive)
+                            {
+                                activeWindow.IsActive = false;
+                                hasChanges = true;
+                                
+                                // Collect profiles for this process
+                                var profiles = new List<MonitoringProfile>();
+                                foreach (var monitorId in process.MonitorIds)
+                                {
+                                    if (_profiles.TryGetValue(monitorId, out var profile))
+                                    {
+                                        profiles.Add(profile);
+                                    }
+                                }
+                                if (profiles.Count > 0)
+                                {
+                                    toUpdate.Add((process, profiles));
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Now set the new active window
+                    if (_processes.TryGetValue((int)activeProcessId, out var activeProcess))
+                    {
+                        var window = activeProcess.Windows.FirstOrDefault(w => w.Handle == activeWindowHandle);
+                        if (window != null)
+                        {
+                            window.IsActive = true;
+                            hasChanges = true;
+                            
+                            // Collect profiles for this process
+                            var profiles = new List<MonitoringProfile>();
+                            foreach (var monitorId in activeProcess.MonitorIds)
+                            {
+                                if (_profiles.TryGetValue(monitorId, out var profile))
+                                {
+                                    profiles.Add(profile);
+                                }
+                            }
+                            if (profiles.Count > 0)
+                            {
+                                toUpdate.Add((activeProcess, profiles));
+                            }
+                        }
+                    }
+                    
+                    _lastActiveWindow = activeWindowHandle;
+                }
+                
+                // Fire update events for affected processes
+                if (hasChanges)
+                {
+                    foreach (var (process, profiles) in toUpdate)
+                    {
+                        foreach (var profile in profiles)
+                        {
+                            FireProcessUpdated(process, profile);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                await _logging.LogDebugAsync($"Error checking active window: {ex.Message}", 
                     "UnifiedMonitoringService");
             }
         }
@@ -804,6 +914,7 @@ namespace FFXIManager.Services
                     Title = w.Title,
                     IsMainWindow = w.IsMainWindow,
                     IsVisible = w.IsVisible,
+                    IsActive = w.IsActive,
                     LastTitleUpdate = w.LastTitleUpdate
                 }).ToList(),
                 MonitorIds = new HashSet<Guid>(process.MonitorIds),

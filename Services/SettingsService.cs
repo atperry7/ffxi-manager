@@ -70,6 +70,7 @@ namespace FFXIManager.Services
             
             // Theme and personalization
             public bool IsDarkTheme { get; set; } = true; // Default to dark theme
+            public double CharacterMonitorOpacity { get; set; } = 0.95; // Default to 95% opacity
             
             // Profile tracking
             public string LastActiveProfileName { get; set; } = string.Empty;

@@ -121,8 +121,7 @@ namespace FFXIManager.Services
         
         public async Task RefreshCharactersAsync()
         {
-            // The UnifiedMonitoringService handles all refreshing internally
-            // We just need to get the latest data
+            // Simply get the latest data - the UnifiedMonitoringService handles all updates
             var characters = await GetCharactersAsync();
             
             await _logging.LogInfoAsync($"Refreshed character data: {characters.Count} character(s) found", "PlayOnlineMonitorService");
@@ -166,7 +165,7 @@ namespace FFXIManager.Services
                 ServerName = ExtractServerName(window?.Title),
                 ProcessName = process.ProcessName,
                 LastSeen = process.LastSeen,
-                IsActive = false // Will be set by UI if needed
+                IsActive = window?.IsActive ?? false // Use the IsActive flag from the window
             };
         }
         
