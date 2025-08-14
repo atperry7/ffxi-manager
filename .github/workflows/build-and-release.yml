@@ -41,6 +41,9 @@ jobs:
     - name: Build application
       run: dotnet build ${{ env.PROJECT_NAME }}.csproj --configuration ${{ env.BUILD_CONFIGURATION }} --no-restore
     
+    - name: Restore test project dependencies
+      run: dotnet restore Testing/${{ env.PROJECT_NAME }}.Tests.csproj
+    
     - name: Build test project
       run: dotnet build Testing/${{ env.PROJECT_NAME }}.Tests.csproj --configuration ${{ env.BUILD_CONFIGURATION }} --no-restore
     
