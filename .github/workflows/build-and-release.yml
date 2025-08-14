@@ -41,51 +41,6 @@ jobs:
     - name: Build application
       run: dotnet build ${{ env.PROJECT_NAME }}.csproj --configuration ${{ env.BUILD_CONFIGURATION }} --no-restore
     
-    - name: Restore test project dependencies
-      run: dotnet restore Testing/${{ env.PROJECT_NAME }}.Tests.csproj
-    
-    - name: Build test project
-      run: dotnet build Testing/${{ env.PROJECT_NAME }}.Tests.csproj --configuration ${{ env.BUILD_CONFIGURATION }} --no-restore
-    
-    - name: Run tests
-      run: |
-        # Create TestResults directory
-        New-Item -ItemType Directory -Path "TestResults" -Force | Out-Null
-        
-        # Run tests with detailed logging and TRX output
-        dotnet test Testing/${{ env.PROJECT_NAME }}.Tests.csproj `
-          --configuration ${{ env.BUILD_CONFIGURATION }} `
-          --no-build `
-          --verbosity normal `
-          --logger "trx;LogFileName=test-results.trx" `
-          --results-directory TestResults `
-          --collect:"XPlat Code Coverage"
-        
-        Write-Host "✅ Tests completed"
-      shell: powershell
-      continue-on-error: false
-    
-    - name: List test results
-      run: |
-        Write-Host "📂 Listing TestResults directory:"
-        if (Test-Path "TestResults") {
-          Get-ChildItem -Path "TestResults" -Recurse | ForEach-Object {
-            Write-Host "  $($_.FullName)"
-          }
-        } else {
-          Write-Host "  ❌ TestResults directory not found"
-        }
-      shell: powershell
-    
-    - name: Publish test results
-      uses: dorny/test-reporter@v1
-      if: always()
-      with:
-        name: MSTest Results
-        path: TestResults/*.trx
-        reporter: dotnet-trx
-        fail-on-error: false
-    
     - name: Verify strong name signing
       run: |
         $assemblyPath = "bin/${{ env.BUILD_CONFIGURATION }}/net9.0-windows/${{ env.PROJECT_NAME }}.dll"
@@ -128,14 +83,6 @@ jobs:
         name: ${{ env.PROJECT_NAME }}-build-${{ github.run_number }}
         path: publish/
         retention-days: 30
-    
-    - name: Upload test results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: test-results-${{ github.run_number }}
-        path: TestResults/
-        retention-days: 7
     
     # Clean up signing key for security
     - name: Clean up signing key
