@@ -77,6 +77,15 @@ namespace FFXIManager.Services
             // Cache the loaded settings
             _cachedSettings = settings;
             
+            // If we loaded default settings and no file exists, create the initial file
+            // This ensures that future atomic operations will work properly
+            if (!File.Exists(_settingsPath) && !_disposed)
+            {
+                // Trigger immediate save (without debouncing) to create the initial file
+                _pendingSaveSettings = _cachedSettings;
+                _ = Task.Run(() => AtomicSave(_cachedSettings));
+            }
+            
             return _cachedSettings;
         }
         
@@ -186,26 +195,102 @@ namespace FFXIManager.Services
                 var json = JsonSerializer.Serialize(settings, SerializerOptions);
                 var tempPath = _settingsPath + ".tmp";
 
-                // Write to temporary file
-                await File.WriteAllTextAsync(tempPath, json);
+                // Write to temporary file with retry logic
+                await RetryFileOperationAsync(async () => await File.WriteAllTextAsync(tempPath, json));
 
                 // Backup existing settings file if it exists
                 if (File.Exists(_settingsPath))
                 {
-                    File.Copy(_settingsPath, _backupPath, true);
+                    await RetryFileOperationAsync(() => 
+                    {
+                        File.Copy(_settingsPath, _backupPath, true);
+                        return Task.CompletedTask;
+                    });
                 }
 
-                // Atomically replace the settings file
-                File.Replace(tempPath, _settingsPath, null);
+                // Atomically replace or move the settings file
+                await RetryFileOperationAsync(() =>
+                {
+                    if (File.Exists(_settingsPath))
+                    {
+                        // Target exists, use atomic replace
+                        File.Replace(tempPath, _settingsPath, null);
+                    }
+                    else
+                    {
+                        // Target doesn't exist, use move (effectively atomic on same volume)
+                        File.Move(tempPath, _settingsPath);
+                    }
+                    return Task.CompletedTask;
+                });
             }
             catch (Exception)
             {
-                // Silently fail - settings are not critical
+                // Log the error but don't crash the application
+                // Clean up temp file if it exists
+                try
+                {
+                    var tempPath = _settingsPath + ".tmp";
+                    if (File.Exists(tempPath))
+                    {
+                        File.Delete(tempPath);
+                    }
+                }
+                catch
+                {
+                    // Ignore cleanup errors
+                }
+                
+                // For debugging purposes, you could add logging here if ILoggingService was available
+                // The settings service intentionally doesn't take logging dependencies to avoid circular references
             }
             finally
             {
                 _writeSemaphore.Release();
             }
+        }
+
+        /// <summary>
+        /// Retries file operations with exponential backoff for common file system issues
+        /// </summary>
+        private static async Task RetryFileOperationAsync(Func<Task> operation, int maxRetries = 5, int initialDelayMs = 50)
+        {
+            var delay = initialDelayMs;
+            Exception? lastException = null;
+            
+            for (int attempt = 0; attempt <= maxRetries; attempt++)
+            {
+                try
+                {
+                    await operation();
+                    return; // Success
+                }
+                catch (IOException ex) when (attempt < maxRetries)
+                {
+                    lastException = ex;
+                    await Task.Delay(delay);
+                    delay = Math.Min(delay * 2, 1000); // Cap at 1 second
+                }
+                catch (UnauthorizedAccessException ex) when (attempt < maxRetries)
+                {
+                    lastException = ex;
+                    await Task.Delay(delay);
+                    delay = Math.Min(delay * 2, 1000);
+                }
+                catch (DirectoryNotFoundException ex) when (attempt < maxRetries)
+                {
+                    lastException = ex;
+                    // Recreate the directory if it was deleted
+                    var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                    var appFolder = Path.Combine(appDataPath, "FFXIManager");
+                    Directory.CreateDirectory(appFolder);
+                    await Task.Delay(delay);
+                    delay = Math.Min(delay * 2, 1000);
+                }
+            }
+            
+            // If we've exhausted retries, throw the last exception
+            throw lastException ?? new InvalidOperationException("File operation failed after retries");
         }
 
         public void Dispose()

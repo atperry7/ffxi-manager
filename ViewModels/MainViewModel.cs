@@ -63,12 +63,32 @@ namespace FFXIManager.ViewModels
             // Subscribe to status message changes
             _statusService.MessageChanged += (_, message) => OnPropertyChanged(nameof(StatusMessage));
 
-            // Subscribe to IsLoading changes from ProfileManagement
+            // Subscribe to property changes from ProfileManagement
             ProfileManagement.PropertyChanged += (_, e) =>
             {
                 if (e.PropertyName == nameof(ProfileManagement.IsLoading))
                 {
                     OnPropertyChanged(nameof(IsLoading));
+                }
+                else if (e.PropertyName == nameof(ProfileManagement.PlayOnlineDirectory))
+                {
+                    OnPropertyChanged(nameof(PlayOnlineDirectory));
+                }
+                else if (e.PropertyName == nameof(ProfileManagement.ShowAutoBackups))
+                {
+                    OnPropertyChanged(nameof(ShowAutoBackups));
+                }
+                else if (e.PropertyName == nameof(ProfileManagement.NewBackupName))
+                {
+                    OnPropertyChanged(nameof(NewBackupName));
+                }
+                else if (e.PropertyName == nameof(ProfileManagement.SelectedProfile))
+                {
+                    OnPropertyChanged(nameof(SelectedProfile));
+                }
+                else if (e.PropertyName == nameof(ProfileManagement.ActiveLoginStatus))
+                {
+                    OnPropertyChanged(nameof(ActiveLoginStatus));
                 }
             };
 

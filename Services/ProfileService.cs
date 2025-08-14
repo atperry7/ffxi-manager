@@ -40,7 +40,7 @@ namespace FFXIManager.Services
             await _loggingService.LogDebugAsync("Getting all profiles", "ProfileService");
             
             return await _cachingService.GetOrSetAsync(
-                CacheKeys.ProfilesList,
+                GetDirectorySpecificCacheKey(CacheKeys.ProfilesList),
                 async () => await Task.Run(() => GetProfiles(includeAutoBackups: true)),
                 TimeSpan.FromMinutes(5));
         }
@@ -53,7 +53,7 @@ namespace FFXIManager.Services
             await _loggingService.LogDebugAsync("Getting user profiles", "ProfileService");
             
             return await _cachingService.GetOrSetAsync(
-                CacheKeys.UserProfilesList,
+                GetDirectorySpecificCacheKey(CacheKeys.UserProfilesList),
                 async () => await Task.Run(() => GetProfiles(includeAutoBackups: false)),
                 TimeSpan.FromMinutes(5));
         }
@@ -66,7 +66,7 @@ namespace FFXIManager.Services
             await _loggingService.LogDebugAsync("Getting auto-backup profiles", "ProfileService");
             
             return await _cachingService.GetOrSetAsync(
-                CacheKeys.AutoBackupsList,
+                GetDirectorySpecificCacheKey(CacheKeys.AutoBackupsList),
                 async () => await Task.Run(() => GetProfiles(includeAutoBackups: true)
                     .Where(p => p.Name.StartsWith(_configService.ProfileConfig.AutoBackupPrefix, StringComparison.OrdinalIgnoreCase))
                     .OrderByDescending(p => p.LastModified)
@@ -153,14 +153,14 @@ namespace FFXIManager.Services
             await _loggingService.LogDebugAsync("Getting active login info", "ProfileService");
             
             // Handle nullable return type properly for caching
-            var result = await _cachingService.GetAsync<ProfileInfo>(CacheKeys.ActiveLoginInfo);
+            var result = await _cachingService.GetAsync<ProfileInfo>(GetDirectorySpecificCacheKey(CacheKeys.ActiveLoginInfo));
             if (result != null)
                 return result;
                 
             var activeInfo = GetActiveLoginInfoInternal();
             if (activeInfo != null)
             {
-                await _cachingService.SetAsync(CacheKeys.ActiveLoginInfo, activeInfo, TimeSpan.FromMinutes(1));
+                await _cachingService.SetAsync(GetDirectorySpecificCacheKey(CacheKeys.ActiveLoginInfo), activeInfo, TimeSpan.FromMinutes(1));
             }
             
             return activeInfo;
@@ -490,7 +490,7 @@ namespace FFXIManager.Services
         {
             await _loggingService.LogInfoAsync("Clearing active profile tracking", "ProfileService");
             await Task.Run(() => UpdateLastActiveProfile(string.Empty));
-            await _cachingService.RemoveAsync(CacheKeys.ActiveLoginInfo);
+            await _cachingService.RemoveAsync(GetDirectorySpecificCacheKey(CacheKeys.ActiveLoginInfo));
         }
         
         /// <summary>
@@ -558,12 +558,22 @@ namespace FFXIManager.Services
                 .Trim();
         }
         
+        /// <summary>
+        /// Creates a directory-specific cache key to prevent cross-directory cache pollution
+        /// </summary>
+        private string GetDirectorySpecificCacheKey(string baseKey)
+        {
+            // Use a hash of the directory path to create a compact, unique suffix
+            var directoryHash = PlayOnlineDirectory.GetHashCode().ToString("X");
+            return $"{baseKey}_{directoryHash}";
+        }
+        
         private async Task InvalidateProfileCaches()
         {
-            await _cachingService.RemoveAsync(CacheKeys.ProfilesList);
-            await _cachingService.RemoveAsync(CacheKeys.UserProfilesList);
-            await _cachingService.RemoveAsync(CacheKeys.AutoBackupsList);
-            await _cachingService.RemoveAsync(CacheKeys.ActiveLoginInfo);
+            await _cachingService.RemoveAsync(GetDirectorySpecificCacheKey(CacheKeys.ProfilesList));
+            await _cachingService.RemoveAsync(GetDirectorySpecificCacheKey(CacheKeys.UserProfilesList));
+            await _cachingService.RemoveAsync(GetDirectorySpecificCacheKey(CacheKeys.AutoBackupsList));
+            await _cachingService.RemoveAsync(GetDirectorySpecificCacheKey(CacheKeys.ActiveLoginInfo));
         }
 
         private static async Task RetryIOAsync(Func<Task> action, int retries = 5, int initialDelayMs = 50)
