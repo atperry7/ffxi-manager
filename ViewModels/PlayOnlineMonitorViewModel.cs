@@ -201,8 +201,8 @@ namespace FFXIManager.ViewModels
                 var monitorWindow = new Views.CharacterMonitorWindow(this);
                 
                 _statusService.SetMessage("Opening character monitor window...");
-                // Ensure characters are loaded at open time without blocking UI
-                _ = LoadCharactersAsync();
+                // The pop-out window should use the same real-time Characters collection
+                // No need to call LoadCharactersAsync() as it can interfere with real-time updates
                 monitorWindow.Show(); // Non-modal; no Owner so the main window won't be forced to front
                 
                 _statusService.SetMessage("Character monitor window opened");
