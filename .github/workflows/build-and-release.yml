@@ -41,17 +41,47 @@ jobs:
     - name: Build application
       run: dotnet build ${{ env.PROJECT_NAME }}.csproj --configuration ${{ env.BUILD_CONFIGURATION }} --no-restore
     
+    - name: Build test project
+      run: dotnet build Testing/${{ env.PROJECT_NAME }}.Tests.csproj --configuration ${{ env.BUILD_CONFIGURATION }} --no-restore
+    
     - name: Run tests
-      run: dotnet test Testing/${{ env.PROJECT_NAME }}.Tests.csproj --configuration ${{ env.BUILD_CONFIGURATION }} --no-build --verbosity normal --logger trx --results-directory TestResults
-      continue-on-error: true
+      run: |
+        # Create TestResults directory
+        New-Item -ItemType Directory -Path "TestResults" -Force | Out-Null
+        
+        # Run tests with detailed logging and TRX output
+        dotnet test Testing/${{ env.PROJECT_NAME }}.Tests.csproj `
+          --configuration ${{ env.BUILD_CONFIGURATION }} `
+          --no-build `
+          --verbosity normal `
+          --logger "trx;LogFileName=test-results.trx" `
+          --results-directory TestResults `
+          --collect:"XPlat Code Coverage"
+        
+        Write-Host "✅ Tests completed"
+      shell: powershell
+      continue-on-error: false
+    
+    - name: List test results
+      run: |
+        Write-Host "📂 Listing TestResults directory:"
+        if (Test-Path "TestResults") {
+          Get-ChildItem -Path "TestResults" -Recurse | ForEach-Object {
+            Write-Host "  $($_.FullName)"
+          }
+        } else {
+          Write-Host "  ❌ TestResults directory not found"
+        }
+      shell: powershell
     
     - name: Publish test results
       uses: dorny/test-reporter@v1
       if: always()
       with:
-        name: Test Results
+        name: MSTest Results
         path: TestResults/*.trx
         reporter: dotnet-trx
+        fail-on-error: false
     
     - name: Verify strong name signing
       run: |
@@ -83,8 +113,10 @@ jobs:
           GitRef = "${{ github.ref }}"
           BuildNumber = "${{ github.run_number }}"
           Configuration = "${{ env.BUILD_CONFIGURATION }}"
+          TestsRun = $true
         } | ConvertTo-Json -Depth 2
         $buildInfo | Out-File -FilePath "publish/BuildInfo.json" -Encoding UTF8
+        Write-Host "✅ Build info created"
       shell: powershell
     
     - name: Upload build artifacts
@@ -93,6 +125,14 @@ jobs:
         name: ${{ env.PROJECT_NAME }}-build-${{ github.run_number }}
         path: publish/
         retention-days: 30
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ github.run_number }}
+        path: TestResults/
+        retention-days: 7
     
     # Clean up signing key for security
     - name: Clean up signing key
@@ -125,6 +165,12 @@ jobs:
         $zipName = "${{ env.PROJECT_NAME }}-v${{ github.run_number }}-windows.zip"
         Compress-Archive -Path "publish/*" -DestinationPath $zipName -CompressionLevel Optimal
         Write-Host "✅ Created package: $zipName"
+        
+        # Show package contents
+        Write-Host "📦 Package contents:"
+        Get-ChildItem -Path "publish" -Recurse | ForEach-Object {
+          Write-Host "  $($_.Name)"
+        }
       shell: powershell
     
     - name: Upload release package
@@ -163,18 +209,23 @@ jobs:
     
     - name: Run security analysis
       run: |
-        # Install security analysis tools
-        dotnet tool install --global security-scan --version 5.6.7 || true
-        
         # Run basic security checks
         Write-Host "🔍 Running security analysis..."
         
         # Check for common security issues in project files
+        $issues = 0
         Get-ChildItem -Recurse -Include "*.cs","*.csproj" | ForEach-Object {
           $content = Get-Content $_.FullName -Raw
           if ($content -match "System\.Web\.HttpUtility\.UrlDecode|eval\(|innerHTML\s*=|\.write\(") {
             Write-Warning "⚠️  Potential security concern in file: $($_.Name)"
+            $issues++
           }
+        }
+        
+        if ($issues -eq 0) {
+          Write-Host "✅ No obvious security issues detected"
+        } else {
+          Write-Host "⚠️  Found $issues potential security concerns"
         }
         
         Write-Host "✅ Security scan completed"
