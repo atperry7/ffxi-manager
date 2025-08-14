@@ -1,0 +1,181 @@
+﻿name: .NET Desktop Build and Release
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  release:
+    types: [ published ]
+
+env:
+  # Configuration for the build
+  DOTNET_VERSION: '9.0.x'
+  BUILD_CONFIGURATION: 'Release'
+  PROJECT_NAME: 'FFXIManager'
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full history for GitVersion if needed
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: Setup signing key
+      run: |
+        echo "${{ secrets.SIGNING_KEY }}" | %{[System.Convert]::FromBase64String($_)} | Set-Content -Path "ffximanager.snk" -Encoding Byte
+      shell: powershell
+    
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.PROJECT_NAME }}.csproj
+    
+    - name: Build application
+      run: dotnet build ${{ env.PROJECT_NAME }}.csproj --configuration ${{ env.BUILD_CONFIGURATION }} --no-restore
+    
+    - name: Run tests
+      run: dotnet test Testing/${{ env.PROJECT_NAME }}.Tests.csproj --configuration ${{ env.BUILD_CONFIGURATION }} --no-build --verbosity normal --logger trx --results-directory TestResults
+      continue-on-error: true
+    
+    - name: Publish test results
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: Test Results
+        path: TestResults/*.trx
+        reporter: dotnet-trx
+    
+    - name: Verify strong name signing
+      run: |
+        $assemblyPath = "bin/${{ env.BUILD_CONFIGURATION }}/net9.0-windows/${{ env.PROJECT_NAME }}.dll"
+        if (Test-Path $assemblyPath) {
+          $assembly = [System.Reflection.Assembly]::LoadFile((Resolve-Path $assemblyPath).Path)
+          $fullName = $assembly.FullName
+          Write-Host "Assembly Full Name: $fullName"
+          if ($fullName -match "PublicKeyToken=([a-f0-9]+)") {
+            Write-Host "✅ Strong name signing verified - PublicKeyToken: $($matches[1])"
+          } else {
+            Write-Error "❌ Strong name signing failed - no PublicKeyToken found"
+            exit 1
+          }
+        } else {
+          Write-Error "❌ Assembly not found at expected path: $assemblyPath"
+          exit 1
+        }
+      shell: powershell
+    
+    - name: Publish application
+      run: dotnet publish ${{ env.PROJECT_NAME }}.csproj --configuration ${{ env.BUILD_CONFIGURATION }} --no-build --output publish
+    
+    - name: Create build info
+      run: |
+        $buildInfo = @{
+          BuildDate = Get-Date -Format "yyyy-MM-dd HH:mm:ss UTC"
+          GitCommit = "${{ github.sha }}"
+          GitRef = "${{ github.ref }}"
+          BuildNumber = "${{ github.run_number }}"
+          Configuration = "${{ env.BUILD_CONFIGURATION }}"
+        } | ConvertTo-Json -Depth 2
+        $buildInfo | Out-File -FilePath "publish/BuildInfo.json" -Encoding UTF8
+      shell: powershell
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.PROJECT_NAME }}-build-${{ github.run_number }}
+        path: publish/
+        retention-days: 30
+    
+    # Clean up signing key for security
+    - name: Clean up signing key
+      if: always()
+      run: |
+        if (Test-Path "ffximanager.snk") {
+          Remove-Item "ffximanager.snk" -Force
+          Write-Host "✅ Signing key cleaned up"
+        }
+      shell: powershell
+
+  create-installer:
+    name: Create Windows Installer
+    runs-on: windows-latest
+    needs: build
+    if: github.event_name == 'release' || github.ref == 'refs/heads/master'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.PROJECT_NAME }}-build-${{ github.run_number }}
+        path: publish/
+    
+    - name: Create ZIP package
+      run: |
+        $zipName = "${{ env.PROJECT_NAME }}-v${{ github.run_number }}-windows.zip"
+        Compress-Archive -Path "publish/*" -DestinationPath $zipName -CompressionLevel Optimal
+        Write-Host "✅ Created package: $zipName"
+      shell: powershell
+    
+    - name: Upload release package
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.PROJECT_NAME }}-release-package
+        path: "*.zip"
+        retention-days: 90
+    
+    # If this is a release event, attach the ZIP to the release
+    - name: Upload to Release
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ${{ env.PROJECT_NAME }}-v${{ github.run_number }}-windows.zip
+        asset_name: ${{ env.PROJECT_NAME }}-v${{ github.run_number }}-windows.zip
+        asset_content_type: application/zip
+
+  security-scan:
+    name: Security Scan
+    runs-on: windows-latest
+    needs: build
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: Run security analysis
+      run: |
+        # Install security analysis tools
+        dotnet tool install --global security-scan --version 5.6.7 || true
+        
+        # Run basic security checks
+        Write-Host "🔍 Running security analysis..."
+        
+        # Check for common security issues in project files
+        Get-ChildItem -Recurse -Include "*.cs","*.csproj" | ForEach-Object {
+          $content = Get-Content $_.FullName -Raw
+          if ($content -match "System\.Web\.HttpUtility\.UrlDecode|eval\(|innerHTML\s*=|\.write\(") {
+            Write-Warning "⚠️  Potential security concern in file: $($_.Name)"
+          }
+        }
+        
+        Write-Host "✅ Security scan completed"
+      shell: powershell
