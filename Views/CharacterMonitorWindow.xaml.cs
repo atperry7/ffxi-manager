@@ -10,13 +10,15 @@ using FFXIManager.ViewModels;
 namespace FFXIManager.Views
 {
     /// <summary>
-    /// Standalone character monitor window with "always on top" functionality
+    /// Standalone character monitor window with "always on top" functionality.
+    /// Implements proper disposal of resources including hotkey services.
     /// </summary>
-    public partial class CharacterMonitorWindow : Window
+    public sealed partial class CharacterMonitorWindow : Window, IDisposable
     {
         private readonly ISettingsService _settingsService;
-        private readonly IGlobalHotkeyService _globalHotkeyService;
+        private readonly LowLevelHotkeyService _globalHotkeyService;
         private readonly ILoggingService _loggingService;
+        private volatile bool _disposed;
         
         public CharacterMonitorWindow(PlayOnlineMonitorViewModel viewModel)
         {
@@ -103,21 +105,7 @@ namespace FFXIManager.Views
         protected override void OnClosed(EventArgs e)
         {
             base.OnClosed(e);
-            
-            // Cleanup global hotkeys
-            _globalHotkeyService?.Dispose();
-            
-            // Save the opacity setting for next time
-            try
-            {
-                var settings = _settingsService.LoadSettings();
-                settings.CharacterMonitorOpacity = MainBorder?.Opacity ?? 0.95;
-                _settingsService.SaveSettings(settings);
-            }
-            catch
-            {
-                // Ignore any errors saving settings
-            }
+            Dispose();
         }
         
         private void OnWindowLoaded(object sender, RoutedEventArgs e)
@@ -320,10 +308,12 @@ namespace FFXIManager.Views
         
         private void TestSimpleHotkey()
         {
+            if (_disposed) return;
+            
             try
             {
                 // Try to register a simple test hotkey with a unique ID
-                int testId = 9999;
+                const int testId = 9999;
                 bool success = _globalHotkeyService.RegisterHotkey(testId, ModifierKeys.Control | ModifierKeys.Shift, Key.T);
                 _loggingService.LogInfoAsync($"Test hotkey registration (Ctrl+Shift+T): {(success ? "SUCCESS" : "FAILED")}", "CharacterMonitorWindow");
                 
@@ -338,6 +328,41 @@ namespace FFXIManager.Views
             {
                 _loggingService.LogErrorAsync("Error testing simple hotkey", ex, "CharacterMonitorWindow");
             }
+        }
+        
+        /// <summary>
+        /// Releases all resources used by the CharacterMonitorWindow.
+        /// </summary>
+        public void Dispose()
+        {
+            if (_disposed) return;
+            
+            _disposed = true;
+            
+            try
+            {
+                // Cleanup global hotkeys
+                _globalHotkeyService?.Dispose();
+                
+                // Save the opacity setting for next time
+                try
+                {
+                    var settings = _settingsService.LoadSettings();
+                    settings.CharacterMonitorOpacity = MainBorder?.Opacity ?? 0.95;
+                    _settingsService.SaveSettings(settings);
+                }
+                catch
+                {
+                    // Ignore any errors saving settings during disposal
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log disposal errors but don't throw
+                _loggingService?.LogErrorAsync("Error during CharacterMonitorWindow disposal", ex, "CharacterMonitorWindow");
+            }
+            
+            GC.SuppressFinalize(this);
         }
     }
 }

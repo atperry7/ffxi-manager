@@ -8,17 +8,25 @@ using FFXIManager.Services;
 namespace FFXIManager.Controls
 {
     /// <summary>
-    /// Interactive control for recording keyboard shortcuts with live feedback
+    /// Interactive control for recording keyboard shortcuts with live feedback.
+    /// Provides thread-safe resource management and proper disposal.
     /// </summary>
-    public partial class KeyRecorderControl : UserControl
+    public sealed partial class KeyRecorderControl : UserControl, IDisposable
     {
+        // Named constant to avoid magic numbers
+        private const int TEMP_RECORDING_HOTKEY_ID = 99999;
+        
         private LowLevelHotkeyService? _tempHookService;
         private ModifierKeys _currentModifiers = ModifierKeys.None;
         private Key _currentKey = Key.None;
-        private bool _isRecording = false;
+        private volatile bool _isRecording;
+        private volatile bool _disposed;
 
         public event EventHandler<KeyboardShortcutConfig>? ShortcutRecorded;
 
+        /// <summary>
+        /// Initializes a new instance of the KeyRecorderControl.
+        /// </summary>
         public KeyRecorderControl()
         {
             InitializeComponent();
@@ -52,8 +60,15 @@ namespace FFXIManager.Controls
             }
         }
 
+        /// <summary>
+        /// Starts recording keyboard input.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">Thrown if the control has been disposed.</exception>
         private void StartRecording()
         {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(KeyRecorderControl));
+                
             try
             {
                 _isRecording = true;
@@ -72,29 +87,28 @@ namespace FFXIManager.Controls
                 AcceptButton.IsEnabled = false;
                 
                 // Start capturing ALL keys (register a dummy hotkey to activate the hook)
-                _tempHookService.RegisterHotkey(99999, ModifierKeys.None, Key.None);
+                _tempHookService.RegisterHotkey(TEMP_RECORDING_HOTKEY_ID, ModifierKeys.None, Key.None);
                 
                 this.Focus();
                 this.Focusable = true;
             }
             catch (Exception ex)
             {
+                // Clean up if initialization failed
+                CleanupHotkeyService();
                 StatusText.Text = $"Error starting recording: {ex.Message}";
-                StopRecording();
+                _isRecording = false;
+                throw;
             }
         }
 
+        /// <summary>
+        /// Stops recording keyboard input and releases resources.
+        /// </summary>
         private void StopRecording()
         {
             _isRecording = false;
-            
-            // Cleanup hook service
-            if (_tempHookService != null)
-            {
-                _tempHookService.HotkeyPressed -= OnKeyPressed;
-                _tempHookService.Dispose();
-                _tempHookService = null;
-            }
+            CleanupHotkeyService();
             
             // Update UI
             RecordButton.Content = "📹 Record";
@@ -112,9 +126,39 @@ namespace FFXIManager.Controls
                 AcceptButton.IsEnabled = false;
             }
         }
+        
+        /// <summary>
+        /// Safely cleans up the hotkey service resources.
+        /// </summary>
+        private void CleanupHotkeyService()
+        {
+            if (_tempHookService != null)
+            {
+                try
+                {
+                    _tempHookService.HotkeyPressed -= OnKeyPressed;
+                    _tempHookService.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    // Log the exception but don't throw during cleanup
+                    System.Diagnostics.Debug.WriteLine($"Error disposing hotkey service: {ex.Message}");
+                }
+                finally
+                {
+                    _tempHookService = null;
+                }
+            }
+        }
 
+        /// <summary>
+        /// Handles hotkey press events during recording.
+        /// </summary>
         private void OnKeyPressed(object? sender, HotkeyPressedEventArgs e)
         {
+            // Ignore if not recording or disposed
+            if (!_isRecording || _disposed) return;
+            
             // This is called for EVERY key press while recording
             Dispatcher.BeginInvoke(() =>
             {
@@ -145,6 +189,11 @@ namespace FFXIManager.Controls
             });
         }
 
+        /// <summary>
+        /// Determines if the specified key is a modifier key (Ctrl, Alt, Shift, Win).
+        /// </summary>
+        /// <param name="key">The key to check.</param>
+        /// <returns>True if the key is a modifier key.</returns>
         private static bool IsModifierKey(Key key)
         {
             return key == Key.LeftCtrl || key == Key.RightCtrl ||
@@ -153,6 +202,9 @@ namespace FFXIManager.Controls
                    key == Key.LWin || key == Key.RWin;
         }
 
+        /// <summary>
+        /// Resets the control to its initial state.
+        /// </summary>
         private void Reset()
         {
             StopRecording();
@@ -169,6 +221,11 @@ namespace FFXIManager.Controls
             AcceptButton.IsEnabled = false;
         }
 
+        /// <summary>
+        /// Sets the current shortcut combination.
+        /// </summary>
+        /// <param name="modifiers">The modifier keys.</param>
+        /// <param name="key">The primary key.</param>
         public void SetShortcut(ModifierKeys modifiers, Key key)
         {
             _currentModifiers = modifiers;
@@ -196,6 +253,22 @@ namespace FFXIManager.Controls
         {
             base.OnInitialized(e);
             this.Unloaded += OnUnloaded;
+        }
+        
+        /// <summary>
+        /// Releases all resources used by the KeyRecorderControl.
+        /// </summary>
+        public void Dispose()
+        {
+            if (_disposed) return;
+            
+            _disposed = true;
+            StopRecording();
+            
+            // Remove event handlers
+            this.Unloaded -= OnUnloaded;
+            
+            GC.SuppressFinalize(this);
         }
     }
 }

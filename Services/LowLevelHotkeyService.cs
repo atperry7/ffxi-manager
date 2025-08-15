@@ -2,25 +2,33 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows.Input;
 
 namespace FFXIManager.Services
 {
     /// <summary>
-    /// Low-level keyboard hook implementation that intercepts keys before other applications
-    /// This bypasses Windower and FFXI key interception
+    /// Low-level keyboard hook implementation that intercepts keys before other applications.
+    /// This bypasses Windower and FFXI key interception by using SetWindowsHookEx(WH_KEYBOARD_LL).
+    /// Thread-safe and properly manages Win32 resources.
     /// </summary>
-    public class LowLevelHotkeyService : IGlobalHotkeyService
+    public sealed class LowLevelHotkeyService : IGlobalHotkeyService
     {
         private const int WH_KEYBOARD_LL = 13;
         private const int HC_ACTION = 0;
         private const int WM_KEYDOWN = 0x0100;
         private const int WM_SYSKEYDOWN = 0x0104;
+        private const int VK_SHIFT = 0x10;
+        private const int VK_CONTROL = 0x11;
+        private const int VK_MENU = 0x12; // Alt key
+        private const int VK_LWIN = 0x5B;
+        private const int VK_RWIN = 0x5C;
 
         private readonly Dictionary<int, HotkeyInfo> _registeredHotkeys = new();
+        private readonly object _lock = new();
         private LowLevelKeyboardProc? _hookProc;
         private IntPtr _hookId = IntPtr.Zero;
-        private bool _disposed;
+        private volatile bool _disposed;
 
         private sealed class HotkeyInfo
         {
@@ -58,15 +66,37 @@ namespace FFXIManager.Services
         }
 
         public event EventHandler<HotkeyPressedEventArgs>? HotkeyPressed;
-        public int RegisteredCount => _registeredHotkeys.Count(kvp => kvp.Value.IsRegistered);
+        /// <summary>
+        /// Gets the number of currently registered hotkeys.
+        /// </summary>
+        public int RegisteredCount 
+        { 
+            get 
+            { 
+                lock (_lock) 
+                { 
+                    return _registeredHotkeys.Count(kvp => kvp.Value.IsRegistered); 
+                } 
+            } 
+        }
 
+        /// <summary>
+        /// Initializes a new instance of the LowLevelHotkeyService.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when the keyboard hook cannot be installed.</exception>
         public LowLevelHotkeyService()
         {
             _hookProc = HookCallback;
             _hookId = SetHook(_hookProc);
+            
+            if (_hookId == IntPtr.Zero)
+            {
+                var error = Marshal.GetLastWin32Error();
+                throw new InvalidOperationException($"Failed to install keyboard hook. Win32 error: {error}");
+            }
         }
 
-        private IntPtr SetHook(LowLevelKeyboardProc proc)
+        private static IntPtr SetHook(LowLevelKeyboardProc proc)
         {
             using (Process curProcess = Process.GetCurrentProcess())
             using (ProcessModule? curModule = curProcess.MainModule)
@@ -92,7 +122,14 @@ namespace FFXIManager.Services
                 var key = KeyInterop.KeyFromVirtualKey(vkCode);
 
                 // Check if this matches any registered hotkeys
-                foreach (var kvp in _registeredHotkeys)
+                Dictionary<int, HotkeyInfo> snapshot;
+                lock (_lock)
+                {
+                    // Take a snapshot of registered hotkeys to avoid holding lock during event invocation
+                    snapshot = new Dictionary<int, HotkeyInfo>(_registeredHotkeys);
+                }
+                
+                foreach (var kvp in snapshot)
                 {
                     var hotkeyInfo = kvp.Value;
                     if (hotkeyInfo.IsRegistered && 
@@ -116,62 +153,102 @@ namespace FFXIManager.Services
         {
             ModifierKeys modifiers = ModifierKeys.None;
             
-            if (GetAsyncKeyState(0x10) < 0) // VK_SHIFT
+            if (GetAsyncKeyState(VK_SHIFT) < 0)
                 modifiers |= ModifierKeys.Shift;
-            if (GetAsyncKeyState(0x11) < 0) // VK_CONTROL
+            if (GetAsyncKeyState(VK_CONTROL) < 0)
                 modifiers |= ModifierKeys.Control;
-            if (GetAsyncKeyState(0x12) < 0) // VK_MENU (Alt)
+            if (GetAsyncKeyState(VK_MENU) < 0)
                 modifiers |= ModifierKeys.Alt;
-            if (GetAsyncKeyState(0x5B) < 0 || GetAsyncKeyState(0x5C) < 0) // VK_LWIN, VK_RWIN
+            if (GetAsyncKeyState(VK_LWIN) < 0 || GetAsyncKeyState(VK_RWIN) < 0)
                 modifiers |= ModifierKeys.Windows;
                 
             return modifiers;
         }
 
+        /// <summary>
+        /// Registers a hotkey to be monitored by the low-level hook.
+        /// </summary>
+        /// <param name="id">Unique identifier for the hotkey.</param>
+        /// <param name="modifiers">Modifier keys (Ctrl, Alt, Shift, Win).</param>
+        /// <param name="key">Primary key.</param>
+        /// <returns>True if registration succeeded.</returns>
+        /// <exception cref="ObjectDisposedException">Thrown if the service has been disposed.</exception>
         public bool RegisterHotkey(int id, ModifierKeys modifiers, Key key)
         {
             if (_disposed) throw new ObjectDisposedException(nameof(LowLevelHotkeyService));
 
-            _registeredHotkeys[id] = new HotkeyInfo
+            lock (_lock)
             {
-                Modifiers = modifiers,
-                Key = key,
-                IsRegistered = true
-            };
+                _registeredHotkeys[id] = new HotkeyInfo
+                {
+                    Modifiers = modifiers,
+                    Key = key,
+                    IsRegistered = true
+                };
+            }
 
             return true; // Low-level hooks always "succeed" at registration
         }
 
+        /// <summary>
+        /// Unregisters a hotkey from monitoring.
+        /// </summary>
+        /// <param name="id">The hotkey ID to unregister.</param>
+        /// <returns>True if the hotkey was found and removed.</returns>
         public bool UnregisterHotkey(int id)
         {
             if (_disposed) return false;
-            return _registeredHotkeys.Remove(id);
+            
+            lock (_lock)
+            {
+                return _registeredHotkeys.Remove(id);
+            }
         }
 
+        /// <summary>
+        /// Unregisters all hotkeys from monitoring.
+        /// </summary>
         public void UnregisterAll()
         {
             if (_disposed) return;
-            _registeredHotkeys.Clear();
+            
+            lock (_lock)
+            {
+                _registeredHotkeys.Clear();
+            }
         }
 
+        /// <summary>
+        /// Checks if a hotkey ID is currently registered.
+        /// </summary>
+        /// <param name="id">The hotkey ID to check.</param>
+        /// <returns>True if the hotkey is registered.</returns>
         public bool IsRegistered(int id)
         {
-            return _registeredHotkeys.TryGetValue(id, out var info) && info.IsRegistered;
+            if (_disposed) return false;
+            
+            lock (_lock)
+            {
+                return _registeredHotkeys.TryGetValue(id, out var info) && info.IsRegistered;
+            }
         }
 
         public void Dispose()
         {
             if (_disposed) return;
 
+            // Set flag first to prevent race conditions during disposal
+            _disposed = true;
+            
             UnregisterAll();
             
-            if (_hookId != IntPtr.Zero)
+            // Ensure we unhook in a thread-safe manner
+            var hookToRemove = Interlocked.Exchange(ref _hookId, IntPtr.Zero);
+            if (hookToRemove != IntPtr.Zero)
             {
-                UnhookWindowsHookEx(_hookId);
-                _hookId = IntPtr.Zero;
+                UnhookWindowsHookEx(hookToRemove);
             }
 
-            _disposed = true;
             GC.SuppressFinalize(this);
         }
     }
