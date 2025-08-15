@@ -64,7 +64,6 @@ namespace FFXIManager.Services
         {
             _hookProc = HookCallback;
             _hookId = SetHook(_hookProc);
-            Debug.WriteLine($"[DEBUG] Low-level keyboard hook installed: {_hookId != IntPtr.Zero}");
         }
 
         private IntPtr SetHook(LowLevelKeyboardProc proc)
@@ -91,8 +90,6 @@ namespace FFXIManager.Services
                 // Get current modifier key state
                 var modifiers = GetCurrentModifiers();
                 var key = KeyInterop.KeyFromVirtualKey(vkCode);
-                
-                Debug.WriteLine($"[DEBUG] Low-level key: {modifiers}+{key} (VK: 0x{vkCode:X})");
 
                 // Check if this matches any registered hotkeys
                 foreach (var kvp in _registeredHotkeys)
@@ -102,8 +99,6 @@ namespace FFXIManager.Services
                         hotkeyInfo.Modifiers == modifiers && 
                         hotkeyInfo.Key == key)
                     {
-                        Debug.WriteLine($"[DEBUG] 🎯 Low-level hotkey matched: {modifiers}+{key}");
-                        
                         // Fire the event
                         HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(kvp.Key, modifiers, key));
                         
@@ -137,8 +132,6 @@ namespace FFXIManager.Services
         {
             if (_disposed) throw new ObjectDisposedException(nameof(LowLevelHotkeyService));
 
-            Debug.WriteLine($"[DEBUG] Registering low-level hotkey ID={id}, {modifiers}+{key}");
-
             _registeredHotkeys[id] = new HotkeyInfo
             {
                 Modifiers = modifiers,
@@ -146,7 +139,6 @@ namespace FFXIManager.Services
                 IsRegistered = true
             };
 
-            Debug.WriteLine($"[DEBUG] Successfully registered low-level hotkey {modifiers}+{key} with ID {id}");
             return true; // Low-level hooks always "succeed" at registration
         }
 
