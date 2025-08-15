@@ -26,8 +26,28 @@ namespace FFXIManager.Views
             _originalShortcut = shortcut;
             DataContext = shortcut;
             
+            // Show current shortcut in header
+            UpdateCurrentShortcutDisplay();
+            
             // Initialize the key recorder with the current shortcut
             KeyRecorder.SetShortcut(shortcut.Modifiers, shortcut.Key);
+        }
+        
+        /// <summary>
+        /// Updates the display of the current shortcut in the header.
+        /// </summary>
+        private void UpdateCurrentShortcutDisplay()
+        {
+            var currentText = "Current: ";
+            if (_originalShortcut.Key == System.Windows.Input.Key.None)
+            {
+                currentText += "None (not configured)";
+            }
+            else
+            {
+                currentText += _originalShortcut.DisplayText;
+            }
+            CurrentShortcutText.Text = currentText;
         }
 
         private void KeyRecorder_ShortcutRecorded(object sender, KeyboardShortcutConfig e)
@@ -41,6 +61,11 @@ namespace FFXIManager.Views
                 SlotIndex = _originalShortcut.SlotIndex,
                 IsEnabled = _originalShortcut.IsEnabled
             };
+            
+            // Automatically close the dialog after successful recording
+            // This provides immediate feedback and streamlines the workflow
+            DialogResult = true;
+            Close();
         }
 
         private void Apply_Click(object sender, RoutedEventArgs e)

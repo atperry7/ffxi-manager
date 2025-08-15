@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:FFXIManager.Controls"
-        Title="Edit Keyboard Shortcut" Height="300" Width="450"
+        Title="Edit Keyboard Shortcut" Height="380" Width="500"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="{DynamicResource BackgroundBrush}">
@@ -19,10 +19,20 @@
                        FontSize="14" 
                        FontWeight="Bold"
                        Foreground="{DynamicResource PrimaryTextBrush}"/>
-            <TextBlock Text="Record a new keyboard combination for this character slot." 
+            <TextBlock x:Name="CurrentShortcutText"
+                       Text="Current: None" 
+                       FontSize="11" 
+                       Margin="0,5,0,0"
+                       Foreground="{DynamicResource AccentBrush}"/>
+            <TextBlock Text="Click the 📹 Record button below, then press your desired key combination." 
                        FontSize="11" 
                        Margin="0,5,0,0"
                        Style="{StaticResource SecondaryTextBlock}"/>
+            <TextBlock Text="💡 Tip: Use modifier keys (Ctrl, Alt, Shift, Win) to avoid conflicts with FFXI." 
+                       FontSize="10" 
+                       Margin="0,3,0,0"
+                       FontStyle="Italic"
+                       Foreground="{DynamicResource SecondaryTextBrush}"/>
         </StackPanel>
         
         <!-- Key Recorder -->
