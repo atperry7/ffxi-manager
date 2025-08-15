@@ -27,9 +27,11 @@ namespace FFXIManager.Views
             _settingsService = ServiceLocator.SettingsService;
             _loggingService = ServiceLocator.LoggingService;
             
-            // Initialize global hotkey service
-            _globalHotkeyService = new Win32GlobalHotkeyService(this);
+            // Initialize low-level keyboard hook service (bypasses Windower/FFXI interception)
+            _globalHotkeyService = new LowLevelHotkeyService();
             _globalHotkeyService.HotkeyPressed += OnGlobalHotkeyPressed;
+            
+            _loggingService.LogInfoAsync("🔥 Using LOW-LEVEL keyboard hooks to bypass Windower/FFXI interception", "CharacterMonitorWindow");
             
             // Set initial window properties
             ShowInTaskbar = true;
