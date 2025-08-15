@@ -216,28 +216,11 @@
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,1,0,0">
             <StackPanel>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    
-                    <TextBlock Grid.Column="0"
-                               Text="⌨ Hotkeys" 
-                               FontSize="9" 
-                               FontWeight="Bold"
-                               Foreground="{DynamicResource PrimaryTextBrush}"
-                               Margin="0,0,0,2"/>
-                    
-                    <Button Grid.Column="1"
-                            Content="Test"
-                            FontSize="8"
-                            Width="30"
-                            Height="16"
-                            Click="TestButton_Click"
-                            ToolTip="Test hotkey system"
-                            Style="{StaticResource InfoIconButton}"/>
-                </Grid>
+                <TextBlock Text="⌨ Hotkeys" 
+                           FontSize="9" 
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource PrimaryTextBrush}"
+                           Margin="0,0,0,2"/>
                 
                 <TextBlock x:Name="HotkeyStatusText"
                            Text="No hotkeys registered"
