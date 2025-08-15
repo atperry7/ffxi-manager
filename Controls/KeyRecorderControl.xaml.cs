@@ -162,21 +162,15 @@ namespace FFXIManager.Controls
             // This is called for EVERY key press while recording
             Dispatcher.BeginInvoke(() =>
             {
-                // Debug logging to see what we're receiving
-                System.Diagnostics.Debug.WriteLine($"[KeyRecorder] Key pressed: {e.Key}, Modifiers: {e.Modifiers}");
-                
                 // Ignore modifier-only keys
                 if (IsModifierKey(e.Key))
                 {
-                    System.Diagnostics.Debug.WriteLine($"[KeyRecorder] Ignoring modifier key: {e.Key}");
                     return;
                 }
 
                 // Capture the combination
                 _currentModifiers = e.Modifiers;
                 _currentKey = e.Key;
-                
-                System.Diagnostics.Debug.WriteLine($"[KeyRecorder] Captured: {_currentModifiers} + {_currentKey}");
 
                 // Update display
                 if (_currentModifiers == ModifierKeys.None)
@@ -194,7 +188,6 @@ namespace FFXIManager.Controls
                 StopRecording();
                 
                 // Automatically fire the ShortcutRecorded event with the captured combination
-                System.Diagnostics.Debug.WriteLine($"[KeyRecorder] Firing ShortcutRecorded event with: {_currentModifiers} + {_currentKey}");
                 var shortcut = new KeyboardShortcutConfig(0, _currentModifiers, _currentKey);
                 ShortcutRecorded?.Invoke(this, shortcut);
             });

@@ -124,9 +124,6 @@ namespace FFXIManager.Services
                 var modifiers = GetCurrentModifiers();
                 var key = KeyInterop.KeyFromVirtualKey(vkCode);
                 
-                // Debug logging for key recording scenarios
-                System.Diagnostics.Debug.WriteLine($"[LowLevelHook] Key detected: vkCode={vkCode}, key={key}, modifiers={modifiers}");
-
                 // Check if this matches any registered hotkeys
                 Dictionary<int, HotkeyInfo> snapshot;
                 lock (_lock)
@@ -138,7 +135,6 @@ namespace FFXIManager.Services
                 // Special case: if we have the temp recording hotkey registered, fire for ALL keys
                 if (snapshot.ContainsKey(TEMP_RECORDING_HOTKEY_ID))
                 {
-                    System.Diagnostics.Debug.WriteLine($"[LowLevelHook] Recording mode - firing event for: {key} + {modifiers}");
                     HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(TEMP_RECORDING_HOTKEY_ID, modifiers, key));
                     // Don't consume the key in recording mode to allow normal processing
                     return CallNextHookEx(_hookId, nCode, wParam, lParam);
@@ -151,7 +147,6 @@ namespace FFXIManager.Services
                         hotkeyInfo.Modifiers == modifiers && 
                         hotkeyInfo.Key == key)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[LowLevelHook] Matched registered hotkey: {modifiers}+{key}");
                         // Fire the event
                         HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(kvp.Key, modifiers, key));
                         
