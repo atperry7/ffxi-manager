@@ -62,19 +62,7 @@ namespace FFXIManager.Views
                 IsEnabled = _originalShortcut.IsEnabled
             };
             
-            // Show confirmation message with the captured shortcut
-            var result = MessageBox.Show(
-                $"Successfully captured: {EditedShortcut.DisplayText}\n\nApply this shortcut for {_originalShortcut.SlotDisplayText}?", 
-                "Shortcut Captured", 
-                MessageBoxButton.YesNo, 
-                MessageBoxImage.Question);
-                
-            if (result == MessageBoxResult.Yes)
-            {
-                DialogResult = true;
-                Close();
-            }
-            // If No, just leave the dialog open so user can try again
+            // No auto-close or confirmation - let the user review and click Apply when ready
         }
 
         private void Apply_Click(object sender, RoutedEventArgs e)
