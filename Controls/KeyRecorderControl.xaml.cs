@@ -50,15 +50,6 @@ namespace FFXIManager.Controls
             Reset();
         }
 
-        private void AcceptButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (_currentModifiers != ModifierKeys.None && _currentKey != Key.None)
-            {
-                var shortcut = new KeyboardShortcutConfig(0, _currentModifiers, _currentKey);
-                ShortcutRecorded?.Invoke(this, shortcut);
-                Reset();
-            }
-        }
 
         /// <summary>
         /// Starts recording keyboard input.
@@ -84,7 +75,6 @@ namespace FFXIManager.Controls
                 StatusText.Text = "Press any key combination. Recording will stop automatically.";
                 
                 ClearButton.IsEnabled = false;
-                AcceptButton.IsEnabled = false;
                 
                 // Start capturing ALL keys (register a dummy hotkey to activate the hook)
                 _tempHookService.RegisterHotkey(TEMP_RECORDING_HOTKEY_ID, ModifierKeys.None, Key.None);
@@ -117,13 +107,11 @@ namespace FFXIManager.Controls
             
             if (_currentModifiers != ModifierKeys.None && _currentKey != Key.None)
             {
-                StatusText.Text = "Shortcut captured! Click Accept to use it.";
-                AcceptButton.IsEnabled = true;
+                StatusText.Text = "Shortcut captured! Use Apply in the dialog to save it.";
             }
             else
             {
                 StatusText.Text = "No valid shortcut recorded. Try again.";
-                AcceptButton.IsEnabled = false;
             }
         }
         
@@ -222,7 +210,6 @@ namespace FFXIManager.Controls
             RecordButton.Content = "📹 Record";
             RecordButton.Background = System.Windows.Media.Brushes.Green;
             ClearButton.IsEnabled = true;
-            AcceptButton.IsEnabled = false;
         }
 
         /// <summary>
@@ -244,7 +231,6 @@ namespace FFXIManager.Controls
                 KeyDisplayText.Text = modifiers == ModifierKeys.None ? 
                     key.ToString() : 
                     $"{modifiers}+{key}";
-                AcceptButton.IsEnabled = true;
             }
         }
 

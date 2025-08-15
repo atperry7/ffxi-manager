@@ -72,17 +72,7 @@
                         Background="{StaticResource SecondaryBrush}"
                         Width="80"
                         Height="32"
-                        Margin="0,0,8,0"
                         Click="ClearButton_Click"/>
-                
-                <Button x:Name="AcceptButton"
-                        Content="✓ Accept"
-                        Style="{StaticResource ModernButtonBase}"
-                        Background="{StaticResource PrimaryBrush}"
-                        Width="80"
-                        Height="32"
-                        Click="AcceptButton_Click"
-                        IsEnabled="False"/>
             </StackPanel>
         </Grid>
     </Border>
