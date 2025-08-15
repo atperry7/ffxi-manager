@@ -296,5 +296,21 @@ namespace FFXIManager.Views
                 }
             }
         }
+        
+        private void TestButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _loggingService.LogInfoAsync("🧪 Test button clicked - simulating Win+F2 hotkey", "CharacterMonitorWindow");
+                
+                // Simulate a hotkey press for slot 1 (Win+F2)
+                var testArgs = new HotkeyPressedEventArgs(1001, ModifierKeys.Windows, Key.F2);
+                OnGlobalHotkeyPressed(_globalHotkeyService, testArgs);
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogErrorAsync("Error in test button", ex, "CharacterMonitorWindow");
+            }
+        }
     }
 }

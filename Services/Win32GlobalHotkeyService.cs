@@ -78,10 +78,22 @@ namespace FFXIManager.Services
                 _windowHandle = new WindowInteropHelper(_window).Handle;
             }
             
-            if (_windowHandle == IntPtr.Zero) return;
+            if (_windowHandle == IntPtr.Zero) 
+            {
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] SetupMessageHook: Window handle is still zero!");
+                return;
+            }
 
             _hwndSource = HwndSource.FromHwnd(_windowHandle);
-            _hwndSource?.AddHook(WndProc);
+            if (_hwndSource != null)
+            {
+                _hwndSource.AddHook(WndProc);
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] Message hook setup successful for window 0x{_windowHandle.ToInt64():X}");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] Failed to get HwndSource for window 0x{_windowHandle.ToInt64():X}");
+            }
         }
 
         private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -91,13 +103,21 @@ namespace FFXIManager.Services
 
         private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
+            // Debug: Log all messages we receive (only for hotkeys to avoid spam)
             if (msg == WM_HOTKEY)
             {
                 int hotkeyId = wParam.ToInt32();
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] WM_HOTKEY received: ID={hotkeyId}, hwnd=0x{hwnd.ToInt64():X}");
+                
                 if (_registeredHotkeys.TryGetValue(hotkeyId, out var hotkeyInfo))
                 {
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] Found registered hotkey: {hotkeyInfo.Modifiers}+{hotkeyInfo.Key}");
                     HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(hotkeyId, hotkeyInfo.Modifiers, hotkeyInfo.Key));
                     handled = true;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] Hotkey ID {hotkeyId} not found in registered hotkeys");
                 }
             }
 
@@ -107,11 +127,17 @@ namespace FFXIManager.Services
         public bool RegisterHotkey(int id, ModifierKeys modifiers, Key key)
         {
             if (_disposed) throw new ObjectDisposedException(nameof(Win32GlobalHotkeyService));
-            if (_windowHandle == IntPtr.Zero) return false;
+            if (_windowHandle == IntPtr.Zero) 
+            {
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] RegisterHotkey failed: Window handle is zero");
+                return false;
+            }
 
             // Convert WPF keys to Win32 constants
             var win32Modifiers = ConvertModifiersToWin32(modifiers);
             var virtualKey = KeyInterop.VirtualKeyFromKey(key);
+
+            System.Diagnostics.Debug.WriteLine($"[DEBUG] Registering hotkey ID={id}, Modifiers=0x{win32Modifiers:X}, VKey=0x{virtualKey:X} ({modifiers}+{key}) for window 0x{_windowHandle.ToInt64():X}");
 
             // Attempt to register with the system
             bool success = RegisterHotKey(_windowHandle, id, win32Modifiers, (uint)virtualKey);
@@ -124,6 +150,12 @@ namespace FFXIManager.Services
                     Key = key,
                     IsRegistered = true
                 };
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] Successfully registered hotkey {modifiers}+{key} with ID {id}");
+            }
+            else
+            {
+                var error = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] Failed to register hotkey {modifiers}+{key}, Win32 error: {error}");
             }
 
             return success;
