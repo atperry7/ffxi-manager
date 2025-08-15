@@ -1,0 +1,113 @@
+name: "🐛 Bug report"
+description: Something crashed, froze, or acted like a Goblin with a linkshell
+title: "[Bug] <short summary>"
+labels: ["bug", "needs-triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Sorry for the aggro! Fill this out so we can reproduce and smack the bug with a Kraken Club.
+  - type: input
+    id: app_version
+    attributes:
+      label: FFXI Manager version
+      placeholder: "1.0.0-beta (build SHA if available)"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS / .NET runtime
+      placeholder: "Windows 10/11; .NET 9"
+    validations:
+      required: true
+  - type: input
+    id: ecosystem
+    attributes:
+      label: Ecosystem context
+      description: Windower / POL Proxy / Silmaril versions; # of concurrent accounts; active apps
+      placeholder: "Windower 4.5.x; POL Proxy 1.2.x; Silmaril 3.x; 4 accounts"
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Plain-language description of the issue.
+      placeholder: "Quick Switch popup stops detecting characters after swapping profiles…"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps please.
+      value: |
+        1. Launch FFXI Manager
+        2. Start Windower and POL Proxy
+        3. Swap to backup profile A
+        4. Log in character B
+        5. Observe Quick Switch not updating
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: "Quick Switch shows the newly logged-in character within 2s"
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: "Popup shows previous character; requires app restart"
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Blocker (can't use core features)
+        - Critical (major feature broken; no workaround)
+        - Major (major feature broken; workaround exists)
+        - Minor (annoying but usable)
+        - Trivial (cosmetic)
+      default: 2
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: Frequency
+      options:
+        - Always
+        - Often
+        - Intermittent
+        - Rare
+  - type: checkboxes
+    id: regression
+    attributes:
+      label: Regression?
+      options:
+        - label: Started after updating FFXI Manager
+        - label: Started after updating Windower / POL Proxy / Silmaril
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / crash dumps
+      description: Paste relevant excerpts or attach files. (Sanitize credentials!)
+      render: text
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots / screen recordings
+      description: Drag & drop files here.
+  - type: textarea
+    id: workarounds
+    attributes:
+      label: Known workaround
+      placeholder: "Restart Quick Switch; kill/restart Windower; reapply profile…"
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional notes
+      render: markdown

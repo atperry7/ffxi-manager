@@ -1,0 +1,100 @@
+name: "✨ Feature request"
+description: Propose a new capability or improvement for FFXI Manager
+title: "[Feature] <short summary>"
+labels: ["feature", "needs-triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping level up **FFXI Manager**! Tell us what would make multi-boxing smoother, faster, or less alt-tabby.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences describing the feature.
+      placeholder: "Quick character hotkeys from the always-on-top pop-up…"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Motivation
+      description: What problem does this solve? What pain shows up today?
+      placeholder: "I often pick the wrong mule and have to relog three times…"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Impacted area(s)
+      multiple: true
+      options:
+        - Login Profile Mastery
+        - Application Manager (Windower / POL Proxy / Silmaril)
+        - Character Monitor
+        - Quick Switch UI
+        - Installer / Updater
+        - Configuration / Settings
+        - Telemetry / Logging
+        - Documentation
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the solution or UX flow. Link mockups if you have them.
+      placeholder: "Add a configurable hotkey to switch to last-used character profile…"
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      placeholder: "Manual file swap; Windower script; external hotkey tool…"
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope (In / Out)
+      description: Bulleted lists of what's included vs. explicitly out-of-scope.
+      value: |
+        **In:**  
+        -  
+        **Out:**  
+        -  
+  - type: checkboxes
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: What must be true for this to be “done”?
+      options:
+        - label: Option is configurable via Settings
+        - label: Works while app is minimized / always-on-top
+        - label: Logged to the activity log
+        - label: Documented in README / Help
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options: ["Low", "Medium", "High"]
+      default: 1
+  - type: input
+    id: version
+    attributes:
+      label: FFXI Manager version
+      placeholder: "1.0.0"
+  - type: input
+    id: environment
+    attributes:
+      label: OS / Environment
+      placeholder: "Windows 11 24H2; .NET 9"
+  - type: input
+    id: ecosystem
+    attributes:
+      label: Ecosystem versions (if relevant)
+      description: Windower / POL Proxy / Silmaril versions, # of concurrent accounts, etc.
+      placeholder: "Windower 4.5.x; POL Proxy 1.2.x; Silmaril 3.x; 6 accounts"
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context / mockups
+      render: markdown
