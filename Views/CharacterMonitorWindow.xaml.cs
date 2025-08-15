@@ -135,7 +135,12 @@ namespace FFXIManager.Views
                 {
                     settings.CharacterSwitchShortcuts = ApplicationSettings.GetDefaultShortcuts();
                     _settingsService.SaveSettings(settings);
+                    _loggingService.LogInfoAsync("Created default keyboard shortcuts (Win+F1-F9)", "CharacterMonitorWindow");
                 }
+                
+                var registeredCount = 0;
+                var failedCount = 0;
+                var registeredShortcuts = new List<string>();
                 
                 // Register each shortcut
                 foreach (var shortcut in settings.CharacterSwitchShortcuts.Where(s => s.IsEnabled))
@@ -144,17 +149,26 @@ namespace FFXIManager.Views
                     
                     if (success)
                     {
-                        _loggingService.LogInfoAsync($"Registered global hotkey: {shortcut.DisplayText} for slot {shortcut.SlotIndex + 1}", "CharacterMonitorWindow");
+                        registeredCount++;
+                        registeredShortcuts.Add($"{shortcut.DisplayText} → Slot {shortcut.SlotIndex + 1}");
+                        _loggingService.LogInfoAsync($"✓ Registered global hotkey: {shortcut.DisplayText} for slot {shortcut.SlotIndex + 1}", "CharacterMonitorWindow");
                     }
                     else
                     {
-                        _loggingService.LogWarningAsync($"Failed to register global hotkey: {shortcut.DisplayText} (may be in use by another application)", "CharacterMonitorWindow");
+                        failedCount++;
+                        _loggingService.LogWarningAsync($"✗ Failed to register global hotkey: {shortcut.DisplayText} (may be in use by another application)", "CharacterMonitorWindow");
                     }
                 }
+                
+                // Update status display
+                UpdateHotkeyStatusDisplay(registeredCount, failedCount, registeredShortcuts);
+                
+                _loggingService.LogInfoAsync($"Hotkey registration complete: {registeredCount} registered, {failedCount} failed", "CharacterMonitorWindow");
             }
             catch (Exception ex)
             {
                 _loggingService.LogErrorAsync("Error registering keyboard shortcuts", ex, "CharacterMonitorWindow");
+                UpdateHotkeyStatusDisplay(0, 0, new List<string>(), "Error registering hotkeys");
             }
         }
         
@@ -165,16 +179,34 @@ namespace FFXIManager.Views
                 // Convert hotkey ID back to slot index
                 int slotIndex = e.HotkeyId - 1000; // Subtract the offset we added
                 
+                _loggingService.LogInfoAsync($"🎮 Global hotkey pressed: {e.Modifiers}+{e.Key} (slot {slotIndex + 1})", "CharacterMonitorWindow");
+                
                 // Execute the switch command on the UI thread
                 Dispatcher.Invoke(() =>
                 {
                     var viewModel = DataContext as PlayOnlineMonitorViewModel;
-                    if (viewModel != null && viewModel.SwitchToSlotCommand.CanExecute(slotIndex))
+                    
+                    // Update last hotkey display immediately
+                    ShowLastHotkeyPressed(e.Modifiers, e.Key, slotIndex);
+                    
+                    if (viewModel != null)
                     {
-                        viewModel.SwitchToSlotCommand.Execute(slotIndex);
-                        
-                        // Provide visual feedback
-                        ShowSlotSwitchFeedback(slotIndex);
+                        if (viewModel.SwitchToSlotCommand.CanExecute(slotIndex))
+                        {
+                            viewModel.SwitchToSlotCommand.Execute(slotIndex);
+                            
+                            // Get character name for feedback
+                            var character = viewModel.Characters.ElementAtOrDefault(slotIndex);
+                            var characterName = character?.DisplayName ?? $"Slot {slotIndex + 1}";
+                            
+                            _loggingService.LogInfoAsync($"✓ Switched to character: {characterName}", "CharacterMonitorWindow");
+                            ShowSlotSwitchFeedback(slotIndex, characterName);
+                        }
+                        else
+                        {
+                            _loggingService.LogWarningAsync($"⚠ Cannot switch to slot {slotIndex + 1} - slot empty or character not responding", "CharacterMonitorWindow");
+                            ShowSlotSwitchFeedback(slotIndex, null, "Cannot switch - slot empty or not responding");
+                        }
                     }
                 });
             }
@@ -184,11 +216,85 @@ namespace FFXIManager.Views
             }
         }
         
-        private void ShowSlotSwitchFeedback(int slotIndex)
+        private void ShowLastHotkeyPressed(ModifierKeys modifiers, Key key, int slotIndex)
         {
-            // TODO: Implement visual feedback animation
-            // For now, just log the switch
-            _loggingService.LogInfoAsync($"Switched to character slot {slotIndex + 1} via hotkey", "CharacterMonitorWindow");
+            if (LastHotkeyText != null)
+            {
+                LastHotkeyText.Text = $"Last pressed: {modifiers}+{key} → Slot {slotIndex + 1}";
+                LastHotkeyText.Visibility = Visibility.Visible;
+            }
+        }
+        
+        private void ShowSlotSwitchFeedback(int slotIndex, string? characterName = null, string? errorMessage = null)
+        {
+            if (LastHotkeyText != null)
+            {
+                if (errorMessage != null)
+                {
+                    LastHotkeyText.Text = errorMessage;
+                    LastHotkeyText.Foreground = System.Windows.Media.Brushes.Orange;
+                }
+                else if (characterName != null)
+                {
+                    LastHotkeyText.Text = $"✓ Switched to: {characterName}";
+                    LastHotkeyText.Foreground = System.Windows.Media.Brushes.LightGreen;
+                }
+                else
+                {
+                    LastHotkeyText.Text = $"Slot {slotIndex + 1} switch attempt";
+                }
+                
+                LastHotkeyText.Visibility = Visibility.Visible;
+                
+                // Clear the message after 5 seconds
+                var timer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromSeconds(5)
+                };
+                timer.Tick += (s, e) => 
+                {
+                    timer.Stop();
+                    if (LastHotkeyText != null)
+                    {
+                        LastHotkeyText.Visibility = Visibility.Collapsed;
+                    }
+                };
+                timer.Start();
+            }
+        }
+        
+        private void UpdateHotkeyStatusDisplay(int registeredCount, int failedCount, List<string> shortcuts, string? errorMessage = null)
+        {
+            if (HotkeyStatusText != null)
+            {
+                if (errorMessage != null)
+                {
+                    HotkeyStatusText.Text = errorMessage;
+                }
+                else if (registeredCount == 0)
+                {
+                    HotkeyStatusText.Text = "No hotkeys registered";
+                }
+                else
+                {
+                    var statusText = $"{registeredCount} registered";
+                    if (failedCount > 0)
+                    {
+                        statusText += $", {failedCount} failed";
+                    }
+                    
+                    if (shortcuts.Count > 0)
+                    {
+                        statusText += $"\n{string.Join(", ", shortcuts.Take(3))}";
+                        if (shortcuts.Count > 3)
+                        {
+                            statusText += $"\n+ {shortcuts.Count - 3} more...";
+                        }
+                    }
+                    
+                    HotkeyStatusText.Text = statusText;
+                }
+            }
         }
     }
 }

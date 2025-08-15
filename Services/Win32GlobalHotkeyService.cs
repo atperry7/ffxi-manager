@@ -21,7 +21,7 @@ namespace FFXIManager.Services
 
         private readonly Dictionary<int, HotkeyInfo> _registeredHotkeys = new();
         private readonly Window _window;
-        private readonly IntPtr _windowHandle;
+        private IntPtr _windowHandle;
         private HwndSource? _hwndSource;
         private bool _disposed;
 
@@ -46,7 +46,7 @@ namespace FFXIManager.Services
         {
             _window = window ?? throw new ArgumentNullException(nameof(window));
             
-            // Get window handle
+            // Get window handle - this might be IntPtr.Zero if window isn't shown yet
             _windowHandle = new WindowInteropHelper(_window).Handle;
             
             // If window is already loaded, setup immediately
@@ -66,11 +66,18 @@ namespace FFXIManager.Services
 
         private void OnWindowSourceInitialized(object? sender, EventArgs e)
         {
+            // Update window handle now that window is initialized
+            _windowHandle = new WindowInteropHelper(_window).Handle;
             SetupMessageHook();
         }
 
         private void SetupMessageHook()
         {
+            if (_windowHandle == IntPtr.Zero) 
+            {
+                _windowHandle = new WindowInteropHelper(_window).Handle;
+            }
+            
             if (_windowHandle == IntPtr.Zero) return;
 
             _hwndSource = HwndSource.FromHwnd(_windowHandle);
