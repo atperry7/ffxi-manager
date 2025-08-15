@@ -1,7 +1,7 @@
 <Window x:Class="FFXIManager.Views.CharacterMonitorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="FFXI Characters" Height="300" Width="100"
+        Title="FFXI Characters" Height="500" Width="120"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         AllowsTransparency="True"
@@ -41,43 +41,44 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Left Side Controls -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="2,0,0,0">
+                <StackPanel Grid.Column="0" Orientation="Vertical" Margin="2,0,0,0">
                     <ToggleButton x:Name="AlwaysOnTopToggle" 
                                   Content="📌" 
                                   ToolTip="Always On Top"
                                   Style="{StaticResource IconToggleButton}"
-                                  Width="20" Height="15" 
+                                  Width="30" Height="15" 
                                   FontSize="9"
-                                  Margin="0,0,2,0"
+                                  Margin="0,0,0,2"
                                   Checked="AlwaysOnTopToggle_Checked"
                                   Unchecked="AlwaysOnTopToggle_Unchecked"/>
                     
                     <Button Content="🔄"
                             Command="{Binding RefreshCharactersCommand}"
                             Style="{StaticResource InfoIconButton}"
-                            Width="20" Height="15"
+                            Width="30" Height="15"
                             FontSize="8"
-                            Margin="0,0,2,0"
+                            Margin="0,0,0,2"
                             ToolTip="Refresh"/>
                 </StackPanel>
                 
                 <!-- Title (Center) -->
                 <TextBlock Grid.Column="1" 
-                           Text="FFXI" 
+                           Text="FFXI"
                            FontSize="10" 
                            FontWeight="Bold"
                            HorizontalAlignment="Center" 
                            VerticalAlignment="Center"
+                           Margin="2,2,2,2"
                            Foreground="{DynamicResource PrimaryTextBrush}"/>
 
                 <!-- Right Side Controls -->
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,2,0">
+                <StackPanel Grid.Column="2" Orientation="Vertical" Margin="1,0,0,0">
                     <!-- Minimize Button -->
                     <Button Content="—" 
                             Click="MinimizeButton_Click"
                             ToolTip="Minimize"
                             Style="{StaticResource InfoIconButton}"
-                            Width="20" Height="15"
+                            Width="25" Height="15"
                             FontSize="9"
                             Margin="0,0,2,0"/>
                     
@@ -86,7 +87,7 @@
                             Click="CloseButton_Click"
                             ToolTip="Close"
                             Style="{StaticResource DangerIconButton}"
-                            Width="20" Height="15"
+                            Width="25" Height="10"
                             FontSize="9"/>
                 </StackPanel>
             </Grid>

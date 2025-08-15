@@ -199,24 +199,24 @@
 
                     <!-- No Characters Message -->
                     <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="24" Background="{DynamicResource SurfaceBrush}">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding PlayOnlineMonitor.CharacterCount, FallbackValue=0}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
                         <TextBlock Text="No PlayOnline characters detected. Launch FFXI to see character instances here."
                                    HorizontalAlignment="Center"
                                    FontStyle="Italic"
                                    FontFamily="Segoe UI"
                                    FontSize="12"
                                    TextWrapping="Wrap"
-                                   TextAlignment="Center">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource SecondaryTextBlock}">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding PlayOnlineMonitor.CharacterCount, FallbackValue=0}" Value="0">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                                   TextAlignment="Center"
+                                   Style="{StaticResource SecondaryTextBlock}"/>
                     </Border>
                 </StackPanel>
             </GroupBox>
