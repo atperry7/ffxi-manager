@@ -77,6 +77,14 @@ namespace FFXIManager.Models.Settings
                 return string.Join("+", parts);
             }
         }
+        
+        /// <summary>
+        /// Display-friendly text for the slot (e.g., "Slot 1", "Slot 2")
+        /// </summary>
+        public string SlotDisplayText
+        {
+            get => $"Slot {SlotIndex + 1}";
+        }
 
         /// <summary>
         /// Unique identifier for this shortcut (used for hotkey registration)
@@ -104,6 +112,10 @@ namespace FFXIManager.Models.Settings
             if (propertyName == nameof(Modifiers) || propertyName == nameof(Key))
             {
                 OnPropertyChanged(nameof(DisplayText));
+            }
+            if (propertyName == nameof(SlotIndex))
+            {
+                OnPropertyChanged(nameof(SlotDisplayText));
             }
         }
 

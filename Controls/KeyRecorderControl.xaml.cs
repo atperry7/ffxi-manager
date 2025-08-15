@@ -186,6 +186,13 @@ namespace FFXIManager.Controls
 
                 // Auto-stop recording after capturing a key
                 StopRecording();
+                
+                // Automatically fire the ShortcutRecorded event with the captured combination
+                if (_currentModifiers != ModifierKeys.None && _currentKey != Key.None)
+                {
+                    var shortcut = new KeyboardShortcutConfig(0, _currentModifiers, _currentKey);
+                    ShortcutRecorded?.Invoke(this, shortcut);
+                }
             });
         }
 
