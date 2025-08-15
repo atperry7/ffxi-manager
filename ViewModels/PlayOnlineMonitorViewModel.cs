@@ -81,6 +81,7 @@ namespace FFXIManager.ViewModels
         public ICommand RefreshCharactersCommand { get; private set; } = null!;
         public ICommand ToggleMonitoringCommand { get; private set; } = null!;
         public ICommand ShowCharacterMonitorCommand { get; private set; } = null!;
+        public ICommand SwitchToSlotCommand { get; private set; } = null!;
 
         private void InitializeCommands()
         {
@@ -96,6 +97,10 @@ namespace FFXIManager.ViewModels
 
             ShowCharacterMonitorCommand = new RelayCommand(
                 () => ShowCharacterMonitorDialog());
+
+            SwitchToSlotCommand = new RelayCommandWithParameter<int>(
+                async slotIndex => await SwitchToSlotAsync(slotIndex),
+                slotIndex => CanSwitchToSlot(slotIndex));
 
             // Prime the list on startup so the mini-UI shows existing characters
             _ = LoadCharactersAsync();
@@ -153,6 +158,38 @@ namespace FFXIManager.ViewModels
                 _statusService.SetMessage($"Error loading characters: {ex.Message}");
                 await _loggingService.LogErrorAsync("Error loading characters", ex, "PlayOnlineMonitorViewModel");
             }
+        }
+
+        #endregion
+
+        #region Public Methods - Character Switching
+
+        /// <summary>
+        /// Switches to the character at the specified slot index
+        /// </summary>
+        /// <param name="slotIndex">0-based slot index</param>
+        public async Task SwitchToSlotAsync(int slotIndex)
+        {
+            if (!CanSwitchToSlot(slotIndex)) return;
+
+            var character = Characters.ElementAtOrDefault(slotIndex);
+            if (character != null)
+            {
+                await ActivateCharacterAsync(character);
+            }
+        }
+
+        /// <summary>
+        /// Checks if switching to the specified slot is possible
+        /// </summary>
+        /// <param name="slotIndex">0-based slot index</param>
+        /// <returns>True if the slot can be switched to</returns>
+        public bool CanSwitchToSlot(int slotIndex)
+        {
+            if (slotIndex < 0 || slotIndex >= Characters.Count) return false;
+            
+            var character = Characters.ElementAtOrDefault(slotIndex);
+            return character != null && character.IsResponding && !character.IsActive;
         }
 
         #endregion
