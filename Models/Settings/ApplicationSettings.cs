@@ -43,15 +43,16 @@ namespace FFXIManager.Models.Settings
         public bool RememberWindowPosition { get; set; } = true;
 
         /// <summary>
-        /// Gets the default keyboard shortcuts for character switching (Ctrl+Shift+1 through Ctrl+Shift+9)
+        /// Gets the default keyboard shortcuts for character switching (Win+F1 through Win+F9)
+        /// Uses Windows key to avoid conflicts with FFXI's Ctrl/Alt macro system
         /// </summary>
         public static List<KeyboardShortcutConfig> GetDefaultShortcuts()
         {
             var shortcuts = new List<KeyboardShortcutConfig>();
             for (int i = 0; i < 9; i++)
             {
-                var key = (Key)(Key.D1 + i); // D1, D2, D3... D9
-                shortcuts.Add(new KeyboardShortcutConfig(i, ModifierKeys.Control | ModifierKeys.Shift, key));
+                var key = (Key)(Key.F1 + i); // F1, F2, F3... F9
+                shortcuts.Add(new KeyboardShortcutConfig(i, ModifierKeys.Windows, key));
             }
             return shortcuts;
         }
