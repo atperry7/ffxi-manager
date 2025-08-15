@@ -23,6 +23,9 @@ namespace FFXIManager.Services
         private const int VK_MENU = 0x12; // Alt key
         private const int VK_LWIN = 0x5B;
         private const int VK_RWIN = 0x5C;
+        
+        // Temp recording hotkey ID used by KeyRecorderControl
+        private const int TEMP_RECORDING_HOTKEY_ID = 99999;
 
         private readonly Dictionary<int, HotkeyInfo> _registeredHotkeys = new();
         private readonly object _lock = new();
@@ -120,6 +123,9 @@ namespace FFXIManager.Services
                 // Get current modifier key state
                 var modifiers = GetCurrentModifiers();
                 var key = KeyInterop.KeyFromVirtualKey(vkCode);
+                
+                // Debug logging for key recording scenarios
+                System.Diagnostics.Debug.WriteLine($"[LowLevelHook] Key detected: vkCode={vkCode}, key={key}, modifiers={modifiers}");
 
                 // Check if this matches any registered hotkeys
                 Dictionary<int, HotkeyInfo> snapshot;
@@ -129,6 +135,15 @@ namespace FFXIManager.Services
                     snapshot = new Dictionary<int, HotkeyInfo>(_registeredHotkeys);
                 }
                 
+                // Special case: if we have the temp recording hotkey registered, fire for ALL keys
+                if (snapshot.ContainsKey(TEMP_RECORDING_HOTKEY_ID))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[LowLevelHook] Recording mode - firing event for: {key} + {modifiers}");
+                    HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(TEMP_RECORDING_HOTKEY_ID, modifiers, key));
+                    // Don't consume the key in recording mode to allow normal processing
+                    return CallNextHookEx(_hookId, nCode, wParam, lParam);
+                }
+                
                 foreach (var kvp in snapshot)
                 {
                     var hotkeyInfo = kvp.Value;
@@ -136,6 +151,7 @@ namespace FFXIManager.Services
                         hotkeyInfo.Modifiers == modifiers && 
                         hotkeyInfo.Key == key)
                     {
+                        System.Diagnostics.Debug.WriteLine($"[LowLevelHook] Matched registered hotkey: {modifiers}+{key}");
                         // Fire the event
                         HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(kvp.Key, modifiers, key));
                         
