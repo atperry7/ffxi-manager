@@ -150,15 +150,11 @@ namespace FFXIManager.Views
                     }
                 }
                 
-                // Update status display
-                UpdateHotkeyStatusDisplay(registeredCount, failedCount, registeredShortcuts);
-                
                 _loggingService.LogInfoAsync($"Hotkey registration complete: {registeredCount} registered, {failedCount} failed", "CharacterMonitorWindow");
             }
             catch (Exception ex)
             {
                 _loggingService.LogErrorAsync("Error registering keyboard shortcuts", ex, "CharacterMonitorWindow");
-                UpdateHotkeyStatusDisplay(0, 0, new List<string>(), "Error registering hotkeys");
             }
         }
         
@@ -176,9 +172,6 @@ namespace FFXIManager.Views
                 {
                     var viewModel = DataContext as PlayOnlineMonitorViewModel;
                     
-                    // Update last hotkey display immediately
-                    ShowLastHotkeyPressed(e.Modifiers, e.Key, slotIndex);
-                    
                     if (viewModel != null)
                     {
                         if (viewModel.SwitchToSlotCommand.CanExecute(slotIndex))
@@ -190,12 +183,10 @@ namespace FFXIManager.Views
                             var characterName = character?.DisplayName ?? $"Slot {slotIndex + 1}";
                             
                             _loggingService.LogInfoAsync($"✓ Switched to character: {characterName}", "CharacterMonitorWindow");
-                            ShowSlotSwitchFeedback(slotIndex, characterName);
                         }
                         else
                         {
                             _loggingService.LogWarningAsync($"⚠ Cannot switch to slot {slotIndex + 1} - slot empty or character not responding", "CharacterMonitorWindow");
-                            ShowSlotSwitchFeedback(slotIndex, null, "Cannot switch - slot empty or not responding");
                         }
                     }
                 });
@@ -203,87 +194,6 @@ namespace FFXIManager.Views
             catch (Exception ex)
             {
                 _loggingService.LogErrorAsync($"Error handling hotkey press", ex, "CharacterMonitorWindow");
-            }
-        }
-        
-        private void ShowLastHotkeyPressed(ModifierKeys modifiers, Key key, int slotIndex)
-        {
-            if (LastHotkeyText != null)
-            {
-                LastHotkeyText.Text = $"Last pressed: {modifiers}+{key} → Slot {slotIndex + 1}";
-                LastHotkeyText.Visibility = Visibility.Visible;
-            }
-        }
-        
-        private void ShowSlotSwitchFeedback(int slotIndex, string? characterName = null, string? errorMessage = null)
-        {
-            if (LastHotkeyText != null)
-            {
-                if (errorMessage != null)
-                {
-                    LastHotkeyText.Text = errorMessage;
-                    LastHotkeyText.Foreground = System.Windows.Media.Brushes.Orange;
-                }
-                else if (characterName != null)
-                {
-                    LastHotkeyText.Text = $"✓ Switched to: {characterName}";
-                    LastHotkeyText.Foreground = System.Windows.Media.Brushes.LightGreen;
-                }
-                else
-                {
-                    LastHotkeyText.Text = $"Slot {slotIndex + 1} switch attempt";
-                }
-                
-                LastHotkeyText.Visibility = Visibility.Visible;
-                
-                // Clear the message after 5 seconds
-                var timer = new System.Windows.Threading.DispatcherTimer
-                {
-                    Interval = TimeSpan.FromSeconds(5)
-                };
-                timer.Tick += (s, e) => 
-                {
-                    timer.Stop();
-                    if (LastHotkeyText != null)
-                    {
-                        LastHotkeyText.Visibility = Visibility.Collapsed;
-                    }
-                };
-                timer.Start();
-            }
-        }
-        
-        private void UpdateHotkeyStatusDisplay(int registeredCount, int failedCount, List<string> shortcuts, string? errorMessage = null)
-        {
-            if (HotkeyStatusText != null)
-            {
-                if (errorMessage != null)
-                {
-                    HotkeyStatusText.Text = errorMessage;
-                }
-                else if (registeredCount == 0)
-                {
-                    HotkeyStatusText.Text = "No hotkeys registered";
-                }
-                else
-                {
-                    var statusText = $"{registeredCount} registered";
-                    if (failedCount > 0)
-                    {
-                        statusText += $", {failedCount} failed";
-                    }
-                    
-                    if (shortcuts.Count > 0)
-                    {
-                        statusText += $"\n{string.Join(", ", shortcuts.Take(3))}";
-                        if (shortcuts.Count > 3)
-                        {
-                            statusText += $"\n+ {shortcuts.Count - 3} more...";
-                        }
-                    }
-                    
-                    HotkeyStatusText.Text = statusText;
-                }
             }
         }
         

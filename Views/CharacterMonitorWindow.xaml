@@ -24,7 +24,6 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         
         <!-- Custom Title Bar with Drag Support -->
@@ -208,36 +207,8 @@
             </StackPanel>
         </Border>
         
-        <!-- Hotkey Status Display -->
-        <Border Grid.Row="2" 
-                x:Name="HotkeyStatusBorder"
-                Background="{DynamicResource SurfaceBrush}" 
-                Padding="5"
-                BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="0,1,0,0">
-            <StackPanel>
-                <TextBlock Text="⌨ Hotkeys" 
-                           FontSize="9" 
-                           FontWeight="Bold"
-                           Foreground="{DynamicResource PrimaryTextBrush}"
-                           Margin="0,0,0,2"/>
-                
-                <TextBlock x:Name="HotkeyStatusText"
-                           Text="No hotkeys registered"
-                           FontSize="8"
-                           Foreground="{DynamicResource SecondaryTextBrush}"
-                           TextWrapping="Wrap"/>
-                <TextBlock x:Name="LastHotkeyText"
-                           Text=""
-                           FontSize="8"
-                           Foreground="{DynamicResource AccentBrush}"
-                           Margin="0,2,0,0"
-                           Visibility="Collapsed"/>
-            </StackPanel>
-        </Border>
-        
         <!-- Opacity Slider -->
-        <Border Grid.Row="3" 
+        <Border Grid.Row="2" 
                 Background="{DynamicResource SurfaceBrush}" 
                 Padding="5"
                 CornerRadius="0,0,8,8">
