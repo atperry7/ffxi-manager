@@ -303,13 +303,38 @@ namespace FFXIManager.Views
             {
                 _loggingService.LogInfoAsync("🧪 Test button clicked - simulating Win+F2 hotkey", "CharacterMonitorWindow");
                 
-                // Simulate a hotkey press for slot 1 (Win+F2)
+                // First, test if we can register a simple test hotkey
+                TestSimpleHotkey();
+                
+                // Then simulate the event
                 var testArgs = new HotkeyPressedEventArgs(1001, ModifierKeys.Windows, Key.F2);
                 OnGlobalHotkeyPressed(_globalHotkeyService, testArgs);
             }
             catch (Exception ex)
             {
                 _loggingService.LogErrorAsync("Error in test button", ex, "CharacterMonitorWindow");
+            }
+        }
+        
+        private void TestSimpleHotkey()
+        {
+            try
+            {
+                // Try to register a simple test hotkey with a unique ID
+                int testId = 9999;
+                bool success = _globalHotkeyService.RegisterHotkey(testId, ModifierKeys.Control | ModifierKeys.Shift, Key.T);
+                _loggingService.LogInfoAsync($"Test hotkey registration (Ctrl+Shift+T): {(success ? "SUCCESS" : "FAILED")}", "CharacterMonitorWindow");
+                
+                if (success)
+                {
+                    // Unregister it immediately
+                    _globalHotkeyService.UnregisterHotkey(testId);
+                    _loggingService.LogInfoAsync("Test hotkey unregistered", "CharacterMonitorWindow");
+                }
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogErrorAsync("Error testing simple hotkey", ex, "CharacterMonitorWindow");
             }
         }
     }

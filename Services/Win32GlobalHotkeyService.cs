@@ -101,13 +101,18 @@ namespace FFXIManager.Services
             UnregisterAll();
         }
 
+        private static int _messageCount = 0;
+        
         private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
-            // Debug: Log all messages we receive (only for hotkeys to avoid spam)
+            // Debug: Count all messages to verify the hook is working
+            _messageCount++;
+            
+            // Debug: Log interesting messages (not just WM_HOTKEY)
             if (msg == WM_HOTKEY)
             {
                 int hotkeyId = wParam.ToInt32();
-                System.Diagnostics.Debug.WriteLine($"[DEBUG] WM_HOTKEY received: ID={hotkeyId}, hwnd=0x{hwnd.ToInt64():X}");
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] 🎯 WM_HOTKEY received: ID={hotkeyId}, hwnd=0x{hwnd.ToInt64():X}, total messages: {_messageCount}");
                 
                 if (_registeredHotkeys.TryGetValue(hotkeyId, out var hotkeyInfo))
                 {
@@ -119,6 +124,11 @@ namespace FFXIManager.Services
                 {
                     System.Diagnostics.Debug.WriteLine($"[DEBUG] Hotkey ID {hotkeyId} not found in registered hotkeys");
                 }
+            }
+            else if (_messageCount % 100 == 0)
+            {
+                // Log every 100th message to verify hook is active
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] Message hook active: {_messageCount} messages processed, msg=0x{msg:X}");
             }
 
             return IntPtr.Zero;
