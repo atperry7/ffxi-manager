@@ -133,7 +133,8 @@ namespace FFXIManager.Infrastructure
                 _playOnlineMonitorService ??= new PlayOnlineMonitorService(
                     UnifiedMonitoringService,
                     LoggingService,
-                    UiDispatcher);
+                    UiDispatcher,
+                    ProcessManagementService); // **IMPROVED**: Inject dependency instead of using ServiceLocator
                 return _playOnlineMonitorService;
             }
         }
