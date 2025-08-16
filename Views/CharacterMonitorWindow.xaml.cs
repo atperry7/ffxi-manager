@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
@@ -19,6 +20,10 @@ namespace FFXIManager.Views
         private readonly LowLevelHotkeyService _globalHotkeyService;
         private readonly ILoggingService _loggingService;
         private volatile bool _disposed;
+        
+        // Hotkey debouncing to prevent rapid-fire issues
+        private readonly Dictionary<int, DateTime> _lastHotkeyPress = new();
+        private readonly TimeSpan _hotkeyDebounceInterval = TimeSpan.FromMilliseconds(500); // 500ms debounce
         
         public CharacterMonitorWindow(PlayOnlineMonitorViewModel viewModel)
         {
@@ -198,10 +203,26 @@ namespace FFXIManager.Views
                 // Convert hotkey ID back to slot index
                 int slotIndex = e.HotkeyId - 1000; // Subtract the offset we added
                 
+                // Debouncing: check if this hotkey was pressed recently
+                var now = DateTime.UtcNow;
+                if (_lastHotkeyPress.TryGetValue(e.HotkeyId, out var lastPress))
+                {
+                    var timeSinceLastPress = now - lastPress;
+                    if (timeSinceLastPress < _hotkeyDebounceInterval)
+                    {
+                        // Ignore this press - too soon after the last one
+                        _loggingService.LogInfoAsync($"⏰ Ignoring rapid hotkey press: {e.Modifiers}+{e.Key} (debounced - {timeSinceLastPress.TotalMilliseconds:F0}ms since last press)", "CharacterMonitorWindow");
+                        return;
+                    }
+                }
+                
+                // Update the last press time for this hotkey
+                _lastHotkeyPress[e.HotkeyId] = now;
+                
                 _loggingService.LogInfoAsync($"🎮 Global hotkey pressed: {e.Modifiers}+{e.Key} (slot {slotIndex + 1})", "CharacterMonitorWindow");
                 
-                // Execute the switch command on the UI thread
-                Dispatcher.Invoke(() =>
+                // Execute the switch command on the UI thread (use BeginInvoke for better responsiveness)
+                Dispatcher.BeginInvoke(() =>
                 {
                     var viewModel = DataContext as PlayOnlineMonitorViewModel;
                     
