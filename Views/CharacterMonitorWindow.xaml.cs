@@ -125,26 +125,9 @@ namespace FFXIManager.Views
             base.OnClosed(e);
         }
         
-        
-        // This method is no longer needed - hotkeys are managed by GlobalHotkeyManager
-        // Keeping as a placeholder for potential future window-specific functionality
-        
-        /// <summary>
-        /// No longer needed - hotkeys are refreshed automatically by GlobalHotkeyManager
-        /// </summary>
-        public static void RefreshKeyboardShortcuts()
-        {
-            // No-op - handled by GlobalHotkeyManager
-        }
-        
         private void OnHotkeySettingsChanged(object? sender, EventArgs e)
         {
-            // No need to refresh hotkeys here - handled by GlobalHotkeyManager
-            // This is kept for potential UI updates in the future
+            // Reserved for potential future UI updates based on hotkey settings changes
         }
-        
-        // This method is no longer needed - hotkey handling is done by PlayOnlineMonitorViewModel
-        
-        
     }
 }

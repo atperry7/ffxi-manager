@@ -15,6 +15,7 @@ namespace FFXIManager.ViewModels
     public class DiscoverySettingsViewModel : Base.ViewModelBase
     {
         private readonly ISettingsService _settingsService;
+        private readonly Dictionary<KeyboardShortcutConfig, bool> _originalEnabledStates = new();
         
         /// <summary>
         /// Static event fired when hotkey settings are changed and saved.
@@ -113,10 +114,28 @@ namespace FFXIManager.ViewModels
             settings.CharacterSwitchShortcuts.Clear();
             settings.CharacterSwitchShortcuts.AddRange(CharacterHotkeys);
             
-            // Update enabled state for all shortcuts based on EnableHotkeys setting
-            foreach (var shortcut in settings.CharacterSwitchShortcuts)
+            // Handle EnableHotkeys toggle properly to preserve individual shortcut states
+            if (!EnableHotkeys)
             {
-                shortcut.IsEnabled = shortcut.IsEnabled && EnableHotkeys;
+                // Store original enabled states and disable all shortcuts
+                _originalEnabledStates.Clear();
+                foreach (var shortcut in settings.CharacterSwitchShortcuts)
+                {
+                    _originalEnabledStates[shortcut] = shortcut.IsEnabled;
+                    shortcut.IsEnabled = false;
+                }
+            }
+            else
+            {
+                // Restore original enabled states if available
+                foreach (var shortcut in settings.CharacterSwitchShortcuts)
+                {
+                    if (_originalEnabledStates.TryGetValue(shortcut, out var wasEnabled))
+                    {
+                        shortcut.IsEnabled = wasEnabled;
+                    }
+                    // If no stored state, leave shortcut as-is (preserves user's individual toggles)
+                }
             }
             
             _settingsService.SaveSettings(settings);
