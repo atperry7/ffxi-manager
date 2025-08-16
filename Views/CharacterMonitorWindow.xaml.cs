@@ -17,13 +17,8 @@ namespace FFXIManager.Views
     public sealed partial class CharacterMonitorWindow : Window, IDisposable
     {
         private readonly ISettingsService _settingsService;
-        private readonly LowLevelHotkeyService _globalHotkeyService;
         private readonly ILoggingService _loggingService;
         private volatile bool _disposed;
-        
-        // Hotkey debouncing to prevent rapid-fire issues
-        private readonly Dictionary<int, DateTime> _lastHotkeyPress = new();
-        private readonly TimeSpan _hotkeyDebounceInterval = TimeSpan.FromMilliseconds(500); // 500ms debounce
         
         public CharacterMonitorWindow(PlayOnlineMonitorViewModel viewModel)
         {
@@ -34,11 +29,7 @@ namespace FFXIManager.Views
             _settingsService = ServiceLocator.SettingsService;
             _loggingService = ServiceLocator.LoggingService;
             
-            // Initialize low-level keyboard hook service (bypasses Windower/FFXI interception)
-            _globalHotkeyService = new LowLevelHotkeyService();
-            _globalHotkeyService.HotkeyPressed += OnGlobalHotkeyPressed;
-            
-            _loggingService.LogInfoAsync("🔥 Using LOW-LEVEL keyboard hooks to bypass Windower/FFXI interception", "CharacterMonitorWindow");
+            _loggingService.LogInfoAsync("CharacterMonitorWindow using centralized GlobalHotkeyManager", "CharacterMonitorWindow");
             
             // Set initial window properties
             ShowInTaskbar = true;
@@ -57,10 +48,8 @@ namespace FFXIManager.Views
                 }
             }
             
-            // Register hotkeys after window is loaded
-            Loaded += OnWindowLoaded;
-            
-            // Subscribe to settings changes to refresh hotkeys
+            // No need to register hotkeys here - they are handled by PlayOnlineMonitorViewModel via GlobalHotkeyManager
+            // We only need to subscribe to settings changes for UI updates
             DiscoverySettingsViewModel.HotkeySettingsChanged += OnHotkeySettingsChanged;
         }
 
@@ -116,140 +105,25 @@ namespace FFXIManager.Views
             Dispose();
         }
         
-        private void OnWindowLoaded(object sender, RoutedEventArgs e)
-        {
-            // Register keyboard shortcuts after window is fully loaded
-            RegisterKeyboardShortcuts();
-        }
         
-        private void RegisterKeyboardShortcuts()
-        {
-            try
-            {
-                var settings = _settingsService.LoadSettings();
-                
-                // If no shortcuts configured, create defaults
-                if (settings.CharacterSwitchShortcuts.Count == 0)
-                {
-                    settings.CharacterSwitchShortcuts = ApplicationSettings.GetDefaultShortcuts();
-                    _settingsService.SaveSettings(settings);
-                    _loggingService.LogInfoAsync("Created default keyboard shortcuts (Win+F1-F9)", "CharacterMonitorWindow");
-                }
-                
-                var registeredCount = 0;
-                var failedCount = 0;
-                var registeredShortcuts = new List<string>();
-                
-                // Register each shortcut
-                foreach (var shortcut in settings.CharacterSwitchShortcuts.Where(s => s.IsEnabled))
-                {
-                    bool success = _globalHotkeyService.RegisterHotkey(shortcut.HotkeyId, shortcut.Modifiers, shortcut.Key);
-                    
-                    if (success)
-                    {
-                        registeredCount++;
-                        registeredShortcuts.Add($"{shortcut.DisplayText} → Slot {shortcut.SlotIndex + 1}");
-                        _loggingService.LogInfoAsync($"✓ Registered global hotkey: {shortcut.DisplayText} for slot {shortcut.SlotIndex + 1}", "CharacterMonitorWindow");
-                    }
-                    else
-                    {
-                        failedCount++;
-                        _loggingService.LogWarningAsync($"✗ Failed to register global hotkey: {shortcut.DisplayText} (may be in use by another application)", "CharacterMonitorWindow");
-                    }
-                }
-                
-                _loggingService.LogInfoAsync($"Hotkey registration complete: {registeredCount} registered, {failedCount} failed", "CharacterMonitorWindow");
-            }
-            catch (Exception ex)
-            {
-                _loggingService.LogErrorAsync("Error registering keyboard shortcuts", ex, "CharacterMonitorWindow");
-            }
-        }
+        // This method is no longer needed - hotkeys are managed by GlobalHotkeyManager
+        // Keeping as a placeholder for potential future window-specific functionality
         
         /// <summary>
-        /// Refreshes keyboard shortcuts by unregistering all current shortcuts and re-registering based on current settings.
-        /// Call this method after hotkey settings have been changed.
+        /// No longer needed - hotkeys are refreshed automatically by GlobalHotkeyManager
         /// </summary>
-        public void RefreshKeyboardShortcuts()
+        public static void RefreshKeyboardShortcuts()
         {
-            if (_disposed) return;
-            
-            try
-            {
-                _loggingService.LogInfoAsync("🔄 Refreshing keyboard shortcuts due to settings change", "CharacterMonitorWindow");
-                
-                // Unregister all current hotkeys
-                _globalHotkeyService.UnregisterAll();
-                
-                // Re-register based on current settings
-                RegisterKeyboardShortcuts();
-            }
-            catch (Exception ex)
-            {
-                _loggingService.LogErrorAsync("Error refreshing keyboard shortcuts", ex, "CharacterMonitorWindow");
-            }
+            // No-op - handled by GlobalHotkeyManager
         }
         
         private void OnHotkeySettingsChanged(object? sender, EventArgs e)
         {
-            // This event can be called from any thread, so we need to marshal to the UI thread
-            Dispatcher.BeginInvoke(RefreshKeyboardShortcuts);
+            // No need to refresh hotkeys here - handled by GlobalHotkeyManager
+            // This is kept for potential UI updates in the future
         }
         
-        private void OnGlobalHotkeyPressed(object? sender, HotkeyPressedEventArgs e)
-        {
-            try
-            {
-                // Convert hotkey ID back to slot index
-                int slotIndex = e.HotkeyId - 1000; // Subtract the offset we added
-                
-                // Debouncing: check if this hotkey was pressed recently
-                var now = DateTime.UtcNow;
-                if (_lastHotkeyPress.TryGetValue(e.HotkeyId, out var lastPress))
-                {
-                    var timeSinceLastPress = now - lastPress;
-                    if (timeSinceLastPress < _hotkeyDebounceInterval)
-                    {
-                        // Ignore this press - too soon after the last one
-                        _loggingService.LogInfoAsync($"⏰ Ignoring rapid hotkey press: {e.Modifiers}+{e.Key} (debounced - {timeSinceLastPress.TotalMilliseconds:F0}ms since last press)", "CharacterMonitorWindow");
-                        return;
-                    }
-                }
-                
-                // Update the last press time for this hotkey
-                _lastHotkeyPress[e.HotkeyId] = now;
-                
-                _loggingService.LogInfoAsync($"🎮 Global hotkey pressed: {e.Modifiers}+{e.Key} (slot {slotIndex + 1})", "CharacterMonitorWindow");
-                
-                // Execute the switch command on the UI thread (use BeginInvoke for better responsiveness)
-                Dispatcher.BeginInvoke(() =>
-                {
-                    var viewModel = DataContext as PlayOnlineMonitorViewModel;
-                    
-                    if (viewModel != null)
-                    {
-                        if (viewModel.SwitchToSlotCommand.CanExecute(slotIndex))
-                        {
-                            viewModel.SwitchToSlotCommand.Execute(slotIndex);
-                            
-                            // Get character name for feedback
-                            var character = viewModel.Characters.ElementAtOrDefault(slotIndex);
-                            var characterName = character?.DisplayName ?? $"Slot {slotIndex + 1}";
-                            
-                            _loggingService.LogInfoAsync($"✓ Switched to character: {characterName}", "CharacterMonitorWindow");
-                        }
-                        else
-                        {
-                            _loggingService.LogWarningAsync($"⚠ Cannot switch to slot {slotIndex + 1} - slot empty or character not responding", "CharacterMonitorWindow");
-                        }
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                _loggingService.LogErrorAsync($"Error handling hotkey press", ex, "CharacterMonitorWindow");
-            }
-        }
+        // This method is no longer needed - hotkey handling is done by PlayOnlineMonitorViewModel
         
         
         /// <summary>
@@ -266,8 +140,7 @@ namespace FFXIManager.Views
                 // Unsubscribe from settings change events
                 DiscoverySettingsViewModel.HotkeySettingsChanged -= OnHotkeySettingsChanged;
                 
-                // Cleanup global hotkeys
-                _globalHotkeyService?.Dispose();
+                // No need to dispose hotkey service - handled by GlobalHotkeyManager singleton
                 
                 // Save the opacity setting for next time
                 try

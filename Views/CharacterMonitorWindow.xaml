@@ -107,10 +107,6 @@
                                             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                                             <Setter Property="BorderThickness" Value="2"/>
                                         </DataTrigger>
-                                        <DataTrigger Binding="{Binding IsResponding}" Value="False">
-                                            <Setter Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
-                                            <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}"/>
-                                        </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
@@ -151,11 +147,6 @@
                                                 <DataTrigger Binding="{Binding IsActive}" Value="True">
                                                     <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/>
                                                     <Setter Property="Content" Value="✓ Active"/>
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding IsResponding}" Value="False">
-                                                    <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
-                                                    <Setter Property="Content" Value="⚠️ Dead"/>
-                                                    <Setter Property="IsEnabled" Value="False"/>
                                                 </DataTrigger>
                                                 <Trigger Property="IsMouseOver" Value="True">
                                                     <Setter Property="Background" Value="{StaticResource SuccessHoverBrush}"/>

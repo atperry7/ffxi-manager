@@ -75,11 +75,6 @@ namespace FFXIManager.Models
             (!string.IsNullOrEmpty(WindowTitle) ? WindowTitle : $"FFXI Process {ProcessId}");
 
         /// <summary>
-        /// Indicates if this character instance is currently responding
-        /// </summary>
-        public bool IsResponding => DateTime.UtcNow - LastSeen < TimeSpan.FromMinutes(1);
-
-        /// <summary>
         /// Indicates if this character is running (process exists)
         /// </summary>
         public bool IsRunning => ProcessId > 0;
@@ -87,25 +82,17 @@ namespace FFXIManager.Models
         /// <summary>
         /// Status text for display
         /// </summary>
-        public string StatusText => IsActive ? "Active" : (IsResponding ? "Running" : "Not Responding");
+        public string StatusText => IsActive ? "Active" : "Running";
 
         /// <summary>
         /// Status color for UI display (string format for XAML compatibility)
         /// </summary>
-        public string StatusColor => IsActive ? "LightBlue" : (IsResponding ? "Green" : "Red");
+        public string StatusColor => IsActive ? "LightBlue" : "Green";
 
         /// <summary>
         /// Status color as WPF Brush for direct binding
         /// </summary>
-        public Brush StatusBrush
-        {
-            get
-            {
-                if (IsActive) return Brushes.LightBlue;
-                if (IsResponding) return Brushes.LimeGreen;
-                return Brushes.OrangeRed;
-            }
-        }
+        public Brush StatusBrush => IsActive ? Brushes.LightBlue : Brushes.LimeGreen;
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -119,12 +106,11 @@ namespace FFXIManager.Models
             {
                 OnPropertyChanged(nameof(DisplayName));
             }
-            else if (propertyName == nameof(IsActive) || propertyName == nameof(LastSeen))
+            else if (propertyName == nameof(IsActive))
             {
                 OnPropertyChanged(nameof(StatusText));
                 OnPropertyChanged(nameof(StatusColor));
                 OnPropertyChanged(nameof(StatusBrush));
-                OnPropertyChanged(nameof(IsResponding));
             }
         }
 

@@ -40,6 +40,9 @@ namespace FFXIManager.ViewModels
 
             InitializeCommands();
             
+            // Initialize global hotkey handling
+            InitializeHotkeyHandling();
+            
             // Start monitoring AFTER UI is ready to receive events
             _monitorService.StartMonitoring();
         }
@@ -191,7 +194,7 @@ namespace FFXIManager.ViewModels
             if (slotIndex < 0 || slotIndex >= Characters.Count) return false;
             
             var character = Characters.ElementAtOrDefault(slotIndex);
-            return character != null && character.IsResponding && !character.IsActive;
+            return character != null && !character.IsActive;
         }
 
         #endregion
@@ -229,6 +232,87 @@ namespace FFXIManager.ViewModels
             catch
             {
                 return "No Hotkey";
+            }
+        }
+
+        #endregion
+
+        #region Hotkey Management
+
+        /// <summary>
+        /// Initializes global hotkey handling for character switching
+        /// </summary>
+        private void InitializeHotkeyHandling()
+        {
+            try
+            {
+                // Subscribe to the global hotkey manager
+                GlobalHotkeyManager.Instance.HotkeyPressed += OnGlobalHotkeyPressed;
+                
+                // Register hotkeys from settings
+                GlobalHotkeyManager.Instance.RegisterHotkeysFromSettings();
+                
+                // Subscribe to hotkey settings changes
+                DiscoverySettingsViewModel.HotkeySettingsChanged += OnHotkeySettingsChanged;
+                
+                _loggingService.LogInfoAsync("PlayOnlineMonitorViewModel initialized with global hotkey support", "PlayOnlineMonitorViewModel");
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogErrorAsync("Error initializing hotkey handling", ex, "PlayOnlineMonitorViewModel");
+            }
+        }
+
+        /// <summary>
+        /// Handles global hotkey press events
+        /// </summary>
+        private void OnGlobalHotkeyPressed(object? sender, HotkeyPressedEventArgs e)
+        {
+            try
+            {
+                // Convert hotkey ID back to slot index
+                int slotIndex = e.HotkeyId - 1000; // Subtract the offset
+                
+                // Execute the switch command on the UI thread
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+                {
+                    if (SwitchToSlotCommand.CanExecute(slotIndex))
+                    {
+                        SwitchToSlotCommand.Execute(slotIndex);
+                        
+                        // Get character name for feedback
+                        var character = Characters.ElementAtOrDefault(slotIndex);
+                        var characterName = character?.DisplayName ?? $"Slot {slotIndex + 1}";
+                        
+                        _statusService.SetMessage($"Switched to character: {characterName}");
+                        _loggingService.LogInfoAsync($"✓ Switched to character via hotkey: {characterName}", "PlayOnlineMonitorViewModel");
+                    }
+                    else
+                    {
+                        _loggingService.LogWarningAsync($"⚠ Cannot switch to slot {slotIndex + 1} - slot empty or character is already active", "PlayOnlineMonitorViewModel");
+                        _statusService.SetMessage($"Cannot switch to slot {slotIndex + 1}");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogErrorAsync("Error handling global hotkey press", ex, "PlayOnlineMonitorViewModel");
+            }
+        }
+
+        /// <summary>
+        /// Handles hotkey settings changes
+        /// </summary>
+        private void OnHotkeySettingsChanged(object? sender, EventArgs e)
+        {
+            try
+            {
+                // Refresh hotkeys when settings change
+                GlobalHotkeyManager.Instance.RefreshHotkeys();
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogErrorAsync("Error refreshing hotkeys after settings change", ex, "PlayOnlineMonitorViewModel");
             }
         }
 
@@ -375,10 +459,16 @@ namespace FFXIManager.ViewModels
         {
             if (!_disposed && disposing)
             {
+                // Unsubscribe from monitor events
                 _monitorService.CharacterDetected -= OnCharacterDetected;
                 _monitorService.CharacterUpdated -= OnCharacterUpdated;
                 _monitorService.CharacterRemoved -= OnCharacterRemoved;
                 _monitorService.StopMonitoring();
+                
+                // Unsubscribe from hotkey events
+                GlobalHotkeyManager.Instance.HotkeyPressed -= OnGlobalHotkeyPressed;
+                DiscoverySettingsViewModel.HotkeySettingsChanged -= OnHotkeySettingsChanged;
+                
                 _cts.Cancel();
                 _cts.Dispose();
                 _disposed = true;
