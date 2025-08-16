@@ -2,6 +2,8 @@
 
 *Welcome, brave adventurer! Your journey to becoming a master of the multibox arts begins here. Complete these quests to earn your **Signet of Basics** and unlock the power of unlimited profile management!*
 
+<img width="1058" height="605" alt="ffxi-manager-track-characters" src="https://github.com/user-attachments/assets/cbe3b8f7-065f-4569-807d-9fed1af62787" />
+
 ---
 
 ## 🎒 **GEAR CHECK** *(Prerequisites)*
