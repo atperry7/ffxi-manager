@@ -47,8 +47,6 @@ namespace FFXIManager.Views
             }
             
             // No need to register hotkeys here - they are handled by PlayOnlineMonitorViewModel via GlobalHotkeyManager
-            // We only need to subscribe to settings changes for UI updates
-            DiscoverySettingsViewModel.HotkeySettingsChanged += OnHotkeySettingsChanged;
         }
 
         private void AlwaysOnTopToggle_Checked(object sender, RoutedEventArgs e)
@@ -101,9 +99,6 @@ namespace FFXIManager.Views
         {
             try
             {
-                // Unsubscribe from settings change events
-                DiscoverySettingsViewModel.HotkeySettingsChanged -= OnHotkeySettingsChanged;
-                
                 // Save the opacity setting for next time
                 try
                 {
@@ -125,9 +120,5 @@ namespace FFXIManager.Views
             base.OnClosed(e);
         }
         
-        private void OnHotkeySettingsChanged(object? sender, EventArgs e)
-        {
-            // Reserved for potential future UI updates based on hotkey settings changes
-        }
     }
 }

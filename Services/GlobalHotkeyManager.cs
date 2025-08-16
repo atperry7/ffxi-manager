@@ -18,7 +18,7 @@ namespace FFXIManager.Services
         private readonly LowLevelHotkeyService _hotkeyService;
         private readonly ILoggingService _loggingService;
         private readonly Dictionary<int, DateTime> _lastHotkeyPress = new();
-        private readonly TimeSpan _hotkeyDebounceInterval = TimeSpan.FromMilliseconds(500);
+        private TimeSpan _hotkeyDebounceInterval = TimeSpan.FromMilliseconds(500);
         private bool _disposed;
 
         /// <summary>
@@ -47,6 +47,9 @@ namespace FFXIManager.Services
                 var settingsService = ServiceLocator.SettingsService;
                 var settings = settingsService.LoadSettings();
 
+                // Update debounce interval from settings
+                _hotkeyDebounceInterval = TimeSpan.FromMilliseconds(settings.HotkeyDebounceIntervalMs);
+                
                 // If no shortcuts configured, create defaults
                 if (settings.CharacterSwitchShortcuts.Count == 0)
                 {

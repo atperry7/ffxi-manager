@@ -13,7 +13,16 @@ namespace FFXIManager.Controls
     /// </summary>
     public sealed partial class KeyRecorderControl : UserControl, IDisposable
     {
-        // Use a fixed constant to avoid conflicts with actual hotkey IDs and ensure consistent cleanup
+        /// <summary>
+        /// Temporary hotkey ID used only during shortcut recording.
+        /// 
+        /// Rationale:
+        /// - Uses Int32.MaxValue (0x7FFFFFFF) to avoid conflicts with real hotkey IDs, which are typically assigned sequentially
+        ///   or within a lower range.
+        /// - This value is reserved for temporary use and is never assigned to actual shortcuts.
+        /// - Using the maximum possible int value ensures it does not overlap with any valid hotkey ID in the application or system.
+        /// - Prevents accidental reuse or collision, and ensures consistent cleanup of temporary hooks.
+        /// </summary>
         public const int TempRecordingHotkeyId = 0x7FFFFFFF;
         
         private LowLevelHotkeyService? _tempHookService;

@@ -26,6 +26,10 @@ namespace FFXIManager.Services
         private const int VK_LWIN = 0x5B;
         private const int VK_RWIN = 0x5C;
         
+        /// <summary>
+        /// Return value to suppress key event from being passed to other applications.
+        /// </summary>
+        private const int SUPPRESS_KEY_EVENT = 1;
 
         private readonly ConcurrentDictionary<int, HotkeyInfo> _registeredHotkeys = new();
         private volatile int _registeredCount;
@@ -69,6 +73,7 @@ namespace FFXIManager.Services
         }
 
         public event EventHandler<HotkeyPressedEventArgs>? HotkeyPressed;
+        
         /// <summary>
         /// Gets the number of currently registered hotkeys.
         /// </summary>
@@ -136,7 +141,7 @@ namespace FFXIManager.Services
                         HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(kvp.Key, modifiers, key));
                         
                         // Consume the key event (don't pass to other applications)
-                        return new IntPtr(1);
+                        return new IntPtr(SUPPRESS_KEY_EVENT);
                     }
                 }
             }

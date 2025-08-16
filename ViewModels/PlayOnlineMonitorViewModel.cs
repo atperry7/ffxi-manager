@@ -273,6 +273,14 @@ namespace FFXIManager.ViewModels
                 // Convert hotkey ID back to slot index
                 int slotIndex = KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(e.HotkeyId);
                 
+                // Validate slot index
+                if (slotIndex < 0 || slotIndex >= Characters.Count)
+                {
+                    _loggingService.LogWarningAsync($"⚠ Invalid slot index {slotIndex} from hotkey ID {e.HotkeyId}", "PlayOnlineMonitorViewModel");
+                    _statusService.SetMessage($"Invalid character slot: {slotIndex + 1}");
+                    return;
+                }
+                
                 // Execute the switch command on the UI thread
                 System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
                 {

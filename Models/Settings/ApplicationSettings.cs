@@ -33,6 +33,12 @@ namespace FFXIManager.Models.Settings
 
         // Keyboard shortcuts for character switching
         public List<KeyboardShortcutConfig> CharacterSwitchShortcuts { get; set; } = new();
+        
+        /// <summary>
+        /// Debounce interval in milliseconds to prevent accidental rapid hotkey presses.
+        /// Default is 500ms.
+        /// </summary>
+        public int HotkeyDebounceIntervalMs { get; set; } = 500;
 
         // Window state persistence
         public double MainWindowWidth { get; set; } = 1200; // Increased default width
