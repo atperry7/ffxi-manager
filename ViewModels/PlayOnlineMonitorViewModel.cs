@@ -1,9 +1,11 @@
 using FFXIManager.Models;
+using FFXIManager.Models.Settings;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 using System.Collections.ObjectModel;
 using System.Threading;
 using System.Windows.Input;
+using FFXIManager.Infrastructure;
 
 namespace FFXIManager.ViewModels
 {
@@ -190,6 +192,44 @@ namespace FFXIManager.ViewModels
             
             var character = Characters.ElementAtOrDefault(slotIndex);
             return character != null && character.IsResponding && !character.IsActive;
+        }
+
+        #endregion
+
+        #region Public Methods - Hotkey Support
+
+        /// <summary>
+        /// Gets the hotkey display text for a character based on its position in the Characters collection
+        /// </summary>
+        /// <param name="character">The character to get the hotkey for</param>
+        /// <returns>The hotkey display text (e.g., "Win+F1") or "No Hotkey" if none configured</returns>
+        public string GetHotkeyForCharacter(PlayOnlineCharacter character)
+        {
+            if (character == null) return "No Hotkey";
+
+            try
+            {
+                // Find the character's index in the collection
+                var index = Characters.IndexOf(character);
+                if (index < 0) return "No Hotkey";
+
+                // Get the hotkey settings
+                var settingsService = ServiceLocator.SettingsService;
+                var settings = settingsService.LoadSettings();
+
+                // Find the corresponding hotkey for this slot index
+                var shortcut = settings.CharacterSwitchShortcuts.FirstOrDefault(s => s.SlotIndex == index);
+                if (shortcut != null && shortcut.IsEnabled)
+                {
+                    return shortcut.DisplayText;
+                }
+
+                return "No Hotkey";
+            }
+            catch
+            {
+                return "No Hotkey";
+            }
         }
 
         #endregion

@@ -15,6 +15,12 @@ namespace FFXIManager.ViewModels
     public class DiscoverySettingsViewModel : Base.ViewModelBase
     {
         private readonly ISettingsService _settingsService;
+        
+        /// <summary>
+        /// Static event fired when hotkey settings are changed and saved.
+        /// CharacterMonitorWindow instances can subscribe to this to refresh their hotkeys.
+        /// </summary>
+        public static event EventHandler? HotkeySettingsChanged;
 
         public DiscoverySettingsViewModel() : this(ServiceLocator.SettingsService) {}
 
@@ -114,6 +120,9 @@ namespace FFXIManager.ViewModels
             }
             
             _settingsService.SaveSettings(settings);
+            
+            // Notify any listening CharacterMonitorWindow instances that hotkey settings have changed
+            HotkeySettingsChanged?.Invoke(this, EventArgs.Empty);
         }
         
         private void EditHotkey(KeyboardShortcutConfig shortcut)

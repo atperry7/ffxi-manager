@@ -54,6 +54,9 @@ namespace FFXIManager.Views
             
             // Register hotkeys after window is loaded
             Loaded += OnWindowLoaded;
+            
+            // Subscribe to settings changes to refresh hotkeys
+            DiscoverySettingsViewModel.HotkeySettingsChanged += OnHotkeySettingsChanged;
         }
 
         private void AlwaysOnTopToggle_Checked(object sender, RoutedEventArgs e)
@@ -158,6 +161,36 @@ namespace FFXIManager.Views
             }
         }
         
+        /// <summary>
+        /// Refreshes keyboard shortcuts by unregistering all current shortcuts and re-registering based on current settings.
+        /// Call this method after hotkey settings have been changed.
+        /// </summary>
+        public void RefreshKeyboardShortcuts()
+        {
+            if (_disposed) return;
+            
+            try
+            {
+                _loggingService.LogInfoAsync("🔄 Refreshing keyboard shortcuts due to settings change", "CharacterMonitorWindow");
+                
+                // Unregister all current hotkeys
+                _globalHotkeyService.UnregisterAll();
+                
+                // Re-register based on current settings
+                RegisterKeyboardShortcuts();
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogErrorAsync("Error refreshing keyboard shortcuts", ex, "CharacterMonitorWindow");
+            }
+        }
+        
+        private void OnHotkeySettingsChanged(object? sender, EventArgs e)
+        {
+            // This event can be called from any thread, so we need to marshal to the UI thread
+            Dispatcher.BeginInvoke(RefreshKeyboardShortcuts);
+        }
+        
         private void OnGlobalHotkeyPressed(object? sender, HotkeyPressedEventArgs e)
         {
             try
@@ -209,6 +242,9 @@ namespace FFXIManager.Views
             
             try
             {
+                // Unsubscribe from settings change events
+                DiscoverySettingsViewModel.HotkeySettingsChanged -= OnHotkeySettingsChanged;
+                
                 // Cleanup global hotkeys
                 _globalHotkeyService?.Dispose();
                 
