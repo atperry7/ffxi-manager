@@ -13,7 +13,20 @@ namespace FFXIManager.Services
     public sealed class GlobalHotkeyManager : IDisposable
     {
         private static readonly Lazy<GlobalHotkeyManager> _instance = new(() => new GlobalHotkeyManager());
-        public static GlobalHotkeyManager Instance => _instance.Value;
+        
+        /// <summary>
+        /// Gets the singleton instance of the GlobalHotkeyManager.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">Thrown if the instance has been disposed.</exception>
+        public static GlobalHotkeyManager Instance
+        {
+            get
+            {
+                if (_instance.IsValueCreated && _instance.Value._disposed)
+                    throw new ObjectDisposedException(nameof(GlobalHotkeyManager), "The singleton instance has been disposed and cannot be accessed.");
+                return _instance.Value;
+            }
+        }
 
         private readonly LowLevelHotkeyService _hotkeyService;
         private readonly ILoggingService _loggingService;

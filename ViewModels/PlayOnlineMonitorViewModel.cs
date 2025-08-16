@@ -282,25 +282,29 @@ namespace FFXIManager.ViewModels
                 }
                 
                 // Execute the switch command on the UI thread
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher != null && !dispatcher.HasShutdownStarted && !dispatcher.HasShutdownFinished)
                 {
-                    if (SwitchToSlotCommand.CanExecute(slotIndex))
+                    dispatcher.BeginInvoke(() =>
                     {
-                        SwitchToSlotCommand.Execute(slotIndex);
-                        
-                        // Get character name for feedback
-                        var character = Characters.ElementAtOrDefault(slotIndex);
-                        var characterName = character?.DisplayName ?? $"Slot {slotIndex + 1}";
-                        
-                        _statusService.SetMessage($"Switched to character: {characterName}");
-                        _loggingService.LogInfoAsync($"✓ Switched to character via hotkey: {characterName}", "PlayOnlineMonitorViewModel");
-                    }
-                    else
-                    {
-                        _loggingService.LogWarningAsync($"⚠ Cannot switch to slot {slotIndex + 1} - slot empty or character is already active", "PlayOnlineMonitorViewModel");
-                        _statusService.SetMessage($"Cannot switch to slot {slotIndex + 1}");
-                    }
-                });
+                        if (SwitchToSlotCommand.CanExecute(slotIndex))
+                        {
+                            SwitchToSlotCommand.Execute(slotIndex);
+                            
+                            // Get character name for feedback
+                            var character = Characters.ElementAtOrDefault(slotIndex);
+                            var characterName = character?.DisplayName ?? $"Slot {slotIndex + 1}";
+                            
+                            _statusService.SetMessage($"Switched to character: {characterName}");
+                            _loggingService.LogInfoAsync($"✓ Switched to character via hotkey: {characterName}", "PlayOnlineMonitorViewModel");
+                        }
+                        else
+                        {
+                            _loggingService.LogWarningAsync($"⚠ Cannot switch to slot {slotIndex + 1} - slot empty or character is already active", "PlayOnlineMonitorViewModel");
+                            _statusService.SetMessage($"Cannot switch to slot {slotIndex + 1}");
+                        }
+                    });
+                }
             }
             catch (Exception ex)
             {

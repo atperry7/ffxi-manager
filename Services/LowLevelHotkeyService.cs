@@ -140,7 +140,13 @@ namespace FFXIManager.Services
                         // Fire the event
                         HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(kvp.Key, modifiers, key));
                         
-                        // Consume the key event (don't pass to other applications)
+                        // IMPORTANT: Suppress key event from reaching other applications
+                        // This prevents the hotkey from being processed by other applications, including:
+                        // - System shortcuts and accessibility tools
+                        // - Other applications' hotkey handlers
+                        // - Game/application-specific key handlers
+                        // This behavior is intentional for this application but may interfere with
+                        // assistive technologies or global system shortcuts if they use the same combinations.
                         return new IntPtr(SUPPRESS_KEY_EVENT);
                     }
                 }

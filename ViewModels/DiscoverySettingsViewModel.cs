@@ -117,11 +117,19 @@ namespace FFXIManager.ViewModels
             // Handle EnableHotkeys toggle properly to preserve individual shortcut states
             if (!EnableHotkeys)
             {
-                // Store original enabled states and disable all shortcuts
-                _originalEnabledStates.Clear();
+                // Store original enabled states only if we haven't already stored them
+                // This prevents losing states on multiple toggles
+                if (_originalEnabledStates.Count == 0)
+                {
+                    foreach (var shortcut in settings.CharacterSwitchShortcuts)
+                    {
+                        _originalEnabledStates[shortcut] = shortcut.IsEnabled;
+                    }
+                }
+                
+                // Disable all shortcuts
                 foreach (var shortcut in settings.CharacterSwitchShortcuts)
                 {
-                    _originalEnabledStates[shortcut] = shortcut.IsEnabled;
                     shortcut.IsEnabled = false;
                 }
             }
@@ -136,6 +144,9 @@ namespace FFXIManager.ViewModels
                     }
                     // If no stored state, leave shortcut as-is (preserves user's individual toggles)
                 }
+                
+                // Clear the stored states after successful restoration
+                _originalEnabledStates.Clear();
             }
             
             _settingsService.SaveSettings(settings);
