@@ -1,26 +1,33 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 using FFXIManager.Infrastructure;
+using FFXIManager.Models.Settings;
 using FFXIManager.Services;
 using FFXIManager.ViewModels;
 
 namespace FFXIManager.Views
 {
     /// <summary>
-    /// Standalone character monitor window with "always on top" functionality
+    /// Standalone character monitor window with "always on top" functionality.
     /// </summary>
-    public partial class CharacterMonitorWindow : Window
+    public sealed partial class CharacterMonitorWindow : Window
     {
         private readonly ISettingsService _settingsService;
+        private readonly ILoggingService _loggingService;
         
         public CharacterMonitorWindow(PlayOnlineMonitorViewModel viewModel)
         {
             InitializeComponent();
             DataContext = viewModel;
             
-            // Get settings service
+            // Get services
             _settingsService = ServiceLocator.SettingsService;
+            _loggingService = ServiceLocator.LoggingService;
+            
+            _loggingService.LogInfoAsync("CharacterMonitorWindow using centralized GlobalHotkeyManager", "CharacterMonitorWindow");
             
             // Set initial window properties
             ShowInTaskbar = true;
@@ -38,6 +45,8 @@ namespace FFXIManager.Views
                     OpacitySlider.Value = settings.CharacterMonitorOpacity;
                 }
             }
+            
+            // No need to register hotkeys here - they are handled by PlayOnlineMonitorViewModel via GlobalHotkeyManager
         }
 
         private void AlwaysOnTopToggle_Checked(object sender, RoutedEventArgs e)
@@ -88,19 +97,28 @@ namespace FFXIManager.Views
         
         protected override void OnClosed(EventArgs e)
         {
-            base.OnClosed(e);
-            
-            // Save the opacity setting for next time
             try
             {
-                var settings = _settingsService.LoadSettings();
-                settings.CharacterMonitorOpacity = MainBorder?.Opacity ?? 0.95;
-                _settingsService.SaveSettings(settings);
+                // Save the opacity setting for next time
+                try
+                {
+                    var settings = _settingsService.LoadSettings();
+                    settings.CharacterMonitorOpacity = MainBorder?.Opacity ?? 0.95;
+                    _settingsService.SaveSettings(settings);
+                }
+                catch
+                {
+                    // Ignore any errors saving settings during window close
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore any errors saving settings
+                // Log cleanup errors but don't throw
+                _loggingService?.LogErrorAsync("Error during CharacterMonitorWindow cleanup", ex, "CharacterMonitorWindow");
             }
+            
+            base.OnClosed(e);
         }
+        
     }
 }

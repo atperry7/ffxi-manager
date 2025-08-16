@@ -1,5 +1,6 @@
 
 using System.Collections.Generic;
+using System.Windows.Input;
 
 namespace FFXIManager.Models.Settings
 {
@@ -30,6 +31,15 @@ namespace FFXIManager.Models.Settings
         // Diagnostics and logging options
         public DiagnosticsOptions Diagnostics { get; set; } = new DiagnosticsOptions();
 
+        // Keyboard shortcuts for character switching
+        public List<KeyboardShortcutConfig> CharacterSwitchShortcuts { get; set; } = new();
+        
+        /// <summary>
+        /// Debounce interval in milliseconds to prevent accidental rapid hotkey presses.
+        /// Default is 500ms.
+        /// </summary>
+        public int HotkeyDebounceIntervalMs { get; set; } = 500;
+
         // Window state persistence
         public double MainWindowWidth { get; set; } = 1200; // Increased default width
         public double MainWindowHeight { get; set; } = 700; // Increased default height
@@ -37,6 +47,21 @@ namespace FFXIManager.Models.Settings
         public double MainWindowTop { get; set; } = double.NaN; // NaN = center on screen
         public bool MainWindowMaximized { get; set; }
         public bool RememberWindowPosition { get; set; } = true;
+
+        /// <summary>
+        /// Gets the default keyboard shortcuts for character switching (Win+F1 through Win+F9)
+        /// Uses Windows key to avoid conflicts with FFXI's Ctrl/Alt macro system
+        /// </summary>
+        public static List<KeyboardShortcutConfig> GetDefaultShortcuts()
+        {
+            var shortcuts = new List<KeyboardShortcutConfig>();
+            for (int i = 0; i < 9; i++)
+            {
+                var key = (Key)(Key.F1 + i); // F1, F2, F3... F9
+                shortcuts.Add(new KeyboardShortcutConfig(i, ModifierKeys.Windows, key));
+            }
+            return shortcuts;
+        }
     }
 }
 

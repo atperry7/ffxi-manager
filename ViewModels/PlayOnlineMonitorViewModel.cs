@@ -1,9 +1,11 @@
 using FFXIManager.Models;
+using FFXIManager.Models.Settings;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 using System.Collections.ObjectModel;
 using System.Threading;
 using System.Windows.Input;
+using FFXIManager.Infrastructure;
 
 namespace FFXIManager.ViewModels
 {
@@ -37,6 +39,9 @@ namespace FFXIManager.ViewModels
             _monitorService.CharacterRemoved += OnCharacterRemoved;
 
             InitializeCommands();
+            
+            // Initialize global hotkey handling
+            InitializeHotkeyHandling();
             
             // Start monitoring AFTER UI is ready to receive events
             _monitorService.StartMonitoring();
@@ -81,6 +86,7 @@ namespace FFXIManager.ViewModels
         public ICommand RefreshCharactersCommand { get; private set; } = null!;
         public ICommand ToggleMonitoringCommand { get; private set; } = null!;
         public ICommand ShowCharacterMonitorCommand { get; private set; } = null!;
+        public ICommand SwitchToSlotCommand { get; private set; } = null!;
 
         private void InitializeCommands()
         {
@@ -96,6 +102,10 @@ namespace FFXIManager.ViewModels
 
             ShowCharacterMonitorCommand = new RelayCommand(
                 () => ShowCharacterMonitorDialog());
+
+            SwitchToSlotCommand = new RelayCommandWithParameter<int>(
+                async slotIndex => await SwitchToSlotAsync(slotIndex),
+                slotIndex => CanSwitchToSlot(slotIndex));
 
             // Prime the list on startup so the mini-UI shows existing characters
             _ = LoadCharactersAsync();
@@ -152,6 +162,169 @@ namespace FFXIManager.ViewModels
             {
                 _statusService.SetMessage($"Error loading characters: {ex.Message}");
                 await _loggingService.LogErrorAsync("Error loading characters", ex, "PlayOnlineMonitorViewModel");
+            }
+        }
+
+        #endregion
+
+        #region Public Methods - Character Switching
+
+        /// <summary>
+        /// Switches to the character at the specified slot index
+        /// </summary>
+        /// <param name="slotIndex">0-based slot index</param>
+        public async Task SwitchToSlotAsync(int slotIndex)
+        {
+            if (!CanSwitchToSlot(slotIndex)) return;
+
+            var character = Characters.ElementAtOrDefault(slotIndex);
+            if (character != null)
+            {
+                await ActivateCharacterAsync(character);
+            }
+        }
+
+        /// <summary>
+        /// Checks if switching to the specified slot is possible
+        /// </summary>
+        /// <param name="slotIndex">0-based slot index</param>
+        /// <returns>True if the slot can be switched to</returns>
+        public bool CanSwitchToSlot(int slotIndex)
+        {
+            if (slotIndex < 0 || slotIndex >= Characters.Count) return false;
+            
+            var character = Characters.ElementAtOrDefault(slotIndex);
+            return character != null && !character.IsActive;
+        }
+
+        #endregion
+
+        #region Public Methods - Hotkey Support
+
+        /// <summary>
+        /// Gets the hotkey display text for a character based on its position in the Characters collection
+        /// </summary>
+        /// <param name="character">The character to get the hotkey for</param>
+        /// <returns>The hotkey display text (e.g., "Win+F1") or "No Hotkey" if none configured</returns>
+        public string GetHotkeyForCharacter(PlayOnlineCharacter character)
+        {
+            if (character == null) return "No Hotkey";
+
+            try
+            {
+                // Find the character's index in the collection
+                var index = Characters.IndexOf(character);
+                if (index < 0) return "No Hotkey";
+
+                // Get the hotkey settings
+                var settingsService = ServiceLocator.SettingsService;
+                var settings = settingsService.LoadSettings();
+
+                // Find the corresponding hotkey for this slot index
+                var shortcut = settings.CharacterSwitchShortcuts.FirstOrDefault(s => s.SlotIndex == index);
+                if (shortcut != null && shortcut.IsEnabled)
+                {
+                    return shortcut.DisplayText;
+                }
+
+                return "No Hotkey";
+            }
+            catch
+            {
+                return "No Hotkey";
+            }
+        }
+
+        #endregion
+
+        #region Hotkey Management
+
+        /// <summary>
+        /// Initializes global hotkey handling for character switching
+        /// </summary>
+        private void InitializeHotkeyHandling()
+        {
+            try
+            {
+                // Subscribe to the global hotkey manager
+                GlobalHotkeyManager.Instance.HotkeyPressed += OnGlobalHotkeyPressed;
+                
+                // Register hotkeys from settings
+                GlobalHotkeyManager.Instance.RegisterHotkeysFromSettings();
+                
+                // Subscribe to hotkey settings changes
+                DiscoverySettingsViewModel.HotkeySettingsChanged += OnHotkeySettingsChanged;
+                
+                _loggingService.LogInfoAsync("PlayOnlineMonitorViewModel initialized with global hotkey support", "PlayOnlineMonitorViewModel");
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogErrorAsync("Error initializing hotkey handling", ex, "PlayOnlineMonitorViewModel");
+            }
+        }
+
+        /// <summary>
+        /// Handles global hotkey press events
+        /// </summary>
+        private void OnGlobalHotkeyPressed(object? sender, HotkeyPressedEventArgs e)
+        {
+            try
+            {
+                // Convert hotkey ID back to slot index
+                int slotIndex = KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(e.HotkeyId);
+                
+                // Validate slot index
+                if (slotIndex < 0 || slotIndex >= Characters.Count)
+                {
+                    _loggingService.LogWarningAsync($"⚠ Invalid slot index {slotIndex} from hotkey ID {e.HotkeyId}", "PlayOnlineMonitorViewModel");
+                    _statusService.SetMessage($"Invalid character slot: {slotIndex + 1}");
+                    return;
+                }
+                
+                // Execute the switch command on the UI thread
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher != null && !dispatcher.HasShutdownStarted && !dispatcher.HasShutdownFinished)
+                {
+                    dispatcher.BeginInvoke(() =>
+                    {
+                        if (SwitchToSlotCommand.CanExecute(slotIndex))
+                        {
+                            SwitchToSlotCommand.Execute(slotIndex);
+                            
+                            // Get character name for feedback
+                            var character = Characters.ElementAtOrDefault(slotIndex);
+                            var characterName = character?.DisplayName ?? $"Slot {slotIndex + 1}";
+                            
+                            _statusService.SetMessage($"Switched to character: {characterName}");
+                            _loggingService.LogInfoAsync($"✓ Switched to character via hotkey: {characterName}", "PlayOnlineMonitorViewModel");
+                        }
+                        else
+                        {
+                            _loggingService.LogWarningAsync($"⚠ Cannot switch to slot {slotIndex + 1} - slot empty or character is already active", "PlayOnlineMonitorViewModel");
+                            _statusService.SetMessage($"Cannot switch to slot {slotIndex + 1}");
+                        }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogErrorAsync("Error handling global hotkey press", ex, "PlayOnlineMonitorViewModel");
+            }
+        }
+
+        /// <summary>
+        /// Handles hotkey settings changes
+        /// </summary>
+        private void OnHotkeySettingsChanged(object? sender, EventArgs e)
+        {
+            try
+            {
+                // Refresh hotkeys when settings change
+                GlobalHotkeyManager.Instance.RefreshHotkeys();
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogErrorAsync("Error refreshing hotkeys after settings change", ex, "PlayOnlineMonitorViewModel");
             }
         }
 
@@ -298,10 +471,16 @@ namespace FFXIManager.ViewModels
         {
             if (!_disposed && disposing)
             {
+                // Unsubscribe from monitor events
                 _monitorService.CharacterDetected -= OnCharacterDetected;
                 _monitorService.CharacterUpdated -= OnCharacterUpdated;
                 _monitorService.CharacterRemoved -= OnCharacterRemoved;
                 _monitorService.StopMonitoring();
+                
+                // Unsubscribe from hotkey events
+                GlobalHotkeyManager.Instance.HotkeyPressed -= OnGlobalHotkeyPressed;
+                DiscoverySettingsViewModel.HotkeySettingsChanged -= OnHotkeySettingsChanged;
+                
                 _cts.Cancel();
                 _cts.Dispose();
                 _disposed = true;

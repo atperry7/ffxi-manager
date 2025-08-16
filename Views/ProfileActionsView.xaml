@@ -38,10 +38,6 @@
                     <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
                     <Setter Property="ToolTip" Value="Currently Active"/>
                 </DataTrigger>
-                <DataTrigger Binding="{Binding IsResponding, FallbackValue=True}" Value="False">
-                    <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
-                    <Setter Property="ToolTip" Value="Character Not Responding"/>
-                </DataTrigger>
             </Style.Triggers>
         </Style>
     </UserControl.Resources>
@@ -152,10 +148,6 @@
                                                 <DataTrigger Binding="{Binding IsActive, FallbackValue=False}" Value="True">
                                                     <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
                                                     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding IsResponding, FallbackValue=True}" Value="False">
-                                                    <Setter Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
-                                                    <Setter Property="BorderBrush" Value="{DynamicResource DisabledTextBrush}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>

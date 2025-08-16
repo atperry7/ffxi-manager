@@ -1,7 +1,8 @@
 <Window x:Class="FFXIManager.Views.DiscoverySettingsDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Diagnostics Settings" Height="300" Width="560"
+        xmlns:controls="clr-namespace:FFXIManager.Controls"
+        Title="Advanced Settings" Height="500" Width="660"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip"
         Background="{DynamicResource BackgroundBrush}">
@@ -16,6 +17,93 @@
 
         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="0,0,0,10">
+                <!-- Character Keyboard Shortcuts Section -->
+                <GroupBox Header="Character Keyboard Shortcuts" BorderBrush="{DynamicResource BorderBrush}" Foreground="{DynamicResource PrimaryTextBrush}" Margin="0,0,0,10">
+                    <StackPanel Margin="8">
+                        <TextBlock Text="Configure global hotkeys to switch between FFXI character windows." 
+                                   FontSize="11" Margin="0,0,0,10" 
+                                   Style="{StaticResource SecondaryTextBlock}"/>
+                        
+                        <CheckBox x:Name="EnableHotkeysCheckBox"
+                                  Content="Enable global keyboard shortcuts" 
+                                  IsChecked="{Binding EnableHotkeys, Mode=TwoWay}" 
+                                  Foreground="{DynamicResource PrimaryTextBrush}" 
+                                  Margin="0,0,0,10"/>
+                        
+                        <!-- Hotkey Configuration Panel -->
+                        <Border Background="{DynamicResource SurfaceBrush}" 
+                                BorderBrush="{DynamicResource BorderBrush}" 
+                                BorderThickness="1" 
+                                CornerRadius="4" 
+                                Padding="8" 
+                                IsEnabled="{Binding IsChecked, ElementName=EnableHotkeysCheckBox}">
+                            <StackPanel>
+                                <TextBlock Text="Character Slot Hotkeys:" 
+                                           FontWeight="Bold" 
+                                           Foreground="{DynamicResource PrimaryTextBrush}" 
+                                           Margin="0,0,0,8"/>
+                                
+                                <!-- Hotkey List -->
+                                <ItemsControl x:Name="HotkeysItemsControl" ItemsSource="{Binding CharacterHotkeys}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{DynamicResource CardBackgroundBrush}" 
+                                                    BorderBrush="{DynamicResource BorderBrush}" 
+                                                    BorderThickness="1" 
+                                                    CornerRadius="2" 
+                                                    Margin="0,0,0,4" 
+                                                    Padding="8">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    
+                                                    <TextBlock Grid.Column="0" 
+                                                               Text="{Binding SlotDisplayText}" 
+                                                               FontWeight="Bold" 
+                                                               VerticalAlignment="Center" 
+                                                               Margin="0,0,10,0" 
+                                                               Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                                    
+                                                    <TextBlock Grid.Column="1" 
+                                                               Text="{Binding DisplayText}" 
+                                                               VerticalAlignment="Center" 
+                                                               Foreground="{DynamicResource AccentBrush}" 
+                                                               FontFamily="Consolas"/>
+                                                    
+                                                    <Button Grid.Column="2" 
+                                                            Content="Edit" 
+                                                            Style="{StaticResource InfoIconButton}" 
+                                                            Width="50" 
+                                                            Height="25" 
+                                                            Margin="5,0,5,0"
+                                                            Command="{Binding DataContext.EditHotkeyCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"/>
+                                                    
+                                                    <CheckBox Grid.Column="3" 
+                                                              Content="Enabled" 
+                                                              IsChecked="{Binding IsEnabled, Mode=TwoWay}" 
+                                                              VerticalAlignment="Center" 
+                                                              Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                
+                                <TextBlock Text="Hotkeys work globally and will switch FFXI character windows even when other applications have focus." 
+                                           FontSize="10" 
+                                           Margin="0,8,0,0" 
+                                           Style="{StaticResource SecondaryTextBlock}"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </GroupBox>
+                
+                <!-- Diagnostics Section -->
                 <GroupBox Header="Diagnostics" BorderBrush="{DynamicResource BorderBrush}" Foreground="{DynamicResource PrimaryTextBrush}">
                     <StackPanel Margin="8">
                         <CheckBox Content="Enable diagnostics (capture info)" IsChecked="{Binding EnableDiagnostics, Mode=TwoWay}" Foreground="{DynamicResource PrimaryTextBrush}"/>

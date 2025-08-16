@@ -1,0 +1,79 @@
+<UserControl x:Class="FFXIManager.Controls.KeyRecorderControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d" 
+             d:DesignHeight="120" d:DesignWidth="350">
+    <Border BorderBrush="{DynamicResource BorderBrush}" 
+            BorderThickness="2" 
+            CornerRadius="8"
+            Background="{DynamicResource CardBackgroundBrush}"
+            Padding="15">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Title -->
+            <TextBlock Grid.Row="0" 
+                       Text="Record Keyboard Shortcut" 
+                       FontWeight="Bold" 
+                       FontSize="14"
+                       Foreground="{DynamicResource PrimaryTextBrush}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,10"/>
+
+            <!-- Current Key Display -->
+            <Border Grid.Row="1" 
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource AccentBrush}"
+                    BorderThickness="2"
+                    CornerRadius="4"
+                    Padding="12,8"
+                    Margin="0,0,0,10">
+                <TextBlock x:Name="KeyDisplayText"
+                           Text="Press key combination..."
+                           FontSize="16"
+                           FontWeight="Medium"
+                           HorizontalAlignment="Center"
+                           Foreground="{DynamicResource AccentBrush}"/>
+            </Border>
+
+            <!-- Status Message -->
+            <TextBlock Grid.Row="2"
+                       x:Name="StatusText"
+                       Text="Press the keys you want to use as a shortcut"
+                       FontSize="11"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,10"/>
+
+            <!-- Action Buttons -->
+            <StackPanel Grid.Row="3" 
+                        Orientation="Horizontal" 
+                        HorizontalAlignment="Center">
+                <Button x:Name="RecordButton"
+                        Content="📹 Record"
+                        Style="{StaticResource ModernButtonBase}"
+                        Background="{StaticResource SuccessBrush}"
+                        Width="80"
+                        Height="32"
+                        Margin="0,0,8,0"
+                        Click="RecordButton_Click"/>
+                
+                <Button x:Name="ClearButton"
+                        Content="🗑 Clear"
+                        Style="{StaticResource ModernButtonBase}"
+                        Background="{StaticResource SecondaryBrush}"
+                        Width="80"
+                        Height="32"
+                        Click="ClearButton_Click"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

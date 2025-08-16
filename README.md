@@ -147,6 +147,87 @@ Before embarking on this epic quest, ensure your adventurer's satchel contains:
 
 ---
 
+## ⚡ **ADVANCED TECHNIQUE: HOTKEY MASTERY** 
+
+```
+    ⚡ ⚡ ⚡
+     \|/
+   --⌨️--
+     /|\
+   HOTKEYS!
+```
+
+*Unlock the secret art of Lightning-Fast Character Switching! Master ninjas switching between alts faster than Utsusemi: Ni cooldown!*
+
+### **🎯 The Art of Instant Character Swapping**
+
+No more alt-tabbing through 6 FFXI windows to find your WHM! With **Global Hotkey Magic**, you can:
+
+- **🔥 Switch characters instantly** - From any application, even with FFXI in fullscreen!
+- **⚡ Bypass Windower interference** - Our low-level keyboard hooks work like Sneak Attack
+- **🎮 Work everywhere** - Whether the Character Monitor window is open or minimized
+- **⏱️ Lightning speed** - Faster than a THF's Treasure Hunter proc
+
+### **🛠️ Quick Setup Guide**
+
+**Step 1: Access Hotkey Settings**
+1. Click "Settings" in the main window
+2. Behold the sacred hotkey configuration panel!
+
+**Step 2: Configure Your Hotkeys** *(Default: Win+F1 through Win+F9)*
+- **Slot 1** (Win+F1) → First character in your list
+- **Slot 2** (Win+F2) → Second character in your list
+- **Slot 3** (Win+F3) → Third character in your list
+- *...and so on, up to 9 characters!*
+
+**Step 3: Test Your Powers**
+1. Launch multiple FFXI characters
+2. Press **Win+F1** from anywhere (even in fullscreen FFXI!)
+3. Watch as your first character window activates instantly! /wow
+4. Press **Win+F2** to switch to your second character
+5. Marvel at the speed! ⚡
+
+### **🔧 Customization Options**
+
+**Modifier Keys Available:**
+- `Ctrl + Key` - For the precise types
+- `Alt + Key` - For the alternative lifestyle
+- `Win + Key` - For the Windows masters (default)
+- `Shift + Key` - For the old-school veterans
+
+**Function Keys Supported:**
+- `F1-F12` - Classic function key setup
+- `1-9` - Number row for quick access
+- `A-Z` - Any letter key for custom setups
+
+### **⚠️ Important Notes**
+
+- **Global Scope**: Hotkeys work from ANY application - FFXI, Discord, web browser, etc.
+- **Smart Debouncing**: Built-in 500ms cooldown prevents accidental double-switches
+- **Windower Compatibility**: Our low-level hooks bypass Windower's input blocking
+- **No Window Required**: Works whether Character Monitor window is open or closed
+- **Auto-Refresh**: Settings changes apply instantly - no restart required!
+
+### **🏆 Achievement Unlocked: Hotkey Ninja**
+
+```
+   ⚡ ⚡ ⚡
+      \|/
+    --🥷--
+      /|\
+   NINJA MASTER!
+```
+
+**New Abilities Gained:**
+- ✅ **Flash Step** - Instant character switching (0.1 second cast time!)
+- ✅ **Omnipresence** - Control all characters from any application
+- ✅ **Time Mastery** - Save 30+ seconds per character switch
+- ✅ **Stealth Mode** - Hotkeys work even in fullscreen applications
+
+*"From novice multiboxer to hotkey master - your journey to efficient character management is complete! Your linkshell salutes your dedication!"* /bow
+
+---
+
 ## 📖 **BONUS QUESTS** *(Optional Side Adventures)*
 
 ```
