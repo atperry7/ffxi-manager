@@ -145,7 +145,7 @@ namespace FFXIManager.Services
                 _lastHotkeyPress[e.HotkeyId] = now;
 
                 // Convert hotkey ID back to slot index
-                int slotIndex = e.HotkeyId - KeyboardShortcutConfig.HotkeyIdOffset; // Subtract the offset
+                int slotIndex = KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(e.HotkeyId);
                 _loggingService.LogInfoAsync($"🎮 Global hotkey pressed: {e.Modifiers}+{e.Key} (slot {slotIndex + 1})", "GlobalHotkeyManager");
 
                 // Forward the event to any listeners

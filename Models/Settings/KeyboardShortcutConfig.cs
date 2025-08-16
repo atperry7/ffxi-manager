@@ -95,6 +95,13 @@ namespace FFXIManager.Models.Settings
         /// </summary>
         public int HotkeyId => SlotIndex + HotkeyIdOffset; // Offset to avoid conflicts with other IDs
 
+        /// <summary>
+        /// Converts a hotkey ID back to its corresponding slot index
+        /// </summary>
+        /// <param name="hotkeyId">The hotkey ID to convert</param>
+        /// <returns>The 0-based slot index</returns>
+        public static int GetSlotIndexFromHotkeyId(int hotkeyId) => hotkeyId - HotkeyIdOffset;
+
         public KeyboardShortcutConfig()
         {
         }

@@ -116,18 +116,16 @@ namespace FFXIManager.Services
                 var key = KeyInterop.KeyFromVirtualKey(vkCode);
                 
                 // Check if this matches any registered hotkeys
-                // Use concurrent dictionary directly - no need for snapshots
-                var registeredHotkeys = _registeredHotkeys;
                 
                 // Special case: if we have the temp recording hotkey registered, fire for ALL keys
-                if (registeredHotkeys.ContainsKey(KeyRecorderControl.TempRecordingHotkeyId))
+                if (_registeredHotkeys.ContainsKey(KeyRecorderControl.TempRecordingHotkeyId))
                 {
                     HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(KeyRecorderControl.TempRecordingHotkeyId, modifiers, key));
                     // Don't consume the key in recording mode to allow normal processing
                     return CallNextHookEx(_hookId, nCode, wParam, lParam);
                 }
                 
-                foreach (var kvp in registeredHotkeys)
+                foreach (var kvp in _registeredHotkeys)
                 {
                     var hotkeyInfo = kvp.Value;
                     if (hotkeyInfo.IsRegistered && 
@@ -173,6 +171,20 @@ namespace FFXIManager.Services
         /// <exception cref="ObjectDisposedException">Thrown if the service has been disposed.</exception>
         public bool RegisterHotkey(int id, ModifierKeys modifiers, Key key)
         {
+            return RegisterHotkey(id, modifiers, key, isTemporary: false);
+        }
+
+        /// <summary>
+        /// Registers a hotkey to be monitored by the low-level hook.
+        /// </summary>
+        /// <param name="id">Unique identifier for the hotkey.</param>
+        /// <param name="modifiers">Modifier keys (Ctrl, Alt, Shift, Win).</param>
+        /// <param name="key">Primary key.</param>
+        /// <param name="isTemporary">Whether this is a temporary registration that shouldn't affect counter.</param>
+        /// <returns>True if registration succeeded.</returns>
+        /// <exception cref="ObjectDisposedException">Thrown if the service has been disposed.</exception>
+        public bool RegisterHotkey(int id, ModifierKeys modifiers, Key key, bool isTemporary)
+        {
             if (_disposed) throw new ObjectDisposedException(nameof(LowLevelHotkeyService));
 
             var newHotkey = new HotkeyInfo
@@ -190,8 +202,8 @@ namespace FFXIManager.Services
             }
             else
             {
-                // Increment count only if it's a new hotkey (exclude temp recording hotkey)
-                if (id != KeyRecorderControl.TempRecordingHotkeyId)
+                // Increment count only if it's a new hotkey and not temporary
+                if (!isTemporary)
                 {
                     Interlocked.Increment(ref _registeredCount);
                 }
