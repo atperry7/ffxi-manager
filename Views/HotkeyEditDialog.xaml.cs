@@ -34,11 +34,10 @@ namespace FFXIManager.Views
         {
             // Update the edited shortcut when a new one is recorded
             EditedShortcut = new KeyboardShortcutConfig(
-                _originalShortcut.HotkeyId,
+                _originalShortcut.SlotIndex,
                 e.Modifiers,
                 e.Key)
             {
-                SlotIndex = _originalShortcut.SlotIndex,
                 IsEnabled = _originalShortcut.IsEnabled
             };
             

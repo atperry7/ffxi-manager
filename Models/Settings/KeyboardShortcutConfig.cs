@@ -11,6 +11,10 @@ namespace FFXIManager.Models.Settings
     [Serializable]
     public class KeyboardShortcutConfig : INotifyPropertyChanged
     {
+        /// <summary>
+        /// Offset used to generate unique hotkey IDs to avoid conflicts with other applications
+        /// </summary>
+        public const int HotkeyIdOffset = 1000;
         private int _slotIndex;
         private ModifierKeys _modifiers;
         private Key _key;
@@ -89,7 +93,7 @@ namespace FFXIManager.Models.Settings
         /// <summary>
         /// Unique identifier for this shortcut (used for hotkey registration)
         /// </summary>
-        public int HotkeyId => SlotIndex + 1000; // Offset to avoid conflicts with other IDs
+        public int HotkeyId => SlotIndex + HotkeyIdOffset; // Offset to avoid conflicts with other IDs
 
         public KeyboardShortcutConfig()
         {

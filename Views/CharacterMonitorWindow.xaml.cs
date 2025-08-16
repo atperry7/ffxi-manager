@@ -12,13 +12,11 @@ namespace FFXIManager.Views
 {
     /// <summary>
     /// Standalone character monitor window with "always on top" functionality.
-    /// Implements proper disposal of resources including hotkey services.
     /// </summary>
-    public sealed partial class CharacterMonitorWindow : Window, IDisposable
+    public sealed partial class CharacterMonitorWindow : Window
     {
         private readonly ISettingsService _settingsService;
         private readonly ILoggingService _loggingService;
-        private volatile bool _disposed;
         
         public CharacterMonitorWindow(PlayOnlineMonitorViewModel viewModel)
         {
@@ -101,8 +99,30 @@ namespace FFXIManager.Views
         
         protected override void OnClosed(EventArgs e)
         {
+            try
+            {
+                // Unsubscribe from settings change events
+                DiscoverySettingsViewModel.HotkeySettingsChanged -= OnHotkeySettingsChanged;
+                
+                // Save the opacity setting for next time
+                try
+                {
+                    var settings = _settingsService.LoadSettings();
+                    settings.CharacterMonitorOpacity = MainBorder?.Opacity ?? 0.95;
+                    _settingsService.SaveSettings(settings);
+                }
+                catch
+                {
+                    // Ignore any errors saving settings during window close
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log cleanup errors but don't throw
+                _loggingService?.LogErrorAsync("Error during CharacterMonitorWindow cleanup", ex, "CharacterMonitorWindow");
+            }
+            
             base.OnClosed(e);
-            Dispose();
         }
         
         
@@ -126,41 +146,5 @@ namespace FFXIManager.Views
         // This method is no longer needed - hotkey handling is done by PlayOnlineMonitorViewModel
         
         
-        /// <summary>
-        /// Releases all resources used by the CharacterMonitorWindow.
-        /// </summary>
-        public void Dispose()
-        {
-            if (_disposed) return;
-            
-            _disposed = true;
-            
-            try
-            {
-                // Unsubscribe from settings change events
-                DiscoverySettingsViewModel.HotkeySettingsChanged -= OnHotkeySettingsChanged;
-                
-                // No need to dispose hotkey service - handled by GlobalHotkeyManager singleton
-                
-                // Save the opacity setting for next time
-                try
-                {
-                    var settings = _settingsService.LoadSettings();
-                    settings.CharacterMonitorOpacity = MainBorder?.Opacity ?? 0.95;
-                    _settingsService.SaveSettings(settings);
-                }
-                catch
-                {
-                    // Ignore any errors saving settings during disposal
-                }
-            }
-            catch (Exception ex)
-            {
-                // Log disposal errors but don't throw
-                _loggingService?.LogErrorAsync("Error during CharacterMonitorWindow disposal", ex, "CharacterMonitorWindow");
-            }
-            
-            GC.SuppressFinalize(this);
-        }
     }
 }

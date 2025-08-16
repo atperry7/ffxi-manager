@@ -13,8 +13,8 @@ namespace FFXIManager.Controls
     /// </summary>
     public sealed partial class KeyRecorderControl : UserControl, IDisposable
     {
-        // Named constant to avoid magic numbers
-        private const int TEMP_RECORDING_HOTKEY_ID = 99999;
+        // Use a GUID-based value to avoid conflicts with actual hotkey IDs
+        public static readonly int TempRecordingHotkeyId = Guid.NewGuid().GetHashCode();
         
         private LowLevelHotkeyService? _tempHookService;
         private ModifierKeys _currentModifiers = ModifierKeys.None;
@@ -77,7 +77,7 @@ namespace FFXIManager.Controls
                 ClearButton.IsEnabled = false;
                 
                 // Start capturing ALL keys (register a dummy hotkey to activate the hook)
-                _tempHookService.RegisterHotkey(TEMP_RECORDING_HOTKEY_ID, ModifierKeys.None, Key.None);
+                _tempHookService.RegisterHotkey(TempRecordingHotkeyId, ModifierKeys.None, Key.None);
                 
                 this.Focus();
                 this.Focusable = true;

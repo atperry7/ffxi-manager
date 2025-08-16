@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Input;
+using FFXIManager.Controls;
 
 namespace FFXIManager.Services
 {
@@ -24,11 +26,9 @@ namespace FFXIManager.Services
         private const int VK_LWIN = 0x5B;
         private const int VK_RWIN = 0x5C;
         
-        // Temp recording hotkey ID used by KeyRecorderControl
-        private const int TEMP_RECORDING_HOTKEY_ID = 99999;
 
-        private readonly Dictionary<int, HotkeyInfo> _registeredHotkeys = new();
-        private readonly object _lock = new();
+        private readonly ConcurrentDictionary<int, HotkeyInfo> _registeredHotkeys = new();
+        private volatile int _registeredCount;
         private LowLevelKeyboardProc? _hookProc;
         private IntPtr _hookId = IntPtr.Zero;
         private volatile bool _disposed;
@@ -72,16 +72,7 @@ namespace FFXIManager.Services
         /// <summary>
         /// Gets the number of currently registered hotkeys.
         /// </summary>
-        public int RegisteredCount 
-        { 
-            get 
-            { 
-                lock (_lock) 
-                { 
-                    return _registeredHotkeys.Count(kvp => kvp.Value.IsRegistered); 
-                } 
-            } 
-        }
+        public int RegisteredCount => _registeredCount;
 
         /// <summary>
         /// Initializes a new instance of the LowLevelHotkeyService.
@@ -125,22 +116,18 @@ namespace FFXIManager.Services
                 var key = KeyInterop.KeyFromVirtualKey(vkCode);
                 
                 // Check if this matches any registered hotkeys
-                Dictionary<int, HotkeyInfo> snapshot;
-                lock (_lock)
-                {
-                    // Take a snapshot of registered hotkeys to avoid holding lock during event invocation
-                    snapshot = new Dictionary<int, HotkeyInfo>(_registeredHotkeys);
-                }
+                // Use concurrent dictionary directly - no need for snapshots
+                var registeredHotkeys = _registeredHotkeys;
                 
                 // Special case: if we have the temp recording hotkey registered, fire for ALL keys
-                if (snapshot.ContainsKey(TEMP_RECORDING_HOTKEY_ID))
+                if (registeredHotkeys.ContainsKey(KeyRecorderControl.TempRecordingHotkeyId))
                 {
-                    HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(TEMP_RECORDING_HOTKEY_ID, modifiers, key));
+                    HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(KeyRecorderControl.TempRecordingHotkeyId, modifiers, key));
                     // Don't consume the key in recording mode to allow normal processing
                     return CallNextHookEx(_hookId, nCode, wParam, lParam);
                 }
                 
-                foreach (var kvp in snapshot)
+                foreach (var kvp in registeredHotkeys)
                 {
                     var hotkeyInfo = kvp.Value;
                     if (hotkeyInfo.IsRegistered && 
@@ -188,14 +175,26 @@ namespace FFXIManager.Services
         {
             if (_disposed) throw new ObjectDisposedException(nameof(LowLevelHotkeyService));
 
-            lock (_lock)
+            var newHotkey = new HotkeyInfo
             {
-                _registeredHotkeys[id] = new HotkeyInfo
+                Modifiers = modifiers,
+                Key = key,
+                IsRegistered = true
+            };
+
+            var wasAdded = _registeredHotkeys.TryAdd(id, newHotkey);
+            if (!wasAdded)
+            {
+                // Update existing hotkey
+                _registeredHotkeys[id] = newHotkey;
+            }
+            else
+            {
+                // Increment count only if it's a new hotkey (exclude temp recording hotkey)
+                if (id != KeyRecorderControl.TempRecordingHotkeyId)
                 {
-                    Modifiers = modifiers,
-                    Key = key,
-                    IsRegistered = true
-                };
+                    Interlocked.Increment(ref _registeredCount);
+                }
             }
 
             return true; // Low-level hooks always "succeed" at registration
@@ -210,10 +209,16 @@ namespace FFXIManager.Services
         {
             if (_disposed) return false;
             
-            lock (_lock)
+            if (_registeredHotkeys.TryRemove(id, out _))
             {
-                return _registeredHotkeys.Remove(id);
+                // Decrement count only if it's not the temp recording hotkey
+                if (id != KeyRecorderControl.TempRecordingHotkeyId)
+                {
+                    Interlocked.Decrement(ref _registeredCount);
+                }
+                return true;
             }
+            return false;
         }
 
         /// <summary>
@@ -223,10 +228,8 @@ namespace FFXIManager.Services
         {
             if (_disposed) return;
             
-            lock (_lock)
-            {
-                _registeredHotkeys.Clear();
-            }
+            _registeredHotkeys.Clear();
+            Interlocked.Exchange(ref _registeredCount, 0);
         }
 
         /// <summary>
@@ -238,10 +241,7 @@ namespace FFXIManager.Services
         {
             if (_disposed) return false;
             
-            lock (_lock)
-            {
-                return _registeredHotkeys.TryGetValue(id, out var info) && info.IsRegistered;
-            }
+            return _registeredHotkeys.TryGetValue(id, out var info) && info.IsRegistered;
         }
 
         public void Dispose()

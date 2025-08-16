@@ -271,7 +271,7 @@ namespace FFXIManager.ViewModels
             try
             {
                 // Convert hotkey ID back to slot index
-                int slotIndex = e.HotkeyId - 1000; // Subtract the offset
+                int slotIndex = e.HotkeyId - KeyboardShortcutConfig.HotkeyIdOffset; // Subtract the offset
                 
                 // Execute the switch command on the UI thread
                 System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
