@@ -17,7 +17,7 @@ namespace FFXIManager
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
-            
+
             // Load the initial theme from settings
             try
             {
@@ -38,14 +38,14 @@ namespace FFXIManager
             if (app == null) return;
 
             var themeUri = isDarkTheme ? DarkThemeUri : LightThemeUri;
-            
+
             // Find and replace the theme dictionary - it should always be at index 0
             ResourceDictionary? oldTheme = null;
             if (app.Resources.MergedDictionaries.Count > 0)
             {
                 var firstDict = app.Resources.MergedDictionaries[0];
-                if (firstDict.Source != null && 
-                    (firstDict.Source.OriginalString.Contains("LightTheme.xaml") || 
+                if (firstDict.Source != null &&
+                    (firstDict.Source.OriginalString.Contains("LightTheme.xaml") ||
                      firstDict.Source.OriginalString.Contains("DarkTheme.xaml")))
                 {
                     oldTheme = firstDict;
@@ -53,7 +53,7 @@ namespace FFXIManager
             }
 
             var newTheme = new ResourceDictionary { Source = themeUri };
-            
+
             if (oldTheme != null)
             {
                 // Replace the first dictionary (theme)
@@ -65,7 +65,7 @@ namespace FFXIManager
                 app.Resources.MergedDictionaries.Insert(0, newTheme);
             }
         }
-        
+
         protected override void OnExit(ExitEventArgs e)
         {
             // Properly dispose of all services before exiting

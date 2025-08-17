@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -17,13 +17,13 @@ namespace FFXIManager.Services
         private readonly IConfigurationService _configService;
         private readonly ICachingService _cachingService;
         private readonly ILoggingService _loggingService;
-        
+
         public string PlayOnlineDirectory { get; set; }
         public ISettingsService? SettingsService { get; set; }
-        
+
         public ProfileService(
-            IConfigurationService configService, 
-            ICachingService cachingService, 
+            IConfigurationService configService,
+            ICachingService cachingService,
             ILoggingService loggingService)
         {
             _configService = configService ?? throw new ArgumentNullException(nameof(configService));
@@ -38,33 +38,33 @@ namespace FFXIManager.Services
         public async Task<List<ProfileInfo>> GetProfilesAsync()
         {
             await _loggingService.LogDebugAsync("Getting all profiles", "ProfileService");
-            
+
             return await _cachingService.GetOrSetAsync(
                 GetDirectorySpecificCacheKey(CacheKeys.ProfilesList),
                 async () => await Task.Run(() => GetProfiles(includeAutoBackups: true)),
                 TimeSpan.FromMinutes(5));
         }
-        
+
         /// <summary>
         /// Gets user-created profiles only (excludes auto-backups) with caching
         /// </summary>
         public async Task<List<ProfileInfo>> GetUserProfilesAsync()
         {
             await _loggingService.LogDebugAsync("Getting user profiles", "ProfileService");
-            
+
             return await _cachingService.GetOrSetAsync(
                 GetDirectorySpecificCacheKey(CacheKeys.UserProfilesList),
                 async () => await Task.Run(() => GetProfiles(includeAutoBackups: false)),
                 TimeSpan.FromMinutes(5));
         }
-        
+
         /// <summary>
         /// Gets auto-backup profiles only with caching
         /// </summary>
         public async Task<List<ProfileInfo>> GetAutoBackupsAsync()
         {
             await _loggingService.LogDebugAsync("Getting auto-backup profiles", "ProfileService");
-            
+
             return await _cachingService.GetOrSetAsync(
                 GetDirectorySpecificCacheKey(CacheKeys.AutoBackupsList),
                 async () => await Task.Run(() => GetProfiles(includeAutoBackups: true)
@@ -73,7 +73,7 @@ namespace FFXIManager.Services
                     .ToList()),
                 TimeSpan.FromMinutes(2)); // Shorter cache for auto-backups as they change more frequently
         }
-        
+
         /// <summary>
         /// Core method to get profiles with filtering and performance optimizations
         /// </summary>
@@ -84,30 +84,30 @@ namespace FFXIManager.Services
                 _loggingService.LogWarningAsync($"PlayOnline directory does not exist: {PlayOnlineDirectory}", "ProfileService");
                 return new List<ProfileInfo>();
             }
-            
+
             var profiles = new List<ProfileInfo>();
             var settings = SettingsService?.LoadSettings();
             var config = _configService.ProfileConfig;
-            
+
             try
             {
                 var searchPattern = $"*{config.BackupFileExtension}";
                 var files = Directory.EnumerateFiles(PlayOnlineDirectory, searchPattern, SearchOption.TopDirectoryOnly)
                     .Where(file => !config.ExcludedFiles.Contains(Path.GetFileName(file)))
                     .ToArray(); // Materialize to avoid multiple enumerations
-                
+
                 // Pre-allocate list capacity for better performance
                 profiles = new List<ProfileInfo>(files.Length);
-                
+
                 foreach (var file in files)
                 {
                     var fileInfo = new FileInfo(file);
                     var name = Path.GetFileNameWithoutExtension(file);
                     var isAutoBackup = name.StartsWith(config.AutoBackupPrefix, StringComparison.OrdinalIgnoreCase);
-                    
+
                     // Filter auto-backups if not requested
                     if (isAutoBackup && !includeAutoBackups) continue;
-                    
+
                     var profile = new ProfileInfo
                     {
                         Name = name,
@@ -117,19 +117,19 @@ namespace FFXIManager.Services
                         Description = GetProfileDescription(name),
                         IsLastUserChoice = settings?.LastActiveProfileName.Equals(name, StringComparison.OrdinalIgnoreCase) == true
                     };
-                    
+
                     profiles.Add(profile);
                 }
-                
+
                 // Efficient sorting with pre-computed values
-                profiles.Sort((x, y) => 
+                profiles.Sort((x, y) =>
                 {
                     var xIsAuto = x.Name.StartsWith(config.AutoBackupPrefix, StringComparison.OrdinalIgnoreCase);
                     var yIsAuto = y.Name.StartsWith(config.AutoBackupPrefix, StringComparison.OrdinalIgnoreCase);
-                    
+
                     if (xIsAuto != yIsAuto) return xIsAuto.CompareTo(yIsAuto);
-                    
-                    return xIsAuto 
+
+                    return xIsAuto
                         ? y.LastModified.CompareTo(x.LastModified) // Newest auto-backups first
                         : string.Compare(x.Name, y.Name, StringComparison.OrdinalIgnoreCase); // User profiles alphabetically
                 });
@@ -141,48 +141,48 @@ namespace FFXIManager.Services
                 _loggingService.LogErrorAsync($"Error reading profiles from {PlayOnlineDirectory}", ex, "ProfileService");
                 throw new InvalidOperationException($"Error reading profiles: {ex.Message}", ex);
             }
-            
+
             return profiles;
         }
-        
+
         /// <summary>
         /// Gets the current active login file information with caching
         /// </summary>
         public async Task<ProfileInfo?> GetActiveLoginInfoAsync()
         {
             await _loggingService.LogDebugAsync("Getting active login info", "ProfileService");
-            
+
             // Handle nullable return type properly for caching
             var result = await _cachingService.GetAsync<ProfileInfo>(GetDirectorySpecificCacheKey(CacheKeys.ActiveLoginInfo));
             if (result != null)
                 return result;
-                
+
             var activeInfo = GetActiveLoginInfoInternal();
             if (activeInfo != null)
             {
                 await _cachingService.SetAsync(GetDirectorySpecificCacheKey(CacheKeys.ActiveLoginInfo), activeInfo, TimeSpan.FromMinutes(1));
             }
-            
+
             return activeInfo;
         }
-        
+
         private ProfileInfo? GetActiveLoginInfoInternal()
         {
             var config = _configService.ProfileConfig;
             var activeLoginPath = Path.Combine(PlayOnlineDirectory, config.DefaultLoginFileName);
             if (!File.Exists(activeLoginPath)) return null;
-            
+
             try
             {
                 var fileInfo = new FileInfo(activeLoginPath);
                 var settings = SettingsService?.LoadSettings();
-                
+
                 var (displayName, description) = !string.IsNullOrEmpty(settings?.LastActiveProfileName)
-                    ? ($"{config.DefaultLoginFileName} (Last Set: {settings.LastActiveProfileName})", 
+                    ? ($"{config.DefaultLoginFileName} (Last Set: {settings.LastActiveProfileName})",
                        $"System login file - last set to '{settings.LastActiveProfileName}' by user")
-                    : ($"{config.DefaultLoginFileName} (System File)", 
+                    : ($"{config.DefaultLoginFileName} (System File)",
                        _configService.BackupConfig.ProfileDescriptions["SystemFile"]);
-                
+
                 return new ProfileInfo
                 {
                     Name = displayName,
@@ -198,58 +198,58 @@ namespace FFXIManager.Services
                 throw new InvalidOperationException($"Error reading active login file: {ex.Message}", ex);
             }
         }
-        
+
         /// <summary>
         /// Swaps the active login file with a backup profile
         /// </summary>
         public async Task SwapProfileAsync(ProfileInfo targetProfile)
         {
             ArgumentNullException.ThrowIfNull(targetProfile);
-            
+
             await _loggingService.LogInfoAsync($"Starting profile swap to: {targetProfile.Name}", "ProfileService");
-            
+
             if (targetProfile.IsSystemFile)
             {
                 var error = "Cannot swap with the system login file";
                 await _loggingService.LogWarningAsync(error, "ProfileService");
                 throw new InvalidOperationException(error);
             }
-            
+
             var config = _configService.ProfileConfig;
             var activeLoginPath = Path.Combine(PlayOnlineDirectory, config.DefaultLoginFileName);
-            
+
             if (!File.Exists(targetProfile.FilePath))
             {
                 var error = $"Profile file not found: {targetProfile.FilePath}";
                 await _loggingService.LogErrorAsync(error, null, "ProfileService");
                 throw new FileNotFoundException(error);
             }
-            
+
             try
             {
                 // Create auto-backup of current file
                 if (File.Exists(activeLoginPath) && _configService.BackupConfig.CreateAutoBackupsOnSwap)
                 {
-                    var backupPath = Path.Combine(PlayOnlineDirectory, 
+                    var backupPath = Path.Combine(PlayOnlineDirectory,
                         $"{config.AutoBackupPrefix}{DateTime.Now.ToString(config.AutoBackupDateTimeFormat)}{config.BackupFileExtension}");
-                    
+
                     await _loggingService.LogDebugAsync($"Creating auto-backup: {backupPath}", "ProfileService");
                     File.Copy(activeLoginPath, backupPath, true);
-                    
+
                     // Clean up old backups asynchronously
                     _ = Task.Run(async () => await CleanupAutoBackupsAsync());
                 }
-                
+
                 // Copy target profile to active location
                 await _loggingService.LogDebugAsync($"Copying profile from {targetProfile.FilePath} to {activeLoginPath}", "ProfileService");
                 await RetryIOAsync(() => { File.Copy(targetProfile.FilePath, activeLoginPath, true); return Task.CompletedTask; });
-                
+
                 // Remember user's choice
                 UpdateLastActiveProfile(targetProfile.Name);
-                
+
                 // Invalidate relevant caches
                 await InvalidateProfileCaches();
-                
+
                 await _loggingService.LogInfoAsync($"Successfully swapped to profile: {targetProfile.Name}", "ProfileService");
             }
             catch (Exception ex)
@@ -258,7 +258,7 @@ namespace FFXIManager.Services
                 throw new InvalidOperationException($"Error swapping profile: {ex.Message}", ex);
             }
         }
-        
+
         /// <summary>
         /// Creates a backup of the current active login file
         /// </summary>
@@ -266,9 +266,9 @@ namespace FFXIManager.Services
         {
             if (string.IsNullOrWhiteSpace(backupName))
                 throw new ArgumentException("Backup name cannot be empty", nameof(backupName));
-            
+
             await _loggingService.LogInfoAsync($"Creating backup: {backupName}", "ProfileService");
-            
+
             var config = _configService.ProfileConfig;
             var activeLoginPath = Path.Combine(PlayOnlineDirectory, config.DefaultLoginFileName);
             if (!File.Exists(activeLoginPath))
@@ -277,24 +277,24 @@ namespace FFXIManager.Services
                 await _loggingService.LogErrorAsync(error, null, "ProfileService");
                 throw new FileNotFoundException(error);
             }
-            
+
             var sanitizedName = SanitizeFileName(backupName);
             var backupPath = Path.Combine(PlayOnlineDirectory, $"{sanitizedName}{config.BackupFileExtension}");
-            
+
             if (File.Exists(backupPath))
             {
                 var error = $"Backup file already exists: {sanitizedName}{config.BackupFileExtension}";
                 await _loggingService.LogWarningAsync(error, "ProfileService");
                 throw new InvalidOperationException(error);
             }
-            
+
             return await Task.Run(async () =>
             {
                 try
                 {
                     await RetryIOAsync(() => { File.Copy(activeLoginPath, backupPath); return Task.CompletedTask; });
                     var fileInfo = new FileInfo(backupPath);
-                    
+
                     var profile = new ProfileInfo
                     {
                         Name = sanitizedName,
@@ -303,10 +303,10 @@ namespace FFXIManager.Services
                         FileSize = fileInfo.Length,
                         Description = _configService.BackupConfig.ProfileDescriptions["UserProfile"]
                     };
-                    
+
                     // Invalidate caches since we added a new profile
                     await InvalidateProfileCaches();
-                    
+
                     await _loggingService.LogInfoAsync($"Successfully created backup: {sanitizedName}", "ProfileService");
                     return profile;
                 }
@@ -317,16 +317,16 @@ namespace FFXIManager.Services
                 }
             });
         }
-        
+
         /// <summary>
         /// Deletes a backup profile file
         /// </summary>
         public async Task DeleteProfileAsync(ProfileInfo profile)
         {
             ArgumentNullException.ThrowIfNull(profile);
-            
+
             await _loggingService.LogInfoAsync($"Deleting profile: {profile.Name}", "ProfileService");
-            
+
             var config = _configService.ProfileConfig;
             if (profile.IsSystemFile || config.ExcludedFiles.Contains(Path.GetFileName(profile.FilePath)))
             {
@@ -334,7 +334,7 @@ namespace FFXIManager.Services
                 await _loggingService.LogWarningAsync(error, "ProfileService");
                 throw new InvalidOperationException(error);
             }
-            
+
             // SECURITY: Prevent deletion of currently active profiles
             if (profile.IsCurrentlyActive)
             {
@@ -342,23 +342,23 @@ namespace FFXIManager.Services
                 await _loggingService.LogWarningAsync(error, "ProfileService");
                 throw new InvalidOperationException(error);
             }
-            
+
             if (!File.Exists(profile.FilePath))
             {
                 var error = $"Profile file not found: {profile.FilePath}";
                 await _loggingService.LogWarningAsync(error, "ProfileService");
                 throw new FileNotFoundException(error);
             }
-            
+
             await Task.Run(async () =>
             {
                 try
                 {
                     await RetryIOAsync(() => { File.Delete(profile.FilePath); return Task.CompletedTask; });
-                    
+
                     // Invalidate caches since we removed a profile
                     await InvalidateProfileCaches();
-                    
+
                     await _loggingService.LogInfoAsync($"Successfully deleted profile: {profile.Name}", "ProfileService");
                 }
                 catch (Exception ex)
@@ -368,7 +368,7 @@ namespace FFXIManager.Services
                 }
             });
         }
-        
+
         /// <summary>
         /// Renames a profile file
         /// </summary>
@@ -377,40 +377,40 @@ namespace FFXIManager.Services
             ArgumentNullException.ThrowIfNull(profile);
             if (string.IsNullOrWhiteSpace(newName))
                 throw new ArgumentException("New name cannot be empty", nameof(newName));
-            
+
             await _loggingService.LogInfoAsync($"Renaming profile from '{profile.Name}' to '{newName}'", "ProfileService");
-            
+
             if (profile.IsSystemFile)
             {
                 var error = "Cannot rename the system login file";
                 await _loggingService.LogWarningAsync(error, "ProfileService");
                 throw new InvalidOperationException(error);
             }
-            
+
             var config = _configService.ProfileConfig;
             var sanitizedName = SanitizeFileName(newName);
             var newFilePath = Path.Combine(PlayOnlineDirectory, $"{sanitizedName}{config.BackupFileExtension}");
-            
+
             if (File.Exists(newFilePath))
             {
                 var error = $"A profile with the name '{sanitizedName}' already exists";
                 await _loggingService.LogWarningAsync(error, "ProfileService");
                 throw new InvalidOperationException(error);
             }
-            
+
             if (!File.Exists(profile.FilePath))
             {
                 var error = $"Profile file not found: {profile.FilePath}";
                 await _loggingService.LogWarningAsync(error, "ProfileService");
                 throw new FileNotFoundException(error);
             }
-            
+
             await Task.Run(async () =>
             {
                 try
                 {
                     await RetryIOAsync(() => { File.Move(profile.FilePath, newFilePath); return Task.CompletedTask; });
-                    
+
                     // Update settings if this was the user's last active profile
                     var settings = SettingsService?.LoadSettings();
                     if (settings?.LastActiveProfileName == profile.Name)
@@ -418,10 +418,10 @@ namespace FFXIManager.Services
                         settings.LastActiveProfileName = sanitizedName;
                         SettingsService?.SaveSettings(settings);
                     }
-                    
+
                     // Invalidate caches since we changed a profile
                     await InvalidateProfileCaches();
-                    
+
                     await _loggingService.LogInfoAsync($"Successfully renamed profile to: {sanitizedName}", "ProfileService");
                 }
                 catch (Exception ex)
@@ -431,14 +431,14 @@ namespace FFXIManager.Services
                 }
             });
         }
-        
+
         /// <summary>
         /// Cleans up old automatic backup files, keeping only the most recent ones
         /// </summary>
         public async Task CleanupAutoBackupsAsync()
         {
             await _loggingService.LogDebugAsync("Starting auto-backup cleanup", "ProfileService");
-            
+
             await Task.Run(async () =>
             {
                 try
@@ -446,15 +446,15 @@ namespace FFXIManager.Services
                     var config = _configService.ProfileConfig;
                     var settings = SettingsService?.LoadSettings();
                     var maxBackups = settings?.MaxAutoBackups ?? _configService.BackupConfig.DefaultMaxAutoBackups;
-                    
+
                     var backupFiles = Directory.GetFiles(PlayOnlineDirectory, $"{config.AutoBackupPrefix}*{config.BackupFileExtension}")
                         .Select(f => new FileInfo(f))
                         .OrderByDescending(f => f.LastWriteTime)
                         .ToArray();
-                    
+
                     var filesToDelete = backupFiles.Skip(maxBackups);
                     var deletedCount = 0;
-                    
+
                     foreach (var file in filesToDelete)
                     {
                         try
@@ -467,7 +467,7 @@ namespace FFXIManager.Services
                             await _loggingService.LogWarningAsync($"Failed to delete auto-backup: {file.Name}", "ProfileService");
                         }
                     }
-                    
+
                     if (deletedCount > 0)
                     {
                         // Invalidate auto-backup cache
@@ -482,7 +482,7 @@ namespace FFXIManager.Services
                 }
             });
         }
-        
+
         /// <summary>
         /// Clears the user's profile choice
         /// </summary>
@@ -492,30 +492,30 @@ namespace FFXIManager.Services
             await Task.Run(() => UpdateLastActiveProfile(string.Empty));
             await _cachingService.RemoveAsync(GetDirectorySpecificCacheKey(CacheKeys.ActiveLoginInfo));
         }
-        
+
         /// <summary>
         /// Always returns false - external change detection removed for simplicity
         /// </summary>
         public static async Task<bool> DetectExternalChangesAsync() => await Task.FromResult(false);
-        
+
         /// <summary>
         /// Validates if the PlayOnline directory exists with caching
         /// </summary>
         public bool ValidatePlayOnlineDirectory()
         {
             var cacheKey = string.Format(provider: null, format: CompositeFormats.DirectoryValidationFormat, PlayOnlineDirectory);
-            
+
             // Use synchronous check for validation - can be cached if needed
             var exists = Directory.Exists(PlayOnlineDirectory);
-            
+
             if (!exists)
             {
                 _loggingService.LogWarningAsync($"PlayOnline directory validation failed: {PlayOnlineDirectory}", "ProfileService");
             }
-            
+
             return exists;
         }
-        
+
         private static class CompositeFormats
         {
             public static readonly CompositeFormat DirectoryValidationFormat = CompositeFormat.Parse(CacheKeys.DirectoryValidation);
@@ -528,7 +528,7 @@ namespace FFXIManager.Services
             var isAutoBackup = profileName.StartsWith(_configService.ProfileConfig.AutoBackupPrefix, StringComparison.OrdinalIgnoreCase);
             return isAutoBackup ? config.ProfileDescriptions["AutoBackup"] : config.ProfileDescriptions["UserProfile"];
         }
-        
+
         private void UpdateLastActiveProfile(string profileName)
         {
             try
@@ -545,19 +545,19 @@ namespace FFXIManager.Services
                 _loggingService.LogWarningAsync($"Failed to update last active profile: {ex.Message}", "ProfileService");
             }
         }
-        
+
         private string SanitizeFileName(string fileName)
         {
             var config = _configService.FileSystemConfig;
             var invalidChars = Path.GetInvalidFileNameChars()
                 .Concat(config.InvalidFileNameChars.Select(s => s[0]))
                 .Distinct();
-                
+
             return invalidChars
                 .Aggregate(fileName, (current, invalidChar) => current.Replace(invalidChar, '_'))
                 .Trim();
         }
-        
+
         /// <summary>
         /// Creates a directory-specific cache key to prevent cross-directory cache pollution
         /// </summary>
@@ -567,7 +567,7 @@ namespace FFXIManager.Services
             var directoryHash = PlayOnlineDirectory.GetHashCode().ToString("X");
             return $"{baseKey}_{directoryHash}";
         }
-        
+
         private async Task InvalidateProfileCaches()
         {
             await _cachingService.RemoveAsync(GetDirectorySpecificCacheKey(CacheKeys.ProfilesList));

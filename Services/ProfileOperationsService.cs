@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using FFXIManager.Models;
@@ -19,30 +19,30 @@ namespace FFXIManager.Services
         Task<(bool Success, string Message, int DeletedCount)> CleanupAutoBackupsAsync();
         Task<(bool Success, string Message)> ResetTrackingAsync();
     }
-    
+
     public class ProfileOperationsService : IProfileOperationsService
     {
         private readonly IProfileService _profileService;
         private readonly ISettingsService _settingsService;
-        
+
         public ProfileOperationsService(IProfileService profileService, ISettingsService settingsService)
         {
             _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         }
-        
+
         public async Task<List<ProfileInfo>> LoadProfilesAsync(bool includeAutoBackups)
         {
-            return includeAutoBackups 
+            return includeAutoBackups
                 ? await _profileService.GetProfilesAsync()
                 : await _profileService.GetUserProfilesAsync();
         }
-        
+
         public async Task<ProfileInfo?> GetActiveLoginInfoAsync()
         {
             return await _profileService.GetActiveLoginInfoAsync();
         }
-        
+
         public async Task<(bool Success, string Message)> SwapProfileAsync(ProfileInfo profile)
         {
             try
@@ -54,12 +54,12 @@ namespace FFXIManager.Services
                     return (false, "Cannot swap with the system login file");
 
                 await _profileService.SwapProfileAsync(profile);
-                
+
                 // Update settings
                 var settings = _settingsService.LoadSettings();
                 settings.LastActiveProfileName = profile.Name;
                 _settingsService.SaveSettings(settings);
-                
+
                 return (true, $"Successfully swapped to profile: {profile.Name}");
             }
             catch (Exception ex)
@@ -67,7 +67,7 @@ namespace FFXIManager.Services
                 return (false, $"Error swapping profile: {ex.Message}");
             }
         }
-        
+
         public async Task<(bool Success, string Message, ProfileInfo? NewProfile)> CreateBackupAsync(string name)
         {
             try
@@ -83,7 +83,7 @@ namespace FFXIManager.Services
                 return (false, $"Error creating backup: {ex.Message}", null);
             }
         }
-        
+
         public async Task<(bool Success, string Message)> DeleteProfileAsync(ProfileInfo profile, bool confirmDelete = true)
         {
             try
@@ -108,12 +108,12 @@ namespace FFXIManager.Services
                             "Confirm Delete",
                             System.Windows.MessageBoxButton.YesNo,
                             System.Windows.MessageBoxImage.Warning);
-                        
+
                         if (result != System.Windows.MessageBoxResult.Yes)
                             return (false, "Delete cancelled by user");
                     }
                 }
-                
+
                 await _profileService.DeleteProfileAsync(profile);
                 return (true, $"Profile '{profile.Name}' deleted successfully");
             }
@@ -122,7 +122,7 @@ namespace FFXIManager.Services
                 return (false, $"Error deleting profile: {ex.Message}");
             }
         }
-        
+
         public async Task<(bool Success, string Message)> RenameProfileAsync(ProfileInfo profile, string newName)
         {
             try
@@ -144,20 +144,20 @@ namespace FFXIManager.Services
                 return (false, $"Error renaming profile: {ex.Message}");
             }
         }
-        
+
         public async Task<(bool Success, string Message, int DeletedCount)> CleanupAutoBackupsAsync()
         {
             try
             {
                 var autoBackupsBefore = await _profileService.GetAutoBackupsAsync();
                 var countBefore = autoBackupsBefore.Count;
-                
+
                 await _profileService.CleanupAutoBackupsAsync();
-                
+
                 var autoBackupsAfter = await _profileService.GetAutoBackupsAsync();
                 var countAfter = autoBackupsAfter.Count;
                 var deletedCount = countBefore - countAfter;
-                
+
                 return (true, $"Cleaned up {deletedCount} old auto-backup files", deletedCount);
             }
             catch (Exception ex)
@@ -165,7 +165,7 @@ namespace FFXIManager.Services
                 return (false, $"Error cleaning up auto-backups: {ex.Message}", 0);
             }
         }
-        
+
         public async Task<(bool Success, string Message)> ResetTrackingAsync()
         {
             try

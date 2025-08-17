@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace FFXIManager.Configuration
@@ -13,7 +13,7 @@ namespace FFXIManager.Configuration
         FileSystemConfiguration FileSystemConfig { get; }
         BackupConfiguration BackupConfig { get; }
         ValidationConfiguration ValidationConfig { get; }
-        
+
         void ReloadConfiguration();
         void SaveConfiguration();
     }

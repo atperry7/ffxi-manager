@@ -1,4 +1,4 @@
-using FFXIManager.Configuration;
+﻿using FFXIManager.Configuration;
 using FFXIManager.Infrastructure;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
@@ -49,7 +49,7 @@ namespace FFXIManager.ViewModels
 
             // Create specialized ViewModels with their specific dependencies
             ProfileManagement = new ProfileManagementViewModel(
-                profileOperations, statusService, settingsService, 
+                profileOperations, statusService, settingsService,
                 profileService, dialogService, validationService);
 
             ApplicationManagement = new ApplicationManagementViewModel(
@@ -127,31 +127,31 @@ namespace FFXIManager.ViewModels
         // Expose commonly used properties for easy data binding (delegated to child ViewModels)
         public System.Collections.ObjectModel.ObservableCollection<Models.ProfileInfo> Profiles => ProfileManagement.Profiles;
         public System.Collections.ObjectModel.ObservableCollection<Models.ExternalApplication> ExternalApplications => ApplicationManagement.ExternalApplications;
-        
-        public Models.ProfileInfo? SelectedProfile 
-        { 
-            get => ProfileManagement.SelectedProfile; 
-            set => ProfileManagement.SelectedProfile = value; 
+
+        public Models.ProfileInfo? SelectedProfile
+        {
+            get => ProfileManagement.SelectedProfile;
+            set => ProfileManagement.SelectedProfile = value;
         }
 
-        public string NewBackupName 
-        { 
-            get => ProfileManagement.NewBackupName; 
-            set => ProfileManagement.NewBackupName = value; 
+        public string NewBackupName
+        {
+            get => ProfileManagement.NewBackupName;
+            set => ProfileManagement.NewBackupName = value;
         }
-        
-        public string PlayOnlineDirectory 
-        { 
-            get => ProfileManagement.PlayOnlineDirectory; 
-            set => ProfileManagement.PlayOnlineDirectory = value; 
+
+        public string PlayOnlineDirectory
+        {
+            get => ProfileManagement.PlayOnlineDirectory;
+            set => ProfileManagement.PlayOnlineDirectory = value;
         }
-        
-        public bool ShowAutoBackups 
-        { 
-            get => ProfileManagement.ShowAutoBackups; 
-            set => ProfileManagement.ShowAutoBackups = value; 
+
+        public bool ShowAutoBackups
+        {
+            get => ProfileManagement.ShowAutoBackups;
+            set => ProfileManagement.ShowAutoBackups = value;
         }
-        
+
         public string ActiveLoginStatus => ProfileManagement.ActiveLoginStatus;
 
         #endregion
@@ -159,7 +159,7 @@ namespace FFXIManager.ViewModels
         #region Commands
 
         // Expose commonly used commands for easy data binding (delegated to child ViewModels)
-        
+
         // Profile Commands
         public System.Windows.Input.ICommand RefreshCommand => ProfileManagement.RefreshCommand;
         public System.Windows.Input.ICommand SwapProfileCommand => ProfileManagement.SwapProfileCommand;
@@ -210,7 +210,7 @@ namespace FFXIManager.ViewModels
                 // Load data asynchronously without blocking the UI
                 await ProfileManagement.RefreshProfilesAsync();
                 await ApplicationManagement.LoadExternalApplicationsAsync();
-                
+
                 // Load character data using the public method
                 await PlayOnlineMonitor.LoadCharactersAsync();
             }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -24,7 +24,7 @@ namespace FFXIManager.Controls
         /// - Prevents accidental reuse or collision, and ensures consistent cleanup of temporary hooks.
         /// </summary>
         public const int TempRecordingHotkeyId = 0x7FFFFFFF;
-        
+
         private LowLevelHotkeyService? _tempHookService;
         private ModifierKeys _currentModifiers = ModifierKeys.None;
         private Key _currentKey = Key.None;
@@ -68,26 +68,26 @@ namespace FFXIManager.Controls
         {
             if (_disposed)
                 throw new ObjectDisposedException(nameof(KeyRecorderControl));
-                
+
             try
             {
                 _isRecording = true;
-                
+
                 // Create temporary hook service
                 _tempHookService = new LowLevelHotkeyService();
                 _tempHookService.HotkeyPressed += OnKeyPressed;
-                
+
                 // Update UI
                 RecordButton.Content = "⏹ Stop";
                 RecordButton.Background = System.Windows.Media.Brushes.Orange;
                 KeyDisplayText.Text = "Recording... Press keys now";
                 StatusText.Text = "Press any key combination. Recording will stop automatically.";
-                
+
                 ClearButton.IsEnabled = false;
-                
+
                 // Start capturing ALL keys (register a dummy hotkey to activate the hook)
                 _tempHookService.RegisterHotkey(TempRecordingHotkeyId, ModifierKeys.None, Key.None, isTemporary: true);
-                
+
                 this.Focus();
                 this.Focusable = true;
             }
@@ -108,12 +108,12 @@ namespace FFXIManager.Controls
         {
             _isRecording = false;
             CleanupHotkeyService();
-            
+
             // Update UI
             RecordButton.Content = "📹 Record";
             RecordButton.Background = System.Windows.Media.Brushes.Green;
             ClearButton.IsEnabled = true;
-            
+
             if (_currentModifiers != ModifierKeys.None && _currentKey != Key.None)
             {
                 StatusText.Text = "Shortcut captured! Use Apply in the dialog to save it.";
@@ -123,7 +123,7 @@ namespace FFXIManager.Controls
                 StatusText.Text = "No valid shortcut recorded. Try again.";
             }
         }
-        
+
         /// <summary>
         /// Safely cleans up the hotkey service resources.
         /// </summary>
@@ -155,7 +155,7 @@ namespace FFXIManager.Controls
         {
             // Ignore if not recording or disposed
             if (!_isRecording || _disposed) return;
-            
+
             // This is called for EVERY key press while recording
             Dispatcher.BeginInvoke(() =>
             {
@@ -183,7 +183,7 @@ namespace FFXIManager.Controls
 
                 // Auto-stop recording after capturing a key
                 StopRecording();
-                
+
                 // Automatically fire the ShortcutRecorded event with the captured combination
                 var shortcut = new KeyboardShortcutConfig(0, _currentModifiers, _currentKey);
                 ShortcutRecorded?.Invoke(this, shortcut);
@@ -209,13 +209,13 @@ namespace FFXIManager.Controls
         private void Reset()
         {
             StopRecording();
-            
+
             _currentModifiers = ModifierKeys.None;
             _currentKey = Key.None;
-            
+
             KeyDisplayText.Text = "Press key combination...";
             StatusText.Text = "Press the keys you want to use as a shortcut";
-            
+
             RecordButton.Content = "📹 Record";
             RecordButton.Background = System.Windows.Media.Brushes.Green;
             ClearButton.IsEnabled = true;
@@ -230,15 +230,15 @@ namespace FFXIManager.Controls
         {
             _currentModifiers = modifiers;
             _currentKey = key;
-            
+
             if (modifiers == ModifierKeys.None && key == Key.None)
             {
                 KeyDisplayText.Text = "Press key combination...";
             }
             else
             {
-                KeyDisplayText.Text = modifiers == ModifierKeys.None ? 
-                    key.ToString() : 
+                KeyDisplayText.Text = modifiers == ModifierKeys.None ?
+                    key.ToString() :
                     $"{modifiers}+{key}";
             }
         }
@@ -247,26 +247,26 @@ namespace FFXIManager.Controls
         {
             StopRecording();
         }
-        
+
         protected override void OnInitialized(EventArgs e)
         {
             base.OnInitialized(e);
             this.Unloaded += OnUnloaded;
         }
-        
+
         /// <summary>
         /// Releases all resources used by the KeyRecorderControl.
         /// </summary>
         public void Dispose()
         {
             if (_disposed) return;
-            
+
             _disposed = true;
             StopRecording();
-            
+
             // Remove event handlers
             this.Unloaded -= OnUnloaded;
-            
+
             GC.SuppressFinalize(this);
         }
     }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -25,7 +25,7 @@ namespace FFXIManager.Services
         private const int VK_MENU = 0x12; // Alt key
         private const int VK_LWIN = 0x5B;
         private const int VK_RWIN = 0x5C;
-        
+
         /// <summary>
         /// Return value to suppress key event from being passed to other applications.
         /// </summary>
@@ -101,7 +101,7 @@ namespace FFXIManager.Services
         }
 
         public event EventHandler<HotkeyPressedEventArgs>? HotkeyPressed;
-        
+
         /// <summary>
         /// Gets the number of currently registered hotkeys.
         /// </summary>
@@ -115,7 +115,7 @@ namespace FFXIManager.Services
         {
             _hookProc = HookCallback;
             _hookId = SetHook(_hookProc);
-            
+
             if (_hookId == IntPtr.Zero)
             {
                 var error = Marshal.GetLastWin32Error();
@@ -143,16 +143,16 @@ namespace FFXIManager.Services
             {
                 var hookStruct = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
                 var vkCode = (int)hookStruct.vkCode;
-                
+
                 // **GAMING OPTIMIZATION**: Inline modifier key state for performance
                 var modifiers = ModifierKeys.None;
                 if (GetAsyncKeyState(VK_SHIFT) < 0) modifiers |= ModifierKeys.Shift;
                 if (GetAsyncKeyState(VK_CONTROL) < 0) modifiers |= ModifierKeys.Control;
                 if (GetAsyncKeyState(VK_MENU) < 0) modifiers |= ModifierKeys.Alt;
                 if (GetAsyncKeyState(VK_LWIN) < 0 || GetAsyncKeyState(VK_RWIN) < 0) modifiers |= ModifierKeys.Windows;
-                
+
                 var key = KeyInterop.KeyFromVirtualKey(vkCode);
-                
+
                 // Special case: if we have the temp recording hotkey registered, fire for ALL keys
                 if (_registeredHotkeys.ContainsKey(KeyRecorderControl.TempRecordingHotkeyId))
                 {
@@ -160,7 +160,7 @@ namespace FFXIManager.Services
                     // Don't consume the key in recording mode to allow normal processing
                     return CallNextHookEx(_hookId, nCode, wParam, lParam);
                 }
-                
+
                 // **GAMING OPTIMIZATION**: O(1) hotkey lookup instead of linear search
                 var hotkeyKey = new HotkeyKey(modifiers, key);
                 if (_hotkeyLookup.TryGetValue(hotkeyKey, out var hotkeyId))
@@ -170,7 +170,7 @@ namespace FFXIManager.Services
                     {
                         // Fire the event
                         HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(hotkeyId, modifiers, key));
-                        
+
                         // IMPORTANT: Suppress key event from reaching other applications
                         // This prevents the hotkey from being processed by other applications, including:
                         // - System shortcuts and accessibility tools
@@ -233,7 +233,7 @@ namespace FFXIManager.Services
                     var oldKey = new HotkeyKey(oldHotkey.Modifiers, oldHotkey.Key);
                     _hotkeyLookup.TryRemove(oldKey, out _);
                 }
-                
+
                 // Update existing hotkey
                 _registeredHotkeys[id] = newHotkey;
             }
@@ -260,13 +260,13 @@ namespace FFXIManager.Services
         public bool UnregisterHotkey(int id)
         {
             if (_disposed) return false;
-            
+
             if (_registeredHotkeys.TryRemove(id, out var removedHotkey))
             {
                 // **GAMING OPTIMIZATION**: Remove from O(1) lookup table
                 var hotkeyKey = new HotkeyKey(removedHotkey.Modifiers, removedHotkey.Key);
                 _hotkeyLookup.TryRemove(hotkeyKey, out _);
-                
+
                 // Decrement count only if it's not the temp recording hotkey
                 if (id != KeyRecorderControl.TempRecordingHotkeyId)
                 {
@@ -283,7 +283,7 @@ namespace FFXIManager.Services
         public void UnregisterAll()
         {
             if (_disposed) return;
-            
+
             _registeredHotkeys.Clear();
             _hotkeyLookup.Clear(); // **GAMING OPTIMIZATION**: Clear O(1) lookup table
             Interlocked.Exchange(ref _registeredCount, 0);
@@ -297,7 +297,7 @@ namespace FFXIManager.Services
         public bool IsRegistered(int id)
         {
             if (_disposed) return false;
-            
+
             return _registeredHotkeys.TryGetValue(id, out var info) && info.IsRegistered;
         }
 
@@ -307,9 +307,9 @@ namespace FFXIManager.Services
 
             // Set flag first to prevent race conditions during disposal
             _disposed = true;
-            
+
             UnregisterAll();
-            
+
             // Ensure we unhook in a thread-safe manner
             var hookToRemove = Interlocked.Exchange(ref _hookId, IntPtr.Zero);
             if (hookToRemove != IntPtr.Zero)

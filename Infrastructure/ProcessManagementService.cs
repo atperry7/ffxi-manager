@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -128,7 +128,7 @@ namespace FFXIManager.Infrastructure
         private IntPtr _winEventHookHandle = IntPtr.Zero;
         private WinEventDelegate? _winEventCallback;
         private readonly Dictionary<IntPtr, string> _lastWindowTitles = new();
-        
+
         private const int DEFAULT_TIMEOUT_MS = 5000;
         private const int GAMING_ACTIVATION_TIMEOUT_MS = 2000; // Gaming-optimized activation timeout
         private const int GLOBAL_MONITOR_INTERVAL_MS = 2000; // Centralized polling interval
@@ -142,9 +142,9 @@ namespace FFXIManager.Infrastructure
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
-            
+
             // Single global monitoring timer for all process tracking
-            _globalMonitoringTimer = new Timer(GlobalMonitoringCallback, null, 
+            _globalMonitoringTimer = new Timer(GlobalMonitoringCallback, null,
                 Timeout.Infinite, Timeout.Infinite);
         }
 
@@ -263,7 +263,7 @@ namespace FFXIManager.Infrastructure
         public async Task<List<ProcessInfo>> GetProcessesByNamesAsync(IEnumerable<string> processNames)
         {
             var result = new List<ProcessInfo>();
-            
+
             foreach (var processName in processNames)
             {
                 try
@@ -275,12 +275,12 @@ namespace FFXIManager.Infrastructure
                 catch (Win32Exception ex)
                 {
                     // Specific handling for Win32 access issues
-                    await _loggingService.LogDebugAsync($"Win32 access denied for process '{processName}': {ex.Message}", 
+                    await _loggingService.LogDebugAsync($"Win32 access denied for process '{processName}': {ex.Message}",
                         "ProcessManagementService");
                 }
                 catch (Exception ex)
                 {
-                    await _loggingService.LogDebugAsync($"Error getting processes for {processName}: {ex.Message}", 
+                    await _loggingService.LogDebugAsync($"Error getting processes for {processName}: {ex.Message}",
                         "ProcessManagementService");
                 }
             }
@@ -325,12 +325,12 @@ namespace FFXIManager.Infrastructure
             }
             catch (Win32Exception ex)
             {
-                await _loggingService.LogDebugAsync($"Win32 access denied for process {processId}: {ex.Message}", 
+                await _loggingService.LogDebugAsync($"Win32 access denied for process {processId}: {ex.Message}",
                     "ProcessManagementService");
             }
             catch (Exception ex)
             {
-                await _loggingService.LogDebugAsync($"Error getting process {processId}: {ex.Message}", 
+                await _loggingService.LogDebugAsync($"Error getting process {processId}: {ex.Message}",
                     "ProcessManagementService");
             }
 
@@ -342,7 +342,7 @@ namespace FFXIManager.Infrastructure
             try
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
-                
+
                 var process = Process.GetProcessById(processId);
                 if (process?.HasExited == false)
                 {
@@ -352,7 +352,7 @@ namespace FFXIManager.Infrastructure
                         process.WaitForExit(timeoutMs);
                     }, cts.Token);
 
-                    await _loggingService.LogInfoAsync($"Successfully killed process {processId}", 
+                    await _loggingService.LogInfoAsync($"Successfully killed process {processId}",
                         "ProcessManagementService");
                     return true;
                 }
@@ -364,12 +364,12 @@ namespace FFXIManager.Infrastructure
             }
             catch (Win32Exception ex)
             {
-                await _loggingService.LogWarningAsync($"Win32 access denied killing process {processId}: {ex.Message}", 
+                await _loggingService.LogWarningAsync($"Win32 access denied killing process {processId}: {ex.Message}",
                     "ProcessManagementService");
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync($"Error killing process {processId}", ex, 
+                await _loggingService.LogErrorAsync($"Error killing process {processId}", ex,
                     "ProcessManagementService");
             }
 
@@ -380,7 +380,7 @@ namespace FFXIManager.Infrastructure
         {
             // **GAMING OPTIMIZATION**: Use gaming-optimized timeout by default
             var actualTimeout = timeoutMs == DEFAULT_TIMEOUT_MS ? GAMING_ACTIVATION_TIMEOUT_MS : timeoutMs;
-            
+
             // **FAST VALIDATION**: Pre-validate window handle without expensive operations
             if (windowHandle == IntPtr.Zero || !IsWindow(windowHandle))
             {
@@ -390,7 +390,7 @@ namespace FFXIManager.Infrastructure
             // **OPTIMIZATION**: Quick visibility check - don't activate if already visible and foreground
             if (GetForegroundWindow() == windowHandle && IsWindowVisible(windowHandle))
             {
-                await _loggingService.LogDebugAsync($"Window {windowHandle:X8} already active, skipping activation", 
+                await _loggingService.LogDebugAsync($"Window {windowHandle:X8} already active, skipping activation",
                     "ProcessManagementService");
                 return true;
             }
@@ -398,7 +398,7 @@ namespace FFXIManager.Infrastructure
             try
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(actualTimeout));
-                
+
                 bool success = await Task.Run(() =>
                 {
                     return PerformOptimizedWindowActivation(windowHandle);
@@ -406,7 +406,7 @@ namespace FFXIManager.Infrastructure
 
                 if (success)
                 {
-                    await _loggingService.LogDebugAsync($"Successfully activated window {windowHandle:X8}", 
+                    await _loggingService.LogDebugAsync($"Successfully activated window {windowHandle:X8}",
                         "ProcessManagementService");
                 }
 
@@ -414,13 +414,13 @@ namespace FFXIManager.Infrastructure
             }
             catch (Win32Exception ex)
             {
-                await _loggingService.LogDebugAsync($"Win32 error activating window {windowHandle:X8}: {ex.Message}", 
+                await _loggingService.LogDebugAsync($"Win32 error activating window {windowHandle:X8}: {ex.Message}",
                     "ProcessManagementService");
                 return false;
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync($"Error activating window {windowHandle:X8}", ex, 
+                await _loggingService.LogErrorAsync($"Error activating window {windowHandle:X8}", ex,
                     "ProcessManagementService");
                 return false;
             }
@@ -429,7 +429,7 @@ namespace FFXIManager.Infrastructure
         public async Task<List<WindowInfo>> GetProcessWindowsAsync(int processId)
         {
             var windows = new List<WindowInfo>();
-            
+
             try
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(DEFAULT_TIMEOUT_MS));
@@ -451,21 +451,21 @@ namespace FFXIManager.Infrastructure
                                     {
                                         return true; // continue enumeration
                                     }
-                                    
+
                                     if (windowProcessId == (uint)processId)
                                     {
                                         var title = GetWindowTitle(hWnd);
-                                        
-                                            if (FFXIManager.Utilities.ProcessFilters.IsAcceptableWindowTitle(title))
+
+                                        if (FFXIManager.Utilities.ProcessFilters.IsAcceptableWindowTitle(title))
+                                        {
+                                            windows.Add(new WindowInfo
                                             {
-                                                windows.Add(new WindowInfo
-                                                {
-                                                    Handle = hWnd,
-                                                    Title = title,
-                                                    IsVisible = true,
-                                                    ProcessId = processId
-                                                });
-                                            }
+                                                Handle = hWnd,
+                                                Title = title,
+                                                IsVisible = true,
+                                                ProcessId = processId
+                                            });
+                                        }
                                     }
                                 }
                             }
@@ -489,12 +489,12 @@ namespace FFXIManager.Infrastructure
             }
             catch (OperationCanceledException)
             {
-                await _loggingService.LogDebugAsync($"Window enumeration timeout for process {processId}", 
+                await _loggingService.LogDebugAsync($"Window enumeration timeout for process {processId}",
                     "ProcessManagementService");
             }
             catch (Exception ex)
             {
-                await _loggingService.LogDebugAsync($"Error enumerating windows for process {processId}: {ex.Message}", 
+                await _loggingService.LogDebugAsync($"Error enumerating windows for process {processId}: {ex.Message}",
                     "ProcessManagementService");
             }
 
@@ -586,9 +586,9 @@ namespace FFXIManager.Infrastructure
                 // Get the window's thread ID
                 var windowThreadId = GetWindowThreadProcessId(windowHandle, IntPtr.Zero);
                 var currentThreadId = GetCurrentThreadId();
-                
+
                 bool attachedInput = false;
-                
+
                 try
                 {
                     // **OPTIMIZATION**: Attach thread input if different threads
@@ -596,10 +596,10 @@ namespace FFXIManager.Infrastructure
                     {
                         attachedInput = AttachThreadInput(currentThreadId, windowThreadId, true);
                     }
-                    
+
                     // **GAMING OPTIMIZATION**: Fast activation sequence with minimal delays
                     bool success = false;
-                    
+
                     // Step 1: Handle minimized windows with reduced delay
                     if (IsIconic(windowHandle))
                     {
@@ -610,29 +610,29 @@ namespace FFXIManager.Infrastructure
                     {
                         ShowWindow(windowHandle, SW_SHOW);
                     }
-                    
+
                     // Step 2: Primary activation attempt
                     success = SetForegroundWindow(windowHandle);
-                    
+
                     // Step 3: Alternative methods if primary failed
                     if (!success)
                     {
                         // Try bringing window to top first
                         BringWindowToTop(windowHandle);
-                        
+
                         // Then attempt SwitchToThisWindow with Alt+Tab behavior
                         SwitchToThisWindow(windowHandle, true);
-                        
+
                         // Final attempt with SetForegroundWindow
                         success = SetForegroundWindow(windowHandle);
-                        
+
                         // If still failed, assume success since SwitchToThisWindow doesn't return status
                         if (!success)
                         {
                             success = true;
                         }
                     }
-                    
+
                     return success;
                 }
                 finally
@@ -658,7 +658,7 @@ namespace FFXIManager.Infrastructure
         private async Task<List<ProcessInfo>> ConvertToProcessInfoAsync(IEnumerable<Process> processes)
         {
             var result = new List<ProcessInfo>();
-            
+
             foreach (var process in processes)
             {
                 try
@@ -684,7 +684,7 @@ namespace FFXIManager.Infrastructure
 
                     // Get windows for this process (with reduced frequency to avoid flooding)
                     processInfo.Windows = await GetProcessWindowsAsync(process.Id);
-                    
+
                     result.Add(processInfo);
                 }
                 catch (Win32Exception)
@@ -709,7 +709,7 @@ namespace FFXIManager.Infrastructure
         private static bool IsValidProcess(Process? process)
         {
             if (process == null) return false;
-            
+
             try
             {
                 // Basic validation without accessing potentially restricted properties
@@ -861,7 +861,7 @@ namespace FFXIManager.Infrastructure
             }
             catch (Exception ex)
             {
-                await _loggingService.LogDebugAsync($"Error in global monitoring: {ex.Message}", 
+                await _loggingService.LogDebugAsync($"Error in global monitoring: {ex.Message}",
                     "ProcessManagementService");
             }
             finally
@@ -873,7 +873,7 @@ namespace FFXIManager.Infrastructure
         private async Task UpdateTrackedProcessesAsync()
         {
             var currentProcesses = new Dictionary<int, ProcessInfo>();
-            
+
             try
             {
                 // Build composite discovery patterns from user settings and registered watches
@@ -906,7 +906,7 @@ namespace FFXIManager.Infrastructure
                     }
                 }
                 catch { }
-                
+
                 foreach (var proc in relevantProcesses)
                 {
                     currentProcesses[proc.ProcessId] = proc;
@@ -936,7 +936,7 @@ namespace FFXIManager.Infrastructure
                 {
                     var processId = kvp.Key;
                     var processInfo = kvp.Value;
-                    
+
                     if (_trackedProcesses.TryGetValue(processId, out var existing))
                     {
                         // Update existing process
@@ -944,7 +944,7 @@ namespace FFXIManager.Infrastructure
                         existing.IsResponding = processInfo.IsResponding;
                         existing.MainWindowTitle = processInfo.MainWindowTitle;
                         existing.Windows = processInfo.Windows;
-                        
+
                         _ = _uiDispatcher.InvokeAsync(() => ProcessUpdated?.Invoke(this, existing));
                     }
                     else
@@ -972,7 +972,7 @@ namespace FFXIManager.Infrastructure
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync("Error updating tracked processes", ex, 
+                await _loggingService.LogErrorAsync("Error updating tracked processes", ex,
                     "ProcessManagementService");
             }
         }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -20,7 +20,7 @@ namespace FFXIManager.ViewModels
         private readonly IProfileService _profileService;
         private readonly ILoggingService _loggingService;
         private readonly DispatcherTimer _refreshTimer;
-        
+
         private string _statusMessage = "Ready";
         private string _lastRefreshTime = "Never";
         private string _diskSpaceInfo = "";
@@ -87,7 +87,7 @@ namespace FFXIManager.ViewModels
         private void OnStatusMessageChanged(object? sender, string message)
         {
             StatusMessage = string.IsNullOrWhiteSpace(message) ? "Ready" : message;
-            
+
             // Show loading indicator for certain operations
             IsLoading = message.Contains("Loading", StringComparison.OrdinalIgnoreCase) ||
                        message.Contains("Saving", StringComparison.OrdinalIgnoreCase) ||
@@ -147,7 +147,7 @@ namespace FFXIManager.ViewModels
 
             _refreshTimer?.Stop();
             _statusService.MessageChanged -= OnStatusMessageChanged;
-            
+
             GC.SuppressFinalize(this);
         }
     }

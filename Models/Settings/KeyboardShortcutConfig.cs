@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
@@ -64,9 +64,9 @@ namespace FFXIManager.Models.Settings
             get
             {
                 if (Key == Key.None) return "None";
-                
+
                 var parts = new System.Collections.Generic.List<string>();
-                
+
                 if (Modifiers.HasFlag(ModifierKeys.Control))
                     parts.Add("Ctrl");
                 if (Modifiers.HasFlag(ModifierKeys.Alt))
@@ -75,13 +75,13 @@ namespace FFXIManager.Models.Settings
                     parts.Add("Shift");
                 if (Modifiers.HasFlag(ModifierKeys.Windows))
                     parts.Add("Win");
-                
+
                 parts.Add(Key.ToString());
-                
+
                 return string.Join("+", parts);
             }
         }
-        
+
         /// <summary>
         /// Display-friendly text for the slot (e.g., "Slot 1", "Slot 2")
         /// </summary>
@@ -118,7 +118,7 @@ namespace FFXIManager.Models.Settings
         protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-            
+
             // Update dependent properties
             if (propertyName == nameof(Modifiers) || propertyName == nameof(Key))
             {
@@ -141,8 +141,8 @@ namespace FFXIManager.Models.Settings
         public override bool Equals(object? obj)
         {
             if (obj is not KeyboardShortcutConfig other) return false;
-            return SlotIndex == other.SlotIndex && 
-                   Modifiers == other.Modifiers && 
+            return SlotIndex == other.SlotIndex &&
+                   Modifiers == other.Modifiers &&
                    Key == other.Key;
         }
 

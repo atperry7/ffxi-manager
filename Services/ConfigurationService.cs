@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -32,7 +32,7 @@ namespace FFXIManager.Services
             var configDirectory = Path.Combine(appDataPath, "FFXIManager");
             Directory.CreateDirectory(configDirectory);
             _configurationPath = Path.Combine(configDirectory, "FFXIManagerConfig.json");
-            
+
             LoadConfiguration();
         }
 
@@ -46,7 +46,7 @@ namespace FFXIManager.Services
             try
             {
                 var json = JsonSerializer.Serialize(_configuration, SerializerOptions);
-                
+
                 File.WriteAllText(_configurationPath, json);
             }
             catch (Exception ex)
@@ -64,7 +64,7 @@ namespace FFXIManager.Services
                 {
                     var json = File.ReadAllText(_configurationPath);
                     var config = JsonSerializer.Deserialize<ApplicationConfiguration>(json, SerializerOptions);
-                    
+
                     _configuration = config ?? CreateDefaultConfiguration();
                 }
                 else

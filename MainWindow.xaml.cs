@@ -17,10 +17,10 @@ namespace FFXIManager
         {
             InitializeComponent();
             DataContext = new MainViewModel();
-            
+
             // Load and apply saved window state
             LoadWindowState();
-            
+
             // Save window state when closing
             Closing += MainWindow_Closing;
             SizeChanged += MainWindow_SizeChanged;
@@ -33,25 +33,25 @@ namespace FFXIManager
             try
             {
                 var settings = ServiceLocator.SettingsService.LoadSettings();
-                
+
                 if (settings.RememberWindowPosition)
                 {
                     // Apply saved size
                     Width = Math.Max(settings.MainWindowWidth, MinWidth);
                     Height = Math.Max(settings.MainWindowHeight, MinHeight);
-                    
+
                     // Apply saved position if valid
                     if (!double.IsNaN(settings.MainWindowLeft) && !double.IsNaN(settings.MainWindowTop))
                     {
                         // Ensure window is on screen
                         var left = Math.Max(0, Math.Min(settings.MainWindowLeft, SystemParameters.VirtualScreenWidth - Width));
                         var top = Math.Max(0, Math.Min(settings.MainWindowTop, SystemParameters.VirtualScreenHeight - Height));
-                        
+
                         Left = left;
                         Top = top;
                         WindowStartupLocation = WindowStartupLocation.Manual;
                     }
-                    
+
                     // Apply saved window state
                     if (settings.MainWindowMaximized)
                     {
@@ -73,13 +73,13 @@ namespace FFXIManager
             try
             {
                 var settings = ServiceLocator.SettingsService.LoadSettings();
-                
+
                 if (settings.RememberWindowPosition)
                 {
                     // Get current window bounds (use RestoreBounds when maximized)
                     double width, height, left, top;
                     bool isMaximized = WindowState == WindowState.Maximized;
-                    
+
                     if (isMaximized)
                     {
                         width = RestoreBounds.Width;
@@ -94,7 +94,7 @@ namespace FFXIManager
                         left = Left;
                         top = Top;
                     }
-                    
+
                     // Use SettingsService.UpdateWindowBounds with debounce mechanism
                     ServiceLocator.SettingsService.UpdateWindowBounds(width, height, left, top, isMaximized, settings.RememberWindowPosition);
                 }

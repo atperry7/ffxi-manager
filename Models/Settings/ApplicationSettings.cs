@@ -1,4 +1,4 @@
-
+﻿
 using System.Collections.Generic;
 using System.Windows.Input;
 
@@ -33,25 +33,25 @@ namespace FFXIManager.Models.Settings
 
         // Keyboard shortcuts for character switching
         public List<KeyboardShortcutConfig> CharacterSwitchShortcuts { get; set; } = new();
-        
+
         /// <summary>
         /// Debounce interval in milliseconds to prevent accidental rapid hotkey presses.
         /// Optimized for gaming: 25ms provides fast response while preventing double-presses.
         /// </summary>
         public int HotkeyDebounceIntervalMs { get; set; } = 25;
-        
+
         /// <summary>
         /// Activation debounce interval in milliseconds to prevent rapid character switching.
         /// Optimized for gaming: 50ms allows fast character-to-character switching.
         /// </summary>
         public int ActivationDebounceIntervalMs { get; set; } = 50;
-        
+
         /// <summary>
         /// Minimum interval between activation attempts for the same character in milliseconds.
         /// 100ms prevents spam-clicking the same character while allowing instant switching between different characters.
         /// </summary>
         public int MinActivationIntervalMs { get; set; } = 100;
-        
+
         /// <summary>
         /// Timeout for character window activation operations in milliseconds.
         /// Reduced from 8000ms to 3000ms for gaming responsiveness while allowing time for window switching.

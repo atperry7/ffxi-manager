@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -41,9 +41,9 @@ namespace FFXIManager.Services
         public CachingService(TimeSpan? defaultExpiration = null)
         {
             _defaultExpiration = defaultExpiration ?? TimeSpan.FromMinutes(30);
-            
+
             // Set up cleanup timer to run every 5 minutes
-            _cleanupTimer = new System.Threading.Timer(CleanupExpiredEntries, null, 
+            _cleanupTimer = new System.Threading.Timer(CleanupExpiredEntries, null,
                 TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
         }
 
@@ -51,7 +51,7 @@ namespace FFXIManager.Services
         {
             return await Task.Run(() =>
             {
-                if (!_cache.TryGetValue(key, out var entry)) 
+                if (!_cache.TryGetValue(key, out var entry))
                     return null;
 
                 if (entry.IsExpired)
@@ -118,7 +118,7 @@ namespace FFXIManager.Services
         private void CleanupExpiredEntries(object? state)
         {
             var expiredKeys = new List<string>();
-            
+
             foreach (var kvp in _cache)
             {
                 if (kvp.Value.IsExpired)

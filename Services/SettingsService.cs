@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
@@ -15,9 +15,9 @@ namespace FFXIManager.Services
         private const string SETTINGS_FILE = "FFXIManagerSettings.json";
         private const string BACKUP_FILE = "FFXIManagerSettings.json.bak";
         private const int DEBOUNCE_DELAY_MS = 1000; // 1 second debounce
-        
+
         private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions { WriteIndented = true };
-        
+
         private readonly string _settingsPath;
         private readonly string _backupPath;
         private readonly SemaphoreSlim _writeSemaphore = new SemaphoreSlim(1, 1);
@@ -25,7 +25,7 @@ namespace FFXIManager.Services
         private ApplicationSettings? _cachedSettings;
         private ApplicationSettings? _pendingSaveSettings;
         private bool _disposed;
-        
+
         public SettingsService()
         {
             var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
@@ -34,7 +34,7 @@ namespace FFXIManager.Services
             _settingsPath = Path.Combine(appFolder, SETTINGS_FILE);
             _backupPath = Path.Combine(appFolder, BACKUP_FILE);
         }
-        
+
         public ApplicationSettings LoadSettings()
         {
             // Return cached settings if available
@@ -73,10 +73,10 @@ namespace FFXIManager.Services
 
             // Use defaults if loading failed
             settings ??= new ApplicationSettings();
-            
+
             // Cache the loaded settings
             _cachedSettings = settings;
-            
+
             // If we loaded default settings and no file exists, create the initial file
             // This ensures that future atomic operations will work properly
             if (!File.Exists(_settingsPath) && !_disposed)
@@ -85,10 +85,10 @@ namespace FFXIManager.Services
                 _pendingSaveSettings = _cachedSettings;
                 _ = Task.Run(() => AtomicSave(_cachedSettings));
             }
-            
+
             return _cachedSettings;
         }
-        
+
         public void SaveSettings(ApplicationSettings settings)
         {
             if (_disposed)
@@ -102,7 +102,7 @@ namespace FFXIManager.Services
             _saveTimer?.Dispose();
             _saveTimer = new Timer(DebouncedSave, null, DEBOUNCE_DELAY_MS, Timeout.Infinite);
         }
-        
+
         public void UpdateTheme(bool isDarkTheme, double characterMonitorOpacity)
         {
             if (_disposed)
@@ -110,11 +110,11 @@ namespace FFXIManager.Services
 
             // Load current settings if not cached
             var settings = _cachedSettings ?? LoadSettings();
-            
+
             // Update theme properties
             settings.IsDarkTheme = isDarkTheme;
             settings.CharacterMonitorOpacity = characterMonitorOpacity;
-            
+
             // Update cached settings
             _cachedSettings = settings;
             _pendingSaveSettings = settings;
@@ -123,7 +123,7 @@ namespace FFXIManager.Services
             _saveTimer?.Dispose();
             _saveTimer = new Timer(DebouncedSave, null, DEBOUNCE_DELAY_MS, Timeout.Infinite);
         }
-        
+
         public void UpdateWindowBounds(double width, double height, double left, double top, bool isMaximized, bool rememberPosition)
         {
             if (_disposed)
@@ -131,7 +131,7 @@ namespace FFXIManager.Services
 
             // Load current settings if not cached
             var settings = _cachedSettings ?? LoadSettings();
-            
+
             // Update window bounds properties
             settings.MainWindowWidth = width;
             settings.MainWindowHeight = height;
@@ -139,7 +139,7 @@ namespace FFXIManager.Services
             settings.MainWindowTop = top;
             settings.MainWindowMaximized = isMaximized;
             settings.RememberWindowPosition = rememberPosition;
-            
+
             // Update cached settings
             _cachedSettings = settings;
             _pendingSaveSettings = settings;
@@ -148,7 +148,7 @@ namespace FFXIManager.Services
             _saveTimer?.Dispose();
             _saveTimer = new Timer(DebouncedSave, null, DEBOUNCE_DELAY_MS, Timeout.Infinite);
         }
-        
+
         public void UpdateDiagnostics(bool enableDiagnostics, bool verboseLogging, int maxLogEntries)
         {
             if (_disposed)
@@ -156,13 +156,13 @@ namespace FFXIManager.Services
 
             // Load current settings if not cached
             var settings = _cachedSettings ?? LoadSettings();
-            
+
             // Update diagnostics properties
             settings.Diagnostics ??= new DiagnosticsOptions();
             settings.Diagnostics.EnableDiagnostics = enableDiagnostics;
             settings.Diagnostics.VerboseLogging = verboseLogging;
             settings.Diagnostics.MaxLogEntries = maxLogEntries;
-            
+
             // Update cached settings
             _cachedSettings = settings;
             _pendingSaveSettings = settings;
@@ -201,7 +201,7 @@ namespace FFXIManager.Services
                 // Backup existing settings file if it exists
                 if (File.Exists(_settingsPath))
                 {
-                    await RetryFileOperationAsync(() => 
+                    await RetryFileOperationAsync(() =>
                     {
                         File.Copy(_settingsPath, _backupPath, true);
                         return Task.CompletedTask;
@@ -240,7 +240,7 @@ namespace FFXIManager.Services
                 {
                     // Ignore cleanup errors
                 }
-                
+
                 // For debugging purposes, you could add logging here if ILoggingService was available
                 // The settings service intentionally doesn't take logging dependencies to avoid circular references
             }
@@ -257,7 +257,7 @@ namespace FFXIManager.Services
         {
             var delay = initialDelayMs;
             Exception? lastException = null;
-            
+
             for (int attempt = 0; attempt <= maxRetries; attempt++)
             {
                 try
@@ -288,7 +288,7 @@ namespace FFXIManager.Services
                     delay = Math.Min(delay * 2, 1000);
                 }
             }
-            
+
             // If we've exhausted retries, throw the last exception
             throw lastException ?? new InvalidOperationException("File operation failed after retries");
         }
@@ -320,7 +320,7 @@ namespace FFXIManager.Services
             GC.SuppressFinalize(this);
         }
     }
-    
+
     /// <summary>
     /// Simple application settings model
     /// </summary>

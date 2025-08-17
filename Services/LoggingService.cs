@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -75,7 +75,7 @@ namespace FFXIManager.Services
                 var settings = _settingsService?.LoadSettings();
                 if (settings != null)
                 {
-var diag = settings.Diagnostics ?? new DiagnosticsOptions();
+                    var diag = settings.Diagnostics ?? new DiagnosticsOptions();
                     _maxLogEntries = Math.Max(100, Math.Min(diag.MaxLogEntries, 100000));
                     // Determine minimum level based on diagnostics toggles
                     if (!diag.EnableDiagnostics)
@@ -127,7 +127,7 @@ var diag = settings.Diagnostics ?? new DiagnosticsOptions();
         public async Task<List<LogEntry>> GetRecentLogsAsync(int count = 100)
         {
             await LoadLogsIfNeeded();
-            
+
             return await Task.Run(() =>
             {
                 lock (_lock)
@@ -144,7 +144,7 @@ var diag = settings.Diagnostics ?? new DiagnosticsOptions();
             {
                 _logBuffer.Clear();
             }
-            
+
             try
             {
                 if (File.Exists(_logFilePath))
@@ -156,7 +156,7 @@ var diag = settings.Diagnostics ?? new DiagnosticsOptions();
             {
                 // Ignore file deletion errors
             }
-            
+
             return Task.CompletedTask;
         }
 
@@ -183,7 +183,7 @@ var diag = settings.Diagnostics ?? new DiagnosticsOptions();
             lock (_lock)
             {
                 _logBuffer.Add(logEntry);
-                
+
                 // Keep buffer size manageable
                 if (_logBuffer.Count > _maxLogEntries)
                 {
@@ -193,7 +193,7 @@ var diag = settings.Diagnostics ?? new DiagnosticsOptions();
 
             // Write to file asynchronously (fire-and-forget)
             _ = Task.Run(async () => await WriteToFileAsync(logEntry));
-            
+
             return Task.CompletedTask;
         }
 
@@ -229,7 +229,7 @@ var diag = settings.Diagnostics ?? new DiagnosticsOptions();
             {
                 var lines = await File.ReadAllLinesAsync(_logFilePath);
                 var entries = new List<LogEntry>();
-                
+
                 foreach (var line in lines)
                 {
                     if (TryParseLogLine(line, out var entry))
@@ -252,29 +252,29 @@ var diag = settings.Diagnostics ?? new DiagnosticsOptions();
         private static bool TryParseLogLine(string line, out LogEntry entry)
         {
             entry = new LogEntry();
-            
+
             try
             {
                 // Simple parsing - could be enhanced with regex for better accuracy
                 if (line.Length < 24) return false;
-                
+
                 var timestampStr = line.Substring(0, 23);
                 if (!DateTime.TryParse(timestampStr, out var timestamp)) return false;
-                
+
                 var levelStart = line.IndexOf('[') + 1;
                 var levelEnd = line.IndexOf(']');
                 if (levelStart <= 0 || levelEnd <= levelStart) return false;
-                
+
                 var levelStr = line.Substring(levelStart, levelEnd - levelStart);
                 if (!Enum.TryParse<LogLevel>(levelStr, out var level)) return false;
-                
+
                 var messageStart = line.IndexOf(':', levelEnd) + 1;
                 if (messageStart <= 0) return false;
-                
+
                 entry.Timestamp = timestamp;
                 entry.Level = level;
                 entry.Message = line.Substring(messageStart).Trim();
-                
+
                 return true;
             }
             catch

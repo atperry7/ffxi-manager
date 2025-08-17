@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
@@ -70,8 +70,8 @@ namespace FFXIManager.Models
         /// <summary>
         /// Display name for the character (shows character name if available, otherwise window title)
         /// </summary>
-        public string DisplayName => !string.IsNullOrEmpty(CharacterName) ? 
-            (!string.IsNullOrEmpty(ServerName) ? $"{CharacterName} ({ServerName})" : CharacterName) : 
+        public string DisplayName => !string.IsNullOrEmpty(CharacterName) ?
+            (!string.IsNullOrEmpty(ServerName) ? $"{CharacterName} ({ServerName})" : CharacterName) :
             (!string.IsNullOrEmpty(WindowTitle) ? WindowTitle : $"FFXI Process {ProcessId}");
 
         /// <summary>
@@ -99,9 +99,9 @@ namespace FFXIManager.Models
         protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-            
+
             // Update dependent properties
-            if (propertyName == nameof(CharacterName) || propertyName == nameof(ServerName) || 
+            if (propertyName == nameof(CharacterName) || propertyName == nameof(ServerName) ||
                 propertyName == nameof(WindowTitle) || propertyName == nameof(ProcessId))
             {
                 OnPropertyChanged(nameof(DisplayName));

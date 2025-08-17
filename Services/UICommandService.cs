@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -14,7 +14,7 @@ namespace FFXIManager.Services
         void OpenFileLocation(string filePath);
         bool ShowFolderDialog(string title, string initialDirectory, out string selectedPath);
     }
-    
+
     public class UICommandService : IUICommandService
     {
         public void CopyToClipboard(string text)
@@ -28,12 +28,12 @@ namespace FFXIManager.Services
                 throw new InvalidOperationException($"Failed to copy to clipboard: {ex.Message}", ex);
             }
         }
-        
+
         public void OpenFileLocation(string filePath)
         {
             if (!File.Exists(filePath))
                 throw new FileNotFoundException($"File not found: {filePath}");
-            
+
             try
             {
                 Process.Start("explorer.exe", $"/select,\"{filePath}\"");
@@ -43,11 +43,11 @@ namespace FFXIManager.Services
                 throw new InvalidOperationException($"Failed to open file location: {ex.Message}", ex);
             }
         }
-        
+
         public bool ShowFolderDialog(string title, string initialDirectory, out string selectedPath)
         {
             selectedPath = string.Empty;
-            
+
             try
             {
                 var dialog = new Microsoft.Win32.OpenFolderDialog
@@ -55,13 +55,13 @@ namespace FFXIManager.Services
                     Title = title,
                     InitialDirectory = initialDirectory
                 };
-                
+
                 if (dialog.ShowDialog() == true)
                 {
                     selectedPath = dialog.FolderName;
                     return true;
                 }
-                
+
                 return false;
             }
             catch (Exception ex)

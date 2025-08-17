@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -15,31 +15,31 @@ namespace FFXIManager.Models
         private DateTime _lastModified;
         private string _description = string.Empty;
         private long _fileSize;
-        
+
         public string Name
         {
             get => _name;
             set => SetProperty(ref _name, value);
         }
-        
+
         public string FilePath
         {
             get => _filePath;
             set => SetProperty(ref _filePath, value);
         }
-        
+
         public DateTime LastModified
         {
             get => _lastModified;
             set => SetProperty(ref _lastModified, value);
         }
-        
+
         public string Description
         {
             get => _description;
             set => SetProperty(ref _description, value);
         }
-        
+
         /// <summary>
         /// Gets the file size in bytes
         /// </summary>
@@ -55,41 +55,41 @@ namespace FFXIManager.Models
                 }
             }
         }
-        
+
         /// <summary>
         /// Gets a display-friendly file size
         /// </summary>
         public string FileSizeFormatted => FormatFileSize(FileSize);
-        
+
         /// <summary>
         /// SIMPLIFIED: True if this is the login_w.bin system file
         /// </summary>
         public bool IsSystemFile => Path.GetFileName(FilePath).Equals("login_w.bin", StringComparison.OrdinalIgnoreCase);
-        
+
         /// <summary>
         /// SIMPLIFIED: True if this is the user's last selected active profile
         /// </summary>
         public bool IsLastUserChoice { get; set; }
-        
+
         /// <summary>
         /// True if this profile is currently active (matches the active login file)
         /// </summary>
         public bool IsCurrentlyActive { get; set; }
-        
+
         private static string FormatFileSize(long bytes)
         {
             if (bytes < 1024) return $"{bytes} B";
             if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
             return $"{bytes / (1024.0 * 1024.0):F1} MB";
         }
-        
+
         public event PropertyChangedEventHandler? PropertyChanged;
-        
+
         protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
-        
+
         protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
         {
             if (Equals(field, value)) return false;

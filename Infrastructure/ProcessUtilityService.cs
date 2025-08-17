@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -104,7 +104,7 @@ namespace FFXIManager.Infrastructure
             try
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
-                
+
                 var process = Process.GetProcessById(processId);
                 if (process?.HasExited == false)
                 {
@@ -114,7 +114,7 @@ namespace FFXIManager.Infrastructure
                         process.WaitForExit(timeoutMs);
                     }, cts.Token);
 
-                    await _logging.LogInfoAsync($"Successfully killed process {processId}", 
+                    await _logging.LogInfoAsync($"Successfully killed process {processId}",
                         "ProcessUtilityService");
                     return true;
                 }
@@ -126,12 +126,12 @@ namespace FFXIManager.Infrastructure
             }
             catch (Win32Exception ex)
             {
-                await _logging.LogWarningAsync($"Access denied killing process {processId}: {ex.Message}", 
+                await _logging.LogWarningAsync($"Access denied killing process {processId}: {ex.Message}",
                     "ProcessUtilityService");
             }
             catch (Exception ex)
             {
-                await _logging.LogErrorAsync($"Error killing process {processId}", ex, 
+                await _logging.LogErrorAsync($"Error killing process {processId}", ex,
                     "ProcessUtilityService");
             }
 
@@ -148,7 +148,7 @@ namespace FFXIManager.Infrastructure
             try
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
-                
+
                 bool success = await Task.Run(() =>
                 {
                     // Restore if minimized
@@ -169,7 +169,7 @@ namespace FFXIManager.Infrastructure
                     // Use thread input attachment as fallback
                     var currentThread = GetCurrentThreadId();
                     uint targetThread = GetWindowThreadProcessId(windowHandle, out _);
-                    
+
                     if (currentThread != targetThread)
                     {
                         AttachThreadInput(currentThread, targetThread, true);
@@ -182,7 +182,7 @@ namespace FFXIManager.Infrastructure
 
                 if (success)
                 {
-                    await _logging.LogDebugAsync($"Successfully activated window 0x{windowHandle.ToInt64():X}", 
+                    await _logging.LogDebugAsync($"Successfully activated window 0x{windowHandle.ToInt64():X}",
                         "ProcessUtilityService");
                 }
 
@@ -190,7 +190,7 @@ namespace FFXIManager.Infrastructure
             }
             catch (Exception ex)
             {
-                await _logging.LogWarningAsync($"Error activating window: {ex.Message}", 
+                await _logging.LogWarningAsync($"Error activating window: {ex.Message}",
                     "ProcessUtilityService");
                 return false;
             }
@@ -210,7 +210,7 @@ namespace FFXIManager.Infrastructure
                         {
                             uint windowProcessId;
                             uint threadId = GetWindowThreadProcessId(hWnd, out windowProcessId);
-                            
+
                             if (threadId != 0 && windowProcessId == (uint)processId && IsWindowVisible(hWnd))
                             {
                                 var title = GetWindowTitle(hWnd);
@@ -237,7 +237,7 @@ namespace FFXIManager.Infrastructure
             }
             catch (Exception ex)
             {
-                await _logging.LogDebugAsync($"Error enumerating windows for process {processId}: {ex.Message}", 
+                await _logging.LogDebugAsync($"Error enumerating windows for process {processId}: {ex.Message}",
                     "ProcessUtilityService");
             }
 
@@ -273,14 +273,14 @@ namespace FFXIManager.Infrastructure
                         IsResponding = GetSafeResponding(process),
                         Windows = await GetProcessWindowsAsync(processId)
                     };
-                    
+
                     process.Dispose();
                     return info;
                 }
             }
             catch (Exception ex)
             {
-                await _logging.LogDebugAsync($"Error getting process info for {processId}: {ex.Message}", 
+                await _logging.LogDebugAsync($"Error getting process info for {processId}: {ex.Message}",
                     "ProcessUtilityService");
             }
 
@@ -290,7 +290,7 @@ namespace FFXIManager.Infrastructure
         public async Task<List<ProcessBasicInfo>> GetProcessesByNamesAsync(IEnumerable<string> processNames)
         {
             var result = new List<ProcessBasicInfo>();
-            
+
             foreach (var processName in processNames)
             {
                 try
@@ -326,7 +326,7 @@ namespace FFXIManager.Infrastructure
                 }
                 catch (Exception ex)
                 {
-                    await _logging.LogDebugAsync($"Error getting processes for {processName}: {ex.Message}", 
+                    await _logging.LogDebugAsync($"Error getting processes for {processName}: {ex.Message}",
                         "ProcessUtilityService");
                 }
             }

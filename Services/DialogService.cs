@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using System.Windows;
 using FFXIManager.Views;
@@ -19,7 +19,7 @@ namespace FFXIManager.Services
                 return dialog.ShowDialog() == true ? dialog.NewProfileName : null;
             });
         }
-        
+
         public async Task<bool> ShowConfirmationDialogAsync(string title, string message)
         {
             return await ServiceLocator.UiDispatcher.InvokeAsync(() =>
@@ -28,7 +28,7 @@ namespace FFXIManager.Services
                 return result == MessageBoxResult.Yes;
             });
         }
-        
+
         public async Task ShowMessageDialogAsync(string title, string message)
         {
             await ServiceLocator.UiDispatcher.InvokeAsync(() =>
@@ -36,7 +36,7 @@ namespace FFXIManager.Services
                 MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
             });
         }
-        
+
         public async Task<string?> ShowFolderBrowserDialogAsync(string title, string initialDirectory)
         {
             return await ServiceLocator.UiDispatcher.InvokeAsync(() =>
@@ -48,7 +48,7 @@ namespace FFXIManager.Services
                         Title = title,
                         InitialDirectory = initialDirectory
                     };
-                    
+
                     return dialog.ShowDialog() == true ? dialog.FolderName : null;
                 }
                 catch

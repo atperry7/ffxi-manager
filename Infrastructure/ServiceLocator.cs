@@ -1,4 +1,4 @@
-using FFXIManager.Services;
+﻿using FFXIManager.Services;
 using FFXIManager.Configuration;
 
 namespace FFXIManager.Infrastructure
@@ -23,8 +23,8 @@ namespace FFXIManager.Infrastructure
         private static IProcessUtilityService? _processUtilityService;
         private static IUnifiedMonitoringService? _unifiedMonitoringService;
         private static IUiDispatcher? _uiDispatcher;
-        
-        public static ISettingsService SettingsService 
+
+        public static ISettingsService SettingsService
         {
             get
             {
@@ -104,7 +104,7 @@ namespace FFXIManager.Infrastructure
                 return _uiDispatcher;
             }
         }
-        
+
         public static IExternalApplicationService ExternalApplicationService
         {
             get
@@ -125,7 +125,7 @@ namespace FFXIManager.Infrastructure
                 return _unifiedMonitoringService;
             }
         }
-        
+
         public static IPlayOnlineMonitorService PlayOnlineMonitorService
         {
             get
@@ -138,7 +138,7 @@ namespace FFXIManager.Infrastructure
                 return _playOnlineMonitorService;
             }
         }
-        
+
         public static IProfileService ProfileService
         {
             get
@@ -155,7 +155,7 @@ namespace FFXIManager.Infrastructure
                 return _profileService;
             }
         }
-        
+
         public static IProfileOperationsService ProfileOperationsService
         {
             get
@@ -164,7 +164,7 @@ namespace FFXIManager.Infrastructure
                 return _profileOperationsService;
             }
         }
-        
+
         public static IStatusMessageService StatusMessageService
         {
             get
@@ -173,10 +173,10 @@ namespace FFXIManager.Infrastructure
                 return _statusMessageService;
             }
         }
-        
+
         // For testing - allow injection of mock services
         public static void Configure(
-            ISettingsService? settingsService = null, 
+            ISettingsService? settingsService = null,
             IProfileService? profileService = null,
             IProfileOperationsService? profileOperationsService = null,
             IStatusMessageService? statusMessageService = null,
@@ -204,7 +204,7 @@ namespace FFXIManager.Infrastructure
             _processManagementService = processManagementService;
             _uiDispatcher = uiDispatcher;
         }
-        
+
         // For cleanup during testing
         public static void Reset()
         {
@@ -213,7 +213,7 @@ namespace FFXIManager.Infrastructure
             {
                 disposableSettings.Dispose();
             }
-            
+
             _settingsService = null;
             _profileService = null;
             _profileOperationsService = null;
@@ -228,7 +228,7 @@ namespace FFXIManager.Infrastructure
             _processManagementService = null;
             _uiDispatcher = null;
         }
-        
+
         /// <summary>
         /// Properly dispose of all disposable services
         /// </summary>
@@ -238,7 +238,7 @@ namespace FFXIManager.Infrastructure
             {
                 disposableSettings.Dispose();
             }
-            
+
             // Dispose other services as needed in the future
         }
     }

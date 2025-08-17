@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using System.Windows.Threading;
 
@@ -11,31 +11,31 @@ namespace FFXIManager.Services
     {
         string CurrentMessage { get; }
         event EventHandler<string> MessageChanged;
-        
+
         void SetMessage(string message);
         void SetTemporaryMessage(string message, TimeSpan duration);
         void Clear();
     }
-    
+
     public class StatusMessageService : IStatusMessageService
     {
         private string _currentMessage = string.Empty;
         private DispatcherTimer? _clearTimer;
-        
+
         public string CurrentMessage => _currentMessage;
         public event EventHandler<string>? MessageChanged;
-        
+
         public void SetMessage(string message)
         {
             _clearTimer?.Stop();
             _currentMessage = message;
             MessageChanged?.Invoke(this, message);
         }
-        
+
         public void SetTemporaryMessage(string message, TimeSpan duration)
         {
             SetMessage(message);
-            
+
             _clearTimer?.Stop();
             _clearTimer = new DispatcherTimer { Interval = duration };
             _clearTimer.Tick += (s, e) =>
@@ -45,7 +45,7 @@ namespace FFXIManager.Services
             };
             _clearTimer.Start();
         }
-        
+
         public void Clear()
         {
             _clearTimer?.Stop();

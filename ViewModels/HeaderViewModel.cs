@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Linq;
 using System.Windows.Input;
@@ -155,7 +155,7 @@ namespace FFXIManager.ViewModels
                 var s = _settings.LoadSettings();
                 s.IsDarkTheme = IsDarkTheme;
                 _settings.SaveSettings(s);
-                
+
                 // Apply the theme change immediately
                 App.ApplyTheme(IsDarkTheme);
             }
