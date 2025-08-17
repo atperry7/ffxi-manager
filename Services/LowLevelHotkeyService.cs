@@ -187,21 +187,6 @@ namespace FFXIManager.Services
             return CallNextHookEx(_hookId, nCode, wParam, lParam);
         }
 
-        private static ModifierKeys GetCurrentModifiers()
-        {
-            ModifierKeys modifiers = ModifierKeys.None;
-            
-            if (GetAsyncKeyState(VK_SHIFT) < 0)
-                modifiers |= ModifierKeys.Shift;
-            if (GetAsyncKeyState(VK_CONTROL) < 0)
-                modifiers |= ModifierKeys.Control;
-            if (GetAsyncKeyState(VK_MENU) < 0)
-                modifiers |= ModifierKeys.Alt;
-            if (GetAsyncKeyState(VK_LWIN) < 0 || GetAsyncKeyState(VK_RWIN) < 0)
-                modifiers |= ModifierKeys.Windows;
-                
-            return modifiers;
-        }
 
         /// <summary>
         /// Registers a hotkey to be monitored by the low-level hook.
