@@ -130,6 +130,7 @@ namespace FFXIManager.Infrastructure
         private readonly Dictionary<IntPtr, string> _lastWindowTitles = new();
         
         private const int DEFAULT_TIMEOUT_MS = 5000;
+        private const int GAMING_ACTIVATION_TIMEOUT_MS = 2000; // Gaming-optimized activation timeout
         private const int GLOBAL_MONITOR_INTERVAL_MS = 2000; // Centralized polling interval
 
         public event EventHandler<WindowTitleChangedEventArgs>? WindowTitleChanged;
@@ -377,44 +378,35 @@ namespace FFXIManager.Infrastructure
 
         public async Task<bool> ActivateWindowAsync(IntPtr windowHandle, int timeoutMs = DEFAULT_TIMEOUT_MS)
         {
+            // **GAMING OPTIMIZATION**: Use gaming-optimized timeout by default
+            var actualTimeout = timeoutMs == DEFAULT_TIMEOUT_MS ? GAMING_ACTIVATION_TIMEOUT_MS : timeoutMs;
+            
+            // **FAST VALIDATION**: Pre-validate window handle without expensive operations
             if (windowHandle == IntPtr.Zero || !IsWindow(windowHandle))
             {
                 return false;
             }
 
+            // **OPTIMIZATION**: Quick visibility check - don't activate if already visible and foreground
+            if (GetForegroundWindow() == windowHandle && IsWindowVisible(windowHandle))
+            {
+                await _loggingService.LogDebugAsync($"Window {windowHandle:X8} already active, skipping activation", 
+                    "ProcessManagementService");
+                return true;
+            }
+
             try
             {
-                using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+                using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(actualTimeout));
                 
                 bool success = await Task.Run(() =>
                 {
-                    // Method 1: Standard activation
-                    if (IsIconic(windowHandle))
-                    {
-                        ShowWindow(windowHandle, SW_RESTORE);
-                        Thread.Sleep(100);
-                    }
-                    else
-                    {
-                        ShowWindow(windowHandle, SW_SHOW);
-                    }
-
-                    bool result = SetForegroundWindow(windowHandle);
-                    
-                    // Method 2: Alternative if standard failed
-                    if (!result)
-                    {
-                        BringWindowToTop(windowHandle);
-                        SwitchToThisWindow(windowHandle, true);
-                        result = true; // Assume success for these methods
-                    }
-
-                    return result;
+                    return PerformOptimizedWindowActivation(windowHandle);
                 }, cts.Token);
 
                 if (success)
                 {
-                    await _loggingService.LogInfoAsync($"Successfully activated window {windowHandle:X8}", 
+                    await _loggingService.LogDebugAsync($"Successfully activated window {windowHandle:X8}", 
                         "ProcessManagementService");
                 }
 
@@ -577,6 +569,85 @@ namespace FFXIManager.Infrastructure
                 {
                     _globalMonitoringTimer?.Change(0, _monitorIntervalMs);
                 }
+            }
+        }
+
+        #endregion
+
+        #region Gaming-Optimized Window Activation
+
+        /// <summary>
+        /// Performs optimized window activation with thread input attachment and minimal delays
+        /// </summary>
+        private static bool PerformOptimizedWindowActivation(IntPtr windowHandle)
+        {
+            try
+            {
+                // Get the window's thread ID
+                var windowThreadId = GetWindowThreadProcessId(windowHandle, IntPtr.Zero);
+                var currentThreadId = GetCurrentThreadId();
+                
+                bool attachedInput = false;
+                
+                try
+                {
+                    // **OPTIMIZATION**: Attach thread input if different threads
+                    if (windowThreadId != 0 && windowThreadId != currentThreadId)
+                    {
+                        attachedInput = AttachThreadInput(currentThreadId, windowThreadId, true);
+                    }
+                    
+                    // **GAMING OPTIMIZATION**: Fast activation sequence with minimal delays
+                    bool success = false;
+                    
+                    // Step 1: Handle minimized windows with reduced delay
+                    if (IsIconic(windowHandle))
+                    {
+                        ShowWindow(windowHandle, SW_RESTORE);
+                        Thread.Sleep(15); // Reduced from 100ms to 15ms for gaming responsiveness
+                    }
+                    else
+                    {
+                        ShowWindow(windowHandle, SW_SHOW);
+                    }
+                    
+                    // Step 2: Primary activation attempt
+                    success = SetForegroundWindow(windowHandle);
+                    
+                    // Step 3: Alternative methods if primary failed
+                    if (!success)
+                    {
+                        // Try bringing window to top first
+                        BringWindowToTop(windowHandle);
+                        
+                        // Then attempt SwitchToThisWindow with Alt+Tab behavior
+                        SwitchToThisWindow(windowHandle, true);
+                        
+                        // Final attempt with SetForegroundWindow
+                        success = SetForegroundWindow(windowHandle);
+                        
+                        // If still failed, assume success since SwitchToThisWindow doesn't return status
+                        if (!success)
+                        {
+                            success = true;
+                        }
+                    }
+                    
+                    return success;
+                }
+                finally
+                {
+                    // **CLEANUP**: Detach thread input if we attached it
+                    if (attachedInput && windowThreadId != 0 && windowThreadId != currentThreadId)
+                    {
+                        AttachThreadInput(currentThreadId, windowThreadId, false);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Return false on any exception during activation
+                return false;
             }
         }
 

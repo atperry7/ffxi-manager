@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -33,6 +34,36 @@ namespace FFXIManager.Services
         private int _activationDebounceMs = 50;    // Fast debounce for gaming
         private int _minActivationIntervalMs = 100; // Only applies to same character
         private int _activationTimeoutMs = 3000;   // Reduced timeout for responsiveness
+        
+        // **GAMING OPTIMIZATION**: Predictive character window caching
+        private readonly ConcurrentDictionary<int, CachedCharacterInfo> _characterCache = new();
+        private readonly object _cacheLock = new object();
+        
+        /// <summary>
+        /// Cached character information for fast window handle lookups
+        /// </summary>
+        private sealed class CachedCharacterInfo
+        {
+            public int ProcessId { get; set; }
+            public IntPtr WindowHandle { get; set; }
+            public string CharacterName { get; set; } = string.Empty;
+            public string WindowTitle { get; set; } = string.Empty;
+            public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
+            public bool IsValid { get; set; } = true;
+            
+            public PlayOnlineCharacter ToCharacter()
+            {
+                return new PlayOnlineCharacter
+                {
+                    ProcessId = ProcessId,
+                    WindowHandle = WindowHandle,
+                    CharacterName = CharacterName,
+                    WindowTitle = WindowTitle,
+                    LastSeen = LastUpdated,
+                    IsActive = false // Will be updated by monitoring
+                };
+            }
+        }
         
         // Events
         public event EventHandler<PlayOnlineCharacterEventArgs>? CharacterDetected;
@@ -119,8 +150,8 @@ namespace FFXIManager.Services
                 return false;
             }
             
-            // **GAMING OPTIMIZATION**: Smart character-aware rate limiting
-            var currentSlotIndex = await GetCharacterSlotIndexAsync(character);
+            // **GAMING OPTIMIZATION**: Smart character-aware rate limiting using cached lookup
+            var currentSlotIndex = GetCharacterSlotIndexFast(character);
             var timeSinceLastAttempt = DateTime.UtcNow - _lastActivationAttempt;
             
             // Only apply rate limiting if switching to the SAME character
@@ -355,6 +386,10 @@ namespace FFXIManager.Services
                 foreach (var window in e.Process.Windows)
                 {
                     var character = ConvertToCharacter(e.Process, window);
+                    
+                    // **GAMING OPTIMIZATION**: Update character cache for fast lookups
+                    UpdateCharacterCache(character);
+                    
                     SafeDispatchEvent(() => CharacterDetected?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
                 }
                 
@@ -362,6 +397,10 @@ namespace FFXIManager.Services
                 if (e.Process.Windows.Count == 0)
                 {
                     var character = ConvertToCharacter(e.Process, null);
+                    
+                    // **GAMING OPTIMIZATION**: Update character cache for fast lookups
+                    UpdateCharacterCache(character);
+                    
                     SafeDispatchEvent(() => CharacterDetected?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
                 }
                 
@@ -387,6 +426,10 @@ namespace FFXIManager.Services
                     _ = SafeLogInfoAsync($"[PlayOnline] Firing CharacterUpdated for window: '{window.Title}' (Handle: 0x{window.Handle.ToInt64():X})");
                     
                     var character = ConvertToCharacter(e.Process, window);
+                    
+                    // **GAMING OPTIMIZATION**: Update character cache with latest information
+                    UpdateCharacterCache(character);
+                    
                     SafeDispatchEvent(() => CharacterUpdated?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
                 }
             }
@@ -402,6 +445,9 @@ namespace FFXIManager.Services
             
             try
             {
+                // **GAMING OPTIMIZATION**: Remove character from cache when process dies
+                RemoveFromCharacterCache(e.Process.ProcessId);
+                
                 // Need to create a character object for removal
                 var character = new PlayOnlineCharacter 
                 { 
@@ -485,30 +531,95 @@ namespace FFXIManager.Services
         }
         
         /// <summary>
-        /// Gets the character slot index from the Characters collection for character-aware debouncing
+        /// Gets the character slot index using cached lookups - GAMING OPTIMIZED
         /// </summary>
         /// <param name="character">The character to find</param>
         /// <returns>Slot index or -1 if not found</returns>
-        private async Task<int> GetCharacterSlotIndexAsync(PlayOnlineCharacter character)
+        private int GetCharacterSlotIndexFast(PlayOnlineCharacter character)
         {
             try
             {
-                var characters = await GetCharactersAsync();
-                for (int i = 0; i < characters.Count; i++)
+                // **GAMING OPTIMIZATION**: Use cached character lookup instead of expensive GetCharactersAsync()
+                lock (_cacheLock)
                 {
-                    if (characters[i].ProcessId == character.ProcessId && 
-                        characters[i].WindowHandle == character.WindowHandle)
+                    var cachedChars = _characterCache.Values.Where(c => c.IsValid).OrderBy(c => c.ProcessId).ToList();
+                    for (int i = 0; i < cachedChars.Count; i++)
                     {
-                        return i;
+                        if (cachedChars[i].ProcessId == character.ProcessId && 
+                            cachedChars[i].WindowHandle == character.WindowHandle)
+                        {
+                            return i;
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
-                _ = SafeLogErrorAsync($"Error getting character slot index for {character.DisplayName}", ex);
+                _ = SafeLogErrorAsync($"Error getting cached character slot index for {character.DisplayName}", ex);
             }
             
             return -1; // Not found or error
+        }
+        
+        /// <summary>
+        /// Updates the character cache with new/changed character information
+        /// </summary>
+        private void UpdateCharacterCache(PlayOnlineCharacter character)
+        {
+            try
+            {
+                lock (_cacheLock)
+                {
+                    var cacheKey = GetCharacterCacheKey(character.ProcessId, character.WindowHandle);
+                    var cached = new CachedCharacterInfo
+                    {
+                        ProcessId = character.ProcessId,
+                        WindowHandle = character.WindowHandle,
+                        CharacterName = character.CharacterName,
+                        WindowTitle = character.WindowTitle,
+                        LastUpdated = DateTime.UtcNow,
+                        IsValid = true
+                    };
+                    
+                    _characterCache[cacheKey] = cached;
+                    _ = SafeLogInfoAsync($"Updated character cache: {character.CharacterName} (PID: {character.ProcessId})");
+                }
+            }
+            catch (Exception ex)
+            {
+                _ = SafeLogErrorAsync($"Error updating character cache for {character.DisplayName}", ex);
+            }
+        }
+        
+        /// <summary>
+        /// Removes a character from the cache when it's no longer available
+        /// </summary>
+        private void RemoveFromCharacterCache(int processId)
+        {
+            try
+            {
+                lock (_cacheLock)
+                {
+                    var keysToRemove = _characterCache.Keys.Where(k => k.ToString().Contains(processId.ToString())).ToList();
+                    foreach (var key in keysToRemove)
+                    {
+                        _characterCache.TryRemove(key, out _);
+                    }
+                    _ = SafeLogInfoAsync($"Removed character from cache (PID: {processId})");
+                }
+            }
+            catch (Exception ex)
+            {
+                _ = SafeLogErrorAsync($"Error removing character from cache (PID: {processId})", ex);
+            }
+        }
+        
+        /// <summary>
+        /// Generates a unique cache key for character identification
+        /// </summary>
+        private static int GetCharacterCacheKey(int processId, IntPtr windowHandle)
+        {
+            return HashCode.Combine(processId, windowHandle);
         }
         
         #endregion
