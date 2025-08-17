@@ -3,6 +3,7 @@ using FFXIManager.Models.Settings;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.Threading;
 using System.Windows.Input;
 using FFXIManager.Infrastructure;
@@ -139,7 +140,7 @@ namespace FFXIManager.ViewModels
                     // Ensure newly discovered characters are appended to the session order by CharacterName (stable within session)
                     foreach (var c in characters)
                     {
-                        var key = c.DisplayName ?? c.CharacterName ?? string.Empty;
+                        var key = GetCharacterKey(c);
                         if (!string.IsNullOrWhiteSpace(key) && !_preferredOrder.Contains(key))
                         {
                             _preferredOrder.Add(key);
@@ -413,7 +414,7 @@ namespace FFXIManager.ViewModels
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
                 // Maintain session order stickiness by CharacterName on detection
-                var key = character.DisplayName ?? character.CharacterName ?? string.Empty;
+                var key = GetCharacterKey(character);
                 if (!string.IsNullOrWhiteSpace(key) && !_preferredOrder.Contains(key))
                 {
                     _preferredOrder.Add(key);
@@ -438,7 +439,7 @@ namespace FFXIManager.ViewModels
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
                 // Attempt to preserve slot by CharacterName on update (handle/name changes)
-                var key = updatedCharacter.DisplayName ?? updatedCharacter.CharacterName ?? string.Empty;
+                var key = GetCharacterKey(updatedCharacter);
                 if (!string.IsNullOrWhiteSpace(key) && !_preferredOrder.Contains(key))
                 {
                     _preferredOrder.Add(key);
@@ -530,7 +531,7 @@ namespace FFXIManager.ViewModels
         private void MoveCharacter(PlayOnlineCharacter? character, int direction)
         {
             if (character == null) return;
-            var key = character.DisplayName ?? character.CharacterName ?? string.Empty;
+            var key = GetCharacterKey(character);
             if (string.IsNullOrWhiteSpace(key)) return;
 
             var idx = _preferredOrder.IndexOf(key);
@@ -557,8 +558,8 @@ namespace FFXIManager.ViewModels
             }
 
             var sorted = Characters
-                .OrderBy(c => keyIndex.TryGetValue(c.DisplayName ?? c.CharacterName ?? string.Empty, out var k) ? k : int.MaxValue)
-                .ThenBy(c => c.DisplayName ?? c.CharacterName ?? string.Empty)
+                .OrderBy(c => keyIndex.TryGetValue(GetCharacterKey(c), out var k) ? k : int.MaxValue)
+                .ThenBy(c => GetCharacterKey(c))
                 .ToList();
 
             // Reorder in-place to minimize UI churn
@@ -571,6 +572,12 @@ namespace FFXIManager.ViewModels
                     Characters.Move(currentIndex, target);
                 }
             }
+        }
+
+        private static string GetCharacterKey(PlayOnlineCharacter? c)
+        {
+            // Use DisplayName if available, then CharacterName; never return null.
+            return (c?.DisplayName ?? c?.CharacterName) ?? string.Empty;
         }
 
         // Implement IDisposable
