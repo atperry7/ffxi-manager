@@ -42,14 +42,14 @@
         </Style>
     </UserControl.Resources>
     
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel>
+    <StackPanel>
             <!-- Application Manager -->
             <GroupBox Header="🚀 Application Manager" Margin="0,0,0,10">
                 <StackPanel>
-                    <!-- Application List -->
-                    <ItemsControl ItemsSource="{Binding ExternalApplications}">
-                        <ItemsControl.ItemTemplate>
+                    <!-- Application List (independent scroll) -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="300">
+                        <ItemsControl ItemsSource="{Binding ExternalApplications}">
+                            <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border Style="{StaticResource SurfaceCardBorder}">
                                     <Grid>
@@ -91,8 +91,9 @@
                                     </Grid>
                                 </Border>
                             </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
                     <!-- Application control buttons -->
                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0" HorizontalAlignment="Right">
                         <Button Content="➕" 
@@ -137,9 +138,10 @@
                         </StackPanel>
                     </Grid>
 
-                    <!-- Character List - Auto height -->
-                    <ItemsControl ItemsSource="{Binding PlayOnlineMonitor.Characters}">
-                        <ItemsControl.ItemTemplate>
+                    <!-- Character List (independent scroll) -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="400">
+                        <ItemsControl ItemsSource="{Binding PlayOnlineMonitor.Characters}">
+                            <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border>
                                     <Border.Style>
@@ -198,8 +200,9 @@
                                     </Grid>
                                 </Border>
                             </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
 
                     <!-- No Characters Message -->
                     <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="24" Background="{DynamicResource SurfaceBrush}">
@@ -225,5 +228,4 @@
                 </StackPanel>
             </GroupBox>
         </StackPanel>
-    </ScrollViewer>
 </UserControl>
