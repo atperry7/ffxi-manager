@@ -87,6 +87,11 @@ namespace FFXIManager.ViewModels
         public ICommand ToggleMonitoringCommand { get; private set; } = null!;
         public ICommand ShowCharacterMonitorCommand { get; private set; } = null!;
         public ICommand SwitchToSlotCommand { get; private set; } = null!;
+        public ICommand MoveCharacterUpCommand { get; private set; } = null!;
+        public ICommand MoveCharacterDownCommand { get; private set; } = null!;
+
+        // In-memory preferred order (session only). Uses CharacterName as the stable identity for stickiness.
+        private readonly List<string> _preferredOrder = new();
 
         private void InitializeCommands()
         {
@@ -107,6 +112,14 @@ namespace FFXIManager.ViewModels
                 async slotIndex => await SwitchToSlotAsync(slotIndex),
                 slotIndex => CanSwitchToSlot(slotIndex));
 
+            MoveCharacterUpCommand = new RelayCommandWithParameter<PlayOnlineCharacter>(
+                character => MoveCharacter(character, direction: -1),
+                character => character != null && Characters.Count > 1);
+
+            MoveCharacterDownCommand = new RelayCommandWithParameter<PlayOnlineCharacter>(
+                character => MoveCharacter(character, direction: +1),
+                character => character != null && Characters.Count > 1);
+
             // Prime the list on startup so the mini-UI shows existing characters
             _ = LoadCharactersAsync();
         }
@@ -123,6 +136,15 @@ namespace FFXIManager.ViewModels
 
                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
+                    // Ensure newly discovered characters are appended to the session order by CharacterName (stable within session)
+                    foreach (var c in characters)
+                    {
+                        var key = c.DisplayName ?? c.CharacterName ?? string.Empty;
+                        if (!string.IsNullOrWhiteSpace(key) && !_preferredOrder.Contains(key))
+                        {
+                            _preferredOrder.Add(key);
+                        }
+                    }
                     // If monitoring is active, merge characters instead of clearing
                     // This prevents overwriting real-time event updates during manual refresh
                     if (IsMonitoring)
@@ -154,6 +176,9 @@ namespace FFXIManager.ViewModels
                         }
                     }
                 });
+
+                // Apply ordering after load/merge
+                ApplyPreferredOrder();
 
                 OnPropertyChanged(nameof(CharacterCount));
                 _statusService.SetMessage($"Found {characters.Count} PlayOnline character(s)");
@@ -246,16 +271,11 @@ namespace FFXIManager.ViewModels
         {
             try
             {
-                // Subscribe to the global hotkey manager
+                // Subscribe to the global hotkey manager only
+                // Hotkey registration is centralized at application startup to ensure availability
                 GlobalHotkeyManager.Instance.HotkeyPressed += OnGlobalHotkeyPressed;
 
-                // Register hotkeys from settings
-                GlobalHotkeyManager.Instance.RegisterHotkeysFromSettings();
-
-                // Subscribe to hotkey settings changes
-                DiscoverySettingsViewModel.HotkeySettingsChanged += OnHotkeySettingsChanged;
-
-                _loggingService.LogInfoAsync("PlayOnlineMonitorViewModel initialized with global hotkey support", "PlayOnlineMonitorViewModel");
+                _loggingService.LogInfoAsync("PlayOnlineMonitorViewModel initialized with global hotkey support (registration centralized)", "PlayOnlineMonitorViewModel");
             }
             catch (Exception ex)
             {
@@ -392,6 +412,12 @@ namespace FFXIManager.ViewModels
             var character = e.Character;
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
+                // Maintain session order stickiness by CharacterName on detection
+                var key = character.DisplayName ?? character.CharacterName ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(key) && !_preferredOrder.Contains(key))
+                {
+                    _preferredOrder.Add(key);
+                }
                 // Prevent duplicates
                 var existing = Characters.FirstOrDefault(c => c.ProcessId == character.ProcessId && c.WindowHandle == character.WindowHandle);
                 if (existing == null)
@@ -401,6 +427,8 @@ namespace FFXIManager.ViewModels
                     OnPropertyChanged(nameof(MonitoringStatus));
                     _statusService.SetMessage($"PlayOnline character detected: {character.DisplayName}");
                 }
+                // Re-apply ordering after changes
+                ApplyPreferredOrder();
             });
         }
 
@@ -409,6 +437,12 @@ namespace FFXIManager.ViewModels
             var updatedCharacter = e.Character;
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
+                // Attempt to preserve slot by CharacterName on update (handle/name changes)
+                var key = updatedCharacter.DisplayName ?? updatedCharacter.CharacterName ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(key) && !_preferredOrder.Contains(key))
+                {
+                    _preferredOrder.Add(key);
+                }
                 // First try to find by PID and window handle (exact match)
                 var existing = Characters.FirstOrDefault(c => c.ProcessId == updatedCharacter.ProcessId && c.WindowHandle == updatedCharacter.WindowHandle);
 
@@ -446,6 +480,8 @@ namespace FFXIManager.ViewModels
                     Characters.Add(updatedCharacter);
                     OnPropertyChanged(nameof(CharacterCount));
                 }
+                // Re-apply ordering after update
+                ApplyPreferredOrder();
             });
         }
 
@@ -454,6 +490,8 @@ namespace FFXIManager.ViewModels
             var processId = e.Character.ProcessId;
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
+                // Keep sticky order for the session: do NOT remove the key from _preferredOrder here.
+                // This keeps positions stable while processes restart.
                 var character = Characters.FirstOrDefault(c => c.ProcessId == processId);
                 if (character != null)
                 {
@@ -462,6 +500,9 @@ namespace FFXIManager.ViewModels
                     OnPropertyChanged(nameof(MonitoringStatus));
                     _statusService.SetMessage($"PlayOnline character removed: {character.DisplayName}");
                 }
+
+                // Re-apply ordering after removal
+                ApplyPreferredOrder();
             });
         }
 
@@ -479,11 +520,56 @@ namespace FFXIManager.ViewModels
 
                 // Unsubscribe from hotkey events
                 GlobalHotkeyManager.Instance.HotkeyPressed -= OnGlobalHotkeyPressed;
-                DiscoverySettingsViewModel.HotkeySettingsChanged -= OnHotkeySettingsChanged;
 
                 _cts.Cancel();
                 _cts.Dispose();
                 _disposed = true;
+            }
+        }
+
+        private void MoveCharacter(PlayOnlineCharacter? character, int direction)
+        {
+            if (character == null) return;
+            var key = character.DisplayName ?? character.CharacterName ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(key)) return;
+
+            var idx = _preferredOrder.IndexOf(key);
+            if (idx < 0) return;
+
+            var newIdx = Math.Max(0, Math.Min(_preferredOrder.Count - 1, idx + direction));
+            if (newIdx == idx) return;
+
+            _preferredOrder.RemoveAt(idx);
+            _preferredOrder.Insert(newIdx, key);
+
+            ApplyPreferredOrder();
+        }
+
+        private void ApplyPreferredOrder()
+        {
+            // Sort the Characters collection to match _preferredOrder (stable for unmatched)
+            if (Characters.Count <= 1) return;
+
+            var keyIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (int i = 0; i < _preferredOrder.Count; i++)
+            {
+                keyIndex[_preferredOrder[i]] = i;
+            }
+
+            var sorted = Characters
+                .OrderBy(c => keyIndex.TryGetValue(c.DisplayName ?? c.CharacterName ?? string.Empty, out var k) ? k : int.MaxValue)
+                .ThenBy(c => c.DisplayName ?? c.CharacterName ?? string.Empty)
+                .ToList();
+
+            // Reorder in-place to minimize UI churn
+            for (int target = 0; target < sorted.Count; target++)
+            {
+                var item = sorted[target];
+                var currentIndex = Characters.IndexOf(item);
+                if (currentIndex != target && currentIndex >= 0)
+                {
+                    Characters.Move(currentIndex, target);
+                }
             }
         }
 

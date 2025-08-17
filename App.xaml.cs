@@ -24,6 +24,19 @@ namespace FFXIManager
                 var settingsService = ServiceLocator.SettingsService;
                 var settings = settingsService.LoadSettings();
                 ApplyTheme(settings.IsDarkTheme);
+
+                // Centralize global hotkey registration at app startup so it works regardless of UI windows
+                Services.GlobalHotkeyManager.Instance.RegisterHotkeysFromSettings();
+
+                // Refresh hotkeys when settings change
+                ViewModels.DiscoverySettingsViewModel.HotkeySettingsChanged += (_, __) =>
+                {
+                    try
+                    {
+                        Services.GlobalHotkeyManager.Instance.RefreshHotkeys();
+                    }
+                    catch { }
+                };
             }
             catch
             {
@@ -68,6 +81,13 @@ namespace FFXIManager
 
         protected override void OnExit(ExitEventArgs e)
         {
+            try
+            {
+                // Unregister global hotkeys on exit to avoid leaving hooks active
+                Services.GlobalHotkeyManager.Instance.UnregisterAllHotkeys();
+            }
+            catch { }
+
             // Properly dispose of all services before exiting
             ServiceLocator.DisposeAll();
             base.OnExit(e);

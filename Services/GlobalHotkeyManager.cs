@@ -74,9 +74,16 @@ namespace FFXIManager.Services
                 var registeredCount = 0;
                 var failedCount = 0;
 
-                // Register each enabled shortcut
+                // Register each enabled shortcut (de-duplicated by SlotIndex to avoid double registration)
+                var seenSlots = new HashSet<int>();
                 foreach (var shortcut in settings.CharacterSwitchShortcuts.Where(s => s.IsEnabled))
                 {
+                    if (!seenSlots.Add(shortcut.SlotIndex))
+                    {
+                        _loggingService.LogWarningAsync($"⚠ Duplicate shortcut for slot {shortcut.SlotIndex + 1} ignored during registration", "GlobalHotkeyManager");
+                        continue;
+                    }
+
                     bool success = _hotkeyService.RegisterHotkey(shortcut.HotkeyId, shortcut.Modifiers, shortcut.Key);
 
                     if (success)
