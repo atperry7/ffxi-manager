@@ -236,9 +236,10 @@ namespace FFXIManager.Services
         private async Task<bool> PerformImmediateActivationAsync(PlayOnlineCharacter character, CancellationToken cancellationToken = default)
         {
             // **OPTIMIZATION**: Use semaphore to ensure only one activation at a time
-            if (!await _activationSemaphore.WaitAsync(100, cancellationToken))
+            // Increased timeout to 500ms to prevent input blocking on slower systems
+            if (!await _activationSemaphore.WaitAsync(500, cancellationToken))
             {
-                await _logging.LogWarningAsync($"Activation already in progress, skipping {character.DisplayName}", "PlayOnlineMonitorService");
+                await _logging.LogWarningAsync($"Activation semaphore timeout, skipping {character.DisplayName}", "PlayOnlineMonitorService");
                 return false;
             }
 
@@ -600,7 +601,9 @@ namespace FFXIManager.Services
             {
                 lock (_cacheLock)
                 {
-                    var keysToRemove = _characterCache.Keys.Where(k => k.ToString().Contains(processId.ToString())).ToList();
+                    var keysToRemove = _characterCache.Where(kvp => kvp.Value.ProcessId == processId)
+                        .Select(kvp => kvp.Key)
+                        .ToList();
                     foreach (var key in keysToRemove)
                     {
                         _characterCache.TryRemove(key, out _);

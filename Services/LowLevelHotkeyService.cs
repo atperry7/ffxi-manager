@@ -246,7 +246,7 @@ namespace FFXIManager.Services
                 }
             }
 
-            // Add to O(1) lookup table
+            // **FIXED**: Add to O(1) lookup table after successful registration to prevent race condition
             _hotkeyLookup[hotkeyKey] = id;
 
             return true; // Low-level hooks always "succeed" at registration

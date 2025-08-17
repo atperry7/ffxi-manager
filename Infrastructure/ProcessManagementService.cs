@@ -399,9 +399,9 @@ namespace FFXIManager.Infrastructure
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(actualTimeout));
 
-                bool success = await Task.Run(() =>
+                bool success = await Task.Run(async () =>
                 {
-                    return PerformOptimizedWindowActivation(windowHandle);
+                    return await PerformOptimizedWindowActivation(windowHandle);
                 }, cts.Token);
 
                 if (success)
@@ -579,7 +579,7 @@ namespace FFXIManager.Infrastructure
         /// <summary>
         /// Performs optimized window activation with thread input attachment and minimal delays
         /// </summary>
-        private static bool PerformOptimizedWindowActivation(IntPtr windowHandle)
+        private static async Task<bool> PerformOptimizedWindowActivation(IntPtr windowHandle)
         {
             try
             {
@@ -604,7 +604,8 @@ namespace FFXIManager.Infrastructure
                     if (IsIconic(windowHandle))
                     {
                         ShowWindow(windowHandle, SW_RESTORE);
-                        Thread.Sleep(15); // Reduced from 100ms to 15ms for gaming responsiveness
+                        // **FIXED**: Use non-blocking wait instead of Thread.Sleep
+                        await Task.Delay(15); // Async wait prevents input blocking
                     }
                     else
                     {
