@@ -32,10 +32,38 @@ namespace FFXIManager.Services
         private const int SUPPRESS_KEY_EVENT = 1;
 
         private readonly ConcurrentDictionary<int, HotkeyInfo> _registeredHotkeys = new();
+        private readonly ConcurrentDictionary<HotkeyKey, int> _hotkeyLookup = new(); // O(1) lookup for performance
         private volatile int _registeredCount;
         private LowLevelKeyboardProc? _hookProc;
         private IntPtr _hookId = IntPtr.Zero;
         private volatile bool _disposed;
+
+        /// <summary>
+        /// High-performance hotkey key for O(1) lookup operations
+        /// </summary>
+        private readonly struct HotkeyKey : IEquatable<HotkeyKey>
+        {
+            public readonly ModifierKeys Modifiers;
+            public readonly Key Key;
+
+            public HotkeyKey(ModifierKeys modifiers, Key key)
+            {
+                Modifiers = modifiers;
+                Key = key;
+            }
+
+            public bool Equals(HotkeyKey other) =>
+                Modifiers == other.Modifiers && Key == other.Key;
+
+            public override bool Equals(object? obj) =>
+                obj is HotkeyKey other && Equals(other);
+
+            public override int GetHashCode() =>
+                HashCode.Combine(Modifiers, Key);
+
+            public override string ToString() =>
+                $"{Modifiers}+{Key}";
+        }
 
         private sealed class HotkeyInfo
         {
@@ -116,11 +144,14 @@ namespace FFXIManager.Services
                 var hookStruct = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
                 var vkCode = (int)hookStruct.vkCode;
                 
-                // Get current modifier key state
-                var modifiers = GetCurrentModifiers();
-                var key = KeyInterop.KeyFromVirtualKey(vkCode);
+                // **GAMING OPTIMIZATION**: Inline modifier key state for performance
+                var modifiers = ModifierKeys.None;
+                if (GetAsyncKeyState(VK_SHIFT) < 0) modifiers |= ModifierKeys.Shift;
+                if (GetAsyncKeyState(VK_CONTROL) < 0) modifiers |= ModifierKeys.Control;
+                if (GetAsyncKeyState(VK_MENU) < 0) modifiers |= ModifierKeys.Alt;
+                if (GetAsyncKeyState(VK_LWIN) < 0 || GetAsyncKeyState(VK_RWIN) < 0) modifiers |= ModifierKeys.Windows;
                 
-                // Check if this matches any registered hotkeys
+                var key = KeyInterop.KeyFromVirtualKey(vkCode);
                 
                 // Special case: if we have the temp recording hotkey registered, fire for ALL keys
                 if (_registeredHotkeys.ContainsKey(KeyRecorderControl.TempRecordingHotkeyId))
@@ -130,15 +161,15 @@ namespace FFXIManager.Services
                     return CallNextHookEx(_hookId, nCode, wParam, lParam);
                 }
                 
-                foreach (var kvp in _registeredHotkeys)
+                // **GAMING OPTIMIZATION**: O(1) hotkey lookup instead of linear search
+                var hotkeyKey = new HotkeyKey(modifiers, key);
+                if (_hotkeyLookup.TryGetValue(hotkeyKey, out var hotkeyId))
                 {
-                    var hotkeyInfo = kvp.Value;
-                    if (hotkeyInfo.IsRegistered && 
-                        hotkeyInfo.Modifiers == modifiers && 
-                        hotkeyInfo.Key == key)
+                    // Verify the hotkey is still registered and enabled
+                    if (_registeredHotkeys.TryGetValue(hotkeyId, out var hotkeyInfo) && hotkeyInfo.IsRegistered)
                     {
                         // Fire the event
-                        HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(kvp.Key, modifiers, key));
+                        HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(hotkeyId, modifiers, key));
                         
                         // IMPORTANT: Suppress key event from reaching other applications
                         // This prevents the hotkey from being processed by other applications, including:
@@ -205,9 +236,19 @@ namespace FFXIManager.Services
                 IsRegistered = true
             };
 
+            // **GAMING OPTIMIZATION**: Update O(1) lookup table
+            var hotkeyKey = new HotkeyKey(modifiers, key);
+
             var wasAdded = _registeredHotkeys.TryAdd(id, newHotkey);
             if (!wasAdded)
             {
+                // Remove old lookup entry if modifiers/key changed
+                if (_registeredHotkeys.TryGetValue(id, out var oldHotkey))
+                {
+                    var oldKey = new HotkeyKey(oldHotkey.Modifiers, oldHotkey.Key);
+                    _hotkeyLookup.TryRemove(oldKey, out _);
+                }
+                
                 // Update existing hotkey
                 _registeredHotkeys[id] = newHotkey;
             }
@@ -219,6 +260,9 @@ namespace FFXIManager.Services
                     Interlocked.Increment(ref _registeredCount);
                 }
             }
+
+            // Add to O(1) lookup table
+            _hotkeyLookup[hotkeyKey] = id;
 
             return true; // Low-level hooks always "succeed" at registration
         }
@@ -232,8 +276,12 @@ namespace FFXIManager.Services
         {
             if (_disposed) return false;
             
-            if (_registeredHotkeys.TryRemove(id, out _))
+            if (_registeredHotkeys.TryRemove(id, out var removedHotkey))
             {
+                // **GAMING OPTIMIZATION**: Remove from O(1) lookup table
+                var hotkeyKey = new HotkeyKey(removedHotkey.Modifiers, removedHotkey.Key);
+                _hotkeyLookup.TryRemove(hotkeyKey, out _);
+                
                 // Decrement count only if it's not the temp recording hotkey
                 if (id != KeyRecorderControl.TempRecordingHotkeyId)
                 {
@@ -252,6 +300,7 @@ namespace FFXIManager.Services
             if (_disposed) return;
             
             _registeredHotkeys.Clear();
+            _hotkeyLookup.Clear(); // **GAMING OPTIMIZATION**: Clear O(1) lookup table
             Interlocked.Exchange(ref _registeredCount, 0);
         }
 
