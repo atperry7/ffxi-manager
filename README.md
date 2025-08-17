@@ -1,328 +1,119 @@
-﻿# 📜 FFXI Manager - Profile & Application Management Suite
+# FFXI Manager - Profile & Application Management Suite
 
-*Welcome, brave adventurer! Your journey to becoming a master of the multibox arts begins here. Complete these quests to earn your **Signet of Basics** and unlock the power of unlimited profile management!*
+FFXI Manager is a Windows application that simplifies managing multiple Final Fantasy XI accounts and launching related applications. Switch between different account configurations instantly and manage your FFXI tools from a single interface.
+
 
 <img width="1058" height="605" alt="ffxi-manager-track-characters" src="https://github.com/user-attachments/assets/cbe3b8f7-065f-4569-807d-9fed1af62787" />
 
 ---
 
-## 🎒 **GEAR CHECK** *(Prerequisites)*
-
-```
-      ∩___∩
-     | o o |  Kupo!
-    (|  ◡  |)
-     |_____|  
-       |||    
-      /   \
-```
-
-Before embarking on this epic quest, ensure your adventurer's satchel contains:
-
-### **Essential Equipment**
-- **[✓] Signet of Windows** - Windows 10/11 operating system equipped /salute
-- **[✓] .NET Crystal (Level 9)** - .NET 9 Runtime installed and attuned (Merit Points allocated!)
-- **[✓] Vana'diel Portal Stone** - PlayOnline/FFXI successfully installed /cheer
-- **[✓] Storage Bag (50+ slots)** - At least 100MB free disk space (Gobbie Bag expanded!)
-
-### **Recommended Gear** *(Optional but Helpful)*
-- **[○] Windower's Cape** - Windower installed for enhanced adventuring (BRD/WHM approved!)
-- **[○] Scholar's Spectacles** - Text editor for config tweaking (VSCode, Notepad++, etc.) /think
-- **[○] Linkpearl of Knowledge** - Web browser for accessing linkshell wisdom and guides
-- **[○] Terminal Tome** - Basic command line knowledge (+5 to Power User skill, SCH subjob recommended)
-
-### **Party Supplies** *(For Advanced Adventurers)*
-- **[○] POL Proxy Scroll** - For those seeking server mastery (RDM/BLM mains rejoice!)
-- **[○] Multibox License** - Multiple FFXI accounts ready for party formation /party
-- **[○] Coffee of Endurance** - Essential for late-night Dynamis profile swapping sessions
-
----
-
-## ⚔️ **MAIN QUEST LINE: Journey to the Signet**
-
-```
-   .-.___.-.
-   ( o   o )
-   (  =•=  ) 
-    )     (  
-   (_______)  
-      |||     Chocobo Ready!
-     /   \
-    /_____\
-```
-
-### **Quest 1: Summon the Manager** 🌟
-*Difficulty: Trivial | EXP: 100 | Time: 30 seconds*
-
-**Objective:** Materialize the FFXI Manager into your realm
-1. **Download** the latest FFXIManager.exe from the repository
-2. **Extract** the mystical archive to your chosen sanctuary
-3. **Double-click** FFXIManager.exe to awaken the application
-4. **Witness** the main window materialize before you
-
-✨ **Quest Complete!** /cheer /fireworks *You've summoned your first management familiar! Your linkshell celebrates!*
-
----
-
-### **Quest 2: Establish Your Home Point** 🏠
-*Difficulty: Easy | EXP: 250 | Time: 1 minute*
-
-**Objective:** Link the Manager to your PlayOnline realm
-1. **Navigate** to the Browse Button for the PlayOnline Directory
-2. **Cast "Browse"** to locate your PlayOnline installation
-   - *Typical location: `C:\Program Files (x86)\PlayOnline\SquareEnix\PlayOnlineViewer`*
-3. **Confirm** the path contains the sacred `login_w.bin` artifact
-
-✨ **Quest Complete!** /hurray *Your Mog House base of operations is now established! Time to check your delivery box!*
-
----
-
-### **Quest 3: Forge Your First Profile** 🛡️
-*Difficulty: Easy | EXP: 500 | Time: 2 minutes*
-
-**Objective:** Create your inaugural character profile set
-1. **Configure** your first 4 accounts in PlayOnline (if not done)
-2. **Return** to FFXI Manager's Profile Chamber
-3. **Click** the sacred "Add Profile" button
-4. **Name** your creation (e.g., "Main Party", "Craft Mules", "Storage Alliance")
-5. **Observe** as your profile crystallizes in the list
-
-✨ **Quest Complete!** /joy *You've learned the ancient art of profile preservation! Merit points earned: Profile Management +1*
-
----
-
-### **Quest 4: Master the Swap Technique** 🔄
-*Difficulty: Easy | EXP: 750 | Time: 1 minute*
-
-**Objective:** Execute your first profile transformation
-1. **Select** a different profile from your collection
-2. **Invoke** "Swap to Selected Profile" with confidence (double-click or right-click for context menu)
-3. **Watch** the status messages confirm your success
-4. **Marvel** as the active indicator shifts to your chosen profile
-
-✨ **Quest Complete!** /dance *The power of instant account switching is yours! Your WHM, BLM, and THF alts rejoice!*
-
----
-
-### **Quest 5: Summon Your Battle Companions** ⚔️
-*Difficulty: Moderate | EXP: 1000 | Time: 3 minutes*
-
-**Objective:** Register and launch your adventuring tools
-1. **Click** the "➕" rune in the Application Management panel
-2. **Configure** your primary launcher:
-   - **Name:** "Windower" (or your preferred ally)
-   - **Path:** Browse to windower.exe
-   - **Arguments:** Add any battle flags you desire
-3. **Save** your companion's configuration
-4. **Launch** with the "▶️" command to begin your adventure
-
-✨ **Quest Complete!** /hurray /cheer *Your linkshell party is assembled and ready for battle! Jobs synced, subjobs set!*
-
----
-
-## 🏆 **ACHIEVEMENT UNLOCKED: SIGNET OF BASICS**
-
-```
-   ⭐️ ⭐️ ⭐️
-      \|/
-    --🏆--
-      /|\
-    VICTORY!
-```
-
-*Congratulations, adventurer! You have proven yourself worthy!*
-
-### **Rewards Earned:**
-- **Title:** Profile Squire (Level 1) - Working towards that PLD merit!
-- **Ability:** Unlimited Profile Slots - No more 4-account prison! /cheer
-- **Skill:** Quick Swap - Change entire account sets faster than a NIN's Utsusemi
-- **Passive:** Auto-Backup - Your profiles protected like a PLD's Invincible
-- **Mount:** Express Launch - Start multiple apps faster than a THF's Flee
-
-### **Your New Powers:**
-- ✅ Create unlimited profile configurations
-- ✅ Swap between account sets instantly
-- ✅ Launch and manage multiple applications
-- ✅ Monitor application status in real-time
-- ✅ Monitor character instances in real-time
-- ✅ Automatic backup protection
-
----
-
-## ⚡ **ADVANCED TECHNIQUE: HOTKEY MASTERY** 
-
-```
-    ⚡ ⚡ ⚡
-     \|/
-   --⌨️--
-     /|\
-   HOTKEYS!
-```
-
-*Unlock the secret art of Lightning-Fast Character Switching! Master ninjas switching between alts faster than Utsusemi: Ni cooldown!*
-
-### **🎯 The Art of Instant Character Swapping**
-
-No more alt-tabbing through 6 FFXI windows to find your WHM! With **Global Hotkey Magic**, you can:
-
-- **🔥 Switch characters instantly** - From any application, even with FFXI in fullscreen!
-- **⚡ Bypass Windower interference** - Our low-level keyboard hooks work like Sneak Attack
-- **🎮 Work everywhere** - Whether the Character Monitor window is open or minimized
-- **⏱️ Lightning speed** - Faster than a THF's Treasure Hunter proc
-
-### **🛠️ Quick Setup Guide**
-
-**Step 1: Access Hotkey Settings**
-1. Click "Settings" in the main window
-2. Behold the sacred hotkey configuration panel!
-
-**Step 2: Configure Your Hotkeys** *(Default: Win+F1 through Win+F9)*
-- **Slot 1** (Win+F1) → First character in your list
-- **Slot 2** (Win+F2) → Second character in your list
-- **Slot 3** (Win+F3) → Third character in your list
-- *...and so on, up to 9 characters!*
-
-**Step 3: Test Your Powers**
-1. Launch multiple FFXI characters
-2. Press **Win+F1** from anywhere (even in fullscreen FFXI!)
-3. Watch as your first character window activates instantly! /wow
-4. Press **Win+F2** to switch to your second character
-5. Marvel at the speed! ⚡
-
-### **🔧 Customization Options**
-
-**Modifier Keys Available:**
-- `Ctrl + Key` - For the precise types
-- `Alt + Key` - For the alternative lifestyle
-- `Win + Key` - For the Windows masters (default)
-- `Shift + Key` - For the old-school veterans
-
-**Function Keys Supported:**
-- `F1-F12` - Classic function key setup
-- `1-9` - Number row for quick access
-- `A-Z` - Any letter key for custom setups
-
-### **⚠️ Important Notes**
-
-- **Global Scope**: Hotkeys work from ANY application - FFXI, Discord, web browser, etc.
-- **Smart Debouncing**: Built-in 500ms cooldown prevents accidental double-switches
-- **Windower Compatibility**: Our low-level hooks bypass Windower's input blocking
-- **No Window Required**: Works whether Character Monitor window is open or closed
-- **Auto-Refresh**: Settings changes apply instantly - no restart required!
-
-### **🏆 Achievement Unlocked: Hotkey Ninja**
-
-```
-   ⚡ ⚡ ⚡
-      \|/
-    --🥷--
-      /|\
-   NINJA MASTER!
-```
-
-**New Abilities Gained:**
-- ✅ **Flash Step** - Instant character switching (0.1 second cast time!)
-- ✅ **Omnipresence** - Control all characters from any application
-- ✅ **Time Mastery** - Save 30+ seconds per character switch
-- ✅ **Stealth Mode** - Hotkeys work even in fullscreen applications
-
-*"From novice multiboxer to hotkey master - your journey to efficient character management is complete! Your linkshell salutes your dedication!"* /bow
-
----
-
-## 📖 **BONUS QUESTS** *(Optional Side Adventures)*
-
-```
-    📜 📜 📜
-    [Q][Q][Q]
-    Quest Log
-```
-
-### **The Organizer's Path** (Recommended Job: RDM/WHM)
-- Create themed profiles: "Dynamis Linkshell", "Craft Specialists (100+3 all!)", "Storage Mules"
-- Master the art of profile naming like organizing your Mog Safe
-- Establish a backup rotation strategy worthy of a Salvage run
-
-### **The Commander's Challenge** (Recommended Job: PLD/WAR)
-- Add all your FFXI tools to the launcher /salute
-- Configure complex launch arguments like setting up Ballista macros
-- Set up application groups for one-click linkshell party assembly
-
-### **The Archivist's Duty** (Recommended Job: SCH/BLM)
-- Learn the backup file structure like memorizing spell scrolls
-- Master manual profile management with Scholar precision
-- Understand the sacred `login_w.bin` mysteries /think
-
----
-
-## 🗺️ **WHERE TO ADVENTURE NEXT**
-
-```
-     N
-     |
- W--🗺--E
-     |
-     S
-```
-
-Now that you've earned your **Signet of Basics**, the realm of Vana'diel management awaits:
-
-1. **Profile Mastery** - Create specialized profile sets for every occasion
-2. **Application Army** - Build your ultimate tool launcher configuration
-3. **Automation Arts** - Combine profiles with application launches
-
----
-
-## 💬 **TIPS FROM VETERAN ADVENTURERS**
-
-```
- 💭 💭 💭
- (  ^ ^  )
-  ( ಠ ಠ )
-   )   (
-  /|||||\  Linkshell Wisdom
-```
-
-> *"Name your profiles clearly - 'Test123' becomes confusing when you have 20 profiles! /slap"* - Shantotto the Organized (BLM99/RDM49)
-
-> *"Always check the status bar - it's your quest tracker for every operation! /point"* - Prishe the Vigilant (MNK99/WAR49)
-
-> *"Create a 'Safe' profile before experimenting - your emergency Warp II home! /nod"* - Tenzen the Cautious (SAM99/WAR49)
-
-> *"Launch Windower AFTER swapping profiles, not before - timing is everything! /think"* - Lion the Strategic (THF99/NIN49)
-
----
-
-## 🆘 **EMERGENCY LINKSHELL** *(Getting Help)*
-
-```
-    📡))))
-   [HELP!]
-    S.O.S
-```
-
-If your quest goes awry: /panic
-- **Check Status Messages** - Your quest log updates in real-time like combat text
-- **Verify Paths** - Ensure your PlayOnline directory is correctly set /search
-- **Review Active Profile** - The green checkmark shows your current job configuration
-- **Consult the Codex** - Full README.md contains ancient wisdom from veteran linkshells
-- **Signal for Help** - Open an issue in the repository /shout
-
----
-
-*May your profiles be many, your swaps be swift, and your adventures be lag-free!*
-
-```
-      ∩___∩
-     | ^ ^ |  
-    (|  ◡  |) Kupo~!
-     |_____|  
-       |||    
-      /   \
-     /_____\
-```
-
-**Happy Adventuring, Kupo~!** 🌟
+## Features
+
+- **Profile Management**: Create unlimited account profile configurations
+- **Instant Switching**: Swap between different account sets with one click
+- **Application Launcher**: Launch and monitor FFXI tools (Windower, etc.)
+- **Real-time Monitoring**: Track running applications and character instances
+- **Automatic Backups**: Protect your configurations with automatic backup creation
+- **Clean Interface**: Modern WPF interface with dark/light theme support
+
+## System Requirements
+
+### Essential Requirements
+- Windows 10 or Windows 11
+- .NET 9 Runtime
+- PlayOnline/FFXI installation
+- Minimum 100MB free disk space
+
+### Optional (Recommended)
+- Windower for enhanced FFXI experience
+- Text editor for configuration tweaking (VSCode, Notepad++, etc.)
+- Multiple FFXI accounts for multi-boxing
+
+## Installation
+
+1. **Download** the latest FFXIManager.exe from the repository releases
+2. **Extract** the application to your preferred location
+3. **Run** FFXIManager.exe to launch the application
+4. **Configure** your PlayOnline directory (see Configuration section)
+
+## Configuration
+
+### Initial Setup
+
+1. **Set PlayOnline Directory**:
+   - Click the "Browse" button for the PlayOnline Directory
+   - Navigate to your PlayOnline installation
+   - Typical location: `C:\Program Files (x86)\PlayOnline\SquareEnix\PlayOnlineViewer\usr\all`
+   - Verify the directory contains `login_w.bin`
+
+2. **Verify Installation**:
+   - The status bar should show successful directory detection
+   - Existing account configurations will be automatically detected
+
+## Usage
+
+### Profile Management
+
+#### Creating a New Profile
+1. Configure your accounts in PlayOnline as desired
+2. Click "Add Profile" button in FFXI Manager
+3. Enter a descriptive name (e.g., "Main Party", "Crafting Mules", "Storage Characters")
+4. The current account configuration will be saved as a new profile
+
+#### Switching Between Profiles
+1. Select the desired profile from the list
+2. Double-click the profile or right-click and select "Swap to Profile"
+3. The application will backup your current configuration and load the selected profile
+4. Status messages will confirm the operation
+
+#### Managing Profiles
+- **Rename**: Right-click a profile and select "Rename"
+- **Delete**: Right-click a profile and select "Delete" (confirmation required)
+- **Backup**: The current active configuration is automatically backed up before each swap
+
+### Application Management
+
+#### Adding Applications
+1. Click the "+" button in the Application Management panel
+2. Configure your application:
+   - **Name**: Display name (e.g., "Windower")
+   - **Path**: Browse to the executable (e.g., windower.exe)
+   - **Arguments**: Command line arguments (optional)
+3. Save the configuration
+
+#### Launching Applications
+1. Select an application from the list
+2. Click the "▶" (Play) button to launch
+3. Monitor running status in the application list
+4. Use "Stop" button to terminate applications if needed
+
+### Monitoring
+
+The application provides real-time monitoring of:
+- Running external applications
+- Active FFXI character instances
+- Current active profile
+- System status and operations
+
+## Tips and Best Practices
+
+- **Use descriptive profile names** - Avoid generic names like "Test123"
+- **Monitor the status bar** - It provides real-time feedback for all operations
+- **Create a backup profile** - Save your current setup before experimenting
+- **Launch timing** - Switch profiles before launching Windower or other tools
+- **Regular backups** - The application creates automatic backups, but consider manual backups for important configurations
+
+## Troubleshooting
+
+If you encounter issues:
+
+1. **Check status messages** - Error details appear in the status bar
+2. **Verify paths** - Ensure PlayOnline directory is correctly configured
+3. **Review active profile** - Check which profile is currently active
+4. **Restart application** - Close and restart FFXI Manager if needed
+5. **Check file permissions** - Ensure the application has write access to the PlayOnline directory
+
+For additional help, consult the Documentation folder or open an issue in the repository.
 
 
 ## Contributing
@@ -344,3 +135,4 @@ This project is open source. See the repository for license details.
 *Made with ❤️ for the FFXI community*
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/L4L21JMRTW)
+
