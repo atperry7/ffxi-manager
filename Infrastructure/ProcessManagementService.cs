@@ -15,18 +15,6 @@ using FFXIManager.Services;
 namespace FFXIManager.Infrastructure
 {
     /// <summary>
-    /// Thread input attachment tracking to prevent resource leaks
-    /// </summary>
-    internal sealed class ThreadInputAttachment
-    {
-        public uint AttachedThreadId { get; set; }
-        public uint TargetThreadId { get; set; }
-        public DateTime AttachedAt { get; set; }
-        public bool IsAttached { get; set; }
-        public IntPtr WindowHandle { get; set; }
-    }
-    
-    /// <summary>
     /// Unified process monitoring and management infrastructure
     /// Provides shared functionality for both Application Manager and Character Monitor
     /// </summary>
@@ -129,9 +117,9 @@ namespace FFXIManager.Infrastructure
         private CancellationTokenSource? _monitoringCts;
         private int _monitorIntervalMs = GLOBAL_MONITOR_INTERVAL_MS;
         
-        // **GAMING FIX**: Thread input attachment tracking to prevent resource leaks
-        private readonly ConcurrentDictionary<uint, ThreadInputAttachment> _activeAttachments = new();
-        private readonly SemaphoreSlim _activationLock = new(1, 1); // Global activation lock
+        // **GAMING FIX**: Removed thread input attachment tracking fields
+        // The current implementation avoids AttachThreadInput entirely to prevent resource leaks
+        // during rapid character switching, using simpler window activation methods instead
 
         // Unified discovery/tracking state
         private readonly List<DiscoveryWatch> _discoveryWatches = new();

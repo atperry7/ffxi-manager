@@ -28,7 +28,7 @@ namespace FFXIManager.Services
         private CancellationTokenSource _currentActivationCts = new();
         private PlayOnlineCharacter? _pendingActivation;
         private DateTime _lastActivationAttempt = DateTime.MinValue;
-        private int _lastActivatedSlotIndex = -1; // Track last activated character slot for smart debouncing
+        private int _lastActivatedCharacterSlotIndex = -1; // Track last activated character slot for smart debouncing
 
         // Gaming-optimized timing values (loaded from settings)
         private int _activationDebounceMs = 50;    // Fast debounce for gaming
@@ -155,7 +155,7 @@ namespace FFXIManager.Services
             var timeSinceLastAttempt = DateTime.UtcNow - _lastActivationAttempt;
 
             // Only apply rate limiting if switching to the SAME character
-            bool isSameCharacter = (currentSlotIndex == _lastActivatedSlotIndex && currentSlotIndex != -1);
+            bool isSameCharacter = (currentSlotIndex == _lastActivatedCharacterSlotIndex && currentSlotIndex != -1);
             bool tooFrequent = timeSinceLastAttempt.TotalMilliseconds < _minActivationIntervalMs;
 
             if (isSameCharacter && tooFrequent)
@@ -169,13 +169,13 @@ namespace FFXIManager.Services
             else if (!isSameCharacter)
             {
                 // Different character - allow immediate activation (gaming-optimized)
-                await _logging.LogDebugAsync($"Fast character switch: {_lastActivatedSlotIndex} → {currentSlotIndex} for {character.DisplayName}", "PlayOnlineMonitorService");
-                _lastActivatedSlotIndex = currentSlotIndex;
+                await _logging.LogDebugAsync($"Fast character switch: {_lastActivatedCharacterSlotIndex} → {currentSlotIndex} for {character.DisplayName}", "PlayOnlineMonitorService");
+                _lastActivatedCharacterSlotIndex = currentSlotIndex;
                 return await PerformImmediateActivationAsync(character, cancellationToken);
             }
 
             // Same character but enough time has passed - proceed
-            _lastActivatedSlotIndex = currentSlotIndex;
+            _lastActivatedCharacterSlotIndex = currentSlotIndex;
             return await PerformImmediateActivationAsync(character, cancellationToken);
         }
 
@@ -619,10 +619,23 @@ namespace FFXIManager.Services
 
         /// <summary>
         /// Generates a unique cache key for character identification
+        /// Uses both 32-bit processId and full 64-bit windowHandle to avoid hash collisions
         /// </summary>
         private static int GetCharacterCacheKey(int processId, IntPtr windowHandle)
         {
-            return HashCode.Combine(processId, windowHandle);
+            // Handle both 32-bit and 64-bit window handles properly
+            // On 64-bit systems, use both upper and lower 32 bits of the window handle
+            if (IntPtr.Size == 8) // 64-bit system
+            {
+                var handleValue = windowHandle.ToInt64();
+                var lowerHandle = (int)(handleValue & 0xFFFFFFFF);
+                var upperHandle = (int)((handleValue >> 32) & 0xFFFFFFFF);
+                return HashCode.Combine(processId, lowerHandle, upperHandle);
+            }
+            else // 32-bit system
+            {
+                return HashCode.Combine(processId, windowHandle.ToInt32());
+            }
         }
 
         #endregion
