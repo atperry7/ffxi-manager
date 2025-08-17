@@ -8,6 +8,12 @@
     <UseWPF>true</UseWPF>
     <ApplicationIcon>ffxi-manager.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- Version Information -->
+    <Version>1.2.1</Version>
+    <AssemblyVersion>1.2.1</AssemblyVersion>
+    <FileVersion>1.2.1</FileVersion>
+
     <!-- Strong name signing -->
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>ffximanager.snk</AssemblyOriginatorKeyFile>

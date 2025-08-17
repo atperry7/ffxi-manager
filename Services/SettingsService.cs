@@ -74,8 +74,18 @@ namespace FFXIManager.Services
             // Use defaults if loading failed
             settings ??= new ApplicationSettings();
 
+            // Perform settings migration for existing users
+            bool migrationPerformed = MigrateSettings(settings);
+
             // Cache the loaded settings
             _cachedSettings = settings;
+
+            // If migration was performed, save the updated settings immediately
+            if (migrationPerformed && !_disposed)
+            {
+                _pendingSaveSettings = _cachedSettings;
+                _ = Task.Run(() => AtomicSave(_cachedSettings));
+            }
 
             // If we loaded default settings and no file exists, create the initial file
             // This ensures that future atomic operations will work properly
@@ -170,6 +180,61 @@ namespace FFXIManager.Services
             // Reset the debounce timer to schedule a write
             _saveTimer?.Dispose();
             _saveTimer = new Timer(DebouncedSave, null, DEBOUNCE_DELAY_MS, Timeout.Infinite);
+        }
+
+        /// <summary>
+        /// Migrates settings from older versions to the current version.
+        /// Returns true if migration was performed.
+        /// 
+        /// MIGRATION CLEANUP SCHEDULE:
+        /// - Version 2 migration (hotkey debounce 500ms/25ms → 5ms): Added 2025-08, Remove after 2026-02 (6 months)
+        /// - Future migrations should follow the same 6-month deprecation cycle
+        /// </summary>
+        private static bool MigrateSettings(ApplicationSettings settings)
+        {
+            const int CURRENT_VERSION = 2;
+            
+            // If already current version, no migration needed
+            if (settings.SettingsVersion >= CURRENT_VERSION)
+                return false;
+            
+            bool migrationPerformed = false;
+            
+            // ========== MIGRATION v1 → v2 (Added 2025-08, Remove after 2026-02) ==========
+            if (settings.SettingsVersion < 2)
+            {
+                // Critical gaming performance fix: upgrade all activation timings to ultra-responsive 5ms
+                // This helps users stuck with legacy slow settings get optimal gaming performance
+                
+                // Upgrade hotkey debounce (anything > 10ms gets set to 5ms)
+                if (settings.HotkeyDebounceIntervalMs > 10)
+                {
+                    settings.HotkeyDebounceIntervalMs = 5;
+                    migrationPerformed = true;
+                }
+                
+                // Upgrade activation debounce (anything > 10ms gets set to 5ms)
+                if (settings.ActivationDebounceIntervalMs > 10)
+                {
+                    settings.ActivationDebounceIntervalMs = 5;
+                    migrationPerformed = true;
+                }
+                
+                // Upgrade minimum activation interval (anything > 10ms gets set to 5ms)
+                if (settings.MinActivationIntervalMs > 10)
+                {
+                    settings.MinActivationIntervalMs = 5;
+                    migrationPerformed = true;
+                }
+                
+                settings.SettingsVersion = 2;
+                migrationPerformed = true;
+            }
+            // ========== END v1 → v2 MIGRATION (Remove this block after 2026-02) ==========
+            
+            // Future migrations go here with similar comment blocks and removal dates
+            
+            return migrationPerformed;
         }
 
         private void DebouncedSave(object? state)

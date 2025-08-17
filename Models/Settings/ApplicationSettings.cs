@@ -5,10 +5,16 @@ using System.Windows.Input;
 namespace FFXIManager.Models.Settings
 {
     /// <summary>
-    /// Simple application settings model
+    /// Application settings model with migration support
     /// </summary>
     public class ApplicationSettings
     {
+        /// <summary>
+        /// Settings version for migration purposes. Current version: 2
+        /// Version 0/1: Legacy settings (500ms or 25ms debounce)
+        /// Version 2: Gaming-optimized with 5ms debounce for ultra-responsive performance
+        /// </summary>
+        public int SettingsVersion { get; set; } = 2;
         public string PlayOnlineDirectory { get; set; } = @"C:\Program Files (x86)\PlayOnline\SquareEnix\PlayOnlineViewer\usr\all";
         public bool AutoRefreshOnStartup { get; set; } = true;
         public bool ConfirmDeleteOperations { get; set; } = true;
@@ -36,21 +42,21 @@ namespace FFXIManager.Models.Settings
 
         /// <summary>
         /// Debounce interval in milliseconds to prevent accidental rapid hotkey presses.
-        /// Optimized for gaming: 25ms provides fast response while preventing double-presses.
+        /// Optimized for gaming: 5ms provides ultra-responsive switching while preventing double-presses.
         /// </summary>
-        public int HotkeyDebounceIntervalMs { get; set; } = 25;
+        public int HotkeyDebounceIntervalMs { get; set; } = 5;
 
         /// <summary>
         /// Activation debounce interval in milliseconds to prevent rapid character switching.
-        /// Optimized for gaming: 50ms allows fast character-to-character switching.
+        /// Ultra-responsive gaming: 5ms provides near-instant switching while preventing double-activation.
         /// </summary>
-        public int ActivationDebounceIntervalMs { get; set; } = 50;
+        public int ActivationDebounceIntervalMs { get; set; } = 5;
 
         /// <summary>
         /// Minimum interval between activation attempts for the same character in milliseconds.
-        /// 100ms prevents spam-clicking the same character while allowing instant switching between different characters.
+        /// 5ms prevents spam-clicking the same character while allowing ultra-fast switching between different characters.
         /// </summary>
-        public int MinActivationIntervalMs { get; set; } = 100;
+        public int MinActivationIntervalMs { get; set; } = 5;
 
         /// <summary>
         /// Timeout for character window activation operations in milliseconds.

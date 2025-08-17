@@ -31,7 +31,7 @@ namespace FFXIManager.Services
         private readonly LowLevelHotkeyService _hotkeyService;
         private readonly ILoggingService _loggingService;
         private readonly Dictionary<int, DateTime> _lastHotkeyPress = new();
-        private TimeSpan _hotkeyDebounceInterval = TimeSpan.FromMilliseconds(500);
+        private TimeSpan _hotkeyDebounceInterval = TimeSpan.FromMilliseconds(5); // Ultra-responsive gaming default
         private bool _disposed;
 
         /// <summary>

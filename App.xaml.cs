@@ -28,6 +28,31 @@ namespace FFXIManager
                 // Centralize global hotkey registration at app startup so it works regardless of UI windows
                 Services.GlobalHotkeyManager.Instance.RegisterHotkeysFromSettings();
 
+                // Ensure PlayOnline monitoring is started regardless of UI windows
+                ServiceLocator.PlayOnlineMonitorService.StartMonitoring();
+
+                // Handle hotkeys at the service layer so it works even if no VM is constructed
+                Services.GlobalHotkeyManager.Instance.HotkeyPressed += async (_, e) =>
+                {
+                    try
+                    {
+                        // Map hotkey ID -> slot index
+                        int slotIndex = Models.Settings.KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(e.HotkeyId);
+                        if (slotIndex < 0) return;
+
+                        var monitor = ServiceLocator.PlayOnlineMonitorService;
+                        var characters = await monitor.GetCharactersAsync();
+                        if (slotIndex >= characters.Count) return;
+
+                        var character = characters[slotIndex];
+                        if (character != null)
+                        {
+                            await monitor.ActivateCharacterWindowAsync(character);
+                        }
+                    }
+                    catch { }
+                };
+
                 // Refresh hotkeys when settings change
                 ViewModels.DiscoverySettingsViewModel.HotkeySettingsChanged += (_, __) =>
                 {

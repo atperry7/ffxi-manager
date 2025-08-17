@@ -94,9 +94,33 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                                 
+                                <!-- Hotkey Performance Settings -->
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,8">
+                                    <TextBlock Text="Hotkey debounce interval:" 
+                                               VerticalAlignment="Center" 
+                                               Foreground="{DynamicResource PrimaryTextBrush}"
+                                               Margin="0,0,8,0"/>
+                                    <TextBox Text="{Binding HotkeyDebounceIntervalMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                             Width="60" 
+                                             VerticalAlignment="Center"
+                                             Margin="0,0,4,0"/>
+                                    <TextBlock Text="ms" 
+                                               VerticalAlignment="Center" 
+                                               Foreground="{DynamicResource PrimaryTextBrush}"
+                                               Margin="0,0,8,0"/>
+                                    <TextBlock Text="(Lower = more responsive, higher = less sensitive)" 
+                                               VerticalAlignment="Center" 
+                                               FontSize="10" 
+                                               Style="{StaticResource SecondaryTextBlock}"/>
+                                </StackPanel>
+                                
                                 <TextBlock Text="Hotkeys work globally and will switch FFXI character windows even when other applications have focus." 
                                            FontSize="10" 
-                                           Margin="0,8,0,0" 
+                                           Margin="0,0,0,0" 
+                                           Style="{StaticResource SecondaryTextBlock}"/>
+                                <TextBlock Text="Gaming tip: 5ms = ultra-responsive (recommended), 10-25ms = balanced, 50ms+ = conservative." 
+                                           FontSize="10" 
+                                           Margin="0,4,0,0" 
                                            Style="{StaticResource SecondaryTextBlock}"/>
                             </StackPanel>
                         </Border>

@@ -63,6 +63,16 @@
                            FontSize="11"
                            VerticalAlignment="Center"/>
             </Border>
+
+            <!-- App Version -->
+            <Border Grid.Column="3" BorderBrush="#4A5568" BorderThickness="1,0,0,0"
+                    Padding="10,0,10,0" Margin="10,0,0,0">
+                <TextBlock Text="{Binding AppVersion, StringFormat='v{0}'}" 
+                           Foreground="#C1C7CD"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           ToolTip="Application Version"/>
+            </Border>
         </Grid>
     </Border>
 </UserControl>

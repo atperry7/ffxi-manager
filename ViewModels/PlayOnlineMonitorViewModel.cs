@@ -41,9 +41,6 @@ namespace FFXIManager.ViewModels
 
             InitializeCommands();
 
-            // Initialize global hotkey handling
-            InitializeHotkeyHandling();
-
             // Start monitoring AFTER UI is ready to receive events
             _monitorService.StartMonitoring();
         }
@@ -263,94 +260,6 @@ namespace FFXIManager.ViewModels
 
         #endregion
 
-        #region Hotkey Management
-
-        /// <summary>
-        /// Initializes global hotkey handling for character switching
-        /// </summary>
-        private void InitializeHotkeyHandling()
-        {
-            try
-            {
-                // Subscribe to the global hotkey manager only
-                // Hotkey registration is centralized at application startup to ensure availability
-                GlobalHotkeyManager.Instance.HotkeyPressed += OnGlobalHotkeyPressed;
-
-                _loggingService.LogInfoAsync("PlayOnlineMonitorViewModel initialized with global hotkey support (registration centralized)", "PlayOnlineMonitorViewModel");
-            }
-            catch (Exception ex)
-            {
-                _loggingService.LogErrorAsync("Error initializing hotkey handling", ex, "PlayOnlineMonitorViewModel");
-            }
-        }
-
-        /// <summary>
-        /// Handles global hotkey press events
-        /// </summary>
-        private void OnGlobalHotkeyPressed(object? sender, HotkeyPressedEventArgs e)
-        {
-            try
-            {
-                // Convert hotkey ID back to slot index
-                int slotIndex = KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(e.HotkeyId);
-
-                // Validate slot index
-                if (slotIndex < 0 || slotIndex >= Characters.Count)
-                {
-                    _loggingService.LogWarningAsync($"⚠ Invalid slot index {slotIndex} from hotkey ID {e.HotkeyId}", "PlayOnlineMonitorViewModel");
-                    _statusService.SetMessage($"Invalid character slot: {slotIndex + 1}");
-                    return;
-                }
-
-                // Execute the switch command on the UI thread
-                var dispatcher = System.Windows.Application.Current?.Dispatcher;
-                if (dispatcher != null && !dispatcher.HasShutdownStarted && !dispatcher.HasShutdownFinished)
-                {
-                    dispatcher.BeginInvoke(() =>
-                    {
-                        if (SwitchToSlotCommand.CanExecute(slotIndex))
-                        {
-                            SwitchToSlotCommand.Execute(slotIndex);
-
-                            // Get character name for feedback
-                            var character = Characters.ElementAtOrDefault(slotIndex);
-                            var characterName = character?.DisplayName ?? $"Slot {slotIndex + 1}";
-
-                            _statusService.SetMessage($"Switched to character: {characterName}");
-                            _loggingService.LogInfoAsync($"✓ Switched to character via hotkey: {characterName}", "PlayOnlineMonitorViewModel");
-                        }
-                        else
-                        {
-                            _loggingService.LogWarningAsync($"⚠ Cannot switch to slot {slotIndex + 1} - slot empty or character is already active", "PlayOnlineMonitorViewModel");
-                            _statusService.SetMessage($"Cannot switch to slot {slotIndex + 1}");
-                        }
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                _loggingService.LogErrorAsync("Error handling global hotkey press", ex, "PlayOnlineMonitorViewModel");
-            }
-        }
-
-        /// <summary>
-        /// Handles hotkey settings changes
-        /// </summary>
-        private void OnHotkeySettingsChanged(object? sender, EventArgs e)
-        {
-            try
-            {
-                // Refresh hotkeys when settings change
-                GlobalHotkeyManager.Instance.RefreshHotkeys();
-            }
-            catch (Exception ex)
-            {
-                _loggingService.LogErrorAsync("Error refreshing hotkeys after settings change", ex, "PlayOnlineMonitorViewModel");
-            }
-        }
-
-        #endregion
-
         #region Private Methods
 
         private async Task ActivateCharacterAsync(PlayOnlineCharacter character)
@@ -518,9 +427,6 @@ namespace FFXIManager.ViewModels
                 _monitorService.CharacterUpdated -= OnCharacterUpdated;
                 _monitorService.CharacterRemoved -= OnCharacterRemoved;
                 _monitorService.StopMonitoring();
-
-                // Unsubscribe from hotkey events
-                GlobalHotkeyManager.Instance.HotkeyPressed -= OnGlobalHotkeyPressed;
 
                 _cts.Cancel();
                 _cts.Dispose();

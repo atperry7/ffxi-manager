@@ -27,6 +27,7 @@ namespace FFXIManager.ViewModels
         private string _backupInfo = "";
         private bool _isLoading;
         private bool _disposed;
+        private string _appVersion = string.Empty;
 
         public StatusBarViewModel(
             IStatusMessageService statusService,
@@ -49,6 +50,22 @@ namespace FFXIManager.ViewModels
             };
             _refreshTimer.Tick += RefreshContextualInfo;
             _refreshTimer.Start();
+
+            // Compute app version once
+            try
+            {
+                var asm = System.Reflection.Assembly.GetEntryAssembly() ?? System.Reflection.Assembly.GetExecutingAssembly();
+                var fvi = System.Diagnostics.FileVersionInfo.GetVersionInfo(asm.Location);
+                // Prefer ProductVersion; fall back to FileVersion; then AssemblyVersion
+                var raw = fvi.ProductVersion;
+                if (string.IsNullOrWhiteSpace(raw)) raw = fvi.FileVersion;
+                if (string.IsNullOrWhiteSpace(raw)) raw = asm.GetName().Version?.ToString();
+                _appVersion = NormalizeVersion(raw) ?? "dev";
+            }
+            catch
+            {
+                _appVersion = "dev";
+            }
 
             // Initial refresh
             RefreshContextualInfo(null, null);
@@ -83,6 +100,8 @@ namespace FFXIManager.ViewModels
             get => _isLoading;
             set => SetProperty(ref _isLoading, value);
         }
+
+        public string AppVersion => _appVersion;
 
         private void OnStatusMessageChanged(object? sender, string message)
         {
@@ -138,6 +157,24 @@ namespace FFXIManager.ViewModels
             {
                 _ = _loggingService.LogDebugAsync($"Error refreshing status bar info: {ex.Message}");
             }
+        }
+
+        private static string? NormalizeVersion(string? v)
+        {
+            if (string.IsNullOrWhiteSpace(v)) return v;
+            // Strip build metadata suffix (SemVer '+...') and any whitespace-only suffixes
+            var plusIdx = v.IndexOf('+');
+            if (plusIdx >= 0)
+            {
+                v = v.Substring(0, plusIdx);
+            }
+            // Also trim any trailing space-separated commit-ish (defensive)
+            var spaceIdx = v.IndexOf(' ');
+            if (spaceIdx > 0)
+            {
+                v = v.Substring(0, spaceIdx);
+            }
+            return v.Trim();
         }
 
         public void Dispose()

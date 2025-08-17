@@ -68,6 +68,13 @@ namespace FFXIManager.ViewModels
             set { _enableHotkeys = value; OnPropertyChanged(); }
         }
 
+        private int _hotkeyDebounceIntervalMs;
+        public int HotkeyDebounceIntervalMs
+        {
+            get => _hotkeyDebounceIntervalMs;
+            set { _hotkeyDebounceIntervalMs = value; OnPropertyChanged(); }
+        }
+
         public ObservableCollection<KeyboardShortcutConfig> CharacterHotkeys { get; }
 
 
@@ -83,6 +90,7 @@ namespace FFXIManager.ViewModels
 
             // Character Hotkeys  
             EnableHotkeys = settings.CharacterSwitchShortcuts.Any(s => s.IsEnabled);
+            HotkeyDebounceIntervalMs = settings.HotkeyDebounceIntervalMs;
             CharacterHotkeys.Clear();
 
             // If no shortcuts configured, create defaults
@@ -109,10 +117,14 @@ namespace FFXIManager.ViewModels
             var validMaxLogEntries = MaxLogEntries > 0 ? MaxLogEntries : 1000;
             _settingsService.UpdateDiagnostics(EnableDiagnostics, VerboseLogging, validMaxLogEntries);
 
-            // Save keyboard shortcuts
+            // Save keyboard shortcuts and debounce interval
             var settings = _settingsService.LoadSettings();
             settings.CharacterSwitchShortcuts.Clear();
             settings.CharacterSwitchShortcuts.AddRange(CharacterHotkeys);
+            
+            // Validate and save debounce interval (minimum 1ms, maximum 1000ms for sanity)
+            var validDebounceInterval = Math.Max(1, Math.Min(1000, HotkeyDebounceIntervalMs));
+            settings.HotkeyDebounceIntervalMs = validDebounceInterval;
 
             // Handle EnableHotkeys toggle properly to preserve individual shortcut states
             if (!EnableHotkeys)
