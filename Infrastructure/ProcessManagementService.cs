@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -13,6 +14,18 @@ using FFXIManager.Services;
 
 namespace FFXIManager.Infrastructure
 {
+    /// <summary>
+    /// Thread input attachment tracking to prevent resource leaks
+    /// </summary>
+    internal sealed class ThreadInputAttachment
+    {
+        public uint AttachedThreadId { get; set; }
+        public uint TargetThreadId { get; set; }
+        public DateTime AttachedAt { get; set; }
+        public bool IsAttached { get; set; }
+        public IntPtr WindowHandle { get; set; }
+    }
+    
     /// <summary>
     /// Unified process monitoring and management infrastructure
     /// Provides shared functionality for both Application Manager and Character Monitor
@@ -115,6 +128,10 @@ namespace FFXIManager.Infrastructure
         private bool _disposed;
         private CancellationTokenSource? _monitoringCts;
         private int _monitorIntervalMs = GLOBAL_MONITOR_INTERVAL_MS;
+        
+        // **GAMING FIX**: Thread input attachment tracking to prevent resource leaks
+        private readonly ConcurrentDictionary<uint, ThreadInputAttachment> _activeAttachments = new();
+        private readonly SemaphoreSlim _activationLock = new(1, 1); // Global activation lock
 
         // Unified discovery/tracking state
         private readonly List<DiscoveryWatch> _discoveryWatches = new();
@@ -577,73 +594,51 @@ namespace FFXIManager.Infrastructure
         #region Gaming-Optimized Window Activation
 
         /// <summary>
-        /// Performs optimized window activation with thread input attachment and minimal delays
+        /// GAMING-OPTIMIZED: Simple window activation without thread input attachment
+        /// This avoids the thread input attachment resource leaks that cause input blocking
         /// </summary>
         private static async Task<bool> PerformOptimizedWindowActivation(IntPtr windowHandle)
         {
             try
             {
-                // Get the window's thread ID
-                var windowThreadId = GetWindowThreadProcessId(windowHandle, IntPtr.Zero);
-                var currentThreadId = GetCurrentThreadId();
+                // **GAMING FIX**: Avoid AttachThreadInput completely for rapid switching
+                // AttachThreadInput causes resource leaks during fast character switching
+                // Use simpler, more reliable activation methods
 
-                bool attachedInput = false;
-
-                try
+                // Step 1: Handle minimized windows
+                if (IsIconic(windowHandle))
                 {
-                    // **OPTIMIZATION**: Attach thread input if different threads
-                    if (windowThreadId != 0 && windowThreadId != currentThreadId)
-                    {
-                        attachedInput = AttachThreadInput(currentThreadId, windowThreadId, true);
-                    }
+                    ShowWindow(windowHandle, SW_RESTORE);
+                    await Task.Delay(10); // Minimal delay for restore
+                }
+                else
+                {
+                    ShowWindow(windowHandle, SW_SHOW);
+                }
 
-                    // **GAMING OPTIMIZATION**: Fast activation sequence with minimal delays
-                    bool success = false;
+                // Step 2: Multi-attempt activation without thread input attachment
+                bool success = false;
 
-                    // Step 1: Handle minimized windows with reduced delay
-                    if (IsIconic(windowHandle))
-                    {
-                        ShowWindow(windowHandle, SW_RESTORE);
-                        // **FIXED**: Use non-blocking wait instead of Thread.Sleep
-                        await Task.Delay(15); // Async wait prevents input blocking
-                    }
-                    else
-                    {
-                        ShowWindow(windowHandle, SW_SHOW);
-                    }
-
-                    // Step 2: Primary activation attempt
+                // Attempt 1: Direct foreground activation
+                success = SetForegroundWindow(windowHandle);
+                
+                if (!success)
+                {
+                    // Attempt 2: Bring to top then activate
+                    BringWindowToTop(windowHandle);
+                    await Task.Delay(5); // Brief pause
                     success = SetForegroundWindow(windowHandle);
-
-                    // Step 3: Alternative methods if primary failed
-                    if (!success)
-                    {
-                        // Try bringing window to top first
-                        BringWindowToTop(windowHandle);
-
-                        // Then attempt SwitchToThisWindow with Alt+Tab behavior
-                        SwitchToThisWindow(windowHandle, true);
-
-                        // Final attempt with SetForegroundWindow
-                        success = SetForegroundWindow(windowHandle);
-
-                        // If still failed, assume success since SwitchToThisWindow doesn't return status
-                        if (!success)
-                        {
-                            success = true;
-                        }
-                    }
-
-                    return success;
                 }
-                finally
+
+                if (!success)
                 {
-                    // **CLEANUP**: Detach thread input if we attached it
-                    if (attachedInput && windowThreadId != 0 && windowThreadId != currentThreadId)
-                    {
-                        AttachThreadInput(currentThreadId, windowThreadId, false);
-                    }
+                    // Attempt 3: SwitchToThisWindow (most reliable for gaming)
+                    SwitchToThisWindow(windowHandle, true);
+                    // SwitchToThisWindow doesn't return status but usually works
+                    success = true;
                 }
+
+                return success;
             }
             catch (Exception)
             {
