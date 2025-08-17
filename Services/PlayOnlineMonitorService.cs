@@ -21,16 +21,18 @@ namespace FFXIManager.Services
         private bool _isMonitoring;
         private bool _disposed;
         
-        // Rapid switching protection
+        // Rapid switching protection with character-aware logic
         private readonly SemaphoreSlim _activationSemaphore = new(1, 1);
         private readonly Timer _activationDebounceTimer;
         private CancellationTokenSource _currentActivationCts = new();
         private PlayOnlineCharacter? _pendingActivation;
         private DateTime _lastActivationAttempt = DateTime.MinValue;
+        private int _lastActivatedSlotIndex = -1; // Track last activated character slot for smart debouncing
         
-        private const int ACTIVATION_DEBOUNCE_MS = 250; // 250ms debounce to prevent rapid clicking
-        private const int MIN_ACTIVATION_INTERVAL_MS = 100; // Minimum 100ms between activation attempts
-        private const int ACTIVATION_TIMEOUT_MS = 8000; // 8 second timeout (increased from 5)
+        // Gaming-optimized timing values (loaded from settings)
+        private int _activationDebounceMs = 50;    // Fast debounce for gaming
+        private int _minActivationIntervalMs = 100; // Only applies to same character
+        private int _activationTimeoutMs = 3000;   // Reduced timeout for responsiveness
         
         // Events
         public event EventHandler<PlayOnlineCharacterEventArgs>? CharacterDetected;
@@ -53,6 +55,9 @@ namespace FFXIManager.Services
             _logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
             _processManagement = processManagement; // null = use ServiceLocator fallback
+            
+            // Load gaming-optimized settings
+            LoadPerformanceSettings();
             
             // Initialize activation debounce timer (initially disabled)
             _activationDebounceTimer = new Timer(DebouncedActivationCallback, null, Timeout.Infinite, Timeout.Infinite);
@@ -114,17 +119,32 @@ namespace FFXIManager.Services
                 return false;
             }
             
-            // **OPTIMIZATION**: Check rate limiting to prevent system overload
+            // **GAMING OPTIMIZATION**: Smart character-aware rate limiting
+            var currentSlotIndex = await GetCharacterSlotIndexAsync(character);
             var timeSinceLastAttempt = DateTime.UtcNow - _lastActivationAttempt;
-            if (timeSinceLastAttempt.TotalMilliseconds < MIN_ACTIVATION_INTERVAL_MS)
+            
+            // Only apply rate limiting if switching to the SAME character
+            bool isSameCharacter = (currentSlotIndex == _lastActivatedSlotIndex && currentSlotIndex != -1);
+            bool tooFrequent = timeSinceLastAttempt.TotalMilliseconds < _minActivationIntervalMs;
+            
+            if (isSameCharacter && tooFrequent)
             {
-                await _logging.LogDebugAsync($"Rate limiting activation request for {character.DisplayName} (too frequent)", "PlayOnlineMonitorService");
+                await _logging.LogDebugAsync($"Rate limiting same-character activation for {character.DisplayName} (slot {currentSlotIndex}, {timeSinceLastAttempt.TotalMilliseconds:F0}ms ago)", "PlayOnlineMonitorService");
                 
-                // Instead of rejecting, use debounced activation
+                // Use debounced activation for same character
                 RequestDebouncedActivation(character);
                 return true; // Return true to indicate request was accepted (will be processed)
             }
+            else if (!isSameCharacter)
+            {
+                // Different character - allow immediate activation (gaming-optimized)
+                await _logging.LogDebugAsync($"Fast character switch: {_lastActivatedSlotIndex} → {currentSlotIndex} for {character.DisplayName}", "PlayOnlineMonitorService");
+                _lastActivatedSlotIndex = currentSlotIndex;
+                return await PerformImmediateActivationAsync(character, cancellationToken);
+            }
             
+            // Same character but enough time has passed - proceed
+            _lastActivatedSlotIndex = currentSlotIndex;
             return await PerformImmediateActivationAsync(character, cancellationToken);
         }
         
@@ -142,9 +162,9 @@ namespace FFXIManager.Services
             _currentActivationCts = new CancellationTokenSource();
             
             // Reset debounce timer
-            _activationDebounceTimer.Change(ACTIVATION_DEBOUNCE_MS, Timeout.Infinite);
+            _activationDebounceTimer.Change(_activationDebounceMs, Timeout.Infinite);
             
-            _ = _logging.LogDebugAsync($"Queued debounced activation for {character.DisplayName}", "PlayOnlineMonitorService");
+            _ = _logging.LogDebugAsync($"Queued debounced activation for {character.DisplayName} (debounce: {_activationDebounceMs}ms)", "PlayOnlineMonitorService");
         }
         
         /// <summary>
@@ -197,13 +217,13 @@ namespace FFXIManager.Services
                 
                 // Create timeout cancellation token
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(ACTIVATION_TIMEOUT_MS);
+                timeoutCts.CancelAfter(_activationTimeoutMs);
                 
                 await _logging.LogInfoAsync($"Activating window for {character.DisplayName}...", "PlayOnlineMonitorService");
                 
                 // **IMPROVED**: Use injected dependency with ServiceLocator fallback
                 var processManagement = _processManagement ?? ServiceLocator.ProcessManagementService;
-                var success = await processManagement.ActivateWindowAsync(character.WindowHandle, ACTIVATION_TIMEOUT_MS);
+                var success = await processManagement.ActivateWindowAsync(character.WindowHandle, _activationTimeoutMs);
                 
                 if (success)
                 {
@@ -438,6 +458,60 @@ namespace FFXIManager.Services
             
             GC.SuppressFinalize(this);
         }
+        
+        #region Performance Settings
+        
+        /// <summary>
+        /// Loads gaming-optimized performance settings from application configuration
+        /// </summary>
+        private void LoadPerformanceSettings()
+        {
+            try
+            {
+                var settingsService = ServiceLocator.SettingsService;
+                var settings = settingsService.LoadSettings();
+                
+                _activationDebounceMs = settings.ActivationDebounceIntervalMs;
+                _minActivationIntervalMs = settings.MinActivationIntervalMs;
+                _activationTimeoutMs = settings.ActivationTimeoutMs;
+                
+                _ = _logging.LogInfoAsync($"Loaded gaming-optimized settings: ActivationDebounce={_activationDebounceMs}ms, MinInterval={_minActivationIntervalMs}ms, Timeout={_activationTimeoutMs}ms", "PlayOnlineMonitorService");
+            }
+            catch (Exception ex)
+            {
+                _ = _logging.LogWarningAsync($"Failed to load performance settings, using defaults: {ex.Message}", "PlayOnlineMonitorService");
+                // Keep the default values already set
+            }
+        }
+        
+        /// <summary>
+        /// Gets the character slot index from the Characters collection for character-aware debouncing
+        /// </summary>
+        /// <param name="character">The character to find</param>
+        /// <returns>Slot index or -1 if not found</returns>
+        private async Task<int> GetCharacterSlotIndexAsync(PlayOnlineCharacter character)
+        {
+            try
+            {
+                var characters = await GetCharactersAsync();
+                for (int i = 0; i < characters.Count; i++)
+                {
+                    if (characters[i].ProcessId == character.ProcessId && 
+                        characters[i].WindowHandle == character.WindowHandle)
+                    {
+                        return i;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _ = SafeLogErrorAsync($"Error getting character slot index for {character.DisplayName}", ex);
+            }
+            
+            return -1; // Not found or error
+        }
+        
+        #endregion
         
         #region Safe Helper Methods
         
