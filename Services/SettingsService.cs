@@ -192,16 +192,18 @@ namespace FFXIManager.Services
         /// </summary>
         private static bool MigrateSettings(ApplicationSettings settings)
         {
-            const int CURRENT_VERSION = 2;
-            
-            // If already current version, no migration needed
-            if (settings.SettingsVersion >= CURRENT_VERSION)
-                return false;
-            
             bool migrationPerformed = false;
             
-            // ========== MIGRATION v1 → v2 (Added 2025-08, Remove after 2026-02) ==========
-            if (settings.SettingsVersion < 2)
+            // ========== MIGRATION v0/v1 → v2 (Added 2025-08, Remove after 2026-02) ==========
+            // Handle both missing SettingsVersion (v0) and explicit v1 settings
+            // For existing users without SettingsVersion, detect need for migration by checking timing values
+            bool needsV2Migration = settings.SettingsVersion < 2 || 
+                                   (settings.SettingsVersion == 2 && // Default value, but actual file might be missing version
+                                    (settings.HotkeyDebounceIntervalMs > 10 || 
+                                     settings.ActivationDebounceIntervalMs > 10 || 
+                                     settings.MinActivationIntervalMs > 10));
+            
+            if (needsV2Migration)
             {
                 // Critical gaming performance fix: upgrade all activation timings to ultra-responsive 5ms
                 // This helps users stuck with legacy slow settings get optimal gaming performance
