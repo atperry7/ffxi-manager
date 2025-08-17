@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using FFXIManager.Infrastructure;
@@ -13,7 +13,7 @@ namespace FFXIManager.Services
     public sealed class GlobalHotkeyManager : IDisposable
     {
         private static readonly Lazy<GlobalHotkeyManager> _instance = new(() => new GlobalHotkeyManager());
-        
+
         /// <summary>
         /// Gets the singleton instance of the GlobalHotkeyManager.
         /// </summary>
@@ -44,7 +44,7 @@ namespace FFXIManager.Services
             _loggingService = ServiceLocator.LoggingService;
             _hotkeyService = new LowLevelHotkeyService();
             _hotkeyService.HotkeyPressed += OnLowLevelHotkeyPressed;
-            
+
             _loggingService.LogInfoAsync("🔥 GlobalHotkeyManager initialized with LOW-LEVEL keyboard hooks", "GlobalHotkeyManager");
         }
 
@@ -62,7 +62,7 @@ namespace FFXIManager.Services
 
                 // Update debounce interval from settings
                 _hotkeyDebounceInterval = TimeSpan.FromMilliseconds(settings.HotkeyDebounceIntervalMs);
-                
+
                 // If no shortcuts configured, create defaults
                 if (settings.CharacterSwitchShortcuts.Count == 0)
                 {

@@ -1,4 +1,4 @@
-
+﻿
 namespace FFXIManager.Models.Settings
 {
     public class DiagnosticsOptions

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
@@ -12,25 +12,25 @@ namespace FFXIManager.Converters
     public class BoolToFontWeightConverter : IValueConverter
     {
         public static readonly BoolToFontWeightConverter Instance = new();
-        
+
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
             return value is true ? FontWeights.Bold : FontWeights.Normal;
         }
-        
+
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {
             throw new NotImplementedException();
         }
     }
-    
+
     /// <summary>
     /// Converts boolean to color for status highlighting
     /// </summary>
     public class BoolToColorConverter : IValueConverter
     {
         public static readonly BoolToColorConverter Instance = new();
-        
+
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
             if (parameter?.ToString() == "Status")
@@ -49,7 +49,7 @@ namespace FFXIManager.Converters
                     return primaryTextBrush ?? Brushes.Black;
                 }
             }
-            
+
             // For other uses - use theme-aware colors
             if (value is true)
             {
@@ -62,13 +62,13 @@ namespace FFXIManager.Converters
                 return primaryTextBrush ?? Brushes.Black;
             }
         }
-        
+
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {
             throw new NotImplementedException();
         }
     }
-    
+
     /// <summary>
     /// Combines profile type and active status into a clear, user-friendly status message
     /// </summary>
@@ -77,10 +77,10 @@ namespace FFXIManager.Converters
         public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
         {
             if (values == null || values.Length < 2) return "Available";
-            
+
             var isSystemFile = values[0] as bool? ?? false;
             var isCurrentlyActive = values.Length > 2 ? (values[2] as bool? ?? false) : false;
-            
+
             if (isSystemFile)
             {
                 return "System File"; // This is the login_w.bin file
@@ -94,13 +94,13 @@ namespace FFXIManager.Converters
                 return "Available"; // This backup is available for use
             }
         }
-        
+
         public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
         {
             throw new NotImplementedException();
         }
     }
-    
+
     /// <summary>
     /// Inverts a boolean value and converts to Visibility
     /// </summary>

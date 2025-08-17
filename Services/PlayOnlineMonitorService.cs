@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -16,30 +17,62 @@ namespace FFXIManager.Services
         private readonly IUnifiedMonitoringService _unifiedMonitoring;
         private readonly ILoggingService _logging;
         private readonly IUiDispatcher _uiDispatcher;
-        
+
         private Guid _monitorId;
         private bool _isMonitoring;
         private bool _disposed;
-        
-        // Rapid switching protection
+
+        // Rapid switching protection with character-aware logic
         private readonly SemaphoreSlim _activationSemaphore = new(1, 1);
         private readonly Timer _activationDebounceTimer;
         private CancellationTokenSource _currentActivationCts = new();
         private PlayOnlineCharacter? _pendingActivation;
         private DateTime _lastActivationAttempt = DateTime.MinValue;
-        
-        private const int ACTIVATION_DEBOUNCE_MS = 250; // 250ms debounce to prevent rapid clicking
-        private const int MIN_ACTIVATION_INTERVAL_MS = 100; // Minimum 100ms between activation attempts
-        private const int ACTIVATION_TIMEOUT_MS = 8000; // 8 second timeout (increased from 5)
-        
+        private int _lastActivatedCharacterSlotIndex = -1; // Track last activated character slot for smart debouncing
+
+        // Gaming-optimized timing values (loaded from settings)
+        private int _activationDebounceMs = 50;    // Fast debounce for gaming
+        private int _minActivationIntervalMs = 100; // Only applies to same character
+        private int _activationTimeoutMs = 3000;   // Reduced timeout for responsiveness
+
+        // **GAMING OPTIMIZATION**: Predictive character window caching
+        private readonly ConcurrentDictionary<int, CachedCharacterInfo> _characterCache = new();
+        private readonly object _cacheLock = new object();
+
+        /// <summary>
+        /// Cached character information for fast window handle lookups
+        /// </summary>
+        private sealed class CachedCharacterInfo
+        {
+            public int ProcessId { get; set; }
+            public IntPtr WindowHandle { get; set; }
+            public string CharacterName { get; set; } = string.Empty;
+            public string WindowTitle { get; set; } = string.Empty;
+            public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
+            public bool IsValid { get; set; } = true;
+
+            public PlayOnlineCharacter ToCharacter()
+            {
+                return new PlayOnlineCharacter
+                {
+                    ProcessId = ProcessId,
+                    WindowHandle = WindowHandle,
+                    CharacterName = CharacterName,
+                    WindowTitle = WindowTitle,
+                    LastSeen = LastUpdated,
+                    IsActive = false // Will be updated by monitoring
+                };
+            }
+        }
+
         // Events
         public event EventHandler<PlayOnlineCharacterEventArgs>? CharacterDetected;
         public event EventHandler<PlayOnlineCharacterEventArgs>? CharacterUpdated;
         public event EventHandler<PlayOnlineCharacterEventArgs>? CharacterRemoved;
-        
+
         // Target process names for PlayOnline/FFXI
         private readonly string[] _targetProcessNames = { "pol", "ffxi", "PlayOnlineViewer" };
-        
+
         // Injected dependency for better testability (fallback to ServiceLocator if not provided)
         private readonly IProcessManagementService? _processManagement;
 
@@ -53,19 +86,22 @@ namespace FFXIManager.Services
             _logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
             _processManagement = processManagement; // null = use ServiceLocator fallback
-            
+
+            // Load gaming-optimized settings
+            LoadPerformanceSettings();
+
             // Initialize activation debounce timer (initially disabled)
             _activationDebounceTimer = new Timer(DebouncedActivationCallback, null, Timeout.Infinite, Timeout.Infinite);
-            
+
             // Register our monitoring profile
             RegisterMonitoringProfile();
-            
+
             // Subscribe to unified monitoring events
             _unifiedMonitoring.ProcessDetected += OnProcessDetected;
             _unifiedMonitoring.ProcessUpdated += OnProcessUpdated;
             _unifiedMonitoring.ProcessRemoved += OnProcessRemoved;
         }
-        
+
         private void RegisterMonitoringProfile()
         {
             var profile = new MonitoringProfile
@@ -76,18 +112,18 @@ namespace FFXIManager.Services
                 TrackWindowTitles = true,       // We need titles for character names
                 IncludeProcessPath = false      // Don't need full paths
             };
-            
+
             _monitorId = _unifiedMonitoring.RegisterMonitor(profile);
             _ = _logging.LogInfoAsync($"Registered PlayOnline monitoring profile (ID: {_monitorId})", "PlayOnlineMonitorService");
         }
-        
+
         public bool IsMonitoring => _isMonitoring;
-        
+
         public async Task<List<PlayOnlineCharacter>> GetCharactersAsync()
         {
             var processes = await _unifiedMonitoring.GetProcessesAsync(_monitorId);
             var characters = new List<PlayOnlineCharacter>();
-            
+
             foreach (var process in processes)
             {
                 // Convert each window to a character
@@ -95,17 +131,17 @@ namespace FFXIManager.Services
                 {
                     characters.Add(ConvertToCharacter(process, window));
                 }
-                
+
                 // If no windows, create one character for the process
                 if (process.Windows.Count == 0)
                 {
                     characters.Add(ConvertToCharacter(process, null));
                 }
             }
-            
+
             return characters;
         }
-        
+
         public async Task<bool> ActivateCharacterWindowAsync(PlayOnlineCharacter character, CancellationToken cancellationToken = default)
         {
             if (character == null || character.WindowHandle == IntPtr.Zero)
@@ -113,21 +149,36 @@ namespace FFXIManager.Services
                 await _logging.LogWarningAsync("Cannot activate character: invalid window handle", "PlayOnlineMonitorService");
                 return false;
             }
-            
-            // **OPTIMIZATION**: Check rate limiting to prevent system overload
+
+            // **GAMING OPTIMIZATION**: Smart character-aware rate limiting using cached lookup
+            var currentSlotIndex = GetCharacterSlotIndexFast(character);
             var timeSinceLastAttempt = DateTime.UtcNow - _lastActivationAttempt;
-            if (timeSinceLastAttempt.TotalMilliseconds < MIN_ACTIVATION_INTERVAL_MS)
+
+            // Only apply rate limiting if switching to the SAME character
+            bool isSameCharacter = (currentSlotIndex == _lastActivatedCharacterSlotIndex && currentSlotIndex != -1);
+            bool tooFrequent = timeSinceLastAttempt.TotalMilliseconds < _minActivationIntervalMs;
+
+            if (isSameCharacter && tooFrequent)
             {
-                await _logging.LogDebugAsync($"Rate limiting activation request for {character.DisplayName} (too frequent)", "PlayOnlineMonitorService");
-                
-                // Instead of rejecting, use debounced activation
+                await _logging.LogDebugAsync($"Rate limiting same-character activation for {character.DisplayName} (slot {currentSlotIndex}, {timeSinceLastAttempt.TotalMilliseconds:F0}ms ago)", "PlayOnlineMonitorService");
+
+                // Use debounced activation for same character
                 RequestDebouncedActivation(character);
                 return true; // Return true to indicate request was accepted (will be processed)
             }
-            
+            else if (!isSameCharacter)
+            {
+                // Different character - allow immediate activation (gaming-optimized)
+                await _logging.LogDebugAsync($"Fast character switch: {_lastActivatedCharacterSlotIndex} → {currentSlotIndex} for {character.DisplayName}", "PlayOnlineMonitorService");
+                _lastActivatedCharacterSlotIndex = currentSlotIndex;
+                return await PerformImmediateActivationAsync(character, cancellationToken);
+            }
+
+            // Same character but enough time has passed - proceed
+            _lastActivatedCharacterSlotIndex = currentSlotIndex;
             return await PerformImmediateActivationAsync(character, cancellationToken);
         }
-        
+
         /// <summary>
         /// Requests a debounced character activation to prevent rapid-fire switching
         /// </summary>
@@ -135,18 +186,18 @@ namespace FFXIManager.Services
         {
             // Store the character for debounced activation
             _pendingActivation = character;
-            
+
             // Cancel previous activation if still pending
             _currentActivationCts.Cancel();
             _currentActivationCts.Dispose();
             _currentActivationCts = new CancellationTokenSource();
-            
+
             // Reset debounce timer
-            _activationDebounceTimer.Change(ACTIVATION_DEBOUNCE_MS, Timeout.Infinite);
-            
-            _ = _logging.LogDebugAsync($"Queued debounced activation for {character.DisplayName}", "PlayOnlineMonitorService");
+            _activationDebounceTimer.Change(_activationDebounceMs, Timeout.Infinite);
+
+            _ = _logging.LogDebugAsync($"Queued debounced activation for {character.DisplayName} (debounce: {_activationDebounceMs}ms)", "PlayOnlineMonitorService");
         }
-        
+
         /// <summary>
         /// Timer callback for debounced activation
         /// </summary>
@@ -155,7 +206,7 @@ namespace FFXIManager.Services
             // **FIXED**: Convert async void to fire-and-forget Task to prevent crashes
             _ = DebouncedActivationCallbackAsync();
         }
-        
+
         /// <summary>
         /// Async implementation of debounced activation with proper exception handling
         /// </summary>
@@ -163,7 +214,7 @@ namespace FFXIManager.Services
         {
             var characterToActivate = _pendingActivation;
             if (characterToActivate == null || _disposed) return;
-            
+
             try
             {
                 await PerformImmediateActivationAsync(characterToActivate, _currentActivationCts.Token);
@@ -178,33 +229,34 @@ namespace FFXIManager.Services
                 await SafeLogErrorAsync($"Error in debounced activation for {characterToActivate.DisplayName}", ex);
             }
         }
-        
+
         /// <summary>
         /// Performs the actual window activation with proper synchronization
         /// </summary>
         private async Task<bool> PerformImmediateActivationAsync(PlayOnlineCharacter character, CancellationToken cancellationToken = default)
         {
             // **OPTIMIZATION**: Use semaphore to ensure only one activation at a time
-            if (!await _activationSemaphore.WaitAsync(100, cancellationToken))
+            // Increased timeout to 500ms to prevent input blocking on slower systems
+            if (!await _activationSemaphore.WaitAsync(500, cancellationToken))
             {
-                await _logging.LogWarningAsync($"Activation already in progress, skipping {character.DisplayName}", "PlayOnlineMonitorService");
+                await _logging.LogWarningAsync($"Activation semaphore timeout, skipping {character.DisplayName}", "PlayOnlineMonitorService");
                 return false;
             }
-            
+
             try
             {
                 _lastActivationAttempt = DateTime.UtcNow;
-                
+
                 // Create timeout cancellation token
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(ACTIVATION_TIMEOUT_MS);
-                
+                timeoutCts.CancelAfter(_activationTimeoutMs);
+
                 await _logging.LogInfoAsync($"Activating window for {character.DisplayName}...", "PlayOnlineMonitorService");
-                
+
                 // **IMPROVED**: Use injected dependency with ServiceLocator fallback
                 var processManagement = _processManagement ?? ServiceLocator.ProcessManagementService;
-                var success = await processManagement.ActivateWindowAsync(character.WindowHandle, ACTIVATION_TIMEOUT_MS);
-                
+                var success = await processManagement.ActivateWindowAsync(character.WindowHandle, _activationTimeoutMs);
+
                 if (success)
                 {
                     await _logging.LogInfoAsync($"Successfully activated window for {character.DisplayName}", "PlayOnlineMonitorService");
@@ -213,7 +265,7 @@ namespace FFXIManager.Services
                 {
                     await _logging.LogWarningAsync($"Failed to activate window for {character.DisplayName}", "PlayOnlineMonitorService");
                 }
-                
+
                 return success;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -231,42 +283,42 @@ namespace FFXIManager.Services
                 _activationSemaphore.Release();
             }
         }
-        
+
         public async Task RefreshCharactersAsync()
         {
             // Simply get the latest data - the UnifiedMonitoringService handles all updates
             var characters = await GetCharactersAsync();
-            
+
             await _logging.LogInfoAsync($"Refreshed character data: {characters.Count} character(s) found", "PlayOnlineMonitorService");
         }
-        
+
         public void StartMonitoring()
         {
             if (_isMonitoring) return;
-            
+
             _isMonitoring = true;
-            
+
             // Start the unified monitoring if not already started
             if (!_unifiedMonitoring.IsMonitoring)
             {
                 _unifiedMonitoring.StartMonitoring();
             }
-            
+
             _ = _logging.LogInfoAsync("Started PlayOnline character monitoring", "PlayOnlineMonitorService");
         }
-        
+
         public void StopMonitoring()
         {
             if (!_isMonitoring) return;
-            
+
             _isMonitoring = false;
-            
+
             // We don't stop the unified monitoring as other services might be using it
             // The unified monitoring will handle its own lifecycle
-            
+
             _ = _logging.LogInfoAsync("Stopped PlayOnline character monitoring", "PlayOnlineMonitorService");
         }
-        
+
         private static PlayOnlineCharacter ConvertToCharacter(MonitoredProcess process, MonitoredWindow? window)
         {
             return new PlayOnlineCharacter
@@ -281,70 +333,78 @@ namespace FFXIManager.Services
                 IsActive = window?.IsActive ?? false // Use the IsActive flag from the window
             };
         }
-        
+
         private static string ExtractCharacterName(string? windowTitle)
         {
             if (string.IsNullOrWhiteSpace(windowTitle))
                 return string.Empty;
-            
+
             // Common FFXI window title patterns:
             // "CharacterName" (simple)
             // "CharacterName - ServerName" (with server)
             // "Final Fantasy XI" (login screen)
-            
+
             // Skip non-character titles
             if (windowTitle.Contains("PlayOnline", StringComparison.OrdinalIgnoreCase) ||
                 windowTitle.Equals("Final Fantasy XI", StringComparison.OrdinalIgnoreCase))
             {
                 return string.Empty;
             }
-            
+
             // Extract character name (before dash if present)
             var dashIndex = windowTitle.IndexOf('-');
             if (dashIndex > 0)
             {
                 return windowTitle.Substring(0, dashIndex).Trim();
             }
-            
+
             // If no dash, the whole title might be the character name
             return windowTitle.Trim();
         }
-        
+
         private static string ExtractServerName(string? windowTitle)
         {
             if (string.IsNullOrWhiteSpace(windowTitle))
                 return string.Empty;
-            
+
             // Look for pattern "CharacterName - ServerName"
             var dashIndex = windowTitle.IndexOf('-');
             if (dashIndex > 0 && dashIndex < windowTitle.Length - 1)
             {
                 return windowTitle.Substring(dashIndex + 1).Trim();
             }
-            
+
             return string.Empty;
         }
-        
+
         private void OnProcessDetected(object? sender, MonitoredProcessEventArgs e)
         {
             if (e.MonitorId != _monitorId || _disposed) return;
-            
+
             try
             {
                 // Convert and fire events for each window
                 foreach (var window in e.Process.Windows)
                 {
                     var character = ConvertToCharacter(e.Process, window);
+
+                    // **GAMING OPTIMIZATION**: Update character cache for fast lookups
+                    UpdateCharacterCache(character);
+
                     SafeDispatchEvent(() => CharacterDetected?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
                 }
-                
+
                 // If no windows yet, fire event for the process itself
                 if (e.Process.Windows.Count == 0)
                 {
                     var character = ConvertToCharacter(e.Process, null);
+
+                    // **GAMING OPTIMIZATION**: Update character cache for fast lookups
+                    UpdateCharacterCache(character);
+
                     SafeDispatchEvent(() => CharacterDetected?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
                 }
-                
+
                 _ = SafeLogInfoAsync($"PlayOnline process detected: {e.Process.ProcessName} (PID: {e.Process.ProcessId})");
             }
             catch (Exception ex)
@@ -352,21 +412,25 @@ namespace FFXIManager.Services
                 _ = SafeLogErrorAsync("Error in OnProcessDetected", ex);
             }
         }
-        
+
         private void OnProcessUpdated(object? sender, MonitoredProcessEventArgs e)
         {
             if (e.MonitorId != _monitorId || _disposed) return;
-            
+
             try
             {
                 _ = SafeLogInfoAsync($"[PlayOnline] Process updated: {e.Process.ProcessName} (PID: {e.Process.ProcessId}) with {e.Process.Windows.Count} windows");
-                
+
                 // Fire update events for windows with title changes
                 foreach (var window in e.Process.Windows)
                 {
                     _ = SafeLogInfoAsync($"[PlayOnline] Firing CharacterUpdated for window: '{window.Title}' (Handle: 0x{window.Handle.ToInt64():X})");
-                    
+
                     var character = ConvertToCharacter(e.Process, window);
+
+                    // **GAMING OPTIMIZATION**: Update character cache with latest information
+                    UpdateCharacterCache(character);
+
                     SafeDispatchEvent(() => CharacterUpdated?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
                 }
             }
@@ -375,21 +439,24 @@ namespace FFXIManager.Services
                 _ = SafeLogErrorAsync("Error in OnProcessUpdated", ex);
             }
         }
-        
+
         private void OnProcessRemoved(object? sender, MonitoredProcessEventArgs e)
         {
             if (e.MonitorId != _monitorId || _disposed) return;
-            
+
             try
             {
+                // **GAMING OPTIMIZATION**: Remove character from cache when process dies
+                RemoveFromCharacterCache(e.Process.ProcessId);
+
                 // Need to create a character object for removal
-                var character = new PlayOnlineCharacter 
-                { 
+                var character = new PlayOnlineCharacter
+                {
                     ProcessId = e.Process.ProcessId,
                     ProcessName = e.Process.ProcessName
                 };
                 SafeDispatchEvent(() => CharacterRemoved?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
-                
+
                 _ = SafeLogInfoAsync($"PlayOnline process removed: {e.Process.ProcessName} (PID: {e.Process.ProcessId})");
             }
             catch (Exception ex)
@@ -397,34 +464,34 @@ namespace FFXIManager.Services
                 _ = SafeLogErrorAsync("Error in OnProcessRemoved", ex);
             }
         }
-        
+
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
-            
+
             try
             {
                 StopMonitoring();
-                
+
                 // **IMPROVED**: Wait briefly for any pending activation to complete
                 if (_activationSemaphore.CurrentCount == 0)
                 {
                     // Activation in progress - wait up to 500ms for completion
                     _activationSemaphore.Wait(500);
                 }
-                
+
                 // Cancel any pending activations
                 _currentActivationCts?.Cancel();
                 _currentActivationCts?.Dispose();
-                
+
                 // Dispose timers and synchronization objects
                 _activationDebounceTimer?.Dispose();
                 _activationSemaphore?.Dispose();
-                
+
                 // Unregister from unified monitoring
                 _unifiedMonitoring.UnregisterMonitor(_monitorId);
-                
+
                 // Unsubscribe from events
                 _unifiedMonitoring.ProcessDetected -= OnProcessDetected;
                 _unifiedMonitoring.ProcessUpdated -= OnProcessUpdated;
@@ -435,12 +502,146 @@ namespace FFXIManager.Services
                 // Log disposal errors but don't throw
                 _ = SafeLogErrorAsync("Error during PlayOnlineMonitorService disposal", ex);
             }
-            
+
             GC.SuppressFinalize(this);
         }
-        
+
+        #region Performance Settings
+
+        /// <summary>
+        /// Loads gaming-optimized performance settings from application configuration
+        /// </summary>
+        private void LoadPerformanceSettings()
+        {
+            try
+            {
+                var settingsService = ServiceLocator.SettingsService;
+                var settings = settingsService.LoadSettings();
+
+                _activationDebounceMs = settings.ActivationDebounceIntervalMs;
+                _minActivationIntervalMs = settings.MinActivationIntervalMs;
+                _activationTimeoutMs = settings.ActivationTimeoutMs;
+
+                _ = _logging.LogInfoAsync($"Loaded gaming-optimized settings: ActivationDebounce={_activationDebounceMs}ms, MinInterval={_minActivationIntervalMs}ms, Timeout={_activationTimeoutMs}ms", "PlayOnlineMonitorService");
+            }
+            catch (Exception ex)
+            {
+                _ = _logging.LogWarningAsync($"Failed to load performance settings, using defaults: {ex.Message}", "PlayOnlineMonitorService");
+                // Keep the default values already set
+            }
+        }
+
+        /// <summary>
+        /// Gets the character slot index using cached lookups - GAMING OPTIMIZED
+        /// </summary>
+        /// <param name="character">The character to find</param>
+        /// <returns>Slot index or -1 if not found</returns>
+        private int GetCharacterSlotIndexFast(PlayOnlineCharacter character)
+        {
+            try
+            {
+                // **GAMING OPTIMIZATION**: Use cached character lookup instead of expensive GetCharactersAsync()
+                lock (_cacheLock)
+                {
+                    var cachedChars = _characterCache.Values.Where(c => c.IsValid).OrderBy(c => c.ProcessId).ToList();
+                    for (int i = 0; i < cachedChars.Count; i++)
+                    {
+                        if (cachedChars[i].ProcessId == character.ProcessId &&
+                            cachedChars[i].WindowHandle == character.WindowHandle)
+                        {
+                            return i;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _ = SafeLogErrorAsync($"Error getting cached character slot index for {character.DisplayName}", ex);
+            }
+
+            return -1; // Not found or error
+        }
+
+        /// <summary>
+        /// Updates the character cache with new/changed character information
+        /// </summary>
+        private void UpdateCharacterCache(PlayOnlineCharacter character)
+        {
+            try
+            {
+                lock (_cacheLock)
+                {
+                    var cacheKey = GetCharacterCacheKey(character.ProcessId, character.WindowHandle);
+                    var cached = new CachedCharacterInfo
+                    {
+                        ProcessId = character.ProcessId,
+                        WindowHandle = character.WindowHandle,
+                        CharacterName = character.CharacterName,
+                        WindowTitle = character.WindowTitle,
+                        LastUpdated = DateTime.UtcNow,
+                        IsValid = true
+                    };
+
+                    _characterCache[cacheKey] = cached;
+                    _ = SafeLogInfoAsync($"Updated character cache: {character.CharacterName} (PID: {character.ProcessId})");
+                }
+            }
+            catch (Exception ex)
+            {
+                _ = SafeLogErrorAsync($"Error updating character cache for {character.DisplayName}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Removes a character from the cache when it's no longer available
+        /// </summary>
+        private void RemoveFromCharacterCache(int processId)
+        {
+            try
+            {
+                lock (_cacheLock)
+                {
+                    var keysToRemove = _characterCache.Where(kvp => kvp.Value.ProcessId == processId)
+                        .Select(kvp => kvp.Key)
+                        .ToList();
+                    foreach (var key in keysToRemove)
+                    {
+                        _characterCache.TryRemove(key, out _);
+                    }
+                    _ = SafeLogInfoAsync($"Removed character from cache (PID: {processId})");
+                }
+            }
+            catch (Exception ex)
+            {
+                _ = SafeLogErrorAsync($"Error removing character from cache (PID: {processId})", ex);
+            }
+        }
+
+        /// <summary>
+        /// Generates a unique cache key for character identification
+        /// Uses both 32-bit processId and full 64-bit windowHandle to avoid hash collisions
+        /// </summary>
+        private static int GetCharacterCacheKey(int processId, IntPtr windowHandle)
+        {
+            // Handle both 32-bit and 64-bit window handles properly
+            // On 64-bit systems, use both upper and lower 32 bits of the window handle
+            if (IntPtr.Size == 8) // 64-bit system
+            {
+                var handleValue = windowHandle.ToInt64();
+                var lowerHandle = (int)(handleValue & 0xFFFFFFFF);
+                var upperHandle = (int)((handleValue >> 32) & 0xFFFFFFFF);
+                return HashCode.Combine(processId, lowerHandle, upperHandle);
+            }
+            else // 32-bit system
+            {
+                return HashCode.Combine(processId, windowHandle.ToInt32());
+            }
+        }
+
+        #endregion
+
         #region Safe Helper Methods
-        
+
         /// <summary>
         /// Safely dispatches an event to the UI thread with exception handling
         /// </summary>
@@ -459,7 +660,7 @@ namespace FFXIManager.Services
                 _ = SafeLogErrorAsync("Error dispatching event to UI thread", ex);
             }
         }
-        
+
         /// <summary>
         /// Safe logging that won't throw exceptions
         /// </summary>
@@ -474,7 +675,7 @@ namespace FFXIManager.Services
                 // Ignore logging errors to prevent cascading failures
             }
         }
-        
+
         /// <summary>
         /// Safe error logging that won't throw exceptions
         /// </summary>
@@ -490,7 +691,7 @@ namespace FFXIManager.Services
                 // But for now, fail silently to prevent crashes
             }
         }
-        
+
         #endregion
     }
 }

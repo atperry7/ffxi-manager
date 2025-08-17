@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using FFXIManager.Models.Settings;
 
 namespace FFXIManager.Views
@@ -9,7 +9,7 @@ namespace FFXIManager.Views
     public partial class HotkeyEditDialog : Window
     {
         private KeyboardShortcutConfig _originalShortcut;
-        
+
         /// <summary>
         /// Gets the edited shortcut after dialog completion.
         /// </summary>
@@ -22,14 +22,14 @@ namespace FFXIManager.Views
         public HotkeyEditDialog(KeyboardShortcutConfig shortcut)
         {
             InitializeComponent();
-            
+
             _originalShortcut = shortcut;
             DataContext = shortcut;
-            
+
             // Initialize the key recorder with the current shortcut
             KeyRecorder.SetShortcut(shortcut.Modifiers, shortcut.Key);
         }
-        
+
         private void KeyRecorder_ShortcutRecorded(object sender, KeyboardShortcutConfig e)
         {
             // Update the edited shortcut when a new one is recorded
@@ -40,7 +40,7 @@ namespace FFXIManager.Views
             {
                 IsEnabled = _originalShortcut.IsEnabled
             };
-            
+
             // No auto-close or confirmation - let the user review and click Apply when ready
         }
 
@@ -54,7 +54,7 @@ namespace FFXIManager.Views
             }
             else
             {
-                MessageBox.Show("Please record a keyboard shortcut before applying.", 
+                MessageBox.Show("Please record a keyboard shortcut before applying.",
                     "No Shortcut Recorded", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }

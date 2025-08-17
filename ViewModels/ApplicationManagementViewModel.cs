@@ -1,4 +1,4 @@
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 using FFXIManager.Views;
@@ -29,10 +29,10 @@ namespace FFXIManager.ViewModels
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
 
             ExternalApplications = new ObservableCollection<ExternalApplication>();
-            
+
             _applicationService.ApplicationStatusChanged += OnApplicationStatusChanged;
             InitializeCommands();
-            
+
             // Start monitoring
             _applicationService.StartMonitoring();
         }
@@ -145,7 +145,7 @@ namespace FFXIManager.ViewModels
                 }
 
                 var success = await _applicationService.LaunchApplicationAsync(application);
-                
+
                 if (success)
                 {
                     _statusService.SetMessage($"Successfully launched {application.Name}");
@@ -175,7 +175,7 @@ namespace FFXIManager.ViewModels
                 _statusService.SetMessage($"Stopping {application.Name}...");
 
                 var success = await _applicationService.KillApplicationAsync(application);
-                
+
                 if (success)
                 {
                     _statusService.SetMessage($"Successfully stopped {application.Name}");
@@ -197,7 +197,7 @@ namespace FFXIManager.ViewModels
 
         private async Task EditApplicationAsync(ExternalApplication application)
         {
-            if (application == null) 
+            if (application == null)
             {
                 _statusService.SetMessage("No application selected for editing");
                 return;
@@ -221,7 +221,7 @@ namespace FFXIManager.ViewModels
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"Error opening configuration dialog: {ex.Message}", "Dialog Error", 
+                        MessageBox.Show($"Error opening configuration dialog: {ex.Message}", "Dialog Error",
                                       MessageBoxButton.OK, MessageBoxImage.Error);
                         _statusService.SetMessage($"Failed to open configuration dialog: {ex.Message}");
                         return (bool?)false;
@@ -233,9 +233,9 @@ namespace FFXIManager.ViewModels
                 {
                     // IMPORTANT: Call UpdateApplicationAsync to persist changes
                     await _applicationService.UpdateApplicationAsync(application);
-                    
+
                     _statusService.SetMessage($"Application {application.Name} updated successfully");
-                    
+
                     // Trigger property notifications for UI updates
                     application.OnPropertyChanged(nameof(application.StatusColor));
                     application.OnPropertyChanged(nameof(application.StatusText));
@@ -314,7 +314,7 @@ namespace FFXIManager.ViewModels
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"Error opening application dialog: {ex.Message}", "Dialog Error", 
+                        MessageBox.Show($"Error opening application dialog: {ex.Message}", "Dialog Error",
                                       MessageBoxButton.OK, MessageBoxImage.Error);
                         _statusService.SetMessage($"Failed to open application dialog: {ex.Message}");
                         return (bool?)false;

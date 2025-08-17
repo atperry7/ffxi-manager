@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -16,14 +16,14 @@ namespace FFXIManager.ViewModels
     {
         private readonly ISettingsService _settingsService;
         private readonly Dictionary<KeyboardShortcutConfig, bool> _originalEnabledStates = new();
-        
+
         /// <summary>
         /// Static event fired when hotkey settings are changed and saved.
         /// CharacterMonitorWindow instances can subscribe to this to refresh their hotkeys.
         /// </summary>
         public static event EventHandler? HotkeySettingsChanged;
 
-        public DiscoverySettingsViewModel() : this(ServiceLocator.SettingsService) {}
+        public DiscoverySettingsViewModel() : this(ServiceLocator.SettingsService) { }
 
         public DiscoverySettingsViewModel(ISettingsService settingsService)
         {
@@ -60,14 +60,14 @@ namespace FFXIManager.ViewModels
             get => _maxLogEntries;
             set { _maxLogEntries = value; OnPropertyChanged(); }
         }
-        
+
         private bool _enableHotkeys;
         public bool EnableHotkeys
         {
             get => _enableHotkeys;
             set { _enableHotkeys = value; OnPropertyChanged(); }
         }
-        
+
         public ObservableCollection<KeyboardShortcutConfig> CharacterHotkeys { get; }
 
 
@@ -80,11 +80,11 @@ namespace FFXIManager.ViewModels
             EnableDiagnostics = settings.Diagnostics?.EnableDiagnostics ?? false;
             VerboseLogging = settings.Diagnostics?.VerboseLogging ?? false;
             MaxLogEntries = settings.Diagnostics?.MaxLogEntries ?? 1000;
-            
+
             // Character Hotkeys  
             EnableHotkeys = settings.CharacterSwitchShortcuts.Any(s => s.IsEnabled);
             CharacterHotkeys.Clear();
-            
+
             // If no shortcuts configured, create defaults
             if (settings.CharacterSwitchShortcuts.Count == 0)
             {
@@ -108,12 +108,12 @@ namespace FFXIManager.ViewModels
             // Use the specific update method instead of saving the entire settings object
             var validMaxLogEntries = MaxLogEntries > 0 ? MaxLogEntries : 1000;
             _settingsService.UpdateDiagnostics(EnableDiagnostics, VerboseLogging, validMaxLogEntries);
-            
+
             // Save keyboard shortcuts
             var settings = _settingsService.LoadSettings();
             settings.CharacterSwitchShortcuts.Clear();
             settings.CharacterSwitchShortcuts.AddRange(CharacterHotkeys);
-            
+
             // Handle EnableHotkeys toggle properly to preserve individual shortcut states
             if (!EnableHotkeys)
             {
@@ -126,7 +126,7 @@ namespace FFXIManager.ViewModels
                         _originalEnabledStates[shortcut] = shortcut.IsEnabled;
                     }
                 }
-                
+
                 // Disable all shortcuts
                 foreach (var shortcut in settings.CharacterSwitchShortcuts)
                 {
@@ -144,24 +144,24 @@ namespace FFXIManager.ViewModels
                     }
                     // If no stored state, leave shortcut as-is (preserves user's individual toggles)
                 }
-                
+
                 // Clear the stored states after successful restoration
                 _originalEnabledStates.Clear();
             }
-            
+
             _settingsService.SaveSettings(settings);
-            
+
             // Notify any listening CharacterMonitorWindow instances that hotkey settings have changed
             HotkeySettingsChanged?.Invoke(this, EventArgs.Empty);
         }
-        
+
         private void EditHotkey(KeyboardShortcutConfig shortcut)
         {
             if (shortcut == null) return;
-            
+
             var dialog = new HotkeyEditDialog(shortcut);
             var result = dialog.ShowDialog();
-            
+
             if (result == true && dialog.EditedShortcut != null)
             {
                 // Update the shortcut in place

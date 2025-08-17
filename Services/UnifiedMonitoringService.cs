@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -21,39 +21,39 @@ namespace FFXIManager.Services
         private readonly IProcessUtilityService _processUtility;
         private readonly ILoggingService _logging;
         private readonly IUiDispatcher _uiDispatcher;
-        
+
         private readonly Dictionary<Guid, MonitoringProfile> _profiles = new();
         private readonly Dictionary<int, MonitoredProcess> _processes = new();
         private readonly object _lock = new();
-        
+
         private bool _isMonitoring;
         private bool _disposed;
         private Timer? _windowTitleTimer;
         private Timer? _periodicScanTimer;
-        
+
         // WMI watchers for process lifecycle
         private ManagementEventWatcher? _processStartWatcher;
         private ManagementEventWatcher? _processStopWatcher;
-        
+
         // For window title tracking - we'll use polling for reliability
         private readonly Dictionary<IntPtr, string> _lastWindowTitles = new();
         private IntPtr _lastActiveWindow = IntPtr.Zero; // Track the last active window
-        
+
         private const int WINDOW_TITLE_POLL_MS = 250; // Poll every 250ms for more responsive active window detection
         private const int PERIODIC_SCAN_MS = 10000;   // Safety scan every 10 seconds
-        
+
         public bool IsMonitoring => _isMonitoring;
-        
+
         // Per-monitor events
         public event EventHandler<MonitoredProcessEventArgs>? ProcessDetected;
         public event EventHandler<MonitoredProcessEventArgs>? ProcessUpdated;
         public event EventHandler<MonitoredProcessEventArgs>? ProcessRemoved;
-        
+
         // Global events
         public event EventHandler<MonitoredProcess>? GlobalProcessDetected;
         public event EventHandler<MonitoredProcess>? GlobalProcessUpdated;
         public event EventHandler<int>? GlobalProcessRemoved;
-        
+
         public UnifiedMonitoringService(
             IProcessUtilityService processUtility,
             ILoggingService logging,
@@ -63,30 +63,30 @@ namespace FFXIManager.Services
             _logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         }
-        
+
         #region Public Methods
-        
+
         public Guid RegisterMonitor(MonitoringProfile profile)
         {
             if (profile == null) throw new ArgumentNullException(nameof(profile));
-            
+
             lock (_lock)
             {
                 _profiles[profile.Id] = profile;
-                
-                _ = _logging.LogInfoAsync($"Registered monitor '{profile.Name}' (ID: {profile.Id}) for processes: {string.Join(", ", profile.ProcessNames)}", 
+
+                _ = _logging.LogInfoAsync($"Registered monitor '{profile.Name}' (ID: {profile.Id}) for processes: {string.Join(", ", profile.ProcessNames)}",
                     "UnifiedMonitoringService");
-                
+
                 // If monitoring is active, scan for existing processes
                 if (_isMonitoring)
                 {
                     Task.Run(() => ScanForExistingProcessesAsync(profile.Id));
                 }
-                
+
                 return profile.Id;
             }
         }
-        
+
         public void UnregisterMonitor(Guid monitorId)
         {
             lock (_lock)
@@ -99,36 +99,36 @@ namespace FFXIManager.Services
                         process.MonitorIds.Remove(monitorId);
                         process.ContextData.Remove(monitorId);
                     }
-                    
+
                     // Clean up processes that no longer have any monitors
                     var toRemove = _processes
                         .Where(kvp => kvp.Value.MonitorIds.Count == 0)
                         .Select(kvp => kvp.Key)
                         .ToList();
-                    
+
                     foreach (var pid in toRemove)
                     {
                         _processes.Remove(pid);
                     }
-                    
+
                     _ = _logging.LogInfoAsync($"Unregistered monitor {monitorId}", "UnifiedMonitoringService");
                 }
             }
         }
-        
+
         public void UpdateMonitorProfile(Guid monitorId, MonitoringProfile profile)
         {
             if (profile == null) throw new ArgumentNullException(nameof(profile));
-            
+
             lock (_lock)
             {
                 if (_profiles.ContainsKey(monitorId))
                 {
                     profile.Id = monitorId;
                     _profiles[monitorId] = profile;
-                    
+
                     _ = _logging.LogInfoAsync($"Updated monitor profile {monitorId}", "UnifiedMonitoringService");
-                    
+
                     // Rescan for this profile
                     if (_isMonitoring)
                     {
@@ -137,11 +137,11 @@ namespace FFXIManager.Services
                 }
             }
         }
-        
+
         public async Task<List<MonitoredProcess>> GetProcessesAsync(Guid monitorId)
         {
             await Task.Yield();
-            
+
             lock (_lock)
             {
                 return _processes.Values
@@ -150,14 +150,14 @@ namespace FFXIManager.Services
                     .ToList();
             }
         }
-        
+
         public async Task<MonitoredProcess?> GetProcessAsync(Guid monitorId, int processId)
         {
             await Task.Yield();
-            
+
             lock (_lock)
             {
-                if (_processes.TryGetValue(processId, out var process) && 
+                if (_processes.TryGetValue(processId, out var process) &&
                     process.MonitorIds.Contains(monitorId))
                 {
                     return CloneProcess(process);
@@ -165,16 +165,16 @@ namespace FFXIManager.Services
                 return null;
             }
         }
-        
+
         public void StartMonitoring()
         {
             if (_isMonitoring) return;
-            
+
             _isMonitoring = true;
-            
+
             // Start WMI watchers for process lifecycle
             StartWmiWatchers();
-            
+
             // Start window title polling timer
             _windowTitleTimer?.Dispose();
             _windowTitleTimer = new Timer(
@@ -182,7 +182,7 @@ namespace FFXIManager.Services
                 null,
                 0,
                 WINDOW_TITLE_POLL_MS);
-            
+
             // Start periodic safety scan
             _periodicScanTimer?.Dispose();
             _periodicScanTimer = new Timer(
@@ -190,36 +190,36 @@ namespace FFXIManager.Services
                 null,
                 PERIODIC_SCAN_MS,
                 PERIODIC_SCAN_MS);
-            
+
             // Initial scan for all profiles
             Task.Run(() => InitialScanAsync());
-            
+
             _ = _logging.LogInfoAsync("Started unified monitoring", "UnifiedMonitoringService");
         }
-        
+
         public void StopMonitoring()
         {
             if (!_isMonitoring) return;
-            
+
             _isMonitoring = false;
-            
+
             // Stop timers
             _windowTitleTimer?.Dispose();
             _windowTitleTimer = null;
-            
+
             _periodicScanTimer?.Dispose();
             _periodicScanTimer = null;
-            
+
             // Stop WMI watchers
             StopWmiWatchers();
-            
+
             _ = _logging.LogInfoAsync("Stopped unified monitoring", "UnifiedMonitoringService");
         }
-        
+
         #endregion
-        
+
         #region WMI Monitoring
-        
+
         private void StartWmiWatchers()
         {
             try
@@ -234,7 +234,7 @@ namespace FFXIManager.Services
                 _processStartWatcher = new ManagementEventWatcher(new ManagementScope("root\\CIMV2"), creationQuery);
                 _processStartWatcher.EventArrived += OnWmiProcessCreated;
                 _processStartWatcher.Start();
-                
+
                 // Process deletion watcher
                 var deletionQuery = new WqlEventQuery
                 {
@@ -245,7 +245,7 @@ namespace FFXIManager.Services
                 _processStopWatcher = new ManagementEventWatcher(new ManagementScope("root\\CIMV2"), deletionQuery);
                 _processStopWatcher.EventArrived += OnWmiProcessDeleted;
                 _processStopWatcher.Start();
-                
+
                 _ = _logging.LogInfoAsync("WMI process watchers started", "UnifiedMonitoringService");
             }
             catch (Exception ex)
@@ -253,7 +253,7 @@ namespace FFXIManager.Services
                 _ = _logging.LogWarningAsync($"Failed to start WMI watchers: {ex.Message}", "UnifiedMonitoringService");
             }
         }
-        
+
         private void StopWmiWatchers()
         {
             try
@@ -265,7 +265,7 @@ namespace FFXIManager.Services
                     _processStartWatcher.Dispose();
                     _processStartWatcher = null;
                 }
-                
+
                 if (_processStopWatcher != null)
                 {
                     _processStopWatcher.EventArrived -= OnWmiProcessDeleted;
@@ -273,7 +273,7 @@ namespace FFXIManager.Services
                     _processStopWatcher.Dispose();
                     _processStopWatcher = null;
                 }
-                
+
                 _ = _logging.LogInfoAsync("WMI process watchers stopped", "UnifiedMonitoringService");
             }
             catch (Exception ex)
@@ -281,23 +281,23 @@ namespace FFXIManager.Services
                 _ = _logging.LogDebugAsync($"Error stopping WMI watchers: {ex.Message}", "UnifiedMonitoringService");
             }
         }
-        
+
         private void OnWmiProcessCreated(object sender, EventArrivedEventArgs e)
         {
             try
             {
                 if (!_isMonitoring) return;
-                
+
                 var target = e.NewEvent?["TargetInstance"] as ManagementBaseObject;
                 if (target == null) return;
-                
+
                 var nameObj = target["Name"];
                 var pidObj = target["ProcessId"];
                 if (nameObj == null || pidObj == null) return;
-                
+
                 var name = nameObj.ToString() ?? string.Empty;
                 var pid = Convert.ToInt32((uint)pidObj);
-                
+
                 // Check if any profile is interested in this process
                 List<MonitoringProfile> matchingProfiles;
                 lock (_lock)
@@ -306,7 +306,7 @@ namespace FFXIManager.Services
                         .Where(p => ProcessMatchesProfile(name, p))
                         .ToList();
                 }
-                
+
                 if (matchingProfiles.Count > 0)
                 {
                     Task.Run(async () =>
@@ -324,7 +324,7 @@ namespace FFXIManager.Services
                         }
                         catch (Exception ex)
                         {
-                            await _logging.LogDebugAsync($"Error handling process creation: {ex.Message}", 
+                            await _logging.LogDebugAsync($"Error handling process creation: {ex.Message}",
                                 "UnifiedMonitoringService");
                         }
                     });
@@ -332,33 +332,33 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                _ = _logging.LogDebugAsync($"Exception in WMI process creation handler: {ex.Message}", 
+                _ = _logging.LogDebugAsync($"Exception in WMI process creation handler: {ex.Message}",
                     "UnifiedMonitoringService");
             }
         }
-        
+
         private void OnWmiProcessDeleted(object sender, EventArrivedEventArgs e)
         {
             try
             {
                 if (!_isMonitoring) return;
-                
+
                 var target = e.NewEvent?["TargetInstance"] as ManagementBaseObject;
                 if (target == null) return;
-                
+
                 var pidObj = target["ProcessId"];
                 if (pidObj == null) return;
-                
+
                 var pid = Convert.ToInt32((uint)pidObj);
-                
+
                 MonitoredProcess? process;
                 List<MonitoringProfile> affectedProfiles = new();
-                
+
                 lock (_lock)
                 {
                     if (!_processes.TryGetValue(pid, out process))
                         return;
-                    
+
                     // Get affected profiles before removing
                     foreach (var monitorId in process.MonitorIds)
                     {
@@ -367,63 +367,63 @@ namespace FFXIManager.Services
                             affectedProfiles.Add(profile);
                         }
                     }
-                    
+
                     // Remove the process
                     _processes.Remove(pid);
-                    
+
                     // Clear window title tracking
                     foreach (var window in process.Windows)
                     {
                         _lastWindowTitles.Remove(window.Handle);
                     }
                 }
-                
+
                 // Fire removal events for each affected profile
                 foreach (var profile in affectedProfiles)
                 {
                     FireProcessRemoved(process, profile);
                 }
-                
+
                 _uiDispatcher.BeginInvoke(() =>
                 {
                     GlobalProcessRemoved?.Invoke(this, pid);
                 });
-                
-                _ = _logging.LogInfoAsync($"Process terminated: {process.ProcessName} (PID: {pid})", 
+
+                _ = _logging.LogInfoAsync($"Process terminated: {process.ProcessName} (PID: {pid})",
                     "UnifiedMonitoringService");
             }
             catch (Exception ex)
             {
-                _ = _logging.LogDebugAsync($"Exception in WMI process deletion handler: {ex.Message}", 
+                _ = _logging.LogDebugAsync($"Exception in WMI process deletion handler: {ex.Message}",
                     "UnifiedMonitoringService");
             }
         }
-        
+
         #endregion
-        
+
         #region Window Title Polling
-        
+
         private void WindowTitlePollCallback(object? state)
         {
             if (!_isMonitoring || _disposed) return;
-            
+
             Task.Run(async () =>
             {
                 try
                 {
                     // First, check active window
                     await CheckActiveWindowAsync();
-                    
+
                     List<MonitoredProcess> processesToCheck;
                     lock (_lock)
                     {
                         // Get processes that need window title tracking
                         processesToCheck = _processes.Values
-                            .Where(p => p.MonitorIds.Any(id => 
+                            .Where(p => p.MonitorIds.Any(id =>
                                 _profiles.TryGetValue(id, out var profile) && profile.TrackWindowTitles))
                             .ToList();
                     }
-                    
+
                     foreach (var process in processesToCheck)
                     {
                         await UpdateProcessWindowsAsync(process);
@@ -431,12 +431,12 @@ namespace FFXIManager.Services
                 }
                 catch (Exception ex)
                 {
-                    await _logging.LogDebugAsync($"Error in window title polling: {ex.Message}", 
+                    await _logging.LogDebugAsync($"Error in window title polling: {ex.Message}",
                         "UnifiedMonitoringService");
                 }
             });
         }
-        
+
         private async Task UpdateProcessWindowsAsync(MonitoredProcess process)
         {
             try
@@ -444,14 +444,14 @@ namespace FFXIManager.Services
                 var windows = await _processUtility.GetProcessWindowsAsync(process.ProcessId);
                 bool hasChanges = false;
                 List<MonitoringProfile> affectedProfiles = new();
-                
+
                 lock (_lock)
                 {
                     // Check for new or updated windows
                     foreach (var window in windows)
                     {
                         var existingWindow = process.Windows.FirstOrDefault(w => w.Handle == window.Handle);
-                        
+
                         if (existingWindow != null)
                         {
                             // Check if title changed
@@ -462,8 +462,8 @@ namespace FFXIManager.Services
                                 existingWindow.LastTitleUpdate = DateTime.UtcNow;
                                 _lastWindowTitles[window.Handle] = window.Title;
                                 hasChanges = true;
-                                
-                                _ = _logging.LogInfoAsync($"[Unified] Window title changed for PID {process.ProcessId}: '{window.Title}' (Handle: 0x{window.Handle.ToInt64():X})", 
+
+                                _ = _logging.LogInfoAsync($"[Unified] Window title changed for PID {process.ProcessId}: '{window.Title}' (Handle: 0x{window.Handle.ToInt64():X})",
                                     "UnifiedMonitoringService");
                             }
                         }
@@ -482,19 +482,19 @@ namespace FFXIManager.Services
                             hasChanges = true;
                         }
                     }
-                    
+
                     // Remove closed windows
                     var closedWindows = process.Windows
                         .Where(w => !windows.Any(nw => nw.Handle == w.Handle))
                         .ToList();
-                    
+
                     foreach (var closedWindow in closedWindows)
                     {
                         process.Windows.Remove(closedWindow);
                         _lastWindowTitles.Remove(closedWindow.Handle);
                         hasChanges = true;
                     }
-                    
+
                     // Get profiles that track window titles
                     if (hasChanges)
                     {
@@ -507,7 +507,7 @@ namespace FFXIManager.Services
                         }
                     }
                 }
-                
+
                 // Fire update events if there were changes
                 if (hasChanges && affectedProfiles.Count > 0)
                 {
@@ -519,40 +519,40 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                await _logging.LogDebugAsync($"Error updating windows for process {process.ProcessId}: {ex.Message}", 
+                await _logging.LogDebugAsync($"Error updating windows for process {process.ProcessId}: {ex.Message}",
                     "UnifiedMonitoringService");
             }
         }
-        
+
         #endregion
-        
+
         #region Active Window Detection
-        
+
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
-        
+
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-        
+
         private async Task CheckActiveWindowAsync()
         {
             try
             {
                 IntPtr activeWindowHandle = GetForegroundWindow();
-                
+
                 if (activeWindowHandle == IntPtr.Zero || activeWindowHandle == _lastActiveWindow)
                     return;
-                
+
                 // Get the process ID of the active window
                 uint activeProcessId;
                 uint threadId = GetWindowThreadProcessId(activeWindowHandle, out activeProcessId);
-                
+
                 if (threadId == 0)
                     return;
-                
+
                 bool hasChanges = false;
                 List<(MonitoredProcess process, List<MonitoringProfile> profiles)> toUpdate = new();
-                
+
                 lock (_lock)
                 {
                     // First, clear IsActive flag on previously active process
@@ -565,7 +565,7 @@ namespace FFXIManager.Services
                             {
                                 activeWindow.IsActive = false;
                                 hasChanges = true;
-                                
+
                                 // Collect profiles for this process
                                 var profiles = new List<MonitoringProfile>();
                                 foreach (var monitorId in process.MonitorIds)
@@ -582,7 +582,7 @@ namespace FFXIManager.Services
                             }
                         }
                     }
-                    
+
                     // Now set the new active window
                     if (_processes.TryGetValue((int)activeProcessId, out var activeProcess))
                     {
@@ -591,7 +591,7 @@ namespace FFXIManager.Services
                         {
                             window.IsActive = true;
                             hasChanges = true;
-                            
+
                             // Collect profiles for this process
                             var profiles = new List<MonitoringProfile>();
                             foreach (var monitorId in activeProcess.MonitorIds)
@@ -607,10 +607,10 @@ namespace FFXIManager.Services
                             }
                         }
                     }
-                    
+
                     _lastActiveWindow = activeWindowHandle;
                 }
-                
+
                 // Fire update events for affected processes
                 if (hasChanges)
                 {
@@ -625,32 +625,32 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                await _logging.LogDebugAsync($"Error checking active window: {ex.Message}", 
+                await _logging.LogDebugAsync($"Error checking active window: {ex.Message}",
                     "UnifiedMonitoringService");
             }
         }
-        
+
         #endregion
-        
+
         #region Scanning and Detection
-        
+
         private async Task InitialScanAsync()
         {
             try
             {
                 await _logging.LogInfoAsync("Starting initial process scan", "UnifiedMonitoringService");
-                
+
                 List<Guid> profileIds;
                 lock (_lock)
                 {
                     profileIds = _profiles.Keys.ToList();
                 }
-                
+
                 foreach (var profileId in profileIds)
                 {
                     await ScanForExistingProcessesAsync(profileId);
                 }
-                
+
                 await _logging.LogInfoAsync("Completed initial process scan", "UnifiedMonitoringService");
             }
             catch (Exception ex)
@@ -658,7 +658,7 @@ namespace FFXIManager.Services
                 await _logging.LogErrorAsync("Error during initial scan", ex, "UnifiedMonitoringService");
             }
         }
-        
+
         private async Task ScanForExistingProcessesAsync(Guid profileId)
         {
             try
@@ -669,10 +669,10 @@ namespace FFXIManager.Services
                     if (!_profiles.TryGetValue(profileId, out profile))
                         return;
                 }
-                
+
                 // Get processes matching this profile
                 var processes = await _processUtility.GetProcessesByNamesAsync(profile.ProcessNames);
-                
+
                 foreach (var processInfo in processes)
                 {
                     await AddOrUpdateProcessAsync(processInfo, profile);
@@ -680,16 +680,16 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                await _logging.LogDebugAsync($"Error scanning for profile {profileId}: {ex.Message}", 
+                await _logging.LogDebugAsync($"Error scanning for profile {profileId}: {ex.Message}",
                     "UnifiedMonitoringService");
             }
         }
-        
+
         private async Task AddOrUpdateProcessAsync(ProcessBasicInfo processInfo, MonitoringProfile profile)
         {
             MonitoredProcess? monitoredProcess = null;
             bool isNew = false;
-            
+
             lock (_lock)
             {
                 if (!_processes.TryGetValue(processInfo.ProcessId, out monitoredProcess))
@@ -704,7 +704,7 @@ namespace FFXIManager.Services
                         LastSeen = DateTime.UtcNow,
                         IsResponding = processInfo.IsResponding
                     };
-                    
+
                     // Add windows if tracking
                     if (profile.TrackWindows)
                     {
@@ -718,48 +718,48 @@ namespace FFXIManager.Services
                                 IsVisible = window.IsVisible,
                                 LastTitleUpdate = DateTime.UtcNow
                             });
-                            
+
                             if (profile.TrackWindowTitles)
                             {
                                 _lastWindowTitles[window.Handle] = window.Title;
                             }
                         }
                     }
-                    
+
                     _processes[processInfo.ProcessId] = monitoredProcess;
                     isNew = true;
                 }
-                
+
                 // Update process information
                 monitoredProcess.LastSeen = DateTime.UtcNow;
                 monitoredProcess.IsResponding = processInfo.IsResponding;
-                
+
                 // Add this monitor to the process
                 if (monitoredProcess.MonitorIds.Add(profile.Id))
                 {
                     monitoredProcess.ContextData[profile.Id] = profile.Context;
                 }
             }
-            
+
             // Fire events outside of lock
             if (isNew)
             {
                 FireProcessDetected(monitoredProcess, profile);
-                await _logging.LogInfoAsync($"Process detected: {processInfo.ProcessName} (PID: {processInfo.ProcessId}) for monitor '{profile.Name}'", 
+                await _logging.LogInfoAsync($"Process detected: {processInfo.ProcessName} (PID: {processInfo.ProcessId}) for monitor '{profile.Name}'",
                     "UnifiedMonitoringService");
             }
         }
-        
+
         private void PeriodicScanCallback(object? state)
         {
             if (!_isMonitoring || _disposed) return;
-            
+
             Task.Run(async () =>
             {
                 try
                 {
                     await _logging.LogDebugAsync("Running periodic safety scan", "UnifiedMonitoringService");
-                    
+
                     // Check for dead processes
                     List<int> deadProcessIds;
                     lock (_lock)
@@ -768,18 +768,18 @@ namespace FFXIManager.Services
                             .Where(pid => !_processUtility.IsProcessRunning(pid))
                             .ToList();
                     }
-                    
+
                     foreach (var pid in deadProcessIds)
                     {
                         // Remove dead process directly
                         MonitoredProcess? process;
                         List<MonitoringProfile> affectedProfiles = new();
-                        
+
                         lock (_lock)
                         {
                             if (!_processes.TryGetValue(pid, out process))
                                 continue;
-                            
+
                             // Get affected profiles before removing
                             foreach (var monitorId in process.MonitorIds)
                             {
@@ -788,17 +788,17 @@ namespace FFXIManager.Services
                                     affectedProfiles.Add(profile);
                                 }
                             }
-                            
+
                             // Remove the process
                             _processes.Remove(pid);
-                            
+
                             // Clear window title tracking
                             foreach (var window in process.Windows)
                             {
                                 _lastWindowTitles.Remove(window.Handle);
                             }
                         }
-                        
+
                         // Fire removal events for each affected profile
                         if (process != null)
                         {
@@ -806,32 +806,32 @@ namespace FFXIManager.Services
                             {
                                 FireProcessRemoved(process, profile);
                             }
-                            
+
                             _uiDispatcher.BeginInvoke(() =>
                             {
                                 GlobalProcessRemoved?.Invoke(this, pid);
                             });
-                            
-                            await _logging.LogInfoAsync($"Process terminated (periodic scan): {process.ProcessName} (PID: {pid})", 
+
+                            await _logging.LogInfoAsync($"Process terminated (periodic scan): {process.ProcessName} (PID: {pid})",
                                 "UnifiedMonitoringService");
                         }
                     }
-                    
+
                     // Scan for new processes
                     await InitialScanAsync();
                 }
                 catch (Exception ex)
                 {
-                    await _logging.LogDebugAsync($"Error in periodic scan: {ex.Message}", 
+                    await _logging.LogDebugAsync($"Error in periodic scan: {ex.Message}",
                         "UnifiedMonitoringService");
                 }
             });
         }
-        
+
         #endregion
-        
+
         #region Event Firing
-        
+
         private void FireProcessDetected(MonitoredProcess process, MonitoringProfile profile)
         {
             var args = new MonitoredProcessEventArgs
@@ -840,14 +840,14 @@ namespace FFXIManager.Services
                 Process = CloneProcess(process),
                 Profile = profile
             };
-            
+
             _uiDispatcher.BeginInvoke(() =>
             {
                 ProcessDetected?.Invoke(this, args);
                 GlobalProcessDetected?.Invoke(this, args.Process);
             });
         }
-        
+
         private void FireProcessUpdated(MonitoredProcess process, MonitoringProfile profile)
         {
             var args = new MonitoredProcessEventArgs
@@ -856,14 +856,14 @@ namespace FFXIManager.Services
                 Process = CloneProcess(process),
                 Profile = profile
             };
-            
+
             _uiDispatcher.BeginInvoke(() =>
             {
                 ProcessUpdated?.Invoke(this, args);
                 GlobalProcessUpdated?.Invoke(this, args.Process);
             });
         }
-        
+
         private void FireProcessRemoved(MonitoredProcess process, MonitoringProfile profile)
         {
             var args = new MonitoredProcessEventArgs
@@ -872,21 +872,21 @@ namespace FFXIManager.Services
                 Process = CloneProcess(process),
                 Profile = profile
             };
-            
+
             _uiDispatcher.BeginInvoke(() =>
             {
                 ProcessRemoved?.Invoke(this, args);
             });
         }
-        
+
         #endregion
-        
+
         #region Helper Methods
-        
+
         private static bool ProcessMatchesProfile(string processName, MonitoringProfile profile)
         {
             var normalized = FFXIManager.Utilities.ProcessFilters.ExtractProcessName(processName);
-            
+
             foreach (var targetName in profile.ProcessNames)
             {
                 if (string.Equals(normalized, targetName, StringComparison.OrdinalIgnoreCase))
@@ -894,10 +894,10 @@ namespace FFXIManager.Services
                     return true;
                 }
             }
-            
+
             return false;
         }
-        
+
         private MonitoredProcess CloneProcess(MonitoredProcess process)
         {
             return new MonitoredProcess
@@ -921,21 +921,21 @@ namespace FFXIManager.Services
                 ContextData = new Dictionary<Guid, object?>(process.ContextData)
             };
         }
-        
+
         #endregion
-        
+
         #region IDisposable
-        
+
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
-            
+
             StopMonitoring();
-            
+
             GC.SuppressFinalize(this);
         }
-        
+
         #endregion
     }
 }

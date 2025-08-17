@@ -1,4 +1,4 @@
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 using System.Windows.Input;
@@ -31,10 +31,10 @@ namespace FFXIManager.ViewModels
         private void InitializeCommands()
         {
             CopyProfileNameParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
-                profile => CopyProfileNameParameter(profile), 
+                profile => CopyProfileNameParameter(profile),
                 profile => profile != null);
             OpenFileLocationParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
-                profile => OpenFileLocationParameter(profile), 
+                profile => OpenFileLocationParameter(profile),
                 profile => profile != null);
         }
 
@@ -45,7 +45,7 @@ namespace FFXIManager.ViewModels
         private void CopyProfileNameParameter(ProfileInfo profile)
         {
             if (profile == null) return;
-            
+
             try
             {
                 _uiCommandService.CopyToClipboard(profile.Name);
@@ -60,7 +60,7 @@ namespace FFXIManager.ViewModels
         private void OpenFileLocationParameter(ProfileInfo profile)
         {
             if (profile == null) return;
-            
+
             try
             {
                 _uiCommandService.OpenFileLocation(profile.FilePath);

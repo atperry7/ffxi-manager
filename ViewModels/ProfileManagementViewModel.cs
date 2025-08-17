@@ -1,4 +1,4 @@
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 using FFXIManager.Models.Settings;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
@@ -20,7 +20,7 @@ namespace FFXIManager.ViewModels
         private readonly IProfileService _profileService;
         private readonly IDialogService _dialogService;
         private readonly IValidationService _validationService;
-        
+
         private ApplicationSettings _settings;
         private ProfileInfo? _selectedProfile;
         private bool _isLoading;
@@ -115,14 +115,14 @@ namespace FFXIManager.ViewModels
         }
 
         public ProfileInfo? ActiveLoginInfo { get; private set; }
-        
+
         public string ActiveLoginStatus
         {
             get
             {
                 if (ActiveLoginInfo == null)
                     return "? No active login file found";
-                
+
                 var displayText = ActiveLoginInfo.Name;
                 if (displayText.Contains("(Last Set:"))
                 {
@@ -133,7 +133,7 @@ namespace FFXIManager.ViewModels
                         return $"Currently Active: '{lastSetProfile}' profile ({ActiveLoginInfo.FileSizeFormatted}) - Modified: {ActiveLoginInfo.LastModified:yyyy-MM-dd HH:mm}";
                     }
                 }
-                
+
                 return $"Current: System file ({ActiveLoginInfo.FileSizeFormatted}) - Modified: {ActiveLoginInfo.LastModified:yyyy-MM-dd HH:mm}";
             }
         }
@@ -178,13 +178,13 @@ namespace FFXIManager.ViewModels
             RenameProfileCommand = new RelayCommand(async () => await RenameProfileAsync(), CanRenameProfile);
 
             SwapProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
-                async profile => await SwapProfileAsync(profile), 
+                async profile => await SwapProfileAsync(profile),
                 profile => profile != null && !profile.IsSystemFile);
             DeleteProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
-                async profile => await DeleteProfileAsync(profile), 
+                async profile => await DeleteProfileAsync(profile),
                 profile => profile != null && !profile.IsSystemFile && !profile.IsCurrentlyActive);
             RenameProfileParameterCommand = new RelayCommandWithParameter<ProfileInfo>(
-                async profile => await RenameProfileParameterAsync(profile), 
+                async profile => await RenameProfileParameterAsync(profile),
                 profile => profile != null && !profile.IsSystemFile);
         }
 
@@ -249,7 +249,7 @@ namespace FFXIManager.ViewModels
                     _settings.LastUsedProfile = profile.Name;
                     _settings.LastActiveProfileName = profile.Name;
                     _settingsService.SaveSettings(_settings);
-                    
+
                     await RefreshProfilesAsync();
                 }
             }
@@ -331,7 +331,7 @@ namespace FFXIManager.ViewModels
                 var oldName = SelectedProfile.Name;
                 var newName = await _dialogService.ShowRenameDialogAsync(SelectedProfile.Name, SelectedProfile.IsSystemFile);
                 if (newName == null) return;
-                
+
                 var validation = _validationService.ValidateProfileName(newName);
                 if (!validation.IsValid)
                 {
@@ -352,9 +352,9 @@ namespace FFXIManager.ViewModels
                         _settings.LastUsedProfile = newName;
                         _settingsService.SaveSettings(_settings);
                     }
-                    
+
                     await RefreshProfilesAsync();
-                    
+
                     var renamedProfile = Profiles.FirstOrDefault(p => p.Name == newName);
                     if (renamedProfile != null)
                         SelectedProfile = renamedProfile;
@@ -399,7 +399,7 @@ namespace FFXIManager.ViewModels
 
             var originalSelection = SelectedProfile;
             SelectedProfile = profile;
-            
+
             try
             {
                 await RenameProfileAsync();
@@ -426,15 +426,15 @@ namespace FFXIManager.ViewModels
             OnPropertyChanged(nameof(CurrentActiveProfileName));
 
             var activeProfileName = CurrentActiveProfileName;
-            bool activeProfileExists = !string.IsNullOrEmpty(activeProfileName) && 
+            bool activeProfileExists = !string.IsNullOrEmpty(activeProfileName) &&
                 profiles.Any(p => p.Name.Equals(activeProfileName, StringComparison.OrdinalIgnoreCase));
 
             foreach (var profile in profiles)
             {
-                profile.IsCurrentlyActive = !string.IsNullOrEmpty(activeProfileName) && 
+                profile.IsCurrentlyActive = !string.IsNullOrEmpty(activeProfileName) &&
                                           profile.Name.Equals(activeProfileName, StringComparison.OrdinalIgnoreCase) &&
                                           activeProfileExists;
-                                
+
                 Profiles.Add(profile);
 
                 if (profile.IsLastUserChoice) lastUserChoice = profile;
@@ -466,7 +466,7 @@ namespace FFXIManager.ViewModels
                     .Where(p => !p.Name.StartsWith("backup_", StringComparison.OrdinalIgnoreCase))
                     .OrderByDescending(p => p.LastModified)
                     .FirstOrDefault();
-                
+
                 SelectedProfile = fallbackProfile ?? profiles.FirstOrDefault();
             }
         }

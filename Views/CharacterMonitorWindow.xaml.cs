@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -17,35 +17,35 @@ namespace FFXIManager.Views
     {
         private readonly ISettingsService _settingsService;
         private readonly ILoggingService _loggingService;
-        
+
         public CharacterMonitorWindow(PlayOnlineMonitorViewModel viewModel)
         {
             InitializeComponent();
             DataContext = viewModel;
-            
+
             // Get services
             _settingsService = ServiceLocator.SettingsService;
             _loggingService = ServiceLocator.LoggingService;
-            
+
             _loggingService.LogInfoAsync("CharacterMonitorWindow using centralized GlobalHotkeyManager", "CharacterMonitorWindow");
-            
+
             // Set initial window properties
             ShowInTaskbar = true;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            
+
             // Load opacity from settings
             if (MainBorder != null)
             {
                 var settings = _settingsService.LoadSettings();
                 MainBorder.Opacity = settings.CharacterMonitorOpacity;
-                
+
                 // Also set the slider value
                 if (OpacitySlider != null)
                 {
                     OpacitySlider.Value = settings.CharacterMonitorOpacity;
                 }
             }
-            
+
             // No need to register hotkeys here - they are handled by PlayOnlineMonitorViewModel via GlobalHotkeyManager
         }
 
@@ -63,12 +63,12 @@ namespace FFXIManager.Views
         {
             Close();
         }
-        
+
         private void MinimizeButton_Click(object sender, RoutedEventArgs e)
         {
             WindowState = WindowState.Minimized;
         }
-        
+
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             // Allow dragging the window by the custom title bar
@@ -90,11 +90,11 @@ namespace FFXIManager.Views
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
-            
+
             // Ensure the window can be resized properly with custom chrome
             // The resize grip should work automatically with ResizeMode="CanResizeWithGrip"
         }
-        
+
         protected override void OnClosed(EventArgs e)
         {
             try
@@ -116,9 +116,9 @@ namespace FFXIManager.Views
                 // Log cleanup errors but don't throw
                 _loggingService?.LogErrorAsync("Error during CharacterMonitorWindow cleanup", ex, "CharacterMonitorWindow");
             }
-            
+
             base.OnClosed(e);
         }
-        
+
     }
 }

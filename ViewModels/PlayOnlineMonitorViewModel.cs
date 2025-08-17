@@ -1,4 +1,4 @@
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 using FFXIManager.Models.Settings;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
@@ -32,17 +32,17 @@ namespace FFXIManager.ViewModels
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
 
             Characters = new ObservableCollection<PlayOnlineCharacter>();
-            
+
             // Subscribe to monitor events
             _monitorService.CharacterDetected += OnCharacterDetected;
             _monitorService.CharacterUpdated += OnCharacterUpdated;
             _monitorService.CharacterRemoved += OnCharacterRemoved;
 
             InitializeCommands();
-            
+
             // Initialize global hotkey handling
             InitializeHotkeyHandling();
-            
+
             // Start monitoring AFTER UI is ready to receive events
             _monitorService.StartMonitoring();
         }
@@ -62,7 +62,7 @@ namespace FFXIManager.ViewModels
                         _monitorService.StartMonitoring();
                     else
                         _monitorService.StopMonitoring();
-                    
+
                     ((RelayCommand)ToggleMonitoringCommand).RaiseCanExecuteChanged();
                 }
             }
@@ -120,7 +120,7 @@ namespace FFXIManager.ViewModels
             try
             {
                 var characters = await _monitorService.GetCharactersAsync();
-                
+
                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     // If monitoring is active, merge characters instead of clearing
@@ -136,7 +136,7 @@ namespace FFXIManager.ViewModels
                                 Characters.Add(character);
                             }
                         }
-                        
+
                         // Remove characters that are no longer running
                         var toRemove = Characters.Where(c => !characters.Any(ch => ch.ProcessId == c.ProcessId && ch.WindowHandle == c.WindowHandle)).ToList();
                         foreach (var character in toRemove)
@@ -192,7 +192,7 @@ namespace FFXIManager.ViewModels
         public bool CanSwitchToSlot(int slotIndex)
         {
             if (slotIndex < 0 || slotIndex >= Characters.Count) return false;
-            
+
             var character = Characters.ElementAtOrDefault(slotIndex);
             return character != null && !character.IsActive;
         }
@@ -248,13 +248,13 @@ namespace FFXIManager.ViewModels
             {
                 // Subscribe to the global hotkey manager
                 GlobalHotkeyManager.Instance.HotkeyPressed += OnGlobalHotkeyPressed;
-                
+
                 // Register hotkeys from settings
                 GlobalHotkeyManager.Instance.RegisterHotkeysFromSettings();
-                
+
                 // Subscribe to hotkey settings changes
                 DiscoverySettingsViewModel.HotkeySettingsChanged += OnHotkeySettingsChanged;
-                
+
                 _loggingService.LogInfoAsync("PlayOnlineMonitorViewModel initialized with global hotkey support", "PlayOnlineMonitorViewModel");
             }
             catch (Exception ex)
@@ -272,7 +272,7 @@ namespace FFXIManager.ViewModels
             {
                 // Convert hotkey ID back to slot index
                 int slotIndex = KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(e.HotkeyId);
-                
+
                 // Validate slot index
                 if (slotIndex < 0 || slotIndex >= Characters.Count)
                 {
@@ -280,7 +280,7 @@ namespace FFXIManager.ViewModels
                     _statusService.SetMessage($"Invalid character slot: {slotIndex + 1}");
                     return;
                 }
-                
+
                 // Execute the switch command on the UI thread
                 var dispatcher = System.Windows.Application.Current?.Dispatcher;
                 if (dispatcher != null && !dispatcher.HasShutdownStarted && !dispatcher.HasShutdownFinished)
@@ -290,11 +290,11 @@ namespace FFXIManager.ViewModels
                         if (SwitchToSlotCommand.CanExecute(slotIndex))
                         {
                             SwitchToSlotCommand.Execute(slotIndex);
-                            
+
                             // Get character name for feedback
                             var character = Characters.ElementAtOrDefault(slotIndex);
                             var characterName = character?.DisplayName ?? $"Slot {slotIndex + 1}";
-                            
+
                             _statusService.SetMessage($"Switched to character: {characterName}");
                             _loggingService.LogInfoAsync($"✓ Switched to character via hotkey: {characterName}", "PlayOnlineMonitorViewModel");
                         }
@@ -339,11 +339,11 @@ namespace FFXIManager.ViewModels
             try
             {
                 _statusService.SetMessage($"Activating {character.DisplayName}...");
-                
+
                 // Simply activate the window - the monitoring service will detect the change
                 // and fire events that will update our UI automatically
                 var success = await _monitorService.ActivateCharacterWindowAsync(character, _cts.Token);
-                
+
                 if (success)
                 {
                     _statusService.SetMessage($"Activated {character.DisplayName}");
@@ -372,12 +372,12 @@ namespace FFXIManager.ViewModels
             try
             {
                 var monitorWindow = new Views.CharacterMonitorWindow(this);
-                
+
                 _statusService.SetMessage("Opening character monitor window...");
                 // The pop-out window should use the same real-time Characters collection
                 // No need to call LoadCharactersAsync() as it can interfere with real-time updates
                 monitorWindow.Show(); // Non-modal; no Owner so the main window won't be forced to front
-                
+
                 _statusService.SetMessage("Character monitor window opened");
             }
             catch (Exception ex)
@@ -411,7 +411,7 @@ namespace FFXIManager.ViewModels
             {
                 // First try to find by PID and window handle (exact match)
                 var existing = Characters.FirstOrDefault(c => c.ProcessId == updatedCharacter.ProcessId && c.WindowHandle == updatedCharacter.WindowHandle);
-                
+
                 // If not found by handle, the window handle may have changed - find by PID only
                 // This handles cases where the game creates new windows or changes handles
                 if (existing == null)
@@ -419,18 +419,18 @@ namespace FFXIManager.ViewModels
                     existing = Characters.FirstOrDefault(c => c.ProcessId == updatedCharacter.ProcessId);
                     if (existing != null)
                     {
-                        _loggingService.LogInfoAsync($"[UI] Window handle changed for PID {updatedCharacter.ProcessId}: 0x{existing.WindowHandle.ToInt64():X} -> 0x{updatedCharacter.WindowHandle.ToInt64():X}", 
+                        _loggingService.LogInfoAsync($"[UI] Window handle changed for PID {updatedCharacter.ProcessId}: 0x{existing.WindowHandle.ToInt64():X} -> 0x{updatedCharacter.WindowHandle.ToInt64():X}",
                             "PlayOnlineMonitorViewModel");
                         // Update the handle since it changed
                         existing.WindowHandle = updatedCharacter.WindowHandle;
                     }
                 }
-                
+
                 if (existing != null)
                 {
-                    _loggingService.LogInfoAsync($"[UI] Updating character - Old Title: '{existing.WindowTitle}', New Title: '{updatedCharacter.WindowTitle}'", 
+                    _loggingService.LogInfoAsync($"[UI] Updating character - Old Title: '{existing.WindowTitle}', New Title: '{updatedCharacter.WindowTitle}'",
                         "PlayOnlineMonitorViewModel");
-                    
+
                     // Update the properties - the setters will trigger property change notifications
                     existing.WindowTitle = updatedCharacter.WindowTitle;
                     existing.CharacterName = updatedCharacter.CharacterName;
@@ -441,7 +441,7 @@ namespace FFXIManager.ViewModels
                 else
                 {
                     // Character truly not found - might be a new window, add it
-                    _loggingService.LogInfoAsync($"[UI] New window detected for existing process - PID: {updatedCharacter.ProcessId}, Handle: 0x{updatedCharacter.WindowHandle.ToInt64():X}, Title: '{updatedCharacter.WindowTitle}'", 
+                    _loggingService.LogInfoAsync($"[UI] New window detected for existing process - PID: {updatedCharacter.ProcessId}, Handle: 0x{updatedCharacter.WindowHandle.ToInt64():X}, Title: '{updatedCharacter.WindowTitle}'",
                         "PlayOnlineMonitorViewModel");
                     Characters.Add(updatedCharacter);
                     OnPropertyChanged(nameof(CharacterCount));
@@ -476,11 +476,11 @@ namespace FFXIManager.ViewModels
                 _monitorService.CharacterUpdated -= OnCharacterUpdated;
                 _monitorService.CharacterRemoved -= OnCharacterRemoved;
                 _monitorService.StopMonitoring();
-                
+
                 // Unsubscribe from hotkey events
                 GlobalHotkeyManager.Instance.HotkeyPressed -= OnGlobalHotkeyPressed;
                 DiscoverySettingsViewModel.HotkeySettingsChanged -= OnHotkeySettingsChanged;
-                
+
                 _cts.Cancel();
                 _cts.Dispose();
                 _disposed = true;

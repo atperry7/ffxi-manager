@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using FFXIManager.Configuration;
@@ -23,7 +23,7 @@ namespace FFXIManager.Services
     {
         public bool IsValid { get; init; }
         public string? ErrorMessage { get; init; }
-        
+
         public static ValidationResult Success() => new() { IsValid = true };
         public static ValidationResult Failure(string message) => new() { IsValid = false, ErrorMessage = message };
     }
@@ -43,7 +43,7 @@ namespace FFXIManager.Services
         public ValidationResult ValidateProfileName(string name)
         {
             var config = _configService.ValidationConfig;
-            
+
             if (string.IsNullOrWhiteSpace(name))
             {
                 return ValidationResult.Failure(config.ValidationMessages["NameTooShort"]);
@@ -64,7 +64,7 @@ namespace FFXIManager.Services
             var invalidChars = Path.GetInvalidFileNameChars()
                 .Concat(_configService.FileSystemConfig.InvalidFileNameChars.Select(s => s[0]))
                 .Distinct();
-            
+
             if (name.Any(c => invalidChars.Contains(c)))
             {
                 return ValidationResult.Failure(config.ValidationMessages["InvalidCharacters"]);
@@ -91,7 +91,7 @@ namespace FFXIManager.Services
 
                 // Check if path is valid
                 var fullPath = Path.GetFullPath(filePath);
-                
+
                 // Check if directory exists
                 var directory = Path.GetDirectoryName(fullPath);
                 if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
@@ -110,7 +110,7 @@ namespace FFXIManager.Services
         public ValidationResult ValidateFileSize(long sizeBytes)
         {
             var config = _configService.ValidationConfig;
-            
+
             if (sizeBytes < 0)
             {
                 return ValidationResult.Failure("File size cannot be negative");

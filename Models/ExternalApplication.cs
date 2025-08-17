@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
@@ -23,7 +23,7 @@ namespace FFXIManager.Models
         private bool _allowMultipleInstances;
         private int _currentInstances;
         private readonly List<int> _processIds = new();
-        
+
         // Caching for ExecutableExists to reduce file system calls
         private bool? _cachedExecutableExists;
         private string _cachedExecutablePath = string.Empty;
@@ -39,8 +39,8 @@ namespace FFXIManager.Models
         public string ExecutablePath
         {
             get => _executablePath;
-            set 
-            { 
+            set
+            {
                 if (SetProperty(ref _executablePath, value))
                 {
                     // Clear cache when path changes
@@ -164,13 +164,13 @@ namespace FFXIManager.Models
                     return false;
 
                 var now = DateTime.UtcNow;
-                
+
                 // Use cached value if:
                 // 1. We have a cached value
                 // 2. The path hasn't changed
                 // 3. The cache is still valid (within 5 seconds)
-                if (_cachedExecutableExists.HasValue && 
-                    _cachedExecutablePath == ExecutablePath && 
+                if (_cachedExecutableExists.HasValue &&
+                    _cachedExecutablePath == ExecutablePath &&
                     now - _lastFileCheckTime < FileCheckCacheTime)
                 {
                     return _cachedExecutableExists.Value;
@@ -224,7 +224,7 @@ namespace FFXIManager.Models
         public void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-            
+
             // Update dependent properties when key properties change
             if (propertyName == nameof(IsRunning) || propertyName == nameof(ExecutablePath))
             {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace FFXIManager.Models
@@ -28,13 +28,13 @@ namespace FFXIManager.Models
         public DateTime StartTime { get; set; }
         public DateTime LastSeen { get; set; }
         public bool IsResponding { get; set; } = true;
-        
+
         // Window information (if tracked)
         public List<MonitoredWindow> Windows { get; set; } = new();
-        
+
         // Associated monitoring profiles
         public HashSet<Guid> MonitorIds { get; set; } = new();
-        
+
         // Context data from profiles
         public Dictionary<Guid, object?> ContextData { get; set; } = new();
     }
