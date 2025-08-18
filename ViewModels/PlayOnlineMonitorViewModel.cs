@@ -81,6 +81,13 @@ namespace FFXIManager.ViewModels
 
         public string MonitoringStatus => IsMonitoring ? "Monitoring Active" : "Monitoring Paused";
 
+        // **PERFORMANCE FEEDBACK**: Real-time performance metrics for UI
+        public double AverageActivationTimeMs { get; private set; }
+        public double LastActivationTimeMs { get; private set; }
+        public string PerformanceStatus { get; private set; } = "Optimal";
+        public int CacheHitRate { get; private set; }
+        public string PerformanceStatusDisplay => $"{PerformanceStatus} | Avg: {AverageActivationTimeMs:F0}ms | Cache: {CacheHitRate}%";
+
         #endregion
 
         #region Commands
@@ -137,7 +144,14 @@ namespace FFXIManager.ViewModels
             {
                 var characters = await _monitorService.GetCharactersAsync();
 
-                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher == null)
+                {
+                    _ = _loggingService.LogWarningAsync("Application dispatcher not available during character loading", "PlayOnlineMonitorViewModel");
+                    return;
+                }
+                
+                await dispatcher.InvokeAsync(() =>
                 {
                     // Ensure newly discovered characters are appended to the session order by CharacterName (stable within session)
                     foreach (var c in characters)
@@ -278,25 +292,59 @@ namespace FFXIManager.ViewModels
             {
                 _statusService.SetMessage($"Activating {character.DisplayName}...");
 
-                // Simply activate the window - the monitoring service will detect the change
-                // and fire events that will update our UI automatically
-                var success = await _monitorService.ActivateCharacterWindowAsync(character, _cts.Token);
+                // **CONSOLIDATION**: Use the unified activation service for consistency and performance
+                var activationService = ServiceLocator.HotkeyActivationService;
+                var result = await activationService.ActivateCharacterDirectAsync(character, _cts.Token);
 
-                if (success)
+                if (result.Success)
                 {
-                    _statusService.SetMessage($"Activated {character.DisplayName}");
-                    // The UnifiedMonitoringService will detect the active window change within 500ms
-                    // and fire ProcessUpdated events that will update our Characters collection
+                    _statusService.SetMessage($"Activated {character.DisplayName} ({result.Duration.TotalMilliseconds:F0}ms)");
+                    
+                    // **PERFORMANCE FEEDBACK**: Update UI with performance metrics
+                    await UpdatePerformanceMetricsAsync();
                 }
                 else
                 {
-                    _statusService.SetMessage($"Failed to activate {character.DisplayName}");
+                    _statusService.SetMessage($"Failed to activate {character.DisplayName}: {result.ErrorMessage}");
                 }
             }
             catch (Exception ex)
             {
                 _statusService.SetMessage($"Error activating character: {ex.Message}");
                 await _loggingService.LogErrorAsync($"Error activating character {character.DisplayName}", ex, "PlayOnlineMonitorViewModel");
+            }
+        }
+
+        /// <summary>
+        /// Updates the performance metrics displayed in the UI.
+        /// </summary>
+        private async Task UpdatePerformanceMetricsAsync()
+        {
+            try
+            {
+                var activationService = ServiceLocator.HotkeyActivationService;
+                var stats = activationService.GetPerformanceStats();
+                var cacheStats = ServiceLocator.CharacterOrderingService.GetCacheStatistics();
+                
+                AverageActivationTimeMs = stats.AverageActivationTimeMs;
+                CacheHitRate = (int)cacheStats.HitRate;
+                
+                PerformanceStatus = stats.AverageActivationTimeMs switch
+                {
+                    < 50 => "⚡ Excellent",
+                    < 100 => "✅ Good", 
+                    < 200 => "⚠️ Fair",
+                    _ => "🐌 Slow"
+                };
+                
+                OnPropertyChanged(nameof(AverageActivationTimeMs));
+                OnPropertyChanged(nameof(PerformanceStatus));
+                OnPropertyChanged(nameof(CacheHitRate));
+                OnPropertyChanged(nameof(PerformanceStatusDisplay));
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error updating performance metrics", ex, "PlayOnlineMonitorViewModel");
             }
         }
 
@@ -328,7 +376,14 @@ namespace FFXIManager.ViewModels
         private void OnCharacterDetected(object? sender, PlayOnlineCharacterEventArgs e)
         {
             var character = e.Character;
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null)
+            {
+                _ = _loggingService.LogWarningAsync("Application dispatcher not available during character detection", "PlayOnlineMonitorViewModel");
+                return;
+            }
+            
+            dispatcher.Invoke(() =>
             {
                 // Maintain session order stickiness by CharacterName on detection
                 var key = GetCharacterKey(character);
@@ -344,6 +399,25 @@ namespace FFXIManager.ViewModels
                     OnPropertyChanged(nameof(CharacterCount));
                     OnPropertyChanged(nameof(MonitoringStatus));
                     _statusService.SetMessage($"PlayOnline character detected: {character.DisplayName}");
+                    
+                    // **IMMEDIATE AVAILABILITY**: Ensure new characters are immediately switchable
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            // Force immediate cache invalidation so hotkey system sees new character
+                            await ServiceLocator.CharacterOrderingService.InvalidateCacheAsync();
+                            
+                            // Refresh hotkey mappings so new character gets proper hotkey assignment
+                            await ServiceLocator.HotkeyMappingService.RefreshMappingsAsync();
+                            
+                            await _loggingService.LogInfoAsync($"✅ Character '{character.DisplayName}' is now available for hotkey switching", "PlayOnlineMonitorViewModel");
+                        }
+                        catch (Exception ex)
+                        {
+                            await _loggingService.LogErrorAsync($"Error making new character '{character.DisplayName}' available for switching", ex, "PlayOnlineMonitorViewModel");
+                        }
+                    });
                 }
                 // Re-apply ordering after changes
                 ApplyPreferredOrder();
@@ -356,7 +430,14 @@ namespace FFXIManager.ViewModels
         private void OnCharacterUpdated(object? sender, PlayOnlineCharacterEventArgs e)
         {
             var updatedCharacter = e.Character;
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null)
+            {
+                _ = _loggingService.LogWarningAsync("Application dispatcher not available during character update", "PlayOnlineMonitorViewModel");
+                return;
+            }
+            
+            dispatcher.Invoke(() =>
             {
                 // Attempt to preserve slot by CharacterName on update (handle/name changes)
                 var key = GetCharacterKey(updatedCharacter);
@@ -412,7 +493,14 @@ namespace FFXIManager.ViewModels
         private void OnCharacterRemoved(object? sender, PlayOnlineCharacterEventArgs e)
         {
             var processId = e.Character.ProcessId;
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null)
+            {
+                _ = _loggingService.LogWarningAsync("Application dispatcher not available during character removal", "PlayOnlineMonitorViewModel");
+                return;
+            }
+            
+            dispatcher.Invoke(() =>
             {
                 // Keep sticky order for the session: do NOT remove the key from _preferredOrder here.
                 // This keeps positions stable while processes restart.
@@ -587,8 +675,14 @@ namespace FFXIManager.ViewModels
                 {
                     // Return a copy of the current Characters collection as a List
                     // This ensures the hotkey system gets the same ordering as the UI
-                    return await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                        Characters.ToList());
+                    var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                    if (dispatcher == null)
+                    {
+                        await _loggingService.LogWarningAsync("Application dispatcher not available for character ordering", "PlayOnlineMonitorViewModel");
+                        return new List<PlayOnlineCharacter>();
+                    }
+                    
+                    return await dispatcher.InvokeAsync(() => Characters.ToList());
                 });
                 
                 _ = _loggingService.LogInfoAsync("Successfully registered PlayOnlineMonitorViewModel as character ordering provider", "PlayOnlineMonitorViewModel");

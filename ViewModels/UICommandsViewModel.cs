@@ -11,14 +11,14 @@ namespace FFXIManager.ViewModels
     public class UICommandsViewModel : ViewModelBase
     {
         private readonly IUICommandService _uiCommandService;
-        private readonly IStatusMessageService _statusService;
+        private readonly INotificationServiceEnhanced _notificationService;
 
         public UICommandsViewModel(
             IUICommandService uiCommandService,
-            IStatusMessageService statusService)
+            INotificationServiceEnhanced notificationService)
         {
             _uiCommandService = uiCommandService ?? throw new ArgumentNullException(nameof(uiCommandService));
-            _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
+            _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
 
             InitializeCommands();
         }
@@ -42,33 +42,33 @@ namespace FFXIManager.ViewModels
 
         #region Private Methods
 
-        private void CopyProfileNameParameter(ProfileInfo profile)
+        private async void CopyProfileNameParameter(ProfileInfo profile)
         {
             if (profile == null) return;
 
             try
             {
                 _uiCommandService.CopyToClipboard(profile.Name);
-                _statusService.SetMessage($"Copied profile name: {profile.Name}");
+                await _notificationService.ShowToastAsync($"Copied: {profile.Name}", NotificationType.Success, 2000);
             }
             catch (Exception ex)
             {
-                _statusService.SetMessage($"Error copying to clipboard: {ex.Message}");
+                await _notificationService.ShowToastAsync($"Copy failed: {ex.Message}", NotificationType.Error, 3000);
             }
         }
 
-        private void OpenFileLocationParameter(ProfileInfo profile)
+        private async void OpenFileLocationParameter(ProfileInfo profile)
         {
             if (profile == null) return;
 
             try
             {
                 _uiCommandService.OpenFileLocation(profile.FilePath);
-                _statusService.SetMessage($"Opened file location for: {profile.Name}");
+                await _notificationService.ShowToastAsync($"Opened location: {profile.Name}", NotificationType.Info, 2000);
             }
             catch (Exception ex)
             {
-                _statusService.SetMessage($"{ex.Message}");
+                await _notificationService.ShowToastAsync($"Open failed: {ex.Message}", NotificationType.Error, 3000);
             }
         }
 

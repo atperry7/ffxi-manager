@@ -603,6 +603,19 @@
     <!-- Apply Modern Toggle Switch as default CheckBox style -->
     <Style TargetType="{x:Type CheckBox}" BasedOn="{StaticResource ModernToggleSwitch}"/>
     
+    <!-- Toast Notification Theme Resources -->
+    <SolidColorBrush x:Key="ToastBackgroundBrush" Color="#2A2D3A"/>
+    <SolidColorBrush x:Key="ToastBorderBrush" Color="{StaticResource BorderColor}"/>
+    <SolidColorBrush x:Key="ToastTextBrush" Color="{StaticResource PrimaryTextColor}"/>
+    <SolidColorBrush x:Key="ToastCloseButtonBrush" Color="{StaticResource SecondaryTextColor}"/>
+    
+    <!-- Toast Shadow Effect -->
+    <DropShadowEffect x:Key="ToastShadowEffect" 
+                      ShadowDepth="4" 
+                      BlurRadius="12" 
+                      Opacity="0.5" 
+                      Color="Black"/>
+
     <!-- GroupBox Style -->
     <Style TargetType="{x:Type GroupBox}">
         <Setter Property="HeaderTemplate">

@@ -58,7 +58,7 @@ namespace FFXIManager.ViewModels
             PlayOnlineMonitor = new PlayOnlineMonitorViewModel(
                 playOnlineMonitorService, statusService, loggingService);
 
-            UICommands = new UICommandsViewModel(uiCommandService, statusService);
+            UICommands = new UICommandsViewModel(uiCommandService, ServiceLocator.NotificationServiceEnhanced);
 
             // Subscribe to status message changes
             _statusService.MessageChanged += (_, message) => OnPropertyChanged(nameof(StatusMessage));

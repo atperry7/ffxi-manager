@@ -2,8 +2,11 @@ using System;
 using System.Configuration;
 using System.Data;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using FFXIManager.Infrastructure;
+using FFXIManager.Models;
+using FFXIManager.Services;
 
 namespace FFXIManager
 {
@@ -32,70 +35,38 @@ namespace FFXIManager
                 // Ensure PlayOnline monitoring is started regardless of UI windows
                 ServiceLocator.PlayOnlineMonitorService.StartMonitoring();
 
-                // Handle hotkeys at the service layer so it works even if no VM is constructed
+                // **GAMING OPTIMIZATION**: Ultra-fast hotkey processing via unified service
                 Services.GlobalHotkeyManager.Instance.HotkeyPressed += async (_, e) =>
+                {
+                    // **UNIFIED PIPELINE**: All hotkey activation through optimized service
+                    var result = await ServiceLocator.HotkeyActivationService.ActivateCharacterByHotkeyAsync(e.HotkeyId);
+                    
+                    if (!result.Success && IsUnexpectedHotkeyError(result.ErrorMessage))
+                    {
+                        _ = ServiceLocator.NotificationService?.ShowErrorAsync($"Hotkey activation failed: {result.ErrorMessage}");
+                    }
+                };
+                
+                // **PERFORMANCE**: Initialize hotkey mappings at startup
+                _ = Task.Run(async () =>
                 {
                     try
                     {
-                        // Map hotkey ID -> slot index
-                        int slotIndex = Models.Settings.KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(e.HotkeyId);
-                        if (slotIndex < 0) 
-                        {
-                            _ = ServiceLocator.LoggingService.LogWarningAsync($"Invalid hotkey slot index: {slotIndex} from hotkey ID {e.HotkeyId}", "App");
-                            return;
-                        }
-
-                        // **ARCHITECTURAL FIX**: Use CharacterOrderingService to get properly ordered characters
-                        // This ensures hotkey slot positions match the visual order in the UI
-                        var characterOrderingService = ServiceLocator.CharacterOrderingService;
-                        var characters = await characterOrderingService.GetOrderedCharactersAsync();
-                        
-                        // **GAMING CRITICAL**: Robust bounds checking with race condition protection
-                        if (characters == null || characters.Count == 0)
-                        {
-                            _ = ServiceLocator.LoggingService.LogInfoAsync($"No characters available for hotkey slot {slotIndex + 1}", "App");
-                            return;
-                        }
-                        
-                        if (slotIndex >= characters.Count)
-                        {
-                            _ = ServiceLocator.LoggingService.LogInfoAsync($"Hotkey slot {slotIndex + 1} is out of range (have {characters.Count} characters)", "App");
-                            return;
-                        }
-
-                        // Safe array access with additional null check
-                        var character = characters.ElementAtOrDefault(slotIndex);
-                        if (character != null)
-                        {
-                            var monitor = ServiceLocator.PlayOnlineMonitorService;
-                            await monitor.ActivateCharacterWindowAsync(character);
-                            _ = ServiceLocator.LoggingService.LogInfoAsync($"Activated character '{character.DisplayName}' via hotkey slot {slotIndex + 1}", "App");
-                        }
-                        else
-                        {
-                            _ = ServiceLocator.LoggingService.LogWarningAsync($"Character at slot {slotIndex + 1} is null", "App");
-                        }
+                        await ServiceLocator.HotkeyMappingService.RefreshMappingsAsync();
                     }
                     catch (Exception ex)
                     {
-                        // **CRITICAL**: Replace silent failure with proper error handling
-                        var logging = ServiceLocator.LoggingService;
-                        await logging.LogErrorAsync($"Hotkey activation failed for slot {Models.Settings.KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(e.HotkeyId) + 1}", ex, "App");
-                        
-                        // Don't show notifications for common/expected errors to avoid spam
-                        if (!(ex is ArgumentOutOfRangeException || ex is NullReferenceException))
-                        {
-                            _ = ServiceLocator.NotificationService?.ShowErrorAsync($"Hotkey failed: {ex.Message}");
-                        }
+                        _ = ServiceLocator.LoggingService.LogErrorAsync("Error initializing hotkey mappings", ex, "App");
                     }
-                };
-
-                // Refresh hotkeys when settings change
+                });
+                
+                // Refresh hotkeys and mappings when settings change
                 ViewModels.DiscoverySettingsViewModel.HotkeySettingsChanged += (_, __) =>
                 {
                     try
                     {
                         Services.GlobalHotkeyManager.Instance.RefreshHotkeys();
+                        _ = Task.Run(() => ServiceLocator.HotkeyMappingService.RefreshMappingsAsync());
                     }
                     catch { }
                 };
@@ -105,6 +76,21 @@ namespace FFXIManager
                 // Default to dark theme if settings can't be loaded
                 ApplyTheme(true);
             }
+        }
+        
+
+        /// <summary>
+        /// Determines if a hotkey error is unexpected and should be shown to the user.
+        /// </summary>
+        private static bool IsUnexpectedHotkeyError(string? errorMessage)
+        {
+            if (string.IsNullOrEmpty(errorMessage)) return false;
+            
+            // Don't show notifications for expected/common errors
+            return !errorMessage.Contains("No character mapped") &&
+                   !errorMessage.Contains("Invalid window handle") &&
+                   !errorMessage.Contains("Access denied") &&
+                   !errorMessage.Contains("out of range");
         }
 
         public static void ApplyTheme(bool isDarkTheme)

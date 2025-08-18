@@ -17,6 +17,7 @@ namespace FFXIManager.Infrastructure
         private static ILoggingService? _loggingService;
         private static ICachingService? _cachingService;
         private static INotificationService? _notificationService;
+        private static INotificationServiceEnhanced? _notificationServiceEnhanced;
         private static IExternalApplicationService? _externalApplicationService;
         private static IPlayOnlineMonitorService? _playOnlineMonitorService;
         private static IProcessManagementService? _processManagementService;
@@ -24,6 +25,9 @@ namespace FFXIManager.Infrastructure
         private static IUnifiedMonitoringService? _unifiedMonitoringService;
         private static IUiDispatcher? _uiDispatcher;
         private static ICharacterOrderingService? _characterOrderingService;
+        private static IHotkeyMappingService? _hotkeyMappingService;
+        private static IHotkeyPerformanceMonitor? _hotkeyPerformanceMonitor;
+        private static IHotkeyActivationService? _hotkeyActivationService;
 
         public static ISettingsService SettingsService
         {
@@ -67,6 +71,15 @@ namespace FFXIManager.Infrastructure
             {
                 _notificationService ??= new NotificationService(LoggingService);
                 return _notificationService;
+            }
+        }
+
+        public static INotificationServiceEnhanced NotificationServiceEnhanced
+        {
+            get
+            {
+                _notificationServiceEnhanced ??= new NotificationServiceEnhanced(LoggingService);
+                return _notificationServiceEnhanced;
             }
         }
 
@@ -181,6 +194,38 @@ namespace FFXIManager.Infrastructure
             {
                 _characterOrderingService ??= new CharacterOrderingService(LoggingService);
                 return _characterOrderingService;
+            }
+        }
+
+        public static IHotkeyMappingService HotkeyMappingService
+        {
+            get
+            {
+                _hotkeyMappingService ??= new HotkeyMappingService(CharacterOrderingService, SettingsService, LoggingService);
+                return _hotkeyMappingService;
+            }
+        }
+
+        public static IHotkeyPerformanceMonitor HotkeyPerformanceMonitor
+        {
+            get
+            {
+                _hotkeyPerformanceMonitor ??= new HotkeyPerformanceMonitor(LoggingService);
+                return _hotkeyPerformanceMonitor;
+            }
+        }
+
+        public static IHotkeyActivationService HotkeyActivationService
+        {
+            get
+            {
+                _hotkeyActivationService ??= new HotkeyActivationService(
+                    HotkeyMappingService, 
+                    PlayOnlineMonitorService, 
+                    HotkeyPerformanceMonitor, 
+                    LoggingService,
+                    NotificationServiceEnhanced);
+                return _hotkeyActivationService;
             }
         }
 

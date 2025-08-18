@@ -253,20 +253,34 @@ namespace FFXIManager.Services
 
                 await _logging.LogInfoAsync($"Activating window for {character.DisplayName}...", "PlayOnlineMonitorService");
 
-                // **IMPROVED**: Use injected dependency with ServiceLocator fallback
-                var processManagement = _processManagement ?? ServiceLocator.ProcessManagementService;
-                var success = await processManagement.ActivateWindowAsync(character.WindowHandle, _activationTimeoutMs);
+                // **ENHANCED**: Use ProcessUtilityService with detailed failure detection
+                var processUtility = ServiceLocator.ProcessUtilityService;
+                var result = await processUtility.ActivateWindowEnhancedAsync(character.WindowHandle, _activationTimeoutMs);
 
-                if (success)
+                if (result.Success)
                 {
-                    await _logging.LogInfoAsync($"Successfully activated window for {character.DisplayName}", "PlayOnlineMonitorService");
+                    await _logging.LogInfoAsync($"Successfully activated window for {character.DisplayName} in {result.Duration.TotalMilliseconds:F0}ms (attempts: {result.AttemptsRequired})", "PlayOnlineMonitorService");
                 }
                 else
                 {
-                    await _logging.LogWarningAsync($"Failed to activate window for {character.DisplayName}", "PlayOnlineMonitorService");
+                    // **IMPROVED DIAGNOSTICS**: Log specific failure reason
+                    var diagnostic = result.FailureReason switch
+                    {
+                        WindowActivationFailureReason.WindowHung => "Window is not responding - game may be frozen",
+                        WindowActivationFailureReason.ElevationMismatch => "UAC elevation mismatch - try running as administrator",
+                        WindowActivationFailureReason.FullScreenBlocking => "Another application is in fullscreen mode",
+                        WindowActivationFailureReason.FocusStealingPrevention => "Windows focus stealing prevention is blocking activation",
+                        WindowActivationFailureReason.InvalidHandle => "Window handle is no longer valid",
+                        WindowActivationFailureReason.WindowDestroyed => "Window has been destroyed",
+                        WindowActivationFailureReason.AccessDenied => "Access denied to window",
+                        WindowActivationFailureReason.Timeout => $"Activation timed out after {_activationTimeoutMs}ms",
+                        _ => result.DiagnosticInfo ?? "Unknown failure reason"
+                    };
+                    
+                    await _logging.LogWarningAsync($"Failed to activate window for {character.DisplayName}: {diagnostic}", "PlayOnlineMonitorService");
                 }
 
-                return success;
+                return result.Success;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

@@ -64,6 +64,81 @@ namespace FFXIManager.Models.Settings
         /// </summary>
         public int ActivationTimeoutMs { get; set; } = 3000;
 
+        // Performance monitoring and tuning settings
+        /// <summary>
+        /// Performance warning threshold in milliseconds. Activations slower than this will generate warnings.
+        /// Default: 25ms provides tight gaming-focused performance monitoring.
+        /// </summary>
+        public int PerformanceWarningThresholdMs { get; set; } = 25;
+
+        /// <summary>
+        /// Performance critical threshold in milliseconds. Activations slower than this will generate critical alerts.
+        /// Default: 100ms indicates gaming performance degradation requiring attention.
+        /// </summary>
+        public int PerformanceCriticalThresholdMs { get; set; } = 100;
+
+        /// <summary>
+        /// Character cache validity period in milliseconds. Cached character data is refreshed after this interval.
+        /// Default: 1500ms (1.5s) provides good balance between performance and data freshness.
+        /// Lower values = more responsive to changes, higher values = better performance.
+        /// </summary>
+        public int CharacterCacheValidityMs { get; set; } = 1500;
+
+        /// <summary>
+        /// Automatic hotkey mapping refresh interval in milliseconds. Mappings are refreshed periodically.
+        /// Default: 30000ms (30s) ensures mappings stay synchronized with character changes.
+        /// Set to 0 to disable automatic refresh (manual refresh only).
+        /// </summary>
+        public int HotkeyMappingRefreshIntervalMs { get; set; } = 30000;
+
+        /// <summary>
+        /// Maximum number of characters to cache for performance optimization.
+        /// Default: 50 characters should handle even the largest multi-boxing setups.
+        /// </summary>
+        public int MaxCachedCharacters { get; set; } = 50;
+
+        /// <summary>
+        /// Enables predictive caching based on usage patterns.
+        /// When enabled, frequently accessed characters are kept in cache longer.
+        /// Default: true for optimal gaming performance.
+        /// </summary>
+        public bool EnablePredictiveCaching { get; set; } = true;
+
+        /// <summary>
+        /// Enables comprehensive performance monitoring and metrics collection.
+        /// When disabled, only basic success/failure tracking is performed.
+        /// Default: true to help users optimize their setup.
+        /// </summary>
+        public bool EnablePerformanceMonitoring { get; set; } = true;
+
+        /// <summary>
+        /// Number of recent activation attempts to keep in memory for performance analysis.
+        /// Higher values provide more detailed history but use more memory.
+        /// Default: 1000 provides good balance between detail and memory usage.
+        /// </summary>
+        public int PerformanceHistorySize { get; set; } = 1000;
+        
+        /// <summary>
+        /// Hotkey cooldown period in milliseconds to prevent rapid-fire activation spam.
+        /// Minimum time between hotkey activations for the same character.
+        /// Default: 100ms prevents resource contention while maintaining responsiveness.
+        /// </summary>
+        public int HotkeySpamCooldownMs { get; set; } = 100;
+        
+        /// <summary>
+        /// Enable predictive caching for frequently accessed characters.
+        /// When enabled, keeps recently used characters in cache longer.
+        /// Default: true for improved gaming performance.
+        /// </summary>
+        public bool EnablePredictiveCharacterCaching { get; set; } = true;
+
+        /// <summary>
+        /// Automatically adjusts cache timing based on system performance.
+        /// When enabled, cache validity periods are shortened on slow systems and extended on fast systems.
+        /// Default: true for adaptive performance optimization.
+        /// </summary>
+        public bool EnableAdaptivePerformanceTuning { get; set; } = true;
+
         // Window state persistence
         public double MainWindowWidth { get; set; } = 1200; // Increased default width
         public double MainWindowHeight { get; set; } = 700; // Increased default height
@@ -73,15 +148,15 @@ namespace FFXIManager.Models.Settings
         public bool RememberWindowPosition { get; set; } = true;
 
         /// <summary>
-        /// Gets the default keyboard shortcuts for character switching (Win+F1 through Win+F9)
+        /// Gets the default keyboard shortcuts for character switching (Win+F1 through Win+F12)
         /// Uses Windows key to avoid conflicts with FFXI's Ctrl/Alt macro system
         /// </summary>
         public static List<KeyboardShortcutConfig> GetDefaultShortcuts()
         {
             var shortcuts = new List<KeyboardShortcutConfig>();
-            for (int i = 0; i < 9; i++)
+            for (int i = 0; i < 12; i++) // Extended to F12 for better peripheral support
             {
-                var key = (Key)(Key.F1 + i); // F1, F2, F3... F9
+                var key = (Key)(Key.F1 + i); // F1, F2, F3... F12
                 shortcuts.Add(new KeyboardShortcutConfig(i, ModifierKeys.Windows, key));
             }
             return shortcuts;

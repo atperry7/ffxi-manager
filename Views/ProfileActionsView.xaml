@@ -139,7 +139,7 @@
                     </Grid>
 
                     <!-- Character List (independent scroll) -->
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="400">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="200">
                         <ItemsControl ItemsSource="{Binding PlayOnlineMonitor.Characters}">
                             <ItemsControl.ItemTemplate>
                             <DataTemplate>

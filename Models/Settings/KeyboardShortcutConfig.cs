@@ -76,10 +76,24 @@ namespace FFXIManager.Models.Settings
                 if (Modifiers.HasFlag(ModifierKeys.Windows))
                     parts.Add("Win");
 
-                parts.Add(Key.ToString());
+                parts.Add(GetKeyDisplayName(Key));
 
                 return string.Join("+", parts);
             }
+        }
+        
+        /// <summary>
+        /// Gets a user-friendly display name for keys, including extended peripheral keys.
+        /// </summary>
+        private static string GetKeyDisplayName(Key key)
+        {
+            // Handle extended function keys that might come from gaming peripherals
+            return key switch
+            {
+                >= Key.F13 and <= Key.F24 => key.ToString(), // F13-F24 support
+                Key.None => "None",
+                _ => key.ToString()
+            };
         }
 
         /// <summary>
