@@ -117,11 +117,11 @@ namespace FFXIManager.ViewModels
 
             MoveCharacterUpCommand = new RelayCommandWithParameter<PlayOnlineCharacter>(
                 character => MoveCharacter(character, direction: -1),
-                character => character != null && Characters.Count > 1);
+                character => CanMoveCharacter(character, direction: -1));
 
             MoveCharacterDownCommand = new RelayCommandWithParameter<PlayOnlineCharacter>(
                 character => MoveCharacter(character, direction: +1),
-                character => character != null && Characters.Count > 1);
+                character => CanMoveCharacter(character, direction: +1));
 
             // Prime the list on startup so the mini-UI shows existing characters
             _ = LoadCharactersAsync();
@@ -182,6 +182,9 @@ namespace FFXIManager.ViewModels
 
                 // Apply ordering after load/merge
                 ApplyPreferredOrder();
+                
+                // Refresh move command states after loading/merging characters
+                RefreshMoveCommandStates();
 
                 OnPropertyChanged(nameof(CharacterCount));
                 _statusService.SetMessage($"Found {characters.Count} PlayOnline character(s)");
@@ -344,6 +347,9 @@ namespace FFXIManager.ViewModels
                 }
                 // Re-apply ordering after changes
                 ApplyPreferredOrder();
+                
+                // Refresh move command states since collection changed
+                RefreshMoveCommandStates();
             });
         }
 
@@ -397,6 +403,9 @@ namespace FFXIManager.ViewModels
                 }
                 // Re-apply ordering after update
                 ApplyPreferredOrder();
+                
+                // Refresh move command states since collection or ordering may have changed
+                RefreshMoveCommandStates();
             });
         }
 
@@ -418,6 +427,9 @@ namespace FFXIManager.ViewModels
 
                 // Re-apply ordering after removal
                 ApplyPreferredOrder();
+                
+                // Refresh move command states since collection changed
+                RefreshMoveCommandStates();
             });
         }
 
@@ -449,22 +461,65 @@ namespace FFXIManager.ViewModels
             }
         }
 
+        private bool CanMoveCharacter(PlayOnlineCharacter? character, int direction)
+        {
+            if (character == null || Characters.Count <= 1) return false;
+
+            // Find the character's current position in the UI collection
+            var currentIndex = Characters.IndexOf(character);
+            if (currentIndex < 0) return false;
+
+            // Check if movement in the specified direction is valid
+            if (direction < 0 && currentIndex == 0) return false; // Can't move up from first position
+            if (direction > 0 && currentIndex == Characters.Count - 1) return false; // Can't move down from last position
+
+            return true;
+        }
+
         private void MoveCharacter(PlayOnlineCharacter? character, int direction)
         {
-            if (character == null) return;
-            var key = GetCharacterKey(character);
+            if (!CanMoveCharacter(character, direction)) return;
+            
+            var key = GetCharacterKey(character!);
             if (string.IsNullOrWhiteSpace(key)) return;
 
-            var idx = _preferredOrder.IndexOf(key);
-            if (idx < 0) return;
+            // Find the character's current position in the UI collection
+            var currentIndex = Characters.IndexOf(character!);
+            if (currentIndex < 0) return;
 
-            var newIdx = Math.Max(0, Math.Min(_preferredOrder.Count - 1, idx + direction));
-            if (newIdx == idx) return;
+            // Calculate the target index based on the current UI position
+            var targetIndex = currentIndex + direction;
+            if (targetIndex < 0 || targetIndex >= Characters.Count) return;
 
-            _preferredOrder.RemoveAt(idx);
-            _preferredOrder.Insert(newIdx, key);
+            // Get the character we're swapping with
+            var targetCharacter = Characters[targetIndex];
+            var targetKey = GetCharacterKey(targetCharacter);
+            if (string.IsNullOrWhiteSpace(targetKey)) return;
+
+            // Find both keys in the preferred order
+            var keyIdx = _preferredOrder.IndexOf(key);
+            var targetKeyIdx = _preferredOrder.IndexOf(targetKey);
+
+            // Ensure both keys exist in preferred order
+            if (keyIdx < 0)
+            {
+                _preferredOrder.Add(key);
+                keyIdx = _preferredOrder.Count - 1;
+            }
+            if (targetKeyIdx < 0)
+            {
+                _preferredOrder.Add(targetKey);
+                targetKeyIdx = _preferredOrder.Count - 1;
+            }
+
+            // Swap the positions in preferred order
+            _preferredOrder[keyIdx] = targetKey;
+            _preferredOrder[targetKeyIdx] = key;
 
             ApplyPreferredOrder();
+            
+            // Notify that move command CanExecute states may have changed
+            RefreshMoveCommandStates();
         }
 
         private void ApplyPreferredOrder()
@@ -499,6 +554,26 @@ namespace FFXIManager.ViewModels
         {
             // Use DisplayName if available, then CharacterName; never return null.
             return (c?.DisplayName ?? c?.CharacterName) ?? string.Empty;
+        }
+
+        private void RefreshMoveCommandStates()
+        {
+            // Notify WPF that the CanExecute state of move commands may have changed
+            // This will cause the UI to re-evaluate button enabled/disabled states for all characters
+            // Note: This is called whenever the Characters collection changes, ensuring all move buttons
+            // reflect the current valid positions. While this refreshes all commands globally,
+            // it's acceptable for small-to-medium character counts (1-12 characters) and ensures
+            // UI consistency. For larger lists, consider per-character command refresh optimization.
+            
+            if (MoveCharacterUpCommand is RelayCommandWithParameter<PlayOnlineCharacter> upCommand)
+            {
+                upCommand.RaiseCanExecuteChanged();
+            }
+            
+            if (MoveCharacterDownCommand is RelayCommandWithParameter<PlayOnlineCharacter> downCommand)
+            {
+                downCommand.RaiseCanExecuteChanged();
+            }
         }
 
         /// <summary>
