@@ -18,6 +18,7 @@ namespace FFXIManager.ViewModels
         private readonly IPlayOnlineMonitorService _monitorService;
         private readonly IStatusMessageService _statusService;
         private readonly ILoggingService _loggingService;
+        private readonly ICharacterOrderingService _characterOrderingService;
         private bool _isMonitoring = true;
         private bool _autoRefresh = true;
         private bool _disposed;
@@ -31,6 +32,7 @@ namespace FFXIManager.ViewModels
             _monitorService = monitorService ?? throw new ArgumentNullException(nameof(monitorService));
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            _characterOrderingService = ServiceLocator.CharacterOrderingService;
 
             Characters = new ObservableCollection<PlayOnlineCharacter>();
 
@@ -40,6 +42,9 @@ namespace FFXIManager.ViewModels
             _monitorService.CharacterRemoved += OnCharacterRemoved;
 
             InitializeCommands();
+
+            // Register this ViewModel as the character ordering provider for hotkey system
+            RegisterAsCharacterOrderingProvider();
 
             // Start monitoring AFTER UI is ready to receive events
             _monitorService.StartMonitoring();
@@ -422,6 +427,16 @@ namespace FFXIManager.ViewModels
         {
             if (!_disposed && disposing)
             {
+                // Unregister from character ordering service
+                try
+                {
+                    _characterOrderingService.UnregisterCharacterOrderProvider();
+                }
+                catch (Exception ex)
+                {
+                    _ = _loggingService.LogErrorAsync("Error unregistering character ordering provider", ex, "PlayOnlineMonitorViewModel");
+                }
+
                 // Unsubscribe from monitor events
                 _monitorService.CharacterDetected -= OnCharacterDetected;
                 _monitorService.CharacterUpdated -= OnCharacterUpdated;
@@ -484,6 +499,29 @@ namespace FFXIManager.ViewModels
         {
             // Use DisplayName if available, then CharacterName; never return null.
             return (c?.DisplayName ?? c?.CharacterName) ?? string.Empty;
+        }
+
+        /// <summary>
+        /// Registers this ViewModel as the character ordering provider for the hotkey system
+        /// </summary>
+        private void RegisterAsCharacterOrderingProvider()
+        {
+            try
+            {
+                _characterOrderingService.RegisterCharacterOrderProvider(async () =>
+                {
+                    // Return a copy of the current Characters collection as a List
+                    // This ensures the hotkey system gets the same ordering as the UI
+                    return await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        Characters.ToList());
+                });
+                
+                _ = _loggingService.LogInfoAsync("Successfully registered PlayOnlineMonitorViewModel as character ordering provider", "PlayOnlineMonitorViewModel");
+            }
+            catch (Exception ex)
+            {
+                _ = _loggingService.LogErrorAsync("Failed to register as character ordering provider", ex, "PlayOnlineMonitorViewModel");
+            }
         }
 
         // Implement IDisposable

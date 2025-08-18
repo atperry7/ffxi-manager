@@ -60,8 +60,13 @@ namespace FFXIManager.Services
                 var settingsService = ServiceLocator.SettingsService;
                 var settings = settingsService.LoadSettings();
 
-                // Update debounce interval from settings
-                _hotkeyDebounceInterval = TimeSpan.FromMilliseconds(settings.HotkeyDebounceIntervalMs);
+                // **GAMING CRITICAL**: Validate and clamp debounce interval to prevent crashes from malformed settings
+                var debounceMs = Math.Max(1, Math.Min(settings.HotkeyDebounceIntervalMs, 1000)); // Clamp 1-1000ms
+                if (debounceMs != settings.HotkeyDebounceIntervalMs)
+                {
+                    _loggingService.LogWarningAsync($"Clamped invalid hotkey debounce value {settings.HotkeyDebounceIntervalMs}ms to {debounceMs}ms", "GlobalHotkeyManager");
+                }
+                _hotkeyDebounceInterval = TimeSpan.FromMilliseconds(debounceMs);
 
                 // If no shortcuts configured, create defaults
                 if (settings.CharacterSwitchShortcuts.Count == 0)

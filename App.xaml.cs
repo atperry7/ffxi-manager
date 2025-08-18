@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Configuration;
 using System.Data;
+using System.Linq;
 using System.Windows;
 using FFXIManager.Infrastructure;
 
@@ -38,19 +39,55 @@ namespace FFXIManager
                     {
                         // Map hotkey ID -> slot index
                         int slotIndex = Models.Settings.KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(e.HotkeyId);
-                        if (slotIndex < 0) return;
+                        if (slotIndex < 0) 
+                        {
+                            _ = ServiceLocator.LoggingService.LogWarningAsync($"Invalid hotkey slot index: {slotIndex} from hotkey ID {e.HotkeyId}", "App");
+                            return;
+                        }
 
-                        var monitor = ServiceLocator.PlayOnlineMonitorService;
-                        var characters = await monitor.GetCharactersAsync();
-                        if (slotIndex >= characters.Count) return;
+                        // **ARCHITECTURAL FIX**: Use CharacterOrderingService to get properly ordered characters
+                        // This ensures hotkey slot positions match the visual order in the UI
+                        var characterOrderingService = ServiceLocator.CharacterOrderingService;
+                        var characters = await characterOrderingService.GetOrderedCharactersAsync();
+                        
+                        // **GAMING CRITICAL**: Robust bounds checking with race condition protection
+                        if (characters == null || characters.Count == 0)
+                        {
+                            _ = ServiceLocator.LoggingService.LogInfoAsync($"No characters available for hotkey slot {slotIndex + 1}", "App");
+                            return;
+                        }
+                        
+                        if (slotIndex >= characters.Count)
+                        {
+                            _ = ServiceLocator.LoggingService.LogInfoAsync($"Hotkey slot {slotIndex + 1} is out of range (have {characters.Count} characters)", "App");
+                            return;
+                        }
 
-                        var character = characters[slotIndex];
+                        // Safe array access with additional null check
+                        var character = characters.ElementAtOrDefault(slotIndex);
                         if (character != null)
                         {
+                            var monitor = ServiceLocator.PlayOnlineMonitorService;
                             await monitor.ActivateCharacterWindowAsync(character);
+                            _ = ServiceLocator.LoggingService.LogInfoAsync($"Activated character '{character.DisplayName}' via hotkey slot {slotIndex + 1}", "App");
+                        }
+                        else
+                        {
+                            _ = ServiceLocator.LoggingService.LogWarningAsync($"Character at slot {slotIndex + 1} is null", "App");
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        // **CRITICAL**: Replace silent failure with proper error handling
+                        var logging = ServiceLocator.LoggingService;
+                        await logging.LogErrorAsync($"Hotkey activation failed for slot {Models.Settings.KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(e.HotkeyId) + 1}", ex, "App");
+                        
+                        // Don't show notifications for common/expected errors to avoid spam
+                        if (!(ex is ArgumentOutOfRangeException || ex is NullReferenceException))
+                        {
+                            _ = ServiceLocator.NotificationService?.ShowErrorAsync($"Hotkey failed: {ex.Message}");
+                        }
+                    }
                 };
 
                 // Refresh hotkeys when settings change

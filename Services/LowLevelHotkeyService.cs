@@ -114,15 +114,56 @@ namespace FFXIManager.Services
         public LowLevelHotkeyService()
         {
             _hookProc = HookCallback;
-            _hookId = SetHook(_hookProc);
+            _hookId = SetHookWithRetry(_hookProc);
 
             if (_hookId == IntPtr.Zero)
             {
                 var error = Marshal.GetLastWin32Error();
-                throw new InvalidOperationException($"Failed to install keyboard hook. Win32 error: {error}");
+                throw new InvalidOperationException($"Failed to install keyboard hook after retries. Win32 error: {error}");
             }
         }
 
+        /// <summary>
+        /// Installs the keyboard hook with retry logic and exponential backoff.
+        /// This prevents intermittent failures on slower systems or under heavy load.
+        /// </summary>
+        private static IntPtr SetHookWithRetry(LowLevelKeyboardProc proc, int maxRetries = 3)
+        {
+            Exception? lastException = null;
+            
+            for (int attempt = 0; attempt < maxRetries; attempt++)
+            {
+                try
+                {
+                    var hookId = SetHook(proc);
+                    if (hookId != IntPtr.Zero)
+                    {
+                        return hookId;
+                    }
+                    
+                    // Hook installation returned zero - capture error
+                    var error = Marshal.GetLastWin32Error();
+                    lastException = new InvalidOperationException($"Hook installation attempt {attempt + 1} failed. Win32 error: {error}");
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                }
+                
+                // Don't delay on the last attempt
+                if (attempt < maxRetries - 1)
+                {
+                    // Exponential backoff: 50ms, 100ms, 200ms
+                    var delayMs = 50 * (int)Math.Pow(2, attempt);
+                    Thread.Sleep(delayMs);
+                }
+            }
+            
+            // All attempts failed - log the final error but return IntPtr.Zero to let caller handle
+            System.Diagnostics.Debug.WriteLine($"Hook installation failed after {maxRetries} attempts: {lastException?.Message}");
+            return IntPtr.Zero;
+        }
+        
         private static IntPtr SetHook(LowLevelKeyboardProc proc)
         {
             using (Process curProcess = Process.GetCurrentProcess())

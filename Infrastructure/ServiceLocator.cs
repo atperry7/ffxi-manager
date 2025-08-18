@@ -23,6 +23,7 @@ namespace FFXIManager.Infrastructure
         private static IProcessUtilityService? _processUtilityService;
         private static IUnifiedMonitoringService? _unifiedMonitoringService;
         private static IUiDispatcher? _uiDispatcher;
+        private static ICharacterOrderingService? _characterOrderingService;
 
         public static ISettingsService SettingsService
         {
@@ -174,6 +175,15 @@ namespace FFXIManager.Infrastructure
             }
         }
 
+        public static ICharacterOrderingService CharacterOrderingService
+        {
+            get
+            {
+                _characterOrderingService ??= new CharacterOrderingService(LoggingService);
+                return _characterOrderingService;
+            }
+        }
+
         // For testing - allow injection of mock services
         public static void Configure(
             ISettingsService? settingsService = null,
@@ -227,6 +237,7 @@ namespace FFXIManager.Infrastructure
             _playOnlineMonitorService = null;
             _processManagementService = null;
             _uiDispatcher = null;
+            _characterOrderingService = null;
         }
 
         /// <summary>
