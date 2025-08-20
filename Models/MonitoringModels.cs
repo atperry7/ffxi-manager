@@ -48,7 +48,7 @@ namespace FFXIManager.Models
         public string Title { get; set; } = string.Empty;
         public bool IsMainWindow { get; set; }
         public bool IsVisible { get; set; }
-        public bool IsActive { get; set; } // True if this is the foreground window
+        // Removed IsActive - now using LastActivated tracking in PlayOnlineCharacter
         public DateTime LastTitleUpdate { get; set; }
     }
 

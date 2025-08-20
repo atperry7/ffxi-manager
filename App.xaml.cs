@@ -18,7 +18,7 @@ namespace FFXIManager
         private static readonly Uri LightThemeUri = new Uri("Themes/LightTheme.xaml", UriKind.Relative);
         private static readonly Uri DarkThemeUri = new Uri("Themes/DarkTheme.xaml", UriKind.Relative);
 
-        protected override void OnStartup(StartupEventArgs e)
+        protected override async void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
 
@@ -34,6 +34,19 @@ namespace FFXIManager
 
                 // Ensure PlayOnline monitoring is started regardless of UI windows
                 ServiceLocator.PlayOnlineMonitorService.StartMonitoring();
+                
+                // Connect the character ordering service to the monitor and wait for completion
+                if (ServiceLocator.CharacterOrderingService is CharacterOrderingService orderingService)
+                {
+                    try
+                    {
+                        await orderingService.ConnectToMonitorAsync(ServiceLocator.PlayOnlineMonitorService);
+                    }
+                    catch (Exception ex)
+                    {
+                        _ = ServiceLocator.LoggingService.LogErrorAsync("Error connecting character ordering service to monitor", ex, "App");
+                    }
+                }
 
                 // **GAMING OPTIMIZATION**: Ultra-fast hotkey processing via unified service
                 Services.GlobalHotkeyManager.Instance.HotkeyPressed += async (_, e) =>
@@ -43,7 +56,7 @@ namespace FFXIManager
                     
                     if (!result.Success && IsUnexpectedHotkeyError(result.ErrorMessage))
                     {
-                        _ = ServiceLocator.NotificationService?.ShowErrorAsync($"Hotkey activation failed: {result.ErrorMessage}");
+                        _ = ServiceLocator.NotificationServiceEnhanced?.ShowToastAsync($"Hotkey failed: {result.ErrorMessage}", NotificationType.Error);
                     }
                 };
                 

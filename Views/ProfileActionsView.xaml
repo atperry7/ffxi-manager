@@ -34,9 +34,10 @@
             <Setter Property="Width" Value="32"/>
             <Setter Property="Height" Value="32"/>
             <Style.Triggers>
-                <DataTrigger Binding="{Binding IsActive, FallbackValue=False}" Value="True">
+                <DataTrigger Binding="{Binding IsRecentlyActivated, FallbackValue=False}" Value="True">
                     <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
-                    <Setter Property="ToolTip" Value="Currently Active"/>
+                    <Setter Property="ToolTip" Value="Active Character"/>
+                    <Setter Property="Opacity" Value="0.9"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -147,9 +148,10 @@
                                     <Border.Style>
                                         <Style TargetType="Border" BasedOn="{StaticResource HoverCardBorder}">
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsActive, FallbackValue=False}" Value="True">
-                                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-                                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                <DataTrigger Binding="{Binding IsRecentlyActivated, FallbackValue=False}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource SuccessBrush}"/>
+                                                    <Setter Property="BorderThickness" Value="1"/>
+                                                    <Setter Property="Opacity" Value="0.95"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>

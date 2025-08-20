@@ -22,18 +22,25 @@ namespace FFXIManager.Services
         private bool _isMonitoring;
         private bool _disposed;
 
-        // Rapid switching protection with character-aware logic
+        // **EMERGENCY PROTECTION**: Rapid switching protection with character-aware logic and system safeguards
         private readonly SemaphoreSlim _activationSemaphore = new(1, 1);
         private readonly Timer _activationDebounceTimer;
         private CancellationTokenSource _currentActivationCts = new();
         private PlayOnlineCharacter? _pendingActivation;
         private DateTime _lastActivationAttempt = DateTime.MinValue;
         private int _lastActivatedCharacterSlotIndex = -1; // Track last activated character slot for smart debouncing
+        
+        // **EMERGENCY CIRCUIT BREAKER**: Prevents system lockup during excessive switching
+        private static int _globalActivationCount;
+        private static DateTime _lastGlobalReset = DateTime.UtcNow;
+        private static volatile bool _emergencyThrottleActive;
+        private const int MAX_ACTIVATIONS_PER_SECOND = 20;
+        private const int EMERGENCY_THROTTLE_DURATION_MS = 3000;
 
-        // Gaming-optimized timing values (loaded from settings)
+        // Gaming-optimized timing values (loaded from settings) with emergency limits
         private int _activationDebounceMs = 50;    // Fast debounce for gaming
         private int _minActivationIntervalMs = 100; // Only applies to same character
-        private int _activationTimeoutMs = 3000;   // Reduced timeout for responsiveness
+        private int _activationTimeoutMs = 1500;   // **REDUCED** timeout to prevent deadlocks (was 3000)
 
         // **GAMING OPTIMIZATION**: Predictive character window caching
         private readonly ConcurrentDictionary<int, CachedCharacterInfo> _characterCache = new();
@@ -60,7 +67,7 @@ namespace FFXIManager.Services
                     CharacterName = CharacterName,
                     WindowTitle = WindowTitle,
                     LastSeen = LastUpdated,
-                    IsActive = false // Will be updated by monitoring
+                    // LastActivated will be set by HotkeyActivationService when character is activated
                 };
             }
         }
@@ -141,9 +148,53 @@ namespace FFXIManager.Services
 
             return characters;
         }
+        
+        /// <summary>
+        /// **EMERGENCY PROTECTION**: Checks and manages global activation rate limiting
+        /// </summary>
+        private bool IsEmergencyThrottleActive()
+        {
+            var now = DateTime.UtcNow;
+            
+            // Reset counter every second
+            if ((now - _lastGlobalReset).TotalMilliseconds >= 1000)
+            {
+                Interlocked.Exchange(ref _globalActivationCount, 0);
+                _lastGlobalReset = now;
+                _emergencyThrottleActive = false;
+            }
+            
+            // Check if we're over the limit
+            var currentCount = Interlocked.Increment(ref _globalActivationCount);
+            
+            if (currentCount > MAX_ACTIVATIONS_PER_SECOND && !_emergencyThrottleActive)
+            {
+                _emergencyThrottleActive = true;
+                
+                // Schedule throttle reset
+                Task.Delay(EMERGENCY_THROTTLE_DURATION_MS).ContinueWith(_ => 
+                {
+                    _emergencyThrottleActive = false;
+                    Interlocked.Exchange(ref _globalActivationCount, 0);
+                    _ = _logging.LogInfoAsync("Emergency throttle deactivated - normal switching resumed", "PlayOnlineMonitorService");
+                });
+                
+                _ = _logging.LogWarningAsync($"**EMERGENCY THROTTLE ACTIVATED**: {currentCount} activations/sec exceeded limit ({MAX_ACTIVATIONS_PER_SECOND})", "PlayOnlineMonitorService");
+                return true;
+            }
+            
+            return _emergencyThrottleActive;
+        }
 
         public async Task<bool> ActivateCharacterWindowAsync(PlayOnlineCharacter character, CancellationToken cancellationToken = default)
         {
+            // **EMERGENCY CIRCUIT BREAKER**: Check global activation throttle
+            if (IsEmergencyThrottleActive())
+            {
+                await _logging.LogWarningAsync("Character activation blocked: emergency throttle active", "PlayOnlineMonitorService");
+                return false;
+            }
+            
             if (character == null || character.WindowHandle == IntPtr.Zero)
             {
                 await _logging.LogWarningAsync("Cannot activate character: invalid window handle", "PlayOnlineMonitorService");
@@ -344,7 +395,7 @@ namespace FFXIManager.Services
                 ServerName = ExtractServerName(window?.Title),
                 ProcessName = process.ProcessName,
                 LastSeen = process.LastSeen,
-                IsActive = window?.IsActive ?? false // Use the IsActive flag from the window
+                // LastActivated will be set by HotkeyActivationService when character is activated
             };
         }
 

@@ -49,11 +49,11 @@ namespace FFXIManager.ViewModels
             try
             {
                 _uiCommandService.CopyToClipboard(profile.Name);
-                await _notificationService.ShowToastAsync($"Copied: {profile.Name}", NotificationType.Success, 2000);
+                await _notificationService.ShowToastAsync($"Copied: {profile.Name}", NotificationType.Success);
             }
             catch (Exception ex)
             {
-                await _notificationService.ShowToastAsync($"Copy failed: {ex.Message}", NotificationType.Error, 3000);
+                await _notificationService.ShowToastAsync($"Copy failed: {ex.Message}", NotificationType.Error);
             }
         }
 
@@ -64,11 +64,11 @@ namespace FFXIManager.ViewModels
             try
             {
                 _uiCommandService.OpenFileLocation(profile.FilePath);
-                await _notificationService.ShowToastAsync($"Opened location: {profile.Name}", NotificationType.Info, 2000);
+                await _notificationService.ShowToastAsync($"Opened location: {profile.Name}", NotificationType.Info);
             }
             catch (Exception ex)
             {
-                await _notificationService.ShowToastAsync($"Open failed: {ex.Message}", NotificationType.Error, 3000);
+                await _notificationService.ShowToastAsync($"Open failed: {ex.Message}", NotificationType.Error);
             }
         }
 

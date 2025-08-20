@@ -12,7 +12,7 @@ namespace FFXIManager.Services
         /// <summary>
         /// Shows a non-blocking toast notification that auto-dismisses
         /// </summary>
-        Task ShowToastAsync(string message, NotificationType type = NotificationType.Info, int durationMs = 3000);
+        Task ShowToastAsync(string message, NotificationType type = NotificationType.Info, int durationMs = 8000);
         
         /// <summary>
         /// Shows a detailed window activation failure notification

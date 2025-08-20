@@ -95,8 +95,8 @@ namespace FFXIManager.Infrastructure
         [DllImport("user32.dll")]
         private static extern bool IsHungAppWindow(IntPtr hWnd);
         
-        [DllImport("user32.dll")]
-        private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern int GetClassName(IntPtr hWnd, [Out] char[] lpClassName, int nMaxCount);
         
         [DllImport("user32.dll")]
         private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
@@ -565,10 +565,10 @@ namespace FFXIManager.Infrastructure
             }
             
             // Get class name
-            var classBuilder = new StringBuilder(256);
-            if (GetClassName(hWnd, classBuilder, 256) > 0)
+            var classBuffer = new char[256];
+            if (GetClassName(hWnd, classBuffer, 256) > 0)
             {
-                state.ClassName = classBuilder.ToString();
+                state.ClassName = new string(classBuffer).TrimEnd('\0');
             }
             
             return state;
@@ -595,7 +595,7 @@ namespace FFXIManager.Infrastructure
         /// <summary>
         /// Attempts window activation using progressive strategies.
         /// </summary>
-        private async Task<bool> AttemptWindowActivation(IntPtr hWnd, int attemptNumber, CancellationToken cancellationToken)
+        private static async Task<bool> AttemptWindowActivation(IntPtr hWnd, int attemptNumber, CancellationToken cancellationToken)
         {
             // Strategy varies by attempt number
             switch (attemptNumber)
@@ -697,7 +697,7 @@ namespace FFXIManager.Infrastructure
         /// <summary>
         /// Analyzes why window activation failed to provide detailed diagnostics.
         /// </summary>
-        private WindowActivationFailureReason AnalyzeActivationFailure(IntPtr hWnd, WindowStateInfo initialState, WindowStateInfo finalState)
+        private static WindowActivationFailureReason AnalyzeActivationFailure(IntPtr hWnd, WindowStateInfo initialState, WindowStateInfo finalState)
         {
             // Window was destroyed during activation
             if (!IsWindow(hWnd))

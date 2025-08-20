@@ -19,7 +19,9 @@ namespace FFXIManager.Services
         private readonly ILoggingService _loggingService;
         private readonly ConcurrentQueue<QueuedNotification> _notificationQueue = new();
         private readonly DispatcherTimer _batchTimer;
-        private ToastNotification? _currentToast;
+        private readonly List<ToastNotification> _activeToasts = new();
+        private const int MAX_CONCURRENT_TOASTS = 5;
+        private const int TOAST_VERTICAL_SPACING = 5;
 
         public NotificationServiceEnhanced(ILoggingService loggingService)
         {
@@ -81,7 +83,7 @@ namespace FFXIManager.Services
 
         #region INotificationServiceEnhanced Implementation
 
-        public async Task ShowToastAsync(string message, NotificationType type = NotificationType.Info, int durationMs = 3000)
+        public async Task ShowToastAsync(string message, NotificationType type = NotificationType.Info, int durationMs = 8000)
         {
             await ServiceLocator.UiDispatcher.InvokeAsync(() =>
             {
@@ -89,31 +91,39 @@ namespace FFXIManager.Services
                 {
                     // Find main window to host toast
                     var mainWindow = Application.Current.MainWindow;
-                    if (mainWindow == null) return;
+                    if (mainWindow == null || mainWindow.Content is not System.Windows.Controls.Grid mainGrid) 
+                        return;
 
-                    // Create or reuse toast control
-                    if (_currentToast == null)
+                    // Remove old toasts if we've hit the limit
+                    if (_activeToasts.Count >= MAX_CONCURRENT_TOASTS)
                     {
-                        _currentToast = new ToastNotification();
-                        
-                        // Add to main window's grid (assume main window has a Grid)
-                        if (mainWindow.Content is System.Windows.Controls.Grid mainGrid)
-                        {
-                            _currentToast.HorizontalAlignment = HorizontalAlignment.Right;
-                            _currentToast.VerticalAlignment = VerticalAlignment.Top;
-                            _currentToast.Margin = new Thickness(0, 60, 20, 0); // Below title bar
-                            System.Windows.Controls.Grid.SetColumnSpan(_currentToast, int.MaxValue);
-                            System.Windows.Controls.Grid.SetRowSpan(_currentToast, int.MaxValue);
-                            System.Windows.Controls.Panel.SetZIndex(_currentToast, 1000);
-                            
-                            mainGrid.Children.Add(_currentToast);
-                        }
+                        RemoveOldestToast();
                     }
 
-                    // Show the toast
-                    _currentToast.ShowToast(message, type, durationMs: durationMs);
+                    // Create new toast and calculate position BEFORE adding to list
+                    var toast = new ToastNotification();
+                    var stackPosition = _activeToasts.Count; // Position in stack (0, 1, 2, etc.)
+                    ConfigureToastPosition(toast, mainGrid, stackPosition);
                     
-                    _ = _loggingService.LogDebugAsync($"Toast shown: ({type}) {message}", "NotificationServiceEnhanced");
+                    // Add to active toasts list AFTER positioning
+                    _activeToasts.Add(toast);
+                    
+                    // Setup removal when toast completes
+                    var removalTimer = new DispatcherTimer
+                    {
+                        Interval = TimeSpan.FromMilliseconds(durationMs + 300) // Animation buffer
+                    };
+                    removalTimer.Tick += (s, e) =>
+                    {
+                        removalTimer.Stop();
+                        RemoveToast(toast);
+                    };
+                    removalTimer.Start();
+
+                    // Show the toast
+                    toast.ShowToast(message, type, durationMs: durationMs);
+                    
+                    _ = _loggingService.LogDebugAsync($"Toast shown: ({type}) {message} - Active: {_activeToasts.Count} - Position: {stackPosition}", "NotificationServiceEnhanced");
                 }
                 catch (Exception ex)
                 {
@@ -136,7 +146,7 @@ namespace FFXIManager.Services
                 _ => $"{characterName}: Activation failed"
             };
 
-            await ShowToastAsync(message, NotificationType.Error, 5000);
+            await ShowToastAsync(message, NotificationType.Error, 8000);
         }
 
         public void UpdateStatusBar(string message, NotificationType type = NotificationType.Info)
@@ -190,7 +200,124 @@ namespace FFXIManager.Services
                     .OrderByDescending(t => (int)t)
                     .First();
                     
-                await ShowToastAsync(summary, worstType, 4000);
+                await ShowToastAsync(summary, worstType, 8000);
+            }
+        }
+
+        #endregion
+
+        #region Toast Management
+
+        /// <summary>
+        /// Configures the position of a new toast in the stack
+        /// </summary>
+        private void ConfigureToastPosition(ToastNotification toast, System.Windows.Controls.Grid mainGrid, int stackPosition)
+        {
+            // Calculate vertical position based on stack position
+            var topOffset = 5.0; // Very close to title bar for first toast
+            var toastHeight = 80.0; // Actual toast height (from XAML design height)
+            
+            // Each toast gets positioned with true 5px visual gaps
+            // First toast at 5px, second at 5+80+5=90px, third at 5+80+5+80+5=175px, etc.
+            topOffset += stackPosition * (toastHeight + TOAST_VERTICAL_SPACING);
+
+            // Use Canvas positioning for more precise control
+            var canvas = new System.Windows.Controls.Canvas();
+            System.Windows.Controls.Canvas.SetTop(toast, topOffset);
+            System.Windows.Controls.Canvas.SetRight(toast, 20);
+            
+            toast.HorizontalAlignment = HorizontalAlignment.Center;
+            toast.VerticalAlignment = VerticalAlignment.Center;
+            toast.Width = 350; // Fixed width to prevent sizing issues
+            
+            System.Windows.Controls.Panel.SetZIndex(toast, 1000 + stackPosition);
+            
+            // Add canvas to main grid, then toast to canvas
+            System.Windows.Controls.Grid.SetColumnSpan(canvas, int.MaxValue);
+            System.Windows.Controls.Grid.SetRowSpan(canvas, int.MaxValue);
+            canvas.Children.Add(toast);
+            mainGrid.Children.Add(canvas);
+            
+            _ = _loggingService.LogDebugAsync($"Toast positioned at: Top={topOffset}, Right=20, StackPos={stackPosition}", "NotificationServiceEnhanced");
+        }
+
+        /// <summary>
+        /// Removes the oldest toast to make room for new ones
+        /// </summary>
+        private void RemoveOldestToast()
+        {
+            if (_activeToasts.Count > 0)
+            {
+                var oldestToast = _activeToasts[0];
+                RemoveToast(oldestToast);
+            }
+        }
+
+        /// <summary>
+        /// Removes a specific toast and repositions remaining toasts
+        /// </summary>
+        private void RemoveToast(ToastNotification toast)
+        {
+            if (!_activeToasts.Contains(toast)) return;
+
+            try
+            {
+                // Remove from UI - handle Canvas wrapper
+                if (toast.Parent is System.Windows.Controls.Canvas canvas)
+                {
+                    canvas.Children.Remove(toast);
+                    // Remove the canvas from its parent
+                    if (canvas.Parent is System.Windows.Controls.Panel canvasParent)
+                    {
+                        canvasParent.Children.Remove(canvas);
+                    }
+                }
+                else if (toast.Parent is System.Windows.Controls.Panel directParent)
+                {
+                    directParent.Children.Remove(toast);
+                }
+
+                // Remove from active list
+                _activeToasts.Remove(toast);
+
+                // Reposition remaining toasts
+                RepositionToasts();
+                
+                _ = _loggingService.LogDebugAsync($"Toast removed - Remaining: {_activeToasts.Count}", "NotificationServiceEnhanced");
+            }
+            catch (Exception ex)
+            {
+                _ = _loggingService.LogErrorAsync($"Error removing toast: {ex.Message}", ex, "NotificationServiceEnhanced");
+            }
+        }
+
+        /// <summary>
+        /// Repositions all active toasts after one is removed
+        /// </summary>
+        private void RepositionToasts()
+        {
+            var topOffset = 5.0; // Very close to title bar
+            var toastHeight = 80.0; // Actual toast height (from XAML design height)
+
+            for (int i = 0; i < _activeToasts.Count; i++)
+            {
+                var toast = _activeToasts[i];
+                
+                // Calculate position for this toast with true 5px visual gaps  
+                var currentOffset = topOffset + (i * (toastHeight + TOAST_VERTICAL_SPACING));
+                
+                // Update Canvas position if using Canvas wrapper
+                if (toast.Parent is System.Windows.Controls.Canvas canvas)
+                {
+                    System.Windows.Controls.Canvas.SetTop(toast, currentOffset);
+                    System.Windows.Controls.Panel.SetZIndex(toast, 1000 + i);
+                }
+                else
+                {
+                    // Fallback to margin positioning
+                    toast.Margin = new Thickness(0, currentOffset, 20, 0);
+                    System.Windows.Controls.Panel.SetZIndex(toast, 1000 + i);
+                }
             }
         }
 

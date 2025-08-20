@@ -364,6 +364,12 @@ namespace FFXIManager.Services
                     
                     totalStopwatch.Stop();
                     
+                    // **NEW FEATURE**: Track last activation time for successful activations
+                    if (success)
+                    {
+                        character.MarkAsActivated();
+                    }
+                    
                     var result = new HotkeyActivationResult
                     {
                         HotkeyId = hotkeyId,
@@ -458,14 +464,14 @@ namespace FFXIManager.Services
                     // Only show success toasts for slow activations or errors
                     if (durationMs > 50 || result.Source == ActivationSource.Hotkey)
                     {
-                        await _notificationService.ShowToastAsync(message, notificationType, 2000);
+                        await _notificationService.ShowToastAsync(message, notificationType);
                     }
                 }
                 else
                 {
                     // Error toast with helpful message
                     var errorMessage = result.ErrorMessage ?? "Activation failed";
-                    await _notificationService.ShowToastAsync($"{characterName}: {errorMessage}", NotificationType.Error, 4000);
+                    await _notificationService.ShowToastAsync($"{characterName}: {errorMessage}", NotificationType.Error);
                 }
             }
             catch (Exception ex)

@@ -50,7 +50,8 @@ namespace FFXIManager.ViewModels
             // Create specialized ViewModels with their specific dependencies
             ProfileManagement = new ProfileManagementViewModel(
                 profileOperations, statusService, settingsService,
-                profileService, dialogService, validationService);
+                profileService, dialogService, validationService, 
+                ServiceLocator.NotificationServiceEnhanced);
 
             ApplicationManagement = new ApplicationManagementViewModel(
                 applicationService, statusService, loggingService);

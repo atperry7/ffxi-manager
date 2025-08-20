@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using FFXIManager.Infrastructure;
 using FFXIManager.Models.Settings;
 
@@ -31,8 +33,15 @@ namespace FFXIManager.Services
         private readonly LowLevelHotkeyService _hotkeyService;
         private readonly ILoggingService _loggingService;
         private readonly Dictionary<int, DateTime> _lastHotkeyPress = new();
-        private TimeSpan _hotkeyDebounceInterval = TimeSpan.FromMilliseconds(5); // Ultra-responsive gaming default
+        private TimeSpan _hotkeyDebounceInterval = TimeSpan.FromMilliseconds(50); // **INCREASED** from 5ms to prevent system overload
         private bool _disposed;
+        
+        // **EMERGENCY PROTECTION**: Circuit breaker for hotkey flooding
+        private static int _hotkeyPressCount;
+        private static DateTime _lastHotkeyReset = DateTime.UtcNow;
+        private static volatile bool _hotkeyFloodProtection;
+        private const int MAX_HOTKEYS_PER_SECOND = 15;
+        private const int FLOOD_PROTECTION_DURATION_MS = 2000;
 
         /// <summary>
         /// Event fired when a registered hotkey is pressed
@@ -156,6 +165,13 @@ namespace FFXIManager.Services
         {
             try
             {
+                // **EMERGENCY FLOOD PROTECTION**: Check global hotkey rate
+                if (IsHotkeyFloodProtectionActive())
+                {
+                    _loggingService.LogWarningAsync($"Hotkey press ignored: flood protection active ({e.Modifiers}+{e.Key})", "GlobalHotkeyManager");
+                    return;
+                }
+                
                 // Debouncing: check if this hotkey was pressed recently
                 var now = DateTime.UtcNow;
                 if (_lastHotkeyPress.TryGetValue(e.HotkeyId, out var lastPress))
@@ -183,6 +199,44 @@ namespace FFXIManager.Services
             {
                 _loggingService.LogErrorAsync("Error handling hotkey press", ex, "GlobalHotkeyManager");
             }
+        }
+        
+        /// <summary>
+        /// **EMERGENCY PROTECTION**: Manages hotkey flood protection to prevent system overload
+        /// </summary>
+        private bool IsHotkeyFloodProtectionActive()
+        {
+            var now = DateTime.UtcNow;
+            
+            // Reset counter every second
+            if ((now - _lastHotkeyReset).TotalMilliseconds >= 1000)
+            {
+                Interlocked.Exchange(ref _hotkeyPressCount, 0);
+                _lastHotkeyReset = now;
+                _hotkeyFloodProtection = false;
+            }
+            
+            // Check if we're over the limit
+            var currentCount = Interlocked.Increment(ref _hotkeyPressCount);
+            
+            if (currentCount > MAX_HOTKEYS_PER_SECOND && !_hotkeyFloodProtection)
+            {
+                _hotkeyFloodProtection = true;
+                
+                // Schedule flood protection reset
+                Task.Run(async () => 
+                {
+                    await Task.Delay(FLOOD_PROTECTION_DURATION_MS);
+                    _hotkeyFloodProtection = false;
+                    Interlocked.Exchange(ref _hotkeyPressCount, 0);
+                    await _loggingService.LogInfoAsync("Hotkey flood protection deactivated - normal operation resumed", "GlobalHotkeyManager");
+                });
+                
+                _loggingService.LogWarningAsync($"**HOTKEY FLOOD PROTECTION ACTIVATED**: {currentCount} presses/sec exceeded limit ({MAX_HOTKEYS_PER_SECOND})", "GlobalHotkeyManager");
+                return true;
+            }
+            
+            return _hotkeyFloodProtection;
         }
 
         /// <summary>

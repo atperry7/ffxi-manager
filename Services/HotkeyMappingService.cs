@@ -169,7 +169,7 @@ namespace FFXIManager.Services
                     }
                     else
                     {
-                        await _loggingService.LogWarningAsync($"Hotkey {shortcut.HotkeyId} slot {slotIndex} out of range (0-{characters.Count - 1})", "HotkeyMappingService");
+                        await _loggingService.LogDebugAsync($"Hotkey {shortcut.HotkeyId} slot {slotIndex} out of range (0-{characters.Count - 1}) - no character mapped", "HotkeyMappingService");
                         invalidMappings++;
                     }
                 }

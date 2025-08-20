@@ -30,6 +30,14 @@ namespace FFXIManager.Services
         /// Forces immediate cache refresh. Useful after settings changes or process updates.
         /// </summary>
         Task InvalidateCacheAsync();
+        
+        /// <summary>
+        /// Moves a character to a new slot position (for drag-and-drop support).
+        /// </summary>
+        /// <param name="character">Character to move</param>
+        /// <param name="newSlotIndex">Target slot index</param>
+        /// <returns>True if successful</returns>
+        Task<bool> MoveCharacterToSlotAsync(PlayOnlineCharacter character, int newSlotIndex);
 
         /// <summary>
         /// Gets cache performance statistics for monitoring and diagnostics.
@@ -60,5 +68,11 @@ namespace FFXIManager.Services
         /// Provides performance metrics and refresh timing information.
         /// </summary>
         event EventHandler<CharacterCacheUpdatedEventArgs>? CharacterCacheUpdated;
+
+        /// <summary>
+        /// Connects to the monitor service to receive character updates.
+        /// </summary>
+        /// <param name="monitorService">The monitor service to connect to</param>
+        Task ConnectToMonitorAsync(IPlayOnlineMonitorService monitorService);
     }
 }
