@@ -188,6 +188,9 @@ namespace FFXIManager.Services
 
         public async Task<bool> ActivateCharacterWindowAsync(PlayOnlineCharacter character, CancellationToken cancellationToken = default)
         {
+            // **PERFORMANCE**: Start timing immediately
+            var activationStopwatch = System.Diagnostics.Stopwatch.StartNew();
+            
             // **EMERGENCY CIRCUIT BREAKER**: Check global activation throttle
             if (IsEmergencyThrottleActive())
             {
@@ -201,33 +204,38 @@ namespace FFXIManager.Services
                 return false;
             }
 
-            // **GAMING OPTIMIZATION**: Smart character-aware rate limiting using cached lookup
+            // **PERFORMANCE OPTIMIZATION**: Skip rate limiting for fast switching
             var currentSlotIndex = GetCharacterSlotIndexFast(character);
             var timeSinceLastAttempt = DateTime.UtcNow - _lastActivationAttempt;
 
-            // Only apply rate limiting if switching to the SAME character
+            // Only apply rate limiting if switching to the SAME character within 50ms
             bool isSameCharacter = (currentSlotIndex == _lastActivatedCharacterSlotIndex && currentSlotIndex != -1);
-            bool tooFrequent = timeSinceLastAttempt.TotalMilliseconds < _minActivationIntervalMs;
+            bool tooFrequent = timeSinceLastAttempt.TotalMilliseconds < 50; // Reduced from _minActivationIntervalMs
 
             if (isSameCharacter && tooFrequent)
             {
-                await _logging.LogDebugAsync($"Rate limiting same-character activation for {character.DisplayName} (slot {currentSlotIndex}, {timeSinceLastAttempt.TotalMilliseconds:F0}ms ago)", "PlayOnlineMonitorService");
-
-                // Use debounced activation for same character
+                // Skip logging for performance
                 RequestDebouncedActivation(character);
-                return true; // Return true to indicate request was accepted (will be processed)
+                return true;
             }
-            else if (!isSameCharacter)
+            
+            // **PERFORMANCE**: Log after decision to avoid delays
+            if (!isSameCharacter && activationStopwatch.ElapsedMilliseconds > 10)
             {
-                // Different character - allow immediate activation (gaming-optimized)
-                await _logging.LogDebugAsync($"Fast character switch: {_lastActivatedCharacterSlotIndex} → {currentSlotIndex} for {character.DisplayName}", "PlayOnlineMonitorService");
-                _lastActivatedCharacterSlotIndex = currentSlotIndex;
-                return await PerformImmediateActivationAsync(character, cancellationToken);
+                System.Diagnostics.Debug.WriteLine($"[PERF WARNING] Pre-activation took {activationStopwatch.ElapsedMilliseconds}ms");
             }
-
-            // Same character but enough time has passed - proceed
+            
             _lastActivatedCharacterSlotIndex = currentSlotIndex;
-            return await PerformImmediateActivationAsync(character, cancellationToken);
+            var result = await PerformImmediateActivationAsync(character, cancellationToken);
+            
+            // **PERFORMANCE**: Log total time
+            activationStopwatch.Stop();
+            if (activationStopwatch.ElapsedMilliseconds > 100)
+            {
+                await _logging.LogWarningAsync($"[PERFORMANCE] Character activation took {activationStopwatch.ElapsedMilliseconds}ms for {character.DisplayName}", "PlayOnlineMonitorService");
+            }
+            
+            return result;
         }
 
         /// <summary>
@@ -286,11 +294,10 @@ namespace FFXIManager.Services
         /// </summary>
         private async Task<bool> PerformImmediateActivationAsync(PlayOnlineCharacter character, CancellationToken cancellationToken = default)
         {
-            // **OPTIMIZATION**: Use semaphore to ensure only one activation at a time
-            // Increased timeout to 500ms to prevent input blocking on slower systems
-            if (!await _activationSemaphore.WaitAsync(500, cancellationToken))
+            // **PERFORMANCE**: Reduce semaphore wait to 100ms
+            if (!await _activationSemaphore.WaitAsync(100, cancellationToken))
             {
-                await _logging.LogWarningAsync($"Activation semaphore timeout, skipping {character.DisplayName}", "PlayOnlineMonitorService");
+                // Don't log for performance
                 return false;
             }
 
@@ -298,19 +305,23 @@ namespace FFXIManager.Services
             {
                 _lastActivationAttempt = DateTime.UtcNow;
 
-                // Create timeout cancellation token
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(_activationTimeoutMs);
-
-                await _logging.LogInfoAsync($"Activating window for {character.DisplayName}...", "PlayOnlineMonitorService");
+                // **PERFORMANCE**: Use shorter timeout for faster response
+                var fastTimeoutMs = Math.Min(_activationTimeoutMs, 500); // Cap at 500ms
+                
+                // **PERFORMANCE**: Skip info logging to reduce overhead
+                System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Starting for {character.DisplayName}");
 
                 // **ENHANCED**: Use ProcessUtilityService with detailed failure detection
                 var processUtility = ServiceLocator.ProcessUtilityService;
-                var result = await processUtility.ActivateWindowEnhancedAsync(character.WindowHandle, _activationTimeoutMs);
+                var result = await processUtility.ActivateWindowEnhancedAsync(character.WindowHandle, fastTimeoutMs);
 
                 if (result.Success)
                 {
-                    await _logging.LogInfoAsync($"Successfully activated window for {character.DisplayName} in {result.Duration.TotalMilliseconds:F0}ms (attempts: {result.AttemptsRequired})", "PlayOnlineMonitorService");
+                    // Only log if it took too long
+                    if (result.Duration.TotalMilliseconds > 100)
+                    {
+                        await _logging.LogInfoAsync($"Successfully activated {character.DisplayName} in {result.Duration.TotalMilliseconds:F0}ms (attempts: {result.AttemptsRequired})", "PlayOnlineMonitorService");
+                    }
                 }
                 else
                 {
@@ -324,7 +335,7 @@ namespace FFXIManager.Services
                         WindowActivationFailureReason.InvalidHandle => "Window handle is no longer valid",
                         WindowActivationFailureReason.WindowDestroyed => "Window has been destroyed",
                         WindowActivationFailureReason.AccessDenied => "Access denied to window",
-                        WindowActivationFailureReason.Timeout => $"Activation timed out after {_activationTimeoutMs}ms",
+                        WindowActivationFailureReason.Timeout => $"Activation timed out after {fastTimeoutMs}ms",
                         _ => result.DiagnosticInfo ?? "Unknown failure reason"
                     };
                     
@@ -335,7 +346,7 @@ namespace FFXIManager.Services
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                await _logging.LogInfoAsync($"Activation cancelled for {character.DisplayName}", "PlayOnlineMonitorService");
+                // Skip logging for performance
                 return false;
             }
             catch (Exception ex)

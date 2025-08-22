@@ -102,6 +102,16 @@ namespace FFXIManager.Infrastructure
         private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
         
         [DllImport("user32.dll")]
+        private static extern bool AllowSetForegroundWindow(int dwProcessId);
+        
+        [DllImport("user32.dll")]
+        private static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
+        
+        private const uint SPI_GETFOREGROUNDLOCKTIMEOUT = 0x2000;
+        private const uint SPI_SETFOREGROUNDLOCKTIMEOUT = 0x2001;
+        private const uint SPIF_SENDCHANGE = 0x02;
+        
+        [DllImport("user32.dll")]
         private static extern int GetLastError();
 
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
@@ -188,7 +198,7 @@ namespace FFXIManager.Infrastructure
                 
                 using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
                 
-                // Perform activation with multiple strategies
+                // **PERFORMANCE**: Reduce attempts and delays for faster response
                 int attempts = 0;
                 bool success = false;
                 
@@ -199,7 +209,8 @@ namespace FFXIManager.Infrastructure
                     
                     if (!success && attempts < 3)
                     {
-                        await Task.Delay(50 * attempts, cts.Token); // Progressive delay
+                        // **PERFORMANCE**: Reduced delay between attempts
+                        await Task.Delay(Math.Min(20 * attempts, 50), cts.Token); // Max 50ms delay
                     }
                 }
                 
@@ -619,16 +630,22 @@ namespace FFXIManager.Infrastructure
         
         private static async Task<bool> SimpleActivation(IntPtr hWnd, CancellationToken cancellationToken)
         {
+            // **PERFORMANCE**: Check if already foreground first
+            if (GetForegroundWindow() == hWnd)
+                return true;
+            
             if (IsIconic(hWnd))
             {
                 ShowWindow(hWnd, SW_RESTORE);
-                await Task.Delay(50, cancellationToken);
+                // **PERFORMANCE**: Reduced delay
+                await Task.Delay(20, cancellationToken);
             }
             
             SetForegroundWindow(hWnd);
             BringWindowToTop(hWnd);
             
-            await Task.Delay(10, cancellationToken);
+            // **PERFORMANCE**: Reduced delay
+            await Task.Delay(5, cancellationToken);
             return GetForegroundWindow() == hWnd;
         }
         
@@ -651,7 +668,8 @@ namespace FFXIManager.Infrastructure
                     if (IsIconic(hWnd))
                     {
                         ShowWindow(hWnd, SW_RESTORE);
-                        await Task.Delay(50, cancellationToken);
+                        // **PERFORMANCE**: Reduced delay
+                        await Task.Delay(20, cancellationToken);
                     }
                     
                     SetForegroundWindow(hWnd);
@@ -674,25 +692,69 @@ namespace FFXIManager.Infrastructure
         
         private static async Task<bool> AggressiveActivation(IntPtr hWnd, CancellationToken cancellationToken)
         {
-            // Force window to restore and show
-            ShowWindow(hWnd, SW_RESTORE);
-            await Task.Delay(100, cancellationToken);
+            // Get the process ID of the target window
+            GetWindowThreadProcessId(hWnd, out uint targetPid);
             
-            ShowWindow(hWnd, SW_SHOW);
-            BringWindowToTop(hWnd);
+            // Allow the target process to set foreground window
+            AllowSetForegroundWindow((int)targetPid);
             
-            // Multiple activation attempts in quick succession
-            for (int i = 0; i < 3; i++)
+            // Temporarily disable focus stealing prevention
+            IntPtr timeout = Marshal.AllocHGlobal(sizeof(uint));
+            try
             {
-                SetForegroundWindow(hWnd);
-                await Task.Delay(10, cancellationToken);
+                // Get current timeout
+                SystemParametersInfo(SPI_GETFOREGROUNDLOCKTIMEOUT, 0, timeout, 0);
+                uint originalTimeout = (uint)Marshal.ReadInt32(timeout);
                 
-                if (GetForegroundWindow() == hWnd)
-                    return true;
+                // Set timeout to 0 (disable focus stealing prevention)
+                Marshal.WriteInt32(timeout, 0);
+                SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, timeout, SPIF_SENDCHANGE);
+                
+                // Force window to restore and show
+                ShowWindow(hWnd, SW_RESTORE);
+                await Task.Delay(50, cancellationToken);
+                
+                ShowWindow(hWnd, SW_SHOW);
+                BringWindowToTop(hWnd);
+                
+                // Multiple activation attempts in quick succession
+                for (int i = 0; i < 5; i++)
+                {
+                    SetForegroundWindow(hWnd);
+                    
+                    // Use SendKeys to simulate user input (bypasses focus stealing prevention)
+                    if (i == 2)
+                    {
+                        // Simulate an Alt key press to trick Windows into allowing focus change
+                        keybd_event(0x12, 0, 0, 0); // Alt key down
+                        keybd_event(0x12, 0, 2, 0); // Alt key up
+                    }
+                    
+                    await Task.Delay(10, cancellationToken);
+                    
+                    if (GetForegroundWindow() == hWnd)
+                    {
+                        // Restore original timeout
+                        Marshal.WriteInt32(timeout, (int)originalTimeout);
+                        SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, timeout, SPIF_SENDCHANGE);
+                        return true;
+                    }
+                }
+                
+                // Restore original timeout
+                Marshal.WriteInt32(timeout, (int)originalTimeout);
+                SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, timeout, SPIF_SENDCHANGE);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(timeout);
             }
             
             return false;
         }
+        
+        [DllImport("user32.dll")]
+        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
         
         /// <summary>
         /// Analyzes why window activation failed to provide detailed diagnostics.
@@ -701,23 +763,35 @@ namespace FFXIManager.Infrastructure
         {
             // Window was destroyed during activation
             if (!IsWindow(hWnd))
+            {
+                System.Diagnostics.Debug.WriteLine($"[ACTIVATION FAILURE] Window 0x{hWnd.ToInt64():X} was destroyed");
                 return WindowActivationFailureReason.WindowDestroyed;
+            }
             
             // Window is hung
             if (!finalState.IsResponding)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ACTIVATION FAILURE] Window 0x{hWnd.ToInt64():X} is not responding");
                 return WindowActivationFailureReason.WindowHung;
+            }
             
             // Window is not visible (might be hidden by another process)
             if (!finalState.IsVisible)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ACTIVATION FAILURE] Window 0x{hWnd.ToInt64():X} is not visible");
                 return WindowActivationFailureReason.Unknown;
+            }
             
             // Check if another window is blocking (full-screen application)
             var foregroundWindow = GetForegroundWindow();
             if (foregroundWindow != IntPtr.Zero && foregroundWindow != hWnd)
             {
                 var blockingState = GetWindowState(foregroundWindow);
+                System.Diagnostics.Debug.WriteLine($"[ACTIVATION DEBUG] Current foreground: {blockingState.WindowTitle} (0x{foregroundWindow.ToInt64():X})");
+                
                 if (blockingState.IsMaximized || blockingState.ClassName?.Contains("fullscreen", StringComparison.OrdinalIgnoreCase) == true)
                 {
+                    System.Diagnostics.Debug.WriteLine($"[ACTIVATION FAILURE] Blocked by fullscreen: {blockingState.WindowTitle}");
                     return WindowActivationFailureReason.FullScreenBlocking;
                 }
             }
@@ -743,9 +817,13 @@ namespace FFXIManager.Infrastructure
             // Focus stealing prevention might be active
             if (finalState.IsVisible && !finalState.IsMinimized && !finalState.IsForeground)
             {
+                System.Diagnostics.Debug.WriteLine($"[ACTIVATION FAILURE] Focus stealing prevention blocked window 0x{hWnd.ToInt64():X}");
+                System.Diagnostics.Debug.WriteLine($"  Window State: Visible={finalState.IsVisible}, Minimized={finalState.IsMinimized}, Foreground={finalState.IsForeground}");
+                System.Diagnostics.Debug.WriteLine($"  Z-Order: {finalState.ZOrder}, Title: {finalState.WindowTitle}");
                 return WindowActivationFailureReason.FocusStealingPrevention;
             }
             
+            System.Diagnostics.Debug.WriteLine($"[ACTIVATION FAILURE] Unknown reason for window 0x{hWnd.ToInt64():X}");
             return WindowActivationFailureReason.Unknown;
         }
         
