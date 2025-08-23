@@ -372,7 +372,15 @@ namespace FFXIManager.ViewModels.CharacterMonitor
                 var vm = Characters.FirstOrDefault(c => c.ProcessId == e.Character.ProcessId);
                 if (vm != null)
                 {
-                    // Character properties will auto-update via property changed events
+                    // **FIX**: Update the underlying character data with new information
+                    // Window title IS the character name - both get updated together
+                    vm.Character.CharacterName = e.Character.CharacterName;
+                    vm.Character.WindowTitle = e.Character.WindowTitle;
+                    vm.Character.ServerName = e.Character.ServerName;
+                    vm.Character.WindowHandle = e.Character.WindowHandle;
+                    vm.Character.LastSeen = e.Character.LastSeen;
+                    
+                    // Refresh the status display
                     vm.RefreshStatusDisplay();
                 }
             });

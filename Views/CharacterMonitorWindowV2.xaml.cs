@@ -9,7 +9,9 @@ namespace FFXIManager.Views
     /// Refactored Character Monitor window with clean MVVM architecture.
     /// Code-behind is minimal, only handling window-specific behaviors that can't be easily bound.
     /// </summary>
+#pragma warning disable CA1001 // Window properly disposes _viewModel in OnClosed method per WPF pattern
     public partial class CharacterMonitorWindowV2 : Window
+#pragma warning restore CA1001
     {
         private CharacterMonitorViewModel? _viewModel;
 

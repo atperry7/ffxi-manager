@@ -24,6 +24,7 @@ namespace FFXIManager.Infrastructure
         private static IProcessUtilityService? _processUtilityService;
         private static IUnifiedMonitoringService? _unifiedMonitoringService;
         private static IUiDispatcher? _uiDispatcher;
+        private static IWindowEventTracker? _windowEventTracker;
         private static ICharacterOrderingService? _characterOrderingService;
         private static IHotkeyMappingService? _hotkeyMappingService;
         private static IHotkeyPerformanceMonitor? _hotkeyPerformanceMonitor;
@@ -131,11 +132,20 @@ namespace FFXIManager.Infrastructure
             }
         }
 
+        public static IWindowEventTracker WindowEventTracker
+        {
+            get
+            {
+                _windowEventTracker ??= new WindowEventTracker(LoggingService, UiDispatcher);
+                return _windowEventTracker;
+            }
+        }
+
         public static IUnifiedMonitoringService UnifiedMonitoringService
         {
             get
             {
-                _unifiedMonitoringService ??= new UnifiedMonitoringService(ProcessUtilityService, LoggingService, UiDispatcher);
+                _unifiedMonitoringService ??= new UnifiedMonitoringService(ProcessUtilityService, LoggingService, UiDispatcher, WindowEventTracker);
                 return _unifiedMonitoringService;
             }
         }

@@ -23,6 +23,7 @@ namespace FFXIManager.Infrastructure
         Task<WindowActivationResult> ActivateWindowEnhancedAsync(IntPtr windowHandle, int timeoutMs = 5000);
         Task<List<WindowInfo>> GetProcessWindowsAsync(int processId);
         bool IsProcessRunning(int processId);
+        bool IsWindowValid(IntPtr windowHandle);
         Task<ProcessBasicInfo?> GetProcessInfoAsync(int processId);
         Task<List<ProcessBasicInfo>> GetProcessesByNamesAsync(IEnumerable<string> processNames);
     }
@@ -106,6 +107,9 @@ namespace FFXIManager.Infrastructure
         
         [DllImport("user32.dll")]
         private static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
+        
+        [DllImport("user32.dll")]
+        private static extern void SwitchToThisWindow(IntPtr hWnd, bool fAltTab);
         
         private const uint SPI_GETFOREGROUNDLOCKTIMEOUT = 0x2000;
         private const uint SPI_SETFOREGROUNDLOCKTIMEOUT = 0x2001;
@@ -693,10 +697,22 @@ namespace FFXIManager.Infrastructure
         private static async Task<bool> AggressiveActivation(IntPtr hWnd, CancellationToken cancellationToken)
         {
             // Get the process ID of the target window
-            GetWindowThreadProcessId(hWnd, out uint targetPid);
+            var threadId = GetWindowThreadProcessId(hWnd, out uint targetPid);
+            if (threadId == 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Failed to get thread ID for window 0x{hWnd.ToInt64():X}");
+            }
             
             // Allow the target process to set foreground window
             AllowSetForegroundWindow((int)targetPid);
+            
+            // **ENHANCED**: Log current foreground window for debugging
+            var currentForeground = GetForegroundWindow();
+            if (currentForeground != IntPtr.Zero)
+            {
+                var fgState = GetWindowState(currentForeground);
+                System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Current foreground before activation: {fgState.WindowTitle} (0x{currentForeground.ToInt64():X})");
+            }
             
             // Temporarily disable focus stealing prevention
             IntPtr timeout = Marshal.AllocHGlobal(sizeof(uint));
@@ -710,9 +726,16 @@ namespace FFXIManager.Infrastructure
                 Marshal.WriteInt32(timeout, 0);
                 SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, timeout, SPIF_SENDCHANGE);
                 
+                // **FIX**: Use SwitchToThisWindow for better reliability with games
+                // This API is more reliable for switching to game windows
+                SwitchToThisWindow(hWnd, true);
+                
                 // Force window to restore and show
-                ShowWindow(hWnd, SW_RESTORE);
-                await Task.Delay(50, cancellationToken);
+                if (IsIconic(hWnd))
+                {
+                    ShowWindow(hWnd, SW_RESTORE);
+                    await Task.Delay(30, cancellationToken);
+                }
                 
                 ShowWindow(hWnd, SW_SHOW);
                 BringWindowToTop(hWnd);
@@ -720,7 +743,14 @@ namespace FFXIManager.Infrastructure
                 // Multiple activation attempts in quick succession
                 for (int i = 0; i < 5; i++)
                 {
+                    // **ENHANCED**: Try multiple activation methods
                     SetForegroundWindow(hWnd);
+                    
+                    if (i == 1)
+                    {
+                        // Try SwitchToThisWindow again
+                        SwitchToThisWindow(hWnd, true);
+                    }
                     
                     // Use SendKeys to simulate user input (bypasses focus stealing prevention)
                     if (i == 2)
@@ -728,6 +758,7 @@ namespace FFXIManager.Infrastructure
                         // Simulate an Alt key press to trick Windows into allowing focus change
                         keybd_event(0x12, 0, 0, 0); // Alt key down
                         keybd_event(0x12, 0, 2, 0); // Alt key up
+                        System.Diagnostics.Debug.WriteLine("[ACTIVATION] Sent Alt key to bypass focus stealing prevention");
                     }
                     
                     await Task.Delay(10, cancellationToken);
@@ -737,6 +768,7 @@ namespace FFXIManager.Infrastructure
                         // Restore original timeout
                         Marshal.WriteInt32(timeout, (int)originalTimeout);
                         SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, timeout, SPIF_SENDCHANGE);
+                        System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Successfully activated window after {i+1} attempts");
                         return true;
                     }
                 }
@@ -755,6 +787,14 @@ namespace FFXIManager.Infrastructure
         
         [DllImport("user32.dll")]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
+        
+        /// <summary>
+        /// Checks if a window handle is still valid and exists.
+        /// </summary>
+        public bool IsWindowValid(IntPtr windowHandle)
+        {
+            return windowHandle != IntPtr.Zero && IsWindow(windowHandle);
+        }
         
         /// <summary>
         /// Analyzes why window activation failed to provide detailed diagnostics.
