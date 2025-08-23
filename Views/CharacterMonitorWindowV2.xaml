@@ -226,13 +226,31 @@
                   Background="{DynamicResource HeaderBackgroundBrush}"
                   Foreground="{DynamicResource PrimaryTextBrush}"
                   FontSize="10">
-                
-                <!-- View Menu -->
-                <MenuItem Header="_View">
-                    <MenuItem Header="_Refresh"
-                              Command="{Binding CollectionViewModel.RefreshCommand}"
-                              InputGestureText="F5"/>
+
+                <!-- Window Menu -->
+                <MenuItem Header="_Window">
+                    <MenuItem Header="_Always on Top"
+                              IsCheckable="True"
+                              IsChecked="{Binding WindowViewModel.IsAlwaysOnTop}"/>
+                    <MenuItem Header="Auto-_hide when inactive"
+                              IsCheckable="True"
+                              IsChecked="{Binding WindowViewModel.IsAutoHideEnabled}"/>
+                    <MenuItem Header="_Click-to-switch mode"
+                              IsCheckable="True"
+                              IsChecked="{Binding WindowViewModel.IsClickToSwitchEnabled}"
+                              ToolTip="Click character cards to activate them"/>
                     <Separator/>
+                    <MenuItem Header="Dock Position">
+                        <MenuItem Header="Top _Left"
+                                  Command="{Binding WindowViewModel.DockTopLeftCommand}"/>
+                        <MenuItem Header="Top _Right"
+                                  Command="{Binding WindowViewModel.DockTopRightCommand}"/>
+                        <MenuItem Header="Bottom _Left"
+                                  Command="{Binding WindowViewModel.DockBottomLeftCommand}"/>
+                        <MenuItem Header="Bottom _Right"
+                                  Command="{Binding WindowViewModel.DockBottomRightCommand}"/>
+                    </MenuItem>
+                    
                     <MenuItem Header="Window Size">
                         <MenuItem Header="_Tiny (120x200)"
                                   Command="{Binding WindowViewModel.SetTinySizeCommand}"/>
@@ -245,40 +263,7 @@
                         <MenuItem Header="_Wide (400x150)"
                                   Command="{Binding WindowViewModel.SetWideSizeCommand}"/>
                     </MenuItem>
-                </MenuItem>
-                
-                <!-- Window Menu -->
-                <MenuItem Header="_Window">
-                    <MenuItem Header="_Always on Top"
-                              IsCheckable="True"
-                              IsChecked="{Binding WindowViewModel.IsAlwaysOnTop}"/>
-                    <MenuItem Header="Auto-_hide when inactive"
-                              IsCheckable="True"
-                              IsChecked="{Binding WindowViewModel.IsAutoHideEnabled}"/>
-                    <Separator/>
-                    <MenuItem Header="Dock Position">
-                        <MenuItem Header="Top _Left"
-                                  Command="{Binding WindowViewModel.DockTopLeftCommand}"/>
-                        <MenuItem Header="Top _Right"
-                                  Command="{Binding WindowViewModel.DockTopRightCommand}"/>
-                        <MenuItem Header="Bottom _Left"
-                                  Command="{Binding WindowViewModel.DockBottomLeftCommand}"/>
-                        <MenuItem Header="Bottom _Right"
-                                  Command="{Binding WindowViewModel.DockBottomRightCommand}"/>
-                    </MenuItem>
-                    <Separator/>
-                    <MenuItem Header="_Minimize"
-                              Command="{Binding WindowViewModel.MinimizeCommand}"/>
-                    <MenuItem Header="_Close"
-                              Command="{Binding WindowViewModel.CloseCommand}"/>
-                </MenuItem>
-                
-                <!-- Options Menu -->
-                <MenuItem Header="_Options">
-                    <MenuItem Header="_Click-to-switch mode"
-                              IsCheckable="True"
-                              IsChecked="{Binding WindowViewModel.IsClickToSwitchEnabled}"
-                              ToolTip="Click character cards to activate them"/>
+
                     <Separator/>
                     <MenuItem Header="_Transparency">
                         <StackPanel Margin="5">
@@ -295,6 +280,12 @@
                                        Margin="0,5,0,0"/>
                         </StackPanel>
                     </MenuItem>
+
+                    <Separator/>
+                    <MenuItem Header="_Minimize"
+                              Command="{Binding WindowViewModel.MinimizeCommand}"/>
+                    <MenuItem Header="_Close"
+                              Command="{Binding WindowViewModel.CloseCommand}"/>
                 </MenuItem>
             </Menu>
             
