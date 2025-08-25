@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using FFXIManager.Models;
@@ -413,15 +414,18 @@ namespace FFXIManager.Services
             _ = _logging.LogInfoAsync("Stopped PlayOnline character monitoring", "PlayOnlineMonitorService");
         }
 
-        private static PlayOnlineCharacter ConvertToCharacter(MonitoredProcess process, MonitoredWindow? window)
+        private PlayOnlineCharacter ConvertToCharacter(MonitoredProcess process, MonitoredWindow? window)
         {
             // **FIX**: Window title IS the character name - no extraction needed
             var windowTitle = window?.Title ?? process.ProcessName;
+            
+            _ = _logging.LogDebugAsync($"ConvertToCharacter: Process {process.ProcessId} ({process.ProcessName}), Window Title: '{windowTitle}', Handle: 0x{window?.Handle.ToInt64():X}", "PlayOnlineMonitorService");
             
             // **FIX**: Additional protection against null/empty/invalid titles
             if (string.IsNullOrWhiteSpace(windowTitle) || windowTitle.Equals("NULL", StringComparison.OrdinalIgnoreCase))
             {
                 windowTitle = $"FFXI Process {process.ProcessId}";
+                _ = _logging.LogDebugAsync($"ConvertToCharacter: Using fallback title '{windowTitle}' for process {process.ProcessId}", "PlayOnlineMonitorService");
             }
             
             return new PlayOnlineCharacter
@@ -782,14 +786,51 @@ namespace FFXIManager.Services
                     var polCharacters = characters.Where(c => c.ProcessName.Contains("pol", StringComparison.OrdinalIgnoreCase)).ToList();
 
                     if (polCharacters.Count == 0)
+                    {
+                        await _logging.LogDebugAsync($"🔍 POL Title Check: No POL processes found", "PlayOnlineMonitorService");
                         return;
+                    }
 
                     await _logging.LogDebugAsync($"🔍 POL Title Check: Checking {polCharacters.Count} POL processes for title changes", "PlayOnlineMonitorService");
 
                     foreach (var character in polCharacters)
                     {
-                        if (!character.IsRunning || character.WindowHandle == IntPtr.Zero)
+                        if (!character.IsRunning)
+                        {
+                            await _logging.LogDebugAsync($"🔍 POL Title Check: Skipping non-running process {character.ProcessId}", "PlayOnlineMonitorService");
                             continue;
+                        }
+                        
+                        // If we don't have a window handle, try to get windows for this process
+                        if (character.WindowHandle == IntPtr.Zero)
+                        {
+                            await _logging.LogDebugAsync($"🔍 POL Title Check: Process {character.ProcessId} has no window handle, trying to find windows", "PlayOnlineMonitorService");
+                            
+                            // Get windows directly from ProcessUtilityService
+                            var processUtility = ServiceLocator.ProcessUtilityService;
+                            var windows = await processUtility.GetProcessWindowsAsync(character.ProcessId);
+                            
+                            if (windows.Count > 0)
+                            {
+                                var mainWindow = windows.FirstOrDefault(w => w.IsMainWindow) ?? windows.First();
+                                await _logging.LogInfoAsync($"🔍 POL Title Check: Found window for process {character.ProcessId}: Handle 0x{mainWindow.Handle.ToInt64():X}, Title: '{mainWindow.Title}'", "PlayOnlineMonitorService");
+                                
+                                // Update the character with the found window
+                                character.WindowHandle = mainWindow.Handle;
+                                character.WindowTitle = mainWindow.Title;
+                                character.CharacterName = mainWindow.Title;
+                                
+                                // Fire update event
+                                UpdateCharacterCache(character);
+                                SafeDispatchEvent(() => CharacterUpdated?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
+                                continue;
+                            }
+                            else
+                            {
+                                await _logging.LogDebugAsync($"🔍 POL Title Check: No windows found for process {character.ProcessId}", "PlayOnlineMonitorService");
+                                continue;
+                            }
+                        }
 
                         // Get current window title
                         var currentTitle = GetWindowTitle(character.WindowHandle);
@@ -830,38 +871,50 @@ namespace FFXIManager.Services
         }
 
         /// <summary>
-        /// Get window title using Win32 API
+        /// Get window title using Win32 API with enhanced error handling
         /// </summary>
-        private static string GetWindowTitle(IntPtr windowHandle)
+        private string GetWindowTitle(IntPtr windowHandle)
         {
             try
             {
                 if (windowHandle == IntPtr.Zero)
+                {
+                    _ = _logging.LogDebugAsync($"GetWindowTitle: Invalid window handle (IntPtr.Zero)", "PlayOnlineMonitorService");
                     return string.Empty;
+                }
 
                 const int maxLength = 512; // Increased buffer size
                 var buffer = new char[maxLength];
                 int length = GetWindowText(windowHandle, buffer, maxLength);
                 
                 if (length <= 0)
+                {
+                    var error = Marshal.GetLastWin32Error();
+                    _ = _logging.LogDebugAsync($"GetWindowTitle: GetWindowText returned {length} for handle 0x{windowHandle.ToInt64():X}, Win32 Error: {error}", "PlayOnlineMonitorService");
                     return string.Empty;
+                }
                 
                 // **FIX**: Handle null terminators and clean up the string
                 var title = new string(buffer, 0, length).Trim('\0').Trim();
                 
                 // **FIX**: If title is literally "NULL" or empty, return empty string
                 if (string.IsNullOrWhiteSpace(title) || title.Equals("NULL", StringComparison.OrdinalIgnoreCase))
+                {
+                    _ = _logging.LogDebugAsync($"GetWindowTitle: Filtered out invalid title '{title}' for handle 0x{windowHandle.ToInt64():X}", "PlayOnlineMonitorService");
                     return string.Empty;
+                }
                 
+                _ = _logging.LogDebugAsync($"GetWindowTitle: Successfully retrieved '{title}' for handle 0x{windowHandle.ToInt64():X}", "PlayOnlineMonitorService");
                 return title;
             }
-            catch
+            catch (Exception ex)
             {
+                _ = _logging.LogErrorAsync($"GetWindowTitle: Exception for handle 0x{windowHandle.ToInt64():X}", ex, "PlayOnlineMonitorService");
                 return string.Empty;
             }
         }
 
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         private static extern int GetWindowText(IntPtr hWnd, char[] lpString, int nMaxCount);
 
         #endregion

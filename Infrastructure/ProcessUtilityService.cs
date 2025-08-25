@@ -47,6 +47,7 @@ namespace FFXIManager.Infrastructure
     public class ProcessUtilityService : IProcessUtilityService
     {
         private readonly ILoggingService _logging;
+        private readonly ILoggingService _loggingService; // Added for consistency in GetWindowTitle
         private const int DEFAULT_TIMEOUT_MS = 5000;
 
         #region Windows API Imports
@@ -131,6 +132,7 @@ namespace FFXIManager.Infrastructure
         public ProcessUtilityService(ILoggingService logging)
         {
             _logging = logging ?? throw new ArgumentNullException(nameof(logging));
+            _loggingService = logging; // Set both for compatibility
         }
 
         public async Task<bool> KillProcessAsync(int processId, int timeoutMs = DEFAULT_TIMEOUT_MS)
@@ -507,7 +509,7 @@ namespace FFXIManager.Infrastructure
 
         #region Helper Methods
 
-        private static string GetWindowTitle(IntPtr hWnd)
+        private string GetWindowTitle(IntPtr hWnd)
         {
             try
             {
@@ -518,13 +520,23 @@ namespace FFXIManager.Infrastructure
                     int result = GetWindowText(hWnd, buffer, buffer.Length);
                     if (result > 0)
                     {
-                        return new string(buffer, 0, result);
+                        var title = new string(buffer, 0, result);
+                        _ = _loggingService.LogDebugAsync($"ProcessUtility.GetWindowTitle: Retrieved '{title}' for handle 0x{hWnd.ToInt64():X}", "ProcessUtilityService");
+                        return title;
+                    }
+                    else
+                    {
+                        _ = _loggingService.LogDebugAsync($"ProcessUtility.GetWindowTitle: GetWindowText returned 0 for handle 0x{hWnd.ToInt64():X}, length was {length}", "ProcessUtilityService");
                     }
                 }
+                else
+                {
+                    _ = _loggingService.LogDebugAsync($"ProcessUtility.GetWindowTitle: GetWindowTextLength returned {length} for handle 0x{hWnd.ToInt64():X}", "ProcessUtilityService");
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore errors getting window title
+                _ = _loggingService.LogDebugAsync($"ProcessUtility.GetWindowTitle: Exception for handle 0x{hWnd.ToInt64():X}: {ex.Message}", "ProcessUtilityService");
             }
             return string.Empty;
         }
