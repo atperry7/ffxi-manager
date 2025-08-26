@@ -52,7 +52,7 @@
             </Grid>
 
             <!-- Character List -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="200">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl ItemsSource="{Binding Characters}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:CharacterItemViewModel}">

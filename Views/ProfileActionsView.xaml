@@ -34,54 +34,59 @@
     </UserControl.Resources>
     
     <StackPanel>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
             <!-- Application Manager -->
-            <GroupBox Header="🚀 Application Manager" Margin="0,0,0,10">
+            <GroupBox Grid.Row="0" Header="🚀 Application Manager" Margin="0,0,0,10">
                 <StackPanel>
                     <!-- Application List (independent scroll) -->
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="300">
                         <ItemsControl ItemsSource="{Binding ExternalApplications}">
                             <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Style="{StaticResource SurfaceCardBorder}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,12,0"
+                                <DataTemplate>
+                                    <Border Style="{StaticResource SurfaceCardBorder}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,12,0"
                                                  VerticalAlignment="Center"
                                                  Fill="{Binding StatusColor}"/>
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" FontFamily="Segoe UI"/>
-                                            <TextBlock Text="{Binding StatusText}" FontSize="11" Margin="0,2,0,0" FontFamily="Segoe UI" Style="{StaticResource SecondaryTextBlock}"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2" Orientation="Horizontal">
-                                            <Button Content="▶️"
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" FontFamily="Segoe UI"/>
+                                                <TextBlock Text="{Binding StatusText}" FontSize="11" Margin="0,2,0,0" FontFamily="Segoe UI" Style="{StaticResource SecondaryTextBlock}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                <Button Content="▶️"
                                                     Style="{StaticResource LaunchButtonStyle}"
                                                     Command="{Binding DataContext.LaunchApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"
                                                     ToolTip="Launch Application"/>
-                                            <Button Content="⏹️"
+                                                <Button Content="⏹️"
                                                     Style="{StaticResource DangerIconButton}"
                                                     Command="{Binding DataContext.KillApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"
                                                     ToolTip="Stop Application"
                                                     IsEnabled="{Binding IsRunning}"/>
-                                            <Button Content="⚙️"
+                                                <Button Content="⚙️"
                                                     Style="{StaticResource WarningIconButton}"
                                                     Command="{Binding DataContext.EditApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"
                                                     ToolTip="Edit Application"/>
-                                            <Button Content="🗑️"
+                                                <Button Content="🗑️"
                                                     Style="{StaticResource SecondaryIconButton}"
                                                     Command="{Binding DataContext.RemoveApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"
                                                     ToolTip="Remove Application"/>
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
@@ -100,6 +105,7 @@
             </GroupBox>
 
             <!-- PlayOnline Character Monitor (New Architecture) -->
-            <local:EmbeddedCharacterMonitorView/>
-        </StackPanel>
+            <local:EmbeddedCharacterMonitorView Grid.Row="1"/>
+        </Grid>
+    </StackPanel>
 </UserControl>
