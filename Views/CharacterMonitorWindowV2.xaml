@@ -220,9 +220,35 @@
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
+            <!-- Title Bar -->
+            <Border Grid.Row="0"
+                    Background="{DynamicResource HeaderBackgroundBrush}"
+                    Height="20"
+                    MouseLeftButtonDown="TitleBar_MouseLeftButtonDown"
+                    MouseRightButtonDown="TitleBar_MouseRightButtonDown">
+                <Grid>
+                    <TextBlock Text="FFXI Characters"
+                               FontSize="10"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource PrimaryTextBrush}"/>
+
+                    <!-- Pin indicator when always on top -->
+                    <TextBlock Text="📌"
+                               FontSize="10"
+                               HorizontalAlignment="Left"
+                               VerticalAlignment="Center"
+                               Margin="5,0,0,0"
+                               Foreground="{DynamicResource AccentBrush}"
+                               Visibility="{Binding WindowViewModel.IsAlwaysOnTop,
+                                          Converter={StaticResource BoolToVis}}"
+                               ToolTip="Always on Top"/>
+                </Grid>
+            </Border>
             
             <!-- Menu Bar -->
-            <Menu Grid.Row="0"
+            <Menu Grid.Row="1"
                   Background="{DynamicResource HeaderBackgroundBrush}"
                   Foreground="{DynamicResource PrimaryTextBrush}"
                   FontSize="10">
@@ -250,7 +276,7 @@
                         <MenuItem Header="Bottom _Right"
                                   Command="{Binding WindowViewModel.DockBottomRightCommand}"/>
                     </MenuItem>
-                    
+
                     <MenuItem Header="Window Size">
                         <MenuItem Header="_Tiny (120x200)"
                                   Command="{Binding WindowViewModel.SetTinySizeCommand}"/>
@@ -288,34 +314,7 @@
                               Command="{Binding WindowViewModel.CloseCommand}"/>
                 </MenuItem>
             </Menu>
-            
-            <!-- Title Bar -->
-            <Border Grid.Row="1"
-                    Background="{DynamicResource HeaderBackgroundBrush}"
-                    Height="20"
-                    MouseLeftButtonDown="TitleBar_MouseLeftButtonDown"
-                    MouseRightButtonDown="TitleBar_MouseRightButtonDown">
-                <Grid>
-                    <TextBlock Text="FFXI Characters"
-                               FontSize="10"
-                               FontWeight="SemiBold"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               Foreground="{DynamicResource PrimaryTextBrush}"/>
-                    
-                    <!-- Pin indicator when always on top -->
-                    <TextBlock Text="📌"
-                               FontSize="10"
-                               HorizontalAlignment="Left"
-                               VerticalAlignment="Center"
-                               Margin="5,0,0,0"
-                               Foreground="{DynamicResource AccentBrush}"
-                               Visibility="{Binding WindowViewModel.IsAlwaysOnTop,
-                                          Converter={StaticResource BoolToVis}}"
-                               ToolTip="Always on Top"/>
-                </Grid>
-            </Border>
-            
+
             <!-- Character List -->
             <ScrollViewer Grid.Row="2"
                           VerticalScrollBarVisibility="Auto"
