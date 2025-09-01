@@ -23,9 +23,15 @@
     </UserControl.Resources>
     
     <GroupBox Header="🎮 Character Monitor">
-        <StackPanel>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            
             <!-- Monitor Status -->
-            <Grid Margin="0,0,0,12">
+            <Grid Grid.Row="0" Margin="0,0,0,12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
@@ -52,7 +58,7 @@
             </Grid>
 
             <!-- Character List -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl ItemsSource="{Binding Characters}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:CharacterItemViewModel}">
@@ -122,7 +128,7 @@
             </ScrollViewer>
 
             <!-- No Characters Message -->
-            <Border BorderBrush="{DynamicResource BorderBrush}" 
+            <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}" 
                     BorderThickness="1" 
                     CornerRadius="8" 
                     Padding="24" 
@@ -146,6 +152,6 @@
                            TextAlignment="Center"
                            Style="{StaticResource SecondaryTextBlock}"/>
             </Border>
-        </StackPanel>
+        </Grid>
     </GroupBox>
 </UserControl>

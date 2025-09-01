@@ -33,14 +33,14 @@
         
     </UserControl.Resources>
     
-    <StackPanel>
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            <!-- Application Manager -->
-            <GroupBox Grid.Row="0" Header="🚀 Application Manager" Margin="0,0,0,10">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Application Manager -->
+        <GroupBox Grid.Row="0" Header="🚀 Application Manager" Margin="0,0,0,10">
                 <StackPanel>
                     <!-- Application List (independent scroll) -->
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="300">
@@ -102,10 +102,9 @@
                                 ToolTip="Refresh Status"/>
                     </StackPanel>
                 </StackPanel>
-            </GroupBox>
+        </GroupBox>
 
-            <!-- PlayOnline Character Monitor (New Architecture) -->
-            <local:EmbeddedCharacterMonitorView Grid.Row="1"/>
-        </Grid>
-    </StackPanel>
+        <!-- PlayOnline Character Monitor (New Architecture) -->
+        <local:EmbeddedCharacterMonitorView Grid.Row="1"/>
+    </Grid>
 </UserControl>
