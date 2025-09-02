@@ -27,6 +27,11 @@ namespace FFXIManager.Services
         Task<HotkeyActivationResult> ActivateCharacterDirectAsync(PlayOnlineCharacter character, CancellationToken cancellationToken = default);
         
         /// <summary>
+        /// Cycles to the next active character.
+        /// </summary>
+        Task<HotkeyActivationResult> CycleToNextCharacterAsync(CancellationToken cancellationToken = default);
+        
+        /// <summary>
         /// Gets the hotkey ID associated with a character (reverse lookup).
         /// </summary>
         Task<int?> GetHotkeyIdForCharacterAsync(PlayOnlineCharacter character);
@@ -120,6 +125,15 @@ namespace FFXIManager.Services
         
         // **SPAM PREVENTION**: Track last activation times to prevent rapid-fire hotkeys
         private readonly ConcurrentDictionary<int, DateTime> _lastActivationTimes = new();
+        
+        // **CYCLE TRACKING**: Track current position for character cycling
+        private int _currentCycleIndex = -1;
+        private DateTime _lastCycleTime = DateTime.MinValue;
+        private readonly object _cycleLock = new();
+        
+        // **CYCLE CONSTANTS**: Configuration for cycle behavior
+        private const int CYCLE_TIMEOUT_SECONDS = 30;
+        public const int CycleHotkeyId = 999;
         
         public event EventHandler<HotkeyActivationResult>? CharacterActivated;
 
@@ -269,6 +283,148 @@ namespace FFXIManager.Services
                 };
                 
                 await _loggingService.LogErrorAsync($"Error activating character {character.DisplayName}", ex, "HotkeyActivationService");
+                
+                _performanceMonitor.RecordActivation(errorResult.ToMetrics());
+                CharacterActivated?.Invoke(this, errorResult);
+                
+                return errorResult;
+            }
+        }
+
+        /// <summary>
+        /// Cycles to the next active character.
+        /// </summary>
+        public async Task<HotkeyActivationResult> CycleToNextCharacterAsync(CancellationToken cancellationToken = default)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            
+            try
+            {
+                // Get characters in user-defined order
+                var characterOrdering = ServiceLocator.CharacterOrderingService;
+                var orderedCharacters = await characterOrdering.GetOrderedCharactersAsync();
+                
+                if (orderedCharacters == null || orderedCharacters.Count == 0)
+                {
+                    var noCharactersResult = new HotkeyActivationResult
+                    {
+                        Success = false,
+                        Duration = stopwatch.Elapsed,
+                        ErrorMessage = "No active characters to cycle through",
+                        Source = ActivationSource.Hotkey
+                    };
+                    
+                    await _loggingService.LogDebugAsync("Cycle hotkey pressed but no active characters found", "HotkeyActivationService");
+                    await _notificationService.ShowToastAsync("No active characters to cycle", NotificationType.Warning);
+                    return noCharactersResult;
+                }
+                
+                if (orderedCharacters.Count == 1)
+                {
+                    // Only one character, just activate it
+                    return await ActivateCharacterDirectAsync(orderedCharacters[0], cancellationToken);
+                }
+                
+                lock (_cycleLock)
+                {
+                    // Check if we need to reset the cycle (timeout or first use)
+                    bool cycleReset = false;
+                    bool isFirstUse = (_lastCycleTime == DateTime.MinValue);
+                    var timeSinceLastCycle = isFirstUse ? 0 : (DateTime.UtcNow - _lastCycleTime).TotalSeconds;
+                    
+                    if (_currentCycleIndex == -1 || (!isFirstUse && timeSinceLastCycle > CYCLE_TIMEOUT_SECONDS))
+                    {
+                        // Reset cycle - find the currently active character to start from
+                        var currentActiveIndex = -1;
+                        PlayOnlineCharacter? lastActivatedChar = null;
+                        DateTime mostRecentActivation = DateTime.MinValue;
+                        
+                        for (int i = 0; i < orderedCharacters.Count; i++)
+                        {
+                            var char_ = orderedCharacters[i];
+                            if (char_.LastActivated.HasValue && char_.LastActivated.Value > mostRecentActivation)
+                            {
+                                mostRecentActivation = char_.LastActivated.Value;
+                                lastActivatedChar = char_;
+                                currentActiveIndex = i;
+                            }
+                        }
+                        
+                        // If we found a last activated character, start from the next one
+                        // Otherwise start from the beginning
+                        if (currentActiveIndex >= 0)
+                        {
+                            _currentCycleIndex = (currentActiveIndex + 1) % orderedCharacters.Count;
+                        }
+                        else
+                        {
+                            _currentCycleIndex = 0;
+                        }
+                        
+                        cycleReset = true;
+                        
+                        // Notify user of cycle reset only if it was due to timeout (not first use)
+                        if (!isFirstUse && timeSinceLastCycle > CYCLE_TIMEOUT_SECONDS)
+                        {
+                            _ = _notificationService.ShowToastAsync("Cycle reset - timeout exceeded", NotificationType.Info);
+                        }
+                    }
+                    else
+                    {
+                        // Continue cycling - move to next character
+                        _currentCycleIndex = (_currentCycleIndex + 1) % orderedCharacters.Count;
+                    }
+                    
+                    _lastCycleTime = DateTime.UtcNow;
+                    
+                    // Activate the next character
+                    var targetCharacter = orderedCharacters[_currentCycleIndex];
+                    
+                    // Capture variables for the async task
+                    var showReset = cycleReset && !isFirstUse && timeSinceLastCycle > CYCLE_TIMEOUT_SECONDS;
+                    var cycleIndex = _currentCycleIndex;
+                    var totalCount = orderedCharacters.Count;
+                    
+                    _ = Task.Run(async () =>
+                    {
+                        var result = await ActivateCharacterDirectAsync(targetCharacter, cancellationToken);
+                        
+                        // Show which character we cycled to
+                        var positionText = $"Character {cycleIndex + 1}/{totalCount}: {targetCharacter.DisplayName}";
+                        
+                        // Only show [Reset] if it was an actual timeout reset, not first use
+                        if (showReset)
+                        {
+                            positionText = $"[Reset] {positionText}";
+                        }
+                        
+                        await _notificationService.ShowToastAsync(positionText, NotificationType.Success);
+                        await _loggingService.LogInfoAsync($"Cycled to {positionText}", "HotkeyActivationService");
+                    });
+                    
+                    stopwatch.Stop();
+                    return new HotkeyActivationResult
+                    {
+                        Character = targetCharacter,
+                        Success = true,
+                        Duration = stopwatch.Elapsed,
+                        Source = ActivationSource.Hotkey
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                var errorResult = new HotkeyActivationResult
+                {
+                    Success = false,
+                    Duration = stopwatch.Elapsed,
+                    ErrorMessage = $"Error cycling characters: {ex.Message}",
+                    Source = ActivationSource.Hotkey
+                };
+                
+                await _loggingService.LogErrorAsync("Error cycling to next character", ex, "HotkeyActivationService");
+                await _notificationService.ShowToastAsync($"Cycle error: {ex.Message}", NotificationType.Error);
                 
                 _performanceMonitor.RecordActivation(errorResult.ToMetrics());
                 CharacterActivated?.Invoke(this, errorResult);

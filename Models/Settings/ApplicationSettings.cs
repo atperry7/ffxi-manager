@@ -40,6 +40,9 @@ namespace FFXIManager.Models.Settings
         // Keyboard shortcuts for character switching
         public List<KeyboardShortcutConfig> CharacterSwitchShortcuts { get; set; } = new();
 
+        // Cycle hotkey for cycling through active characters
+        public KeyboardShortcutConfig? CycleHotkey { get; set; }
+
         /// <summary>
         /// Debounce interval in milliseconds to prevent accidental rapid hotkey presses.
         /// Optimized for gaming: 5ms provides ultra-responsive switching while preventing double-presses.
@@ -148,18 +151,31 @@ namespace FFXIManager.Models.Settings
         public bool RememberWindowPosition { get; set; } = true;
 
         /// <summary>
-        /// Gets the default keyboard shortcuts for character switching (Win+F1 through Win+F12)
+        /// Gets the default keyboard shortcuts for character switching (Win+F1 through Win+F11)
         /// Uses Windows key to avoid conflicts with FFXI's Ctrl/Alt macro system
+        /// Note: F12 is reserved for the cycle hotkey by default
         /// </summary>
         public static List<KeyboardShortcutConfig> GetDefaultShortcuts()
         {
             var shortcuts = new List<KeyboardShortcutConfig>();
-            for (int i = 0; i < 12; i++) // Extended to F12 for better peripheral support
+            for (int i = 0; i < 11; i++) // F1-F11 (F12 reserved for cycle)
             {
-                var key = (Key)(Key.F1 + i); // F1, F2, F3... F12
+                var key = (Key)(Key.F1 + i); // F1, F2, F3... F11
                 shortcuts.Add(new KeyboardShortcutConfig(i, ModifierKeys.Windows, key));
             }
             return shortcuts;
+        }
+
+        /// <summary>
+        /// Gets the default cycle hotkey (Win+F12)
+        /// </summary>
+        public static KeyboardShortcutConfig GetDefaultCycleHotkey()
+        {
+            // Use a special slot index of -1 to indicate this is the cycle hotkey
+            return new KeyboardShortcutConfig(-1, ModifierKeys.Windows, Key.F12)
+            {
+                IsEnabled = true
+            };
         }
     }
 }

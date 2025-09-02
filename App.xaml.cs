@@ -51,12 +51,26 @@ namespace FFXIManager
                 // **GAMING OPTIMIZATION**: Ultra-fast hotkey processing via unified service
                 Services.GlobalHotkeyManager.Instance.HotkeyPressed += async (_, e) =>
                 {
-                    // **UNIFIED PIPELINE**: All hotkey activation through optimized service
-                    var result = await ServiceLocator.HotkeyActivationService.ActivateCharacterByHotkeyAsync(e.HotkeyId);
-                    
-                    if (!result.Success && IsUnexpectedHotkeyError(result.ErrorMessage))
+                    // Check if this is the cycle hotkey
+                    if (e.HotkeyId == Services.HotkeyActivationService.CycleHotkeyId)
                     {
-                        _ = ServiceLocator.NotificationServiceEnhanced?.ShowToastAsync($"Hotkey failed: {result.ErrorMessage}", NotificationType.Error);
+                        // Handle cycle hotkey
+                        var cycleResult = await ServiceLocator.HotkeyActivationService.CycleToNextCharacterAsync();
+                        
+                        if (!cycleResult.Success && IsUnexpectedHotkeyError(cycleResult.ErrorMessage))
+                        {
+                            _ = ServiceLocator.NotificationServiceEnhanced?.ShowToastAsync($"Cycle failed: {cycleResult.ErrorMessage}", NotificationType.Error);
+                        }
+                    }
+                    else
+                    {
+                        // **UNIFIED PIPELINE**: All hotkey activation through optimized service
+                        var result = await ServiceLocator.HotkeyActivationService.ActivateCharacterByHotkeyAsync(e.HotkeyId);
+                        
+                        if (!result.Success && IsUnexpectedHotkeyError(result.ErrorMessage))
+                        {
+                            _ = ServiceLocator.NotificationServiceEnhanced?.ShowToastAsync($"Hotkey failed: {result.ErrorMessage}", NotificationType.Error);
+                        }
                     }
                 };
                 

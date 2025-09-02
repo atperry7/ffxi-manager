@@ -28,6 +28,15 @@ namespace FFXIManager.Views
 
             // Initialize the key recorder with the current shortcut
             KeyRecorder.SetShortcut(shortcut.Modifiers, shortcut.Key);
+            
+            // Initialize EditedShortcut with the current values in case user doesn't record a new one
+            EditedShortcut = new KeyboardShortcutConfig(
+                shortcut.SlotIndex,
+                shortcut.Modifiers,
+                shortcut.Key)
+            {
+                IsEnabled = shortcut.IsEnabled
+            };
         }
 
         private void KeyRecorder_ShortcutRecorded(object sender, KeyboardShortcutConfig e)

@@ -101,7 +101,7 @@ namespace FFXIManager.Models.Settings
         /// </summary>
         public string SlotDisplayText
         {
-            get => $"Slot {SlotIndex + 1}";
+            get => SlotIndex == -1 ? "Cycle Characters" : $"Slot {SlotIndex + 1}";
         }
 
         /// <summary>

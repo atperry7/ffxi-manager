@@ -82,7 +82,15 @@ namespace FFXIManager.Services
                 {
                     settings.CharacterSwitchShortcuts = ApplicationSettings.GetDefaultShortcuts();
                     settingsService.SaveSettings(settings);
-                    _loggingService.LogInfoAsync("Created default keyboard shortcuts (Win+F1-F9)", "GlobalHotkeyManager");
+                    _loggingService.LogInfoAsync("Created default keyboard shortcuts (Win+F1-F11)", "GlobalHotkeyManager");
+                }
+
+                // If no cycle hotkey configured, create default
+                if (settings.CycleHotkey == null)
+                {
+                    settings.CycleHotkey = ApplicationSettings.GetDefaultCycleHotkey();
+                    settingsService.SaveSettings(settings);
+                    _loggingService.LogInfoAsync("Created default cycle hotkey (Win+F12)", "GlobalHotkeyManager");
                 }
 
                 var registeredCount = 0;
@@ -109,6 +117,24 @@ namespace FFXIManager.Services
                     {
                         failedCount++;
                         _loggingService.LogWarningAsync($"✗ Failed to register global hotkey: {shortcut.DisplayText} (may be in use by another application)", "GlobalHotkeyManager");
+                    }
+                }
+
+                // Register the cycle hotkey if enabled
+                if (settings.CycleHotkey != null && settings.CycleHotkey.IsEnabled)
+                {
+                    // Use the standardized cycle hotkey ID from HotkeyActivationService
+                    bool cycleSuccess = _hotkeyService.RegisterHotkey(HotkeyActivationService.CycleHotkeyId, settings.CycleHotkey.Modifiers, settings.CycleHotkey.Key);
+
+                    if (cycleSuccess)
+                    {
+                        registeredCount++;
+                        _loggingService.LogInfoAsync($"✓ Registered cycle hotkey: {settings.CycleHotkey.DisplayText}", "GlobalHotkeyManager");
+                    }
+                    else
+                    {
+                        failedCount++;
+                        _loggingService.LogWarningAsync($"✗ Failed to register cycle hotkey: {settings.CycleHotkey.DisplayText} (may be in use by another application)", "GlobalHotkeyManager");
                     }
                 }
 
@@ -188,9 +214,17 @@ namespace FFXIManager.Services
                 // Update the last press time for this hotkey
                 _lastHotkeyPress[e.HotkeyId] = now;
 
-                // Convert hotkey ID back to slot index
-                int slotIndex = KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(e.HotkeyId);
-                _loggingService.LogInfoAsync($"🎮 Global hotkey pressed: {e.Modifiers}+{e.Key} (slot {slotIndex + 1})", "GlobalHotkeyManager");
+                // Check if this is the cycle hotkey
+                if (e.HotkeyId == HotkeyActivationService.CycleHotkeyId)
+                {
+                    _loggingService.LogInfoAsync($"🎮 Cycle hotkey pressed: {e.Modifiers}+{e.Key}", "GlobalHotkeyManager");
+                }
+                else
+                {
+                    // Convert hotkey ID back to slot index for character shortcuts
+                    int slotIndex = KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(e.HotkeyId);
+                    _loggingService.LogInfoAsync($"🎮 Global hotkey pressed: {e.Modifiers}+{e.Key} (slot {slotIndex + 1})", "GlobalHotkeyManager");
+                }
 
                 // Forward the event to any listeners
                 HotkeyPressed?.Invoke(this, e);

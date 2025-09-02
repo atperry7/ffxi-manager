@@ -94,6 +94,61 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                                 
+                                <!-- Cycle Hotkey Section -->
+                                <TextBlock Text="Cycle Hotkey:" 
+                                           FontWeight="Bold" 
+                                           Foreground="{DynamicResource PrimaryTextBrush}" 
+                                           Margin="0,12,0,8"/>
+                                
+                                <Border Background="{DynamicResource CardBackgroundBrush}" 
+                                        BorderBrush="{DynamicResource BorderBrush}" 
+                                        BorderThickness="1" 
+                                        CornerRadius="2" 
+                                        Margin="0,0,0,8" 
+                                        Padding="8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <TextBlock Grid.Column="0" 
+                                                   Text="Cycle Characters" 
+                                                   FontWeight="Bold" 
+                                                   VerticalAlignment="Center" 
+                                                   Margin="0,0,10,0" 
+                                                   Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                        
+                                        <TextBlock Grid.Column="1" 
+                                                   Text="{Binding CycleHotkey.DisplayText}" 
+                                                   VerticalAlignment="Center" 
+                                                   Foreground="{DynamicResource AccentBrush}" 
+                                                   FontFamily="Consolas"/>
+                                        
+                                        <Button Grid.Column="2" 
+                                                Content="Edit" 
+                                                Style="{StaticResource InfoIconButton}" 
+                                                Width="50" 
+                                                Height="25" 
+                                                Margin="5,0,5,0"
+                                                Command="{Binding EditHotkeyCommand}"
+                                                CommandParameter="{Binding CycleHotkey}"/>
+                                        
+                                        <CheckBox Grid.Column="3" 
+                                                  Content="Enabled" 
+                                                  IsChecked="{Binding CycleHotkey.IsEnabled, Mode=TwoWay}" 
+                                                  VerticalAlignment="Center" 
+                                                  Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                    </Grid>
+                                </Border>
+                                
+                                <TextBlock Text="The cycle hotkey lets you quickly switch between all active characters in sequence." 
+                                           FontSize="10" 
+                                           Margin="0,0,0,8" 
+                                           Style="{StaticResource SecondaryTextBlock}"/>
+                                
                                 <!-- Hotkey Performance Settings -->
                                 <StackPanel Orientation="Horizontal" Margin="0,12,0,8">
                                     <TextBlock Text="Hotkey debounce interval:" 

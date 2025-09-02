@@ -77,6 +77,13 @@ namespace FFXIManager.ViewModels
 
         public ObservableCollection<KeyboardShortcutConfig> CharacterHotkeys { get; }
 
+        private KeyboardShortcutConfig? _cycleHotkey;
+        public KeyboardShortcutConfig? CycleHotkey
+        {
+            get => _cycleHotkey;
+            set { _cycleHotkey = value; OnPropertyChanged(); }
+        }
+
 
         private void LoadFromSettings()
         {
@@ -89,7 +96,7 @@ namespace FFXIManager.ViewModels
             MaxLogEntries = settings.Diagnostics?.MaxLogEntries ?? 1000;
 
             // Character Hotkeys  
-            EnableHotkeys = settings.CharacterSwitchShortcuts.Any(s => s.IsEnabled);
+            EnableHotkeys = settings.CharacterSwitchShortcuts.Any(s => s.IsEnabled) || (settings.CycleHotkey?.IsEnabled ?? false);
             HotkeyDebounceIntervalMs = settings.HotkeyDebounceIntervalMs;
             CharacterHotkeys.Clear();
 
@@ -109,6 +116,16 @@ namespace FFXIManager.ViewModels
                     CharacterHotkeys.Add(shortcut);
                 }
             }
+
+            // Load cycle hotkey
+            if (settings.CycleHotkey == null)
+            {
+                CycleHotkey = ApplicationSettings.GetDefaultCycleHotkey();
+            }
+            else
+            {
+                CycleHotkey = settings.CycleHotkey;
+            }
         }
 
         public void Save()
@@ -121,6 +138,9 @@ namespace FFXIManager.ViewModels
             var settings = _settingsService.LoadSettings();
             settings.CharacterSwitchShortcuts.Clear();
             settings.CharacterSwitchShortcuts.AddRange(CharacterHotkeys);
+            
+            // Save cycle hotkey
+            settings.CycleHotkey = CycleHotkey;
             
             // Validate and save debounce interval (minimum 1ms, maximum 1000ms for sanity)
             var validDebounceInterval = Math.Max(1, Math.Min(1000, HotkeyDebounceIntervalMs));
@@ -143,6 +163,12 @@ namespace FFXIManager.ViewModels
                 foreach (var shortcut in settings.CharacterSwitchShortcuts)
                 {
                     shortcut.IsEnabled = false;
+                }
+                
+                // Also disable cycle hotkey
+                if (settings.CycleHotkey != null)
+                {
+                    settings.CycleHotkey.IsEnabled = false;
                 }
             }
             else
@@ -176,11 +202,20 @@ namespace FFXIManager.ViewModels
 
             if (result == true && dialog.EditedShortcut != null)
             {
-                // Update the shortcut in place
-                var index = CharacterHotkeys.IndexOf(shortcut);
-                if (index >= 0)
+                // Check if this is the cycle hotkey
+                if (shortcut == CycleHotkey)
                 {
-                    CharacterHotkeys[index] = dialog.EditedShortcut;
+                    // Update the cycle hotkey
+                    CycleHotkey = dialog.EditedShortcut;
+                }
+                else
+                {
+                    // Update the shortcut in the collection
+                    var index = CharacterHotkeys.IndexOf(shortcut);
+                    if (index >= 0)
+                    {
+                        CharacterHotkeys[index] = dialog.EditedShortcut;
+                    }
                 }
             }
         }
