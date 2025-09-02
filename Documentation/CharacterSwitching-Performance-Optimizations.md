@@ -150,10 +150,10 @@ public async Task RapidCharacterSwitching_10ClicksPerSecond_SystemStaysResponsiv
 The optimization uses tunable constants that can be adjusted if needed:
 
 ```csharp
-// Current Values (Optimized for FFXI)
-private const int ACTIVATION_DEBOUNCE_MS = 250;      // 250ms debounce
-private const int MIN_ACTIVATION_INTERVAL_MS = 100;  // 100ms rate limit  
-private const int ACTIVATION_TIMEOUT_MS = 8000;      // 8 second timeout
+// Current Values (Ultra-Responsive Gaming)
+private int ACTIVATION_DEBOUNCE_MS = 5;              // 5ms ultra-responsive debounce
+private int MIN_ACTIVATION_INTERVAL_MS = 5;          // 5ms ultra-responsive rate limit  
+private const int ACTIVATION_TIMEOUT_MS = 3000;      // 3 second timeout (optimized)
 ```
 
 ### **Tuning Recommendations**

@@ -21,6 +21,7 @@ namespace FFXIManager.Services
         private readonly IProcessUtilityService _processUtility;
         private readonly ILoggingService _logging;
         private readonly IUiDispatcher _uiDispatcher;
+        private readonly IWindowEventTracker _windowEventTracker;
 
         private readonly Dictionary<Guid, MonitoringProfile> _profiles = new();
         private readonly Dictionary<int, MonitoredProcess> _processes = new();
@@ -28,19 +29,14 @@ namespace FFXIManager.Services
 
         private bool _isMonitoring;
         private bool _disposed;
-        private Timer? _windowTitleTimer;
         private Timer? _periodicScanTimer;
 
         // WMI watchers for process lifecycle
         private ManagementEventWatcher? _processStartWatcher;
         private ManagementEventWatcher? _processStopWatcher;
 
-        // For window title tracking - we'll use polling for reliability
-        private readonly Dictionary<IntPtr, string> _lastWindowTitles = new();
-        private IntPtr _lastActiveWindow = IntPtr.Zero; // Track the last active window
-
-        private const int WINDOW_TITLE_POLL_MS = 250; // Poll every 250ms for more responsive active window detection
-        private const int PERIODIC_SCAN_MS = 10000;   // Safety scan every 10 seconds
+        // **REPLACED**: Old polling architecture removed - now using real-time Win32 event hooks
+        private const int SAFETY_SCAN_MS = 30000;    // Safety scan every 30 seconds (minimal fallback)
 
         public bool IsMonitoring => _isMonitoring;
 
@@ -57,11 +53,18 @@ namespace FFXIManager.Services
         public UnifiedMonitoringService(
             IProcessUtilityService processUtility,
             ILoggingService logging,
-            IUiDispatcher uiDispatcher)
+            IUiDispatcher uiDispatcher,
+            IWindowEventTracker windowEventTracker)
         {
             _processUtility = processUtility ?? throw new ArgumentNullException(nameof(processUtility));
             _logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
+            _windowEventTracker = windowEventTracker ?? throw new ArgumentNullException(nameof(windowEventTracker));
+            
+            // Subscribe to real-time window events
+            _windowEventTracker.WindowTitleChanged += OnWindowTitleChanged;
+            _windowEventTracker.WindowCreated += OnWindowCreated;
+            _windowEventTracker.WindowDestroyed += OnWindowDestroyed;
         }
 
         #region Public Methods
@@ -175,21 +178,13 @@ namespace FFXIManager.Services
             // Start WMI watchers for process lifecycle
             StartWmiWatchers();
 
-            // Start window title polling timer
-            _windowTitleTimer?.Dispose();
-            _windowTitleTimer = new Timer(
-                WindowTitlePollCallback,
-                null,
-                0,
-                WINDOW_TITLE_POLL_MS);
-
-            // Start periodic safety scan
+            // Start minimal safety scan (much less frequent now)
             _periodicScanTimer?.Dispose();
             _periodicScanTimer = new Timer(
-                PeriodicScanCallback,
+                SafetyScanCallback,
                 null,
-                PERIODIC_SCAN_MS,
-                PERIODIC_SCAN_MS);
+                SAFETY_SCAN_MS,
+                SAFETY_SCAN_MS);
 
             // Initial scan for all profiles
             Task.Run(() => InitialScanAsync());
@@ -204,9 +199,6 @@ namespace FFXIManager.Services
             _isMonitoring = false;
 
             // Stop timers
-            _windowTitleTimer?.Dispose();
-            _windowTitleTimer = null;
-
             _periodicScanTimer?.Dispose();
             _periodicScanTimer = null;
 
@@ -371,11 +363,7 @@ namespace FFXIManager.Services
                     // Remove the process
                     _processes.Remove(pid);
 
-                    // Clear window title tracking
-                    foreach (var window in process.Windows)
-                    {
-                        _lastWindowTitles.Remove(window.Handle);
-                    }
+                    // **REMOVED**: Window title tracking now handled by event-driven architecture
                 }
 
                 // Fire removal events for each affected profile
@@ -401,235 +389,210 @@ namespace FFXIManager.Services
 
         #endregion
 
-        #region Window Title Polling
+        #region Real-Time Window Event Handlers
 
-        private void WindowTitlePollCallback(object? state)
+        /// <summary>
+        /// Handles real-time window title changes from Win32 event hooks
+        /// </summary>
+        private void OnWindowTitleChanged(object? sender, WindowTitleChangedEventArgs e)
         {
-            if (!_isMonitoring || _disposed) return;
+            if (!_isMonitoring || _disposed)
+                return;
 
             Task.Run(async () =>
             {
                 try
                 {
-                    // First, check active window
-                    await CheckActiveWindowAsync();
+                    MonitoredProcess? process;
+                    List<MonitoringProfile> affectedProfiles = new();
+                    string? logMessage = null;
 
-                    List<MonitoredProcess> processesToCheck;
                     lock (_lock)
                     {
-                        // Get processes that need window title tracking
-                        processesToCheck = _processes.Values
-                            .Where(p => p.MonitorIds.Any(id =>
-                                _profiles.TryGetValue(id, out var profile) && profile.TrackWindowTitles))
-                            .ToList();
-                    }
+                        if (!_processes.TryGetValue(e.ProcessId, out process))
+                            return; // Process not tracked
 
-                    foreach (var process in processesToCheck)
-                    {
-                        await UpdateProcessWindowsAsync(process);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    await _logging.LogDebugAsync($"Error in window title polling: {ex.Message}",
-                        "UnifiedMonitoringService");
-                }
-            });
-        }
-
-        private async Task UpdateProcessWindowsAsync(MonitoredProcess process)
-        {
-            try
-            {
-                var windows = await _processUtility.GetProcessWindowsAsync(process.ProcessId);
-                bool hasChanges = false;
-                List<MonitoringProfile> affectedProfiles = new();
-
-                lock (_lock)
-                {
-                    // Check for new or updated windows
-                    foreach (var window in windows)
-                    {
-                        var existingWindow = process.Windows.FirstOrDefault(w => w.Handle == window.Handle);
-
-                        if (existingWindow != null)
+                        // Find and update the window
+                        var window = process.Windows.FirstOrDefault(w => w.Handle == e.WindowHandle);
+                        if (window != null)
                         {
-                            // Check if title changed
-                            if (!_lastWindowTitles.TryGetValue(window.Handle, out var lastTitle) ||
-                                lastTitle != window.Title)
+                            var oldTitle = window.Title;
+                            
+                            // **FIX**: Only update title if the new title is valid
+                            // Don't overwrite good titles with empty/null/garbage
+                            var shouldUpdate = false;
+                            if (!string.IsNullOrWhiteSpace(e.NewTitle) && 
+                                !e.NewTitle.Equals("NULL", StringComparison.OrdinalIgnoreCase))
                             {
-                                existingWindow.Title = window.Title;
-                                existingWindow.LastTitleUpdate = DateTime.UtcNow;
-                                _lastWindowTitles[window.Handle] = window.Title;
-                                hasChanges = true;
+                                // Good title - always update
+                                window.Title = e.NewTitle;
+                                window.LastTitleUpdate = DateTime.UtcNow;
+                                shouldUpdate = true;
+                                logMessage = $"[EVENT-DRIVEN] Window title changed: PID {e.ProcessId}, '{oldTitle}' → '{e.NewTitle}' (Handle: 0x{e.WindowHandle.ToInt64():X})";
+                            }
+                            else
+                            {
+                                // Bad title - don't update, but log for debugging
+                                logMessage = $"[EVENT-DRIVEN] IGNORED bad title change: PID {e.ProcessId}, '{oldTitle}' → '{e.NewTitle}' (Handle: 0x{e.WindowHandle.ToInt64():X}) - keeping existing title";
+                            }
 
-                                _ = _logging.LogInfoAsync($"[Unified] Window title changed for PID {process.ProcessId}: '{window.Title}' (Handle: 0x{window.Handle.ToInt64():X})",
-                                    "UnifiedMonitoringService");
+                            // Only fire events if we actually updated something
+                            if (shouldUpdate)
+                            {
+                                // Get affected profiles
+                                foreach (var monitorId in process.MonitorIds)
+                                {
+                                    if (_profiles.TryGetValue(monitorId, out var profile) && profile.TrackWindowTitles)
+                                    {
+                                        affectedProfiles.Add(profile);
+                                    }
+                                }
                             }
                         }
                         else
                         {
-                            // New window
-                            process.Windows.Add(new MonitoredWindow
+                            // **FIX**: Only add new windows if they have valid titles
+                            if (!string.IsNullOrWhiteSpace(e.NewTitle) && 
+                                !e.NewTitle.Equals("NULL", StringComparison.OrdinalIgnoreCase))
                             {
-                                Handle = window.Handle,
-                                Title = window.Title,
-                                IsMainWindow = window.IsMainWindow,
-                                IsVisible = window.IsVisible,
-                                LastTitleUpdate = DateTime.UtcNow
-                            });
-                            _lastWindowTitles[window.Handle] = window.Title;
-                            hasChanges = true;
-                        }
-                    }
+                                // Window not in our tracking - might be newly created
+                                process.Windows.Add(new MonitoredWindow
+                                {
+                                    Handle = e.WindowHandle,
+                                    Title = e.NewTitle,
+                                    IsMainWindow = false,
+                                    IsVisible = true,
+                                    LastTitleUpdate = DateTime.UtcNow
+                                });
 
-                    // Remove closed windows
-                    var closedWindows = process.Windows
-                        .Where(w => !windows.Any(nw => nw.Handle == w.Handle))
-                        .ToList();
+                                logMessage = $"[EVENT-DRIVEN] New window detected: PID {e.ProcessId}, '{e.NewTitle}' (Handle: 0x{e.WindowHandle.ToInt64():X})";
 
-                    foreach (var closedWindow in closedWindows)
-                    {
-                        process.Windows.Remove(closedWindow);
-                        _lastWindowTitles.Remove(closedWindow.Handle);
-                        hasChanges = true;
-                    }
-
-                    // Get profiles that track window titles
-                    if (hasChanges)
-                    {
-                        foreach (var monitorId in process.MonitorIds)
-                        {
-                            if (_profiles.TryGetValue(monitorId, out var profile) && profile.TrackWindowTitles)
+                                // Get affected profiles
+                                foreach (var monitorId in process.MonitorIds)
+                                {
+                                    if (_profiles.TryGetValue(monitorId, out var profile))
+                                    {
+                                        affectedProfiles.Add(profile);
+                                    }
+                                }
+                            }
+                            else
                             {
-                                affectedProfiles.Add(profile);
+                                logMessage = $"[EVENT-DRIVEN] IGNORED new window with bad title: PID {e.ProcessId}, '{e.NewTitle}' (Handle: 0x{e.WindowHandle.ToInt64():X})";
                             }
                         }
-                    }
-                }
 
-                // Fire update events if there were changes
-                if (hasChanges && affectedProfiles.Count > 0)
-                {
+                        process.LastSeen = DateTime.UtcNow;
+                    }
+
+                    // Log outside the lock
+                    if (!string.IsNullOrEmpty(logMessage))
+                    {
+                        await _logging.LogInfoAsync(logMessage, "UnifiedMonitoringService");
+                    }
+
+                    // Fire update events
                     foreach (var profile in affectedProfiles)
                     {
                         FireProcessUpdated(process, profile);
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                await _logging.LogDebugAsync($"Error updating windows for process {process.ProcessId}: {ex.Message}",
-                    "UnifiedMonitoringService");
-            }
+                catch (Exception ex)
+                {
+                    await _logging.LogErrorAsync($"Error handling window title change for PID {e.ProcessId}", ex, "UnifiedMonitoringService");
+                }
+            });
         }
 
-        #endregion
-
-        #region Active Window Detection
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
-
-        [DllImport("user32.dll")]
-        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-
-        private async Task CheckActiveWindowAsync()
+        /// <summary>
+        /// Handles real-time window creation events
+        /// </summary>
+        private void OnWindowCreated(object? sender, WindowEventArgs e)
         {
-            try
+            if (!_isMonitoring || _disposed)
+                return;
+
+            Task.Run(async () =>
             {
-                IntPtr activeWindowHandle = GetForegroundWindow();
-
-                if (activeWindowHandle == IntPtr.Zero || activeWindowHandle == _lastActiveWindow)
-                    return;
-
-                // Get the process ID of the active window
-                uint activeProcessId;
-                uint threadId = GetWindowThreadProcessId(activeWindowHandle, out activeProcessId);
-
-                if (threadId == 0)
-                    return;
-
-                bool hasChanges = false;
-                List<(MonitoredProcess process, List<MonitoringProfile> profiles)> toUpdate = new();
-
-                lock (_lock)
+                try
                 {
-                    // First, clear IsActive flag on previously active process
-                    if (_lastActiveWindow != IntPtr.Zero)
-                    {
-                        foreach (var process in _processes.Values)
-                        {
-                            var activeWindow = process.Windows.FirstOrDefault(w => w.Handle == _lastActiveWindow);
-                            if (activeWindow != null && activeWindow.IsActive)
-                            {
-                                activeWindow.IsActive = false;
-                                hasChanges = true;
+                    await _logging.LogDebugAsync($"[EVENT-DRIVEN] Window created: PID {e.ProcessId}, '{e.WindowTitle}' (Handle: 0x{e.WindowHandle.ToInt64():X})", "UnifiedMonitoringService");
+                    // Window creation is handled by title change events
+                }
+                catch (Exception ex)
+                {
+                    await _logging.LogErrorAsync($"Error handling window creation for PID {e.ProcessId}", ex, "UnifiedMonitoringService");
+                }
+            });
+        }
 
-                                // Collect profiles for this process
-                                var profiles = new List<MonitoringProfile>();
-                                foreach (var monitorId in process.MonitorIds)
-                                {
-                                    if (_profiles.TryGetValue(monitorId, out var profile))
-                                    {
-                                        profiles.Add(profile);
-                                    }
-                                }
-                                if (profiles.Count > 0)
-                                {
-                                    toUpdate.Add((process, profiles));
-                                }
-                            }
-                        }
-                    }
+        /// <summary>
+        /// Handles real-time window destruction events
+        /// </summary>
+        private void OnWindowDestroyed(object? sender, WindowEventArgs e)
+        {
+            if (!_isMonitoring || _disposed)
+                return;
 
-                    // Now set the new active window
-                    if (_processes.TryGetValue((int)activeProcessId, out var activeProcess))
+            Task.Run(async () =>
+            {
+                try
+                {
+                    MonitoredProcess? process;
+                    List<MonitoringProfile> affectedProfiles = new();
+                    string? logMessage = null;
+
+                    lock (_lock)
                     {
-                        var window = activeProcess.Windows.FirstOrDefault(w => w.Handle == activeWindowHandle);
+                        if (!_processes.TryGetValue(e.ProcessId, out process))
+                            return;
+
+                        // Remove the destroyed window
+                        var window = process.Windows.FirstOrDefault(w => w.Handle == e.WindowHandle);
                         if (window != null)
                         {
-                            window.IsActive = true;
-                            hasChanges = true;
+                            process.Windows.Remove(window);
+                            process.LastSeen = DateTime.UtcNow;
 
-                            // Collect profiles for this process
-                            var profiles = new List<MonitoringProfile>();
-                            foreach (var monitorId in activeProcess.MonitorIds)
+                            logMessage = $"[EVENT-DRIVEN] Window destroyed: PID {e.ProcessId}, '{window.Title}' (Handle: 0x{e.WindowHandle.ToInt64():X})";
+
+                            // Get affected profiles
+                            foreach (var monitorId in process.MonitorIds)
                             {
                                 if (_profiles.TryGetValue(monitorId, out var profile))
                                 {
-                                    profiles.Add(profile);
+                                    affectedProfiles.Add(profile);
                                 }
                             }
-                            if (profiles.Count > 0)
-                            {
-                                toUpdate.Add((activeProcess, profiles));
-                            }
                         }
                     }
 
-                    _lastActiveWindow = activeWindowHandle;
-                }
-
-                // Fire update events for affected processes
-                if (hasChanges)
-                {
-                    foreach (var (process, profiles) in toUpdate)
+                    // Log outside the lock
+                    if (!string.IsNullOrEmpty(logMessage))
                     {
-                        foreach (var profile in profiles)
-                        {
-                            FireProcessUpdated(process, profile);
-                        }
+                        await _logging.LogInfoAsync(logMessage, "UnifiedMonitoringService");
+                    }
+
+                    // Fire update events
+                    foreach (var profile in affectedProfiles)
+                    {
+                        FireProcessUpdated(process, profile);
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                await _logging.LogDebugAsync($"Error checking active window: {ex.Message}",
-                    "UnifiedMonitoringService");
-            }
+                catch (Exception ex)
+                {
+                    await _logging.LogErrorAsync($"Error handling window destruction for PID {e.ProcessId}", ex, "UnifiedMonitoringService");
+                }
+            });
         }
 
+        // **REMOVED**: Old polling methods replaced with real-time event-driven architecture
+
+        #endregion
+
+        #region Removed: Active Window Detection
+        // **PERFORMANCE IMPROVEMENT**: Removed 250ms polling for IsActive tracking
+        // LastActivated tracking is now handled by HotkeyActivationService when characters are actually activated
         #endregion
 
         #region Scanning and Detection
@@ -689,6 +652,7 @@ namespace FFXIManager.Services
         {
             MonitoredProcess? monitoredProcess = null;
             bool isNew = false;
+            string? trackingMessage = null;
 
             lock (_lock)
             {
@@ -719,14 +683,22 @@ namespace FFXIManager.Services
                                 LastTitleUpdate = DateTime.UtcNow
                             });
 
-                            if (profile.TrackWindowTitles)
-                            {
-                                _lastWindowTitles[window.Handle] = window.Title;
-                            }
+                            // **REMOVED**: Window title tracking now handled by event-driven architecture
                         }
                     }
 
                     _processes[processInfo.ProcessId] = monitoredProcess;
+                    
+                    // **NEW**: Start real-time window event tracking for this process
+                    trackingMessage = profile.TrackWindowTitles ? 
+                        $"🔍 Starting window event tracking for PID {processInfo.ProcessId} ({processInfo.ProcessName}) - Profile: {profile.Name}" :
+                        $"⚠️ Profile '{profile.Name}' has TrackWindowTitles=false - NOT starting event tracking for PID {processInfo.ProcessId}";
+                    
+                    if (profile.TrackWindowTitles)
+                    {
+                        _windowEventTracker.StartTrackingProcess(processInfo.ProcessId, processInfo.ProcessName);
+                    }
+                    
                     isNew = true;
                 }
 
@@ -741,6 +713,12 @@ namespace FFXIManager.Services
                 }
             }
 
+            // Log tracking message outside the lock
+            if (!string.IsNullOrEmpty(trackingMessage))
+            {
+                await _logging.LogInfoAsync(trackingMessage, "UnifiedMonitoringService");
+            }
+
             // Fire events outside of lock
             if (isNew)
             {
@@ -750,7 +728,10 @@ namespace FFXIManager.Services
             }
         }
 
-        private void PeriodicScanCallback(object? state)
+        /// <summary>
+        /// Minimal safety scan - event-driven architecture with fallback disabled due to issues
+        /// </summary>
+        private void SafetyScanCallback(object? state)
         {
             if (!_isMonitoring || _disposed) return;
 
@@ -758,9 +739,9 @@ namespace FFXIManager.Services
             {
                 try
                 {
-                    await _logging.LogDebugAsync("Running periodic safety scan", "UnifiedMonitoringService");
+                    await _logging.LogDebugAsync("Running minimal safety scan (fallback polling disabled)", "UnifiedMonitoringService");
 
-                    // Check for dead processes
+                    // Only check for dead processes - no additional polling to avoid conflicts
                     List<int> deadProcessIds;
                     lock (_lock)
                     {
@@ -792,11 +773,8 @@ namespace FFXIManager.Services
                             // Remove the process
                             _processes.Remove(pid);
 
-                            // Clear window title tracking
-                            foreach (var window in process.Windows)
-                            {
-                                _lastWindowTitles.Remove(window.Handle);
-                            }
+                            // **NEW**: Stop event tracking for this process
+                            _windowEventTracker.StopTrackingProcess(pid);
                         }
 
                         // Fire removal events for each affected profile
@@ -914,7 +892,7 @@ namespace FFXIManager.Services
                     Title = w.Title,
                     IsMainWindow = w.IsMainWindow,
                     IsVisible = w.IsVisible,
-                    IsActive = w.IsActive,
+                    // Removed IsActive - now using LastActivated tracking in PlayOnlineCharacter
                     LastTitleUpdate = w.LastTitleUpdate
                 }).ToList(),
                 MonitorIds = new HashSet<Guid>(process.MonitorIds),
@@ -932,6 +910,9 @@ namespace FFXIManager.Services
             _disposed = true;
 
             StopMonitoring();
+            
+            // **NEW**: Dispose window event tracker
+            _windowEventTracker?.Dispose();
 
             GC.SuppressFinalize(this);
         }

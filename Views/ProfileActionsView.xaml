@@ -1,7 +1,8 @@
 ﻿<UserControl x:Class="FFXIManager.Views.ProfileActionsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:converters="clr-namespace:FFXIManager.Converters">
+             xmlns:converters="clr-namespace:FFXIManager.Converters"
+             xmlns:local="clr-namespace:FFXIManager.Views">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
         <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
@@ -30,69 +31,65 @@
             </Style.Triggers>
         </Style>
         
-        <Style x:Key="ActivateButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryIconButton}">
-            <Setter Property="Width" Value="32"/>
-            <Setter Property="Height" Value="32"/>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsActive, FallbackValue=False}" Value="True">
-                    <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
-                    <Setter Property="ToolTip" Value="Currently Active"/>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
     </UserControl.Resources>
     
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel>
-            <!-- Application Manager -->
-            <GroupBox Header="🚀 Application Manager" Margin="0,0,0,10">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Application Manager -->
+        <GroupBox Grid.Row="0" Header="🚀 Application Manager" Margin="0,0,0,10">
                 <StackPanel>
-                    <!-- Application List -->
-                    <ItemsControl ItemsSource="{Binding ExternalApplications}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Style="{StaticResource SurfaceCardBorder}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,12,0"
+                    <!-- Application List (independent scroll) -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="300">
+                        <ItemsControl ItemsSource="{Binding ExternalApplications}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource SurfaceCardBorder}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,12,0"
                                                  VerticalAlignment="Center"
                                                  Fill="{Binding StatusColor}"/>
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" FontFamily="Segoe UI"/>
-                                            <TextBlock Text="{Binding StatusText}" FontSize="11" Margin="0,2,0,0" FontFamily="Segoe UI" Style="{StaticResource SecondaryTextBlock}"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2" Orientation="Horizontal">
-                                            <Button Content="▶️"
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" FontFamily="Segoe UI"/>
+                                                <TextBlock Text="{Binding StatusText}" FontSize="11" Margin="0,2,0,0" FontFamily="Segoe UI" Style="{StaticResource SecondaryTextBlock}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                <Button Content="▶️"
                                                     Style="{StaticResource LaunchButtonStyle}"
                                                     Command="{Binding DataContext.LaunchApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"
                                                     ToolTip="Launch Application"/>
-                                            <Button Content="⏹️"
+                                                <Button Content="⏹️"
                                                     Style="{StaticResource DangerIconButton}"
                                                     Command="{Binding DataContext.KillApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"
                                                     ToolTip="Stop Application"
                                                     IsEnabled="{Binding IsRunning}"/>
-                                            <Button Content="⚙️"
+                                                <Button Content="⚙️"
                                                     Style="{StaticResource WarningIconButton}"
                                                     Command="{Binding DataContext.EditApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"
                                                     ToolTip="Edit Application"/>
-                                            <Button Content="🗑️"
+                                                <Button Content="🗑️"
                                                     Style="{StaticResource SecondaryIconButton}"
                                                     Command="{Binding DataContext.RemoveApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"
                                                     ToolTip="Remove Application"/>
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
                     <!-- Application control buttons -->
                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0" HorizontalAlignment="Right">
                         <Button Content="➕" 
@@ -105,113 +102,9 @@
                                 ToolTip="Refresh Status"/>
                     </StackPanel>
                 </StackPanel>
-            </GroupBox>
+        </GroupBox>
 
-            <!-- PlayOnline Character Monitor -->
-            <GroupBox Header="🎮 Character Monitor">
-                <StackPanel>
-                    <!-- Monitor Status -->
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="📊 " FontSize="14" VerticalAlignment="Center" FontFamily="Segoe UI"/>
-                            <TextBlock Text="{Binding PlayOnlineMonitor.MonitoringStatus, FallbackValue='Not Available'}" 
-                                       FontWeight="SemiBold" VerticalAlignment="Center" FontSize="13" FontFamily="Segoe UI"/>
-                            <TextBlock Text=" | " Margin="8,0" VerticalAlignment="Center" Style="{StaticResource SecondaryTextBlock}"/>
-                            <TextBlock Text="{Binding PlayOnlineMonitor.CharacterCount, FallbackValue=0}" 
-                                       FontWeight="SemiBold" VerticalAlignment="Center" FontSize="13" FontFamily="Segoe UI"/>
-                            <TextBlock Text=" character(s)" VerticalAlignment="Center" FontSize="13" FontFamily="Segoe UI" Style="{StaticResource SecondaryTextBlock}"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <Button Content="🔄" 
-                                    Style="{StaticResource SuccessIconButton}"
-                                    Command="{Binding PlayOnlineMonitor.RefreshCharactersCommand}"
-                                    ToolTip="Refresh Characters"/>
-                            <Button Content="📱" 
-                                    Style="{StaticResource InfoIconButton}"
-                                    Command="{Binding PlayOnlineMonitor.ShowCharacterMonitorCommand}"
-                                    ToolTip="Open Character Monitor Window"/>
-                        </StackPanel>
-                    </Grid>
-
-                    <!-- Character List - Auto height -->
-                    <ItemsControl ItemsSource="{Binding PlayOnlineMonitor.Characters}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border>
-                                    <Border.Style>
-                                        <Style TargetType="Border" BasedOn="{StaticResource HoverCardBorder}">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsActive, FallbackValue=False}" Value="True">
-                                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-                                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                                                                
-                                        <!-- Status Indicator -->
-                                        <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,12,0"
-                                                 VerticalAlignment="Center"
-                                                 Fill="{Binding StatusBrush, FallbackValue=Gray}"/>
-                                        
-                                        <!-- Character Info -->
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding DisplayName, FallbackValue='Unknown Character'}" 
-                                                       FontWeight="SemiBold" FontSize="13" FontFamily="Segoe UI"/>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding StatusText, FallbackValue='Unknown'}" 
-                                                           FontSize="11" FontFamily="Segoe UI" Style="{StaticResource SecondaryTextBlock}"/>
-                                                <TextBlock Text=" | PID: " FontSize="11" FontFamily="Segoe UI" Style="{StaticResource SecondaryTextBlock}"/>
-                                                <TextBlock Text="{Binding ProcessId, FallbackValue=0}" 
-                                                           FontSize="11" FontFamily="Segoe UI" Style="{StaticResource SecondaryTextBlock}"/>
-                                            </StackPanel>
-                                        </StackPanel>
-                                        
-                                        <!-- Activate Button -->
-                                        <Button Grid.Column="2" Content="🎯"
-                                                Style="{StaticResource ActivateButtonStyle}"
-                                                Command="{Binding DataContext.PlayOnlineMonitor.ActivateCharacterCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding}"
-                                                ToolTip="Activate Character Window"/>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-
-                    <!-- No Characters Message -->
-                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="24" Background="{DynamicResource SurfaceBrush}">
-                        <Border.Style>
-                            <Style TargetType="Border">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding PlayOnlineMonitor.CharacterCount, FallbackValue=0}" Value="0">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Border.Style>
-                        <TextBlock Text="No PlayOnline characters detected. Launch FFXI to see character instances here."
-                                   HorizontalAlignment="Center"
-                                   FontStyle="Italic"
-                                   FontFamily="Segoe UI"
-                                   FontSize="12"
-                                   TextWrapping="Wrap"
-                                   TextAlignment="Center"
-                                   Style="{StaticResource SecondaryTextBlock}"/>
-                    </Border>
-                </StackPanel>
-            </GroupBox>
-        </StackPanel>
-    </ScrollViewer>
+        <!-- PlayOnline Character Monitor (New Architecture) -->
+        <local:EmbeddedCharacterMonitorView Grid.Row="1"/>
+    </Grid>
 </UserControl>

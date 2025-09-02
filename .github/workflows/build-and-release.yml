@@ -112,16 +112,25 @@ jobs:
       - name: Create ZIP package
         shell: pwsh
         run: |
-          $zipName = "${{ env.PROJECT_NAME }}-v${{ github.run_number }}-windows.zip"
+          # Extract version from project file
+          $projectFile = "${{ env.PROJECT_NAME }}.csproj"
+          $xml = [xml](Get-Content $projectFile)
+          $version = $xml.Project.PropertyGroup.Version
+          Write-Host "📦 Detected application version: $version"
+          
+          $zipName = "${{ env.PROJECT_NAME }}-v$version-windows.zip"
           Compress-Archive -Path "publish/*" -DestinationPath $zipName -CompressionLevel Optimal
           Write-Host "✅ Created package: $zipName"
           Get-ChildItem -Path "publish" -Recurse | ForEach-Object {
             Write-Host "  $($_.Name)"
           }
+          
+          # Set output for next step
+          echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.PROJECT_NAME }}-v${{ github.run_number }}-windows.zip
+          files: ${{ env.ZIP_NAME }}
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}

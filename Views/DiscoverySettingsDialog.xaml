@@ -17,18 +17,40 @@
 
         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="0,0,0,10">
-                <!-- Character Keyboard Shortcuts Section -->
-                <GroupBox Header="Character Keyboard Shortcuts" BorderBrush="{DynamicResource BorderBrush}" Foreground="{DynamicResource PrimaryTextBrush}" Margin="0,0,0,10">
+                <!-- Character Input Shortcuts Section -->
+                <GroupBox Header="Character Input Shortcuts" BorderBrush="{DynamicResource BorderBrush}" Foreground="{DynamicResource PrimaryTextBrush}" Margin="0,0,0,10">
                     <StackPanel Margin="8">
-                        <TextBlock Text="Configure global hotkeys to switch between FFXI character windows." 
+                        <TextBlock Text="Configure global hotkeys using keyboard keys and/or controller buttons to switch between FFXI character windows." 
                                    FontSize="11" Margin="0,0,0,10" 
                                    Style="{StaticResource SecondaryTextBlock}"/>
                         
                         <CheckBox x:Name="EnableHotkeysCheckBox"
-                                  Content="Enable global keyboard shortcuts" 
+                                  Content="Enable global hotkeys (keyboard + controller)" 
                                   IsChecked="{Binding EnableHotkeys, Mode=TwoWay}" 
                                   Foreground="{DynamicResource PrimaryTextBrush}" 
                                   Margin="0,0,0,10"/>
+                        
+                        <!-- Controller Status Indicator -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <TextBlock Text="🎮" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                            <TextBlock x:Name="ControllerStatusText" 
+                                       Text="Controller: Checking..." 
+                                       FontSize="10"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource SecondaryTextBlock}"
+                                       Margin="0,0,8,0"/>
+                            <Button x:Name="RefreshControllerButton"
+                                    Content="🔄"
+                                    FontSize="11"
+                                    Width="24"
+                                    Height="20"
+                                    ToolTip="Refresh controller status"
+                                    Click="RefreshController_Click"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Margin="0,0,0,0"
+                                    Padding="2"
+                                    VerticalAlignment="Center"/>
+                        </StackPanel>
                         
                         <!-- Hotkey Configuration Panel -->
                         <Border Background="{DynamicResource SurfaceBrush}" 
@@ -94,9 +116,88 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                                 
-                                <TextBlock Text="Hotkeys work globally and will switch FFXI character windows even when other applications have focus." 
+                                <!-- Cycle Hotkey Section -->
+                                <TextBlock Text="Cycle Hotkey:" 
+                                           FontWeight="Bold" 
+                                           Foreground="{DynamicResource PrimaryTextBrush}" 
+                                           Margin="0,12,0,8"/>
+                                
+                                <Border Background="{DynamicResource CardBackgroundBrush}" 
+                                        BorderBrush="{DynamicResource BorderBrush}" 
+                                        BorderThickness="1" 
+                                        CornerRadius="2" 
+                                        Margin="0,0,0,8" 
+                                        Padding="8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <TextBlock Grid.Column="0" 
+                                                   Text="Cycle Characters" 
+                                                   FontWeight="Bold" 
+                                                   VerticalAlignment="Center" 
+                                                   Margin="0,0,10,0" 
+                                                   Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                        
+                                        <TextBlock Grid.Column="1" 
+                                                   Text="{Binding CycleHotkey.DisplayText}" 
+                                                   VerticalAlignment="Center" 
+                                                   Foreground="{DynamicResource AccentBrush}" 
+                                                   FontFamily="Consolas"/>
+                                        
+                                        <Button Grid.Column="2" 
+                                                Content="Edit" 
+                                                Style="{StaticResource InfoIconButton}" 
+                                                Width="50" 
+                                                Height="25" 
+                                                Margin="5,0,5,0"
+                                                Command="{Binding EditHotkeyCommand}"
+                                                CommandParameter="{Binding CycleHotkey}"/>
+                                        
+                                        <CheckBox Grid.Column="3" 
+                                                  Content="Enabled" 
+                                                  IsChecked="{Binding CycleHotkey.IsEnabled, Mode=TwoWay}" 
+                                                  VerticalAlignment="Center" 
+                                                  Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                    </Grid>
+                                </Border>
+                                
+                                <TextBlock Text="The cycle hotkey lets you quickly switch between all active characters in sequence." 
                                            FontSize="10" 
-                                           Margin="0,8,0,0" 
+                                           Margin="0,0,0,8" 
+                                           Style="{StaticResource SecondaryTextBlock}"/>
+                                
+                                <!-- Hotkey Performance Settings -->
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,8">
+                                    <TextBlock Text="Hotkey debounce interval:" 
+                                               VerticalAlignment="Center" 
+                                               Foreground="{DynamicResource PrimaryTextBrush}"
+                                               Margin="0,0,8,0"/>
+                                    <TextBox Text="{Binding HotkeyDebounceIntervalMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                             Width="60" 
+                                             VerticalAlignment="Center"
+                                             Margin="0,0,4,0"/>
+                                    <TextBlock Text="ms" 
+                                               VerticalAlignment="Center" 
+                                               Foreground="{DynamicResource PrimaryTextBrush}"
+                                               Margin="0,0,8,0"/>
+                                    <TextBlock Text="(Lower = more responsive, higher = less sensitive)" 
+                                               VerticalAlignment="Center" 
+                                               FontSize="10" 
+                                               Style="{StaticResource SecondaryTextBlock}"/>
+                                </StackPanel>
+                                
+                                <TextBlock Text="Hotkeys work globally and will switch FFXI character windows even when other applications have focus. Works with both keyboard and controller inputs." 
+                                           FontSize="10" 
+                                           Margin="0,0,0,0" 
+                                           Style="{StaticResource SecondaryTextBlock}"/>
+                                <TextBlock Text="Gaming tip: 5ms = ultra-responsive (recommended), 10-25ms = balanced, 50ms+ = conservative." 
+                                           FontSize="10" 
+                                           Margin="0,4,0,0" 
                                            Style="{StaticResource SecondaryTextBlock}"/>
                             </StackPanel>
                         </Border>

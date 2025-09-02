@@ -603,6 +603,186 @@
     <!-- Apply Modern Toggle Switch as default CheckBox style -->
     <Style TargetType="{x:Type CheckBox}" BasedOn="{StaticResource ModernToggleSwitch}"/>
     
+    <!-- Toast Notification Theme Resources -->
+    <SolidColorBrush x:Key="ToastBackgroundBrush" Color="#2A2D3A"/>
+    <SolidColorBrush x:Key="ToastBorderBrush" Color="{StaticResource BorderColor}"/>
+    <SolidColorBrush x:Key="ToastTextBrush" Color="{StaticResource PrimaryTextColor}"/>
+    <SolidColorBrush x:Key="ToastCloseButtonBrush" Color="{StaticResource SecondaryTextColor}"/>
+    
+    <!-- Toast Shadow Effect -->
+    <DropShadowEffect x:Key="ToastShadowEffect" 
+                      ShadowDepth="4" 
+                      BlurRadius="12" 
+                      Opacity="0.5" 
+                      Color="Black"/>
+
+    <!-- Menu Style -->
+    <Style TargetType="{x:Type Menu}">
+        <Setter Property="Background" Value="{DynamicResource HeaderBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Height" Value="24"/>
+    </Style>
+
+    <!-- MenuItem Style -->
+    <Style TargetType="{x:Type MenuItem}">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="8,3,8,3"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type MenuItem}">
+                    <Border x:Name="Border" 
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="Icon"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="Shortcut"/>
+                                <ColumnDefinition Width="13"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <!-- Icon -->
+                            <ContentPresenter x:Name="Icon"
+                                            Grid.Column="0"
+                                            Margin="6,0,6,0"
+                                            VerticalAlignment="Center"
+                                            ContentSource="Icon"/>
+                            
+                            <!-- Check mark for checkable items -->
+                            <Border x:Name="Check"
+                                    Grid.Column="0"
+                                    Width="13" Height="13"
+                                    Visibility="Collapsed"
+                                    Margin="6,0,6,0"
+                                    Background="{DynamicResource AccentBrush}"
+                                    BorderThickness="0"
+                                    CornerRadius="2">
+                                <Path x:Name="CheckMark"
+                                      Width="7" Height="7"
+                                      Visibility="Hidden"
+                                      SnapsToDevicePixels="False"
+                                      Stroke="White"
+                                      StrokeThickness="2"
+                                      Data="M 0 0 L 7 7 M 0 7 L 7 0"/>
+                            </Border>
+                            
+                            <!-- Header text -->
+                            <ContentPresenter x:Name="HeaderHost"
+                                            Grid.Column="1"
+                                            ContentSource="Header"
+                                            RecognizesAccessKey="True"
+                                            Margin="{TemplateBinding Padding}"
+                                            VerticalAlignment="Center"/>
+                            
+                            <!-- Shortcut text -->
+                            <TextBlock x:Name="InputGestureText"
+                                     Grid.Column="2"
+                                     Text="{TemplateBinding InputGestureText}"
+                                     Margin="5,0,0,0"
+                                     Opacity="0.7"
+                                     VerticalAlignment="Center"/>
+                            
+                            <!-- Submenu arrow -->
+                            <Path x:Name="SubMenuArrow"
+                                  Grid.Column="3"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Data="M 0 0 L 0 7 L 4 3.5 Z"
+                                  Fill="{DynamicResource PrimaryTextBrush}"
+                                  Visibility="Collapsed"/>
+                            
+                            <!-- Popup for submenu -->
+                            <Popup x:Name="Popup"
+                                   Placement="Right"
+                                   HorizontalOffset="-4"
+                                   IsOpen="{TemplateBinding IsSubmenuOpen}"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Fade">
+                                <Border x:Name="SubmenuBorder"
+                                        SnapsToDevicePixels="True"
+                                        Background="{DynamicResource SurfaceBrush}"
+                                        BorderBrush="{DynamicResource BorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Margin="0,0,8,8">
+                                    <Border.Effect>
+                                        <DropShadowEffect ShadowDepth="2" BlurRadius="8" Opacity="0.3" Color="Black"/>
+                                    </Border.Effect>
+                                    <ScrollViewer CanContentScroll="True">
+                                        <StackPanel IsItemsHost="True"
+                                                  KeyboardNavigation.DirectionalNavigation="Cycle"
+                                                  Grid.IsSharedSizeScope="True"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </Border>
+                    
+                    <ControlTemplate.Triggers>
+                        <!-- TopLevelHeader (menu items with children on menu bar) -->
+                        <Trigger Property="Role" Value="TopLevelHeader">
+                            <Setter Property="Padding" Value="8,3,8,3"/>
+                            <Setter TargetName="Popup" Property="Placement" Value="Bottom"/>
+                            <Setter TargetName="SubMenuArrow" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
+                        
+                        <!-- TopLevelItem (menu items without children on menu bar) -->
+                        <Trigger Property="Role" Value="TopLevelItem">
+                            <Setter Property="Padding" Value="8,3,8,3"/>
+                        </Trigger>
+                        
+                        <!-- SubmenuHeader (submenu items with children) -->
+                        <Trigger Property="Role" Value="SubmenuHeader">
+                            <Setter TargetName="SubMenuArrow" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        
+                        <!-- Show check mark for checked items -->
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        
+                        <!-- Show check border for checkable items -->
+                        <Trigger Property="IsCheckable" Value="True">
+                            <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="Icon" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
+                        
+                        <!-- Highlight on mouse over -->
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Border" Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
+                        </Trigger>
+                        
+                        <!-- Disabled state -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}"/>
+                            <Setter Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Separator Style -->
+    <Style TargetType="{x:Type Separator}">
+        <Setter Property="Height" Value="1"/>
+        <Setter Property="Margin" Value="0,4,0,4"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Separator}">
+                    <Border BorderBrush="{DynamicResource DividerBrush}"
+                            BorderThickness="0,1,0,0"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- GroupBox Style -->
     <Style TargetType="{x:Type GroupBox}">
         <Setter Property="HeaderTemplate">

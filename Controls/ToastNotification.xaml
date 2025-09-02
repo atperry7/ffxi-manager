@@ -1,0 +1,77 @@
+<UserControl x:Class="FFXIManager.Controls.ToastNotification"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="80" d:DesignWidth="350">
+    
+    <UserControl.Resources>
+        <!-- Toast animation -->
+        <Storyboard x:Key="ShowToast">
+            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                           From="0" To="1" Duration="0:0:0.3"/>
+            <ThicknessAnimation Storyboard.TargetProperty="Margin"
+                              From="0,-50,0,0" To="0,0,0,0" Duration="0:0:0.3">
+                <ThicknessAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut"/>
+                </ThicknessAnimation.EasingFunction>
+            </ThicknessAnimation>
+        </Storyboard>
+        
+        <Storyboard x:Key="HideToast">
+            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                           From="1" To="0" Duration="0:0:0.3"/>
+        </Storyboard>
+    </UserControl.Resources>
+    
+    <Border x:Name="ToastBorder" 
+            CornerRadius="8" 
+            Margin="10"
+            Background="{DynamicResource ToastBackgroundBrush}"
+            BorderBrush="{DynamicResource ToastBorderBrush}"
+            BorderThickness="1"
+            Effect="{DynamicResource ToastShadowEffect}">
+        
+        <Grid Margin="15,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            
+            <!-- Icon -->
+            <TextBlock x:Name="IconText" 
+                      Grid.Column="0"
+                      FontSize="20"
+                      VerticalAlignment="Center"
+                      Margin="0,0,10,0"
+                      Foreground="{DynamicResource ToastTextBrush}"/>
+            
+            <!-- Message -->
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock x:Name="TitleText" 
+                          FontWeight="SemiBold"
+                          TextWrapping="Wrap"
+                          Visibility="Collapsed"
+                          Foreground="{DynamicResource ToastTextBrush}"/>
+                <TextBlock x:Name="MessageText" 
+                          TextWrapping="Wrap"
+                          Foreground="{DynamicResource ToastTextBrush}"
+                          Opacity="0.9"/>
+            </StackPanel>
+            
+            <!-- Close button -->
+            <Button x:Name="CloseButton"
+                   Grid.Column="2"
+                   Content="✕"
+                   Width="20" Height="20"
+                   Background="Transparent"
+                   BorderThickness="0"
+                   Foreground="{DynamicResource ToastCloseButtonBrush}"
+                   Cursor="Hand"
+                   Click="CloseButton_Click"
+                   VerticalAlignment="Top"/>
+        </Grid>
+    </Border>
+</UserControl>

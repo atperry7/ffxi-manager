@@ -15,9 +15,10 @@ namespace FFXIManager.Models
         private int _processId;
         private IntPtr _windowHandle;
         private string _windowTitle = string.Empty;
-        private bool _isActive;
+        private DateTime? _lastActivated;
         private DateTime _lastSeen = DateTime.UtcNow;
         private string _processName = string.Empty;
+        private bool _isLastActivated;
 
         public string CharacterName
         {
@@ -49,10 +50,10 @@ namespace FFXIManager.Models
             set => SetProperty(ref _windowTitle, value);
         }
 
-        public bool IsActive
+        public DateTime? LastActivated
         {
-            get => _isActive;
-            set => SetProperty(ref _isActive, value);
+            get => _lastActivated;
+            set => SetProperty(ref _lastActivated, value);
         }
 
         public DateTime LastSeen
@@ -80,23 +81,60 @@ namespace FFXIManager.Models
         public bool IsRunning => ProcessId > 0;
 
         /// <summary>
-        /// Status text for display
+        /// Indicates if this character was recently activated (within last 10 seconds)
         /// </summary>
-        public string StatusText => IsActive ? "Active" : "Running";
+        public bool IsRecentlyActivated => LastActivated.HasValue && 
+            (DateTime.UtcNow - LastActivated.Value).TotalSeconds < 10;
+
+        /// <summary>
+        /// Indicates if this character was the last one activated (persistent until another character is activated)
+        /// </summary>
+        public bool IsLastActivated
+        {
+            get => _isLastActivated;
+            set => SetProperty(ref _isLastActivated, value);
+        }
+
+        /// <summary>
+        /// Status text for display showing activation state
+        /// </summary>
+        public string StatusText
+        {
+            get
+            {
+                if (!LastActivated.HasValue) return "Running";
+                
+                var timeSinceActivation = DateTime.UtcNow - LastActivated.Value;
+                if (timeSinceActivation.TotalSeconds < 10)
+                    return "Recently Active";
+                if (timeSinceActivation.TotalMinutes < 5)
+                    return $"Last Active {(int)timeSinceActivation.TotalMinutes}m ago";
+                    
+                return "Running";
+            }
+        }
 
         /// <summary>
         /// Status color for UI display (string format for XAML compatibility)
         /// </summary>
-        public string StatusColor => IsActive ? "LightBlue" : "Green";
+        public string StatusColor => IsRecentlyActivated ? "Gold" : "Green";
 
         /// <summary>
-        /// Status color as WPF Brush for direct binding
+        /// Status color as WPF Brush for direct binding (shows process health/running status)
         /// </summary>
-        public Brush StatusBrush => IsActive ? Brushes.LightBlue : Brushes.LimeGreen;
+        public Brush StatusBrush => IsRunning ? Brushes.LimeGreen : Brushes.Red;
+
+        /// <summary>
+        /// Marks this character as recently activated (called when switching to this character)
+        /// </summary>
+        public void MarkAsActivated()
+        {
+            LastActivated = DateTime.UtcNow;
+        }
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
-        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        public virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
@@ -106,11 +144,17 @@ namespace FFXIManager.Models
             {
                 OnPropertyChanged(nameof(DisplayName));
             }
-            else if (propertyName == nameof(IsActive))
+            else if (propertyName == nameof(LastActivated))
             {
+                OnPropertyChanged(nameof(IsRecentlyActivated));
                 OnPropertyChanged(nameof(StatusText));
                 OnPropertyChanged(nameof(StatusColor));
+            }
+            else if (propertyName == nameof(ProcessId))
+            {
+                OnPropertyChanged(nameof(IsRunning));
                 OnPropertyChanged(nameof(StatusBrush));
+                OnPropertyChanged(nameof(DisplayName));
             }
         }
 

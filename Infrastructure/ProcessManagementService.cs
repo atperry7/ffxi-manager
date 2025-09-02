@@ -190,6 +190,10 @@ namespace FFXIManager.Infrastructure
         [DllImport("user32.dll")]
         private static extern bool SwitchToThisWindow(IntPtr hWnd, bool fAltTab);
 
+        // Minimal input synthesis to satisfy Windows foreground lock when needed
+        [DllImport("user32.dll")]
+        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr processId);
 
@@ -624,6 +628,22 @@ namespace FFXIManager.Infrastructure
                     SwitchToThisWindow(windowHandle, true);
                     // SwitchToThisWindow doesn't return status but usually works
                     success = true;
+                }
+
+                if (!success)
+                {
+                    // Attempt 4: Foreground lock workaround — synthesize brief Alt key press then retry
+                    const byte VK_MENU = 0x12; // Alt
+                    const uint KEYEVENTF_KEYUP = 0x0002;
+                    try
+                    {
+                        keybd_event(VK_MENU, 0, 0, UIntPtr.Zero);
+                        await Task.Delay(10);
+                        keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+                        await Task.Delay(10);
+                        success = SetForegroundWindow(windowHandle);
+                    }
+                    catch { }
                 }
 
                 return success;

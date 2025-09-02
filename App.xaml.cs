@@ -1,8 +1,12 @@
-﻿using System;
+using System;
 using System.Configuration;
 using System.Data;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using FFXIManager.Infrastructure;
+using FFXIManager.Models;
+using FFXIManager.Services;
 
 namespace FFXIManager
 {
@@ -14,7 +18,7 @@ namespace FFXIManager
         private static readonly Uri LightThemeUri = new Uri("Themes/LightTheme.xaml", UriKind.Relative);
         private static readonly Uri DarkThemeUri = new Uri("Themes/DarkTheme.xaml", UriKind.Relative);
 
-        protected override void OnStartup(StartupEventArgs e)
+        protected override async void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
 
@@ -24,12 +28,96 @@ namespace FFXIManager
                 var settingsService = ServiceLocator.SettingsService;
                 var settings = settingsService.LoadSettings();
                 ApplyTheme(settings.IsDarkTheme);
+
+                // Centralize global hotkey registration at app startup so it works regardless of UI windows
+                Services.GlobalHotkeyManager.Instance.RegisterHotkeysFromSettings();
+
+                // Ensure PlayOnline monitoring is started regardless of UI windows
+                ServiceLocator.PlayOnlineMonitorService.StartMonitoring();
+                
+                // Connect the character ordering service to the monitor and wait for completion
+                if (ServiceLocator.CharacterOrderingService is CharacterOrderingService orderingService)
+                {
+                    try
+                    {
+                        await orderingService.ConnectToMonitorAsync(ServiceLocator.PlayOnlineMonitorService);
+                    }
+                    catch (Exception ex)
+                    {
+                        _ = ServiceLocator.LoggingService.LogErrorAsync("Error connecting character ordering service to monitor", ex, "App");
+                    }
+                }
+
+                // **GAMING OPTIMIZATION**: Ultra-fast hotkey processing via unified service
+                Services.GlobalHotkeyManager.Instance.HotkeyPressed += async (_, e) =>
+                {
+                    // Check if this is the cycle hotkey
+                    if (e.HotkeyId == Services.HotkeyActivationService.CycleHotkeyId)
+                    {
+                        // Handle cycle hotkey
+                        var cycleResult = await ServiceLocator.HotkeyActivationService.CycleToNextCharacterAsync();
+                        
+                        if (!cycleResult.Success && IsUnexpectedHotkeyError(cycleResult.ErrorMessage))
+                        {
+                            _ = ServiceLocator.NotificationServiceEnhanced?.ShowToastAsync($"Cycle failed: {cycleResult.ErrorMessage}", NotificationType.Error);
+                        }
+                    }
+                    else
+                    {
+                        // **UNIFIED PIPELINE**: All hotkey activation through optimized service
+                        var result = await ServiceLocator.HotkeyActivationService.ActivateCharacterByHotkeyAsync(e.HotkeyId);
+                        
+                        if (!result.Success && IsUnexpectedHotkeyError(result.ErrorMessage))
+                        {
+                            _ = ServiceLocator.NotificationServiceEnhanced?.ShowToastAsync($"Hotkey failed: {result.ErrorMessage}", NotificationType.Error);
+                        }
+                    }
+                };
+                
+                // **PERFORMANCE**: Initialize hotkey mappings at startup
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await ServiceLocator.HotkeyMappingService.RefreshMappingsAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        _ = ServiceLocator.LoggingService.LogErrorAsync("Error initializing hotkey mappings", ex, "App");
+                    }
+                });
+                
+                // Refresh hotkeys and mappings when settings change
+                ViewModels.DiscoverySettingsViewModel.HotkeySettingsChanged += (_, __) =>
+                {
+                    try
+                    {
+                        Services.GlobalHotkeyManager.Instance.RefreshHotkeys();
+                        _ = Task.Run(() => ServiceLocator.HotkeyMappingService.RefreshMappingsAsync());
+                    }
+                    catch { }
+                };
             }
             catch
             {
                 // Default to dark theme if settings can't be loaded
                 ApplyTheme(true);
             }
+        }
+        
+
+        /// <summary>
+        /// Determines if a hotkey error is unexpected and should be shown to the user.
+        /// </summary>
+        private static bool IsUnexpectedHotkeyError(string? errorMessage)
+        {
+            if (string.IsNullOrEmpty(errorMessage)) return false;
+            
+            // Don't show notifications for expected/common errors
+            return !errorMessage.Contains("No character mapped") &&
+                   !errorMessage.Contains("Invalid window handle") &&
+                   !errorMessage.Contains("Access denied") &&
+                   !errorMessage.Contains("out of range");
         }
 
         public static void ApplyTheme(bool isDarkTheme)
@@ -68,6 +156,13 @@ namespace FFXIManager
 
         protected override void OnExit(ExitEventArgs e)
         {
+            try
+            {
+                // Unregister global hotkeys on exit to avoid leaving hooks active
+                Services.GlobalHotkeyManager.Instance.UnregisterAllHotkeys();
+            }
+            catch { }
+
             // Properly dispose of all services before exiting
             ServiceLocator.DisposeAll();
             base.OnExit(e);

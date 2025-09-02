@@ -20,7 +20,7 @@
 
             <!-- Title -->
             <TextBlock Grid.Row="0" 
-                       Text="Record Keyboard Shortcut" 
+                       Text="Record Keyboard + Controller Input" 
                        FontWeight="Bold" 
                        FontSize="14"
                        Foreground="{DynamicResource PrimaryTextBrush}"

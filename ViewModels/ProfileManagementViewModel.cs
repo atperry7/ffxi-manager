@@ -18,6 +18,7 @@ namespace FFXIManager.ViewModels
         private readonly IStatusMessageService _statusService;
         private readonly ISettingsService _settingsService;
         private readonly IProfileService _profileService;
+        private readonly INotificationServiceEnhanced _notificationService;
         private readonly IDialogService _dialogService;
         private readonly IValidationService _validationService;
 
@@ -32,7 +33,8 @@ namespace FFXIManager.ViewModels
             ISettingsService settingsService,
             IProfileService profileService,
             IDialogService dialogService,
-            IValidationService validationService)
+            IValidationService validationService,
+            INotificationServiceEnhanced notificationService)
         {
             _profileOperations = profileOperations ?? throw new ArgumentNullException(nameof(profileOperations));
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
@@ -40,6 +42,7 @@ namespace FFXIManager.ViewModels
             _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
             _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
             _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
+            _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
 
             _settings = _settingsService.LoadSettings();
             _profileService.PlayOnlineDirectory = _settings.PlayOnlineDirectory;
@@ -215,6 +218,7 @@ namespace FFXIManager.ViewModels
             catch (Exception ex)
             {
                 _statusService.SetMessage($"Error loading profiles: {ex.Message}");
+                await _notificationService.ShowToastAsync($"Profile loading failed: {ex.Message}", NotificationType.Error);
             }
             finally
             {
@@ -244,13 +248,22 @@ namespace FFXIManager.ViewModels
                 var (success, message) = await _profileOperations.SwapProfileAsync(profile);
                 _statusService.SetMessage(message);
 
+                // Show toast notification with appropriate type and message
                 if (success)
                 {
+                    await _notificationService.ShowToastAsync($"Switched to '{profile.Name}' profile", NotificationType.Success);
+                    
                     _settings.LastUsedProfile = profile.Name;
                     _settings.LastActiveProfileName = profile.Name;
                     _settingsService.SaveSettings(_settings);
 
                     await RefreshProfilesAsync();
+                }
+                else
+                {
+                    // Show error toast for failed swaps
+                    var cleanMessage = message.Replace("Error: ", "").Replace("Failed to ", "");
+                    await _notificationService.ShowToastAsync($"Failed to switch profile: {cleanMessage}", NotificationType.Error);
                 }
             }
             finally
@@ -266,7 +279,8 @@ namespace FFXIManager.ViewModels
                 var validation = _validationService.ValidateProfileName(NewBackupName);
                 if (!validation.IsValid)
                 {
-                    _statusService.SetMessage($"{validation.ErrorMessage}");
+                    // Toast provides better user feedback than status bar for validation errors
+                    await _notificationService.ShowToastAsync($"Invalid name: {validation.ErrorMessage}", NotificationType.Warning);
                     return;
                 }
 
@@ -278,8 +292,15 @@ namespace FFXIManager.ViewModels
 
                 if (success && newProfile != null)
                 {
+                    await _notificationService.ShowToastAsync($"Created backup: '{NewBackupName}'", NotificationType.Success);
                     await ServiceLocator.UiDispatcher.InvokeAsync(() => Profiles.Add(newProfile));
                     NewBackupName = string.Empty;
+                }
+                else
+                {
+                    // Show error toast for failed backup creation
+                    var cleanMessage = message.Replace("Error: ", "").Replace("Failed to ", "");
+                    await _notificationService.ShowToastAsync($"Backup failed: {cleanMessage}", NotificationType.Error);
                 }
             }
             finally
@@ -308,12 +329,19 @@ namespace FFXIManager.ViewModels
 
                 if (success)
                 {
+                    await _notificationService.ShowToastAsync($"Deleted profile: '{profile.Name}'", NotificationType.Warning);
                     await ServiceLocator.UiDispatcher.InvokeAsync(() =>
                     {
                         Profiles.Remove(profile);
                         if (SelectedProfile == profile)
                             SelectedProfile = null;
                     });
+                }
+                else
+                {
+                    // Show error toast for failed deletion
+                    var cleanMessage = message.Replace("Error: ", "").Replace("Failed to ", "");
+                    await _notificationService.ShowToastAsync($"Delete failed: {cleanMessage}", NotificationType.Error);
                 }
             }
             finally
@@ -347,6 +375,8 @@ namespace FFXIManager.ViewModels
 
                 if (success)
                 {
+                    await _notificationService.ShowToastAsync($"Renamed '{oldName}' to '{newName}'", NotificationType.Info);
+                    
                     if (_settings.LastUsedProfile == oldName)
                     {
                         _settings.LastUsedProfile = newName;
@@ -359,10 +389,17 @@ namespace FFXIManager.ViewModels
                     if (renamedProfile != null)
                         SelectedProfile = renamedProfile;
                 }
+                else
+                {
+                    // Show error toast for failed rename
+                    var cleanMessage = message.Replace("Error: ", "").Replace("Failed to ", "");
+                    await _notificationService.ShowToastAsync($"Rename failed: {cleanMessage}", NotificationType.Error);
+                }
             }
             catch (Exception ex)
             {
                 _statusService.SetMessage($"Error renaming profile: {ex.Message}");
+                await _notificationService.ShowToastAsync($"Rename error: {ex.Message}", NotificationType.Error);
             }
             finally
             {
@@ -380,16 +417,18 @@ namespace FFXIManager.ViewModels
                     var validation = _validationService.ValidateDirectory(selectedPath);
                     if (!validation.IsValid)
                     {
-                        _statusService.SetMessage($"{validation.ErrorMessage}");
+                        await _notificationService.ShowToastAsync($"Invalid directory: {validation.ErrorMessage}", NotificationType.Warning);
                         return;
                     }
 
                     PlayOnlineDirectory = selectedPath;
+                    await _notificationService.ShowToastAsync($"Directory updated: {System.IO.Path.GetFileName(selectedPath)}", NotificationType.Success);
                 }
             }
             catch (Exception ex)
             {
                 _statusService.SetMessage($"Error selecting directory: {ex.Message}");
+                await _notificationService.ShowToastAsync($"Directory selection failed: {ex.Message}", NotificationType.Error);
             }
         }
 

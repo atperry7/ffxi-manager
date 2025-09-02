@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using FFXIManager.Controls;
 
@@ -30,6 +31,14 @@ namespace FFXIManager.Services
         /// Return value to suppress key event from being passed to other applications.
         /// </summary>
         private const int SUPPRESS_KEY_EVENT = 1;
+        
+        // **EMERGENCY SAFEGUARDS**: Critical system protection
+        private static readonly object _emergencyLock = new object();
+        private static volatile bool _emergencyMode;
+        private static int _consecutiveFailures;
+        private static DateTime _lastFailureTime = DateTime.MinValue;
+        private const int MAX_CONSECUTIVE_FAILURES = 10;
+        private const int EMERGENCY_COOLDOWN_MS = 2000;
 
         private readonly ConcurrentDictionary<int, HotkeyInfo> _registeredHotkeys = new();
         private readonly ConcurrentDictionary<HotkeyKey, int> _hotkeyLookup = new(); // O(1) lookup for performance
@@ -114,15 +123,56 @@ namespace FFXIManager.Services
         public LowLevelHotkeyService()
         {
             _hookProc = HookCallback;
-            _hookId = SetHook(_hookProc);
+            _hookId = SetHookWithRetry(_hookProc);
 
             if (_hookId == IntPtr.Zero)
             {
                 var error = Marshal.GetLastWin32Error();
-                throw new InvalidOperationException($"Failed to install keyboard hook. Win32 error: {error}");
+                throw new InvalidOperationException($"Failed to install keyboard hook after retries. Win32 error: {error}");
             }
         }
 
+        /// <summary>
+        /// Installs the keyboard hook with retry logic and exponential backoff.
+        /// This prevents intermittent failures on slower systems or under heavy load.
+        /// </summary>
+        private static IntPtr SetHookWithRetry(LowLevelKeyboardProc proc, int maxRetries = 3)
+        {
+            Exception? lastException = null;
+            
+            for (int attempt = 0; attempt < maxRetries; attempt++)
+            {
+                try
+                {
+                    var hookId = SetHook(proc);
+                    if (hookId != IntPtr.Zero)
+                    {
+                        return hookId;
+                    }
+                    
+                    // Hook installation returned zero - capture error
+                    var error = Marshal.GetLastWin32Error();
+                    lastException = new InvalidOperationException($"Hook installation attempt {attempt + 1} failed. Win32 error: {error}");
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                }
+                
+                // Don't delay on the last attempt
+                if (attempt < maxRetries - 1)
+                {
+                    // Exponential backoff: 50ms, 100ms, 200ms
+                    var delayMs = 50 * (int)Math.Pow(2, attempt);
+                    Thread.Sleep(delayMs);
+                }
+            }
+            
+            // All attempts failed - log the final error but return IntPtr.Zero to let caller handle
+            System.Diagnostics.Debug.WriteLine($"Hook installation failed after {maxRetries} attempts: {lastException?.Message}");
+            return IntPtr.Zero;
+        }
+        
         private static IntPtr SetHook(LowLevelKeyboardProc proc)
         {
             using (Process curProcess = Process.GetCurrentProcess())
@@ -139,10 +189,18 @@ namespace FFXIManager.Services
 
         private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
+            // **EMERGENCY PROTECTION**: If in emergency mode, pass through all keys immediately
+            if (_emergencyMode)
+            {
+                return CallNextHookEx(_hookId, nCode, wParam, lParam);
+            }
+            
             if (nCode >= HC_ACTION && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN))
             {
-                var hookStruct = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
-                var vkCode = (int)hookStruct.vkCode;
+                try
+                {
+                    var hookStruct = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
+                    var vkCode = (int)hookStruct.vkCode;
 
                 // **GAMING OPTIMIZATION**: Inline modifier key state for performance
                 var modifiers = ModifierKeys.None;
@@ -161,30 +219,89 @@ namespace FFXIManager.Services
                     return CallNextHookEx(_hookId, nCode, wParam, lParam);
                 }
 
-                // **GAMING OPTIMIZATION**: O(1) hotkey lookup instead of linear search
-                var hotkeyKey = new HotkeyKey(modifiers, key);
-                if (_hotkeyLookup.TryGetValue(hotkeyKey, out var hotkeyId))
-                {
-                    // Verify the hotkey is still registered and enabled
-                    if (_registeredHotkeys.TryGetValue(hotkeyId, out var hotkeyInfo) && hotkeyInfo.IsRegistered)
+                    // **GAMING OPTIMIZATION**: O(1) hotkey lookup instead of linear search
+                    var hotkeyKey = new HotkeyKey(modifiers, key);
+                    if (_hotkeyLookup.TryGetValue(hotkeyKey, out var hotkeyId))
                     {
-                        // Fire the event
-                        HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(hotkeyId, modifiers, key));
+                        // Verify the hotkey is still registered and enabled
+                        if (_registeredHotkeys.TryGetValue(hotkeyId, out var hotkeyInfo) && hotkeyInfo.IsRegistered)
+                        {
+                            // **EMERGENCY PROTECTION**: Non-blocking event fire with timeout protection
+                            Task.Run(() => 
+                            {
+                                try 
+                                {
+                                    HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(hotkeyId, modifiers, key));
+                                    ResetFailureCount();
+                                } 
+                                catch (Exception ex)
+                                {
+                                    IncrementFailureCount();
+                                    System.Diagnostics.Debug.WriteLine($"Hotkey event failed: {ex.Message}");
+                                }
+                            });
 
-                        // IMPORTANT: Suppress key event from reaching other applications
-                        // This prevents the hotkey from being processed by other applications, including:
-                        // - System shortcuts and accessibility tools
-                        // - Other applications' hotkey handlers
-                        // - Game/application-specific key handlers
-                        // This behavior is intentional for this application but may interfere with
-                        // assistive technologies or global system shortcuts if they use the same combinations.
-                        return new IntPtr(SUPPRESS_KEY_EVENT);
+                            // IMPORTANT: Suppress key event from reaching other applications
+                            // This prevents the hotkey from being processed by other applications, including:
+                            // - System shortcuts and accessibility tools
+                            // - Other applications' hotkey handlers
+                            // - Game/application-specific key handlers
+                            // This behavior is intentional for this application but may interfere with
+                            // assistive technologies or global system shortcuts if they use the same combinations.
+                            return new IntPtr(SUPPRESS_KEY_EVENT);
+                        }
                     }
+                }
+                catch (Exception ex)
+                {
+                    IncrementFailureCount();
+                    System.Diagnostics.Debug.WriteLine($"Hook callback critical error: {ex.Message}");
+                    // Continue execution to prevent system lockup
                 }
             }
 
             // Pass the key to other applications
             return CallNextHookEx(_hookId, nCode, wParam, lParam);
+        }
+        
+        /// <summary>
+        /// **EMERGENCY SAFEGUARD**: Increments failure count and enters emergency mode if threshold exceeded
+        /// </summary>
+        private static void IncrementFailureCount()
+        {
+            lock (_emergencyLock)
+            {
+                _consecutiveFailures++;
+                _lastFailureTime = DateTime.UtcNow;
+                
+                if (_consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && !_emergencyMode)
+                {
+                    _emergencyMode = true;
+                    System.Diagnostics.Debug.WriteLine($"**EMERGENCY MODE ACTIVATED**: {_consecutiveFailures} consecutive failures detected. Keyboard hooks disabled for {EMERGENCY_COOLDOWN_MS}ms.");
+                    
+                    // Schedule emergency mode reset
+                    Task.Delay(EMERGENCY_COOLDOWN_MS).ContinueWith(_ => 
+                    {
+                        lock (_emergencyLock)
+                        {
+                            _emergencyMode = false;
+                            _consecutiveFailures = 0;
+                            System.Diagnostics.Debug.WriteLine("Emergency mode deactivated. Normal operation resumed.");
+                        }
+                    });
+                }
+            }
+        }
+        
+        /// <summary>
+        /// **EMERGENCY SAFEGUARD**: Resets failure count on successful operations
+        /// </summary>
+        private static void ResetFailureCount()
+        {
+            lock (_emergencyLock)
+            {
+                _consecutiveFailures = 0;
+            }
         }
 
 

@@ -33,6 +33,40 @@ namespace FFXIManager.Tests.Services
         public Task<T> InvokeAsync<T>(Func<T> func) => Task.FromResult(func());
     }
 
+    internal class FakeUnifiedMonitoringService : IUnifiedMonitoringService
+    {
+        public event EventHandler<MonitoredProcessEventArgs>? ProcessDetected;
+        public event EventHandler<MonitoredProcessEventArgs>? ProcessUpdated;
+        public event EventHandler<MonitoredProcessEventArgs>? ProcessRemoved;
+        public event EventHandler<MonitoredProcess>? GlobalProcessDetected;
+        public event EventHandler<MonitoredProcess>? GlobalProcessUpdated;
+        public event EventHandler<int>? GlobalProcessRemoved;
+
+        private readonly Dictionary<int, MonitoredProcess> _processes = new();
+        private readonly Dictionary<Guid, MonitoringProfile> _profiles = new();
+        public bool IsMonitoring { get; private set; }
+
+        public Guid RegisterMonitor(MonitoringProfile profile)
+        {
+            var id = Guid.NewGuid();
+            _profiles[id] = profile;
+            return id;
+        }
+
+        public void UnregisterMonitor(Guid monitorId) { _profiles.Remove(monitorId); }
+        public void UpdateMonitorProfile(Guid monitorId, MonitoringProfile profile) { _profiles[monitorId] = profile; }
+        public Task<List<MonitoredProcess>> GetProcessesAsync(Guid monitorId) => Task.FromResult(_processes.Values.ToList());
+        public Task<MonitoredProcess?> GetProcessAsync(Guid monitorId, int processId) => Task.FromResult(_processes.TryGetValue(processId, out var p) ? p : null);
+        public void StartMonitoring() { IsMonitoring = true; }
+        public void StopMonitoring() { IsMonitoring = false; }
+
+        // Helper to add processes for testing
+        public void AddProcess(MonitoredProcess process)
+        {
+            _processes[process.ProcessId] = process;
+        }
+    }
+
     internal class FakeProcessManagementService : IProcessManagementService
     {
         public event EventHandler<WindowTitleChangedEventArgs>? WindowTitleChanged;
@@ -70,6 +104,7 @@ namespace FFXIManager.Tests.Services
         public void TrackPid(int processId) { }
         public void UnregisterDiscoveryWatch(Guid watchId) { }
         public void UntrackPid(int processId) { }
+        public void RequestImmediateRefresh() { }
 
         // Helpers to drive events
         public void AddProcess(ProcessInfo pi)
@@ -92,6 +127,7 @@ namespace FFXIManager.Tests.Services
     public class PlayOnlineMonitorServiceTests
     {
         private FakeLoggingService _log = null!;
+        private FakeUnifiedMonitoringService _unified = null!;
         private FakeProcessManagementService _proc = null!;
         private FakeUiDispatcher _ui = null!;
         private PlayOnlineMonitorService _service = null!;
@@ -100,9 +136,10 @@ namespace FFXIManager.Tests.Services
         public void Setup()
         {
             _log = new FakeLoggingService();
+            _unified = new FakeUnifiedMonitoringService();
             _proc = new FakeProcessManagementService();
             _ui = new FakeUiDispatcher();
-            _service = new PlayOnlineMonitorService(_log, _proc, _ui);
+            _service = new PlayOnlineMonitorService(_unified, _log, _ui, _proc);
         }
 
         [TestCleanup]
@@ -118,7 +155,7 @@ namespace FFXIManager.Tests.Services
             var pi = new ProcessInfo { ProcessId = 1, ProcessName = "pol", Windows = new List<WindowInfo> { new WindowInfo { Handle = hwnd, Title = "Character A" } }, LastSeen = DateTime.UtcNow };
             _proc.AddProcess(pi);
 
-            var list = await _service.GetRunningCharactersAsync();
+            var list = await _service.GetCharactersAsync();
             Assert.AreEqual(1, list.Count);
             Assert.AreEqual("Character A", list[0].WindowTitle);
             Assert.AreEqual(hwnd, list[0].WindowHandle);
@@ -131,7 +168,7 @@ namespace FFXIManager.Tests.Services
             var pi = new ProcessInfo { ProcessId = 2, ProcessName = "ffxi", Windows = new List<WindowInfo> { new WindowInfo { Handle = hwnd, Title = "Character B" } }, LastSeen = DateTime.UtcNow };
             _proc.AddProcess(pi);
 
-            var list = await _service.GetRunningCharactersAsync();
+            var list = await _service.GetCharactersAsync();
             var ch = list[0];
             var ok = await _service.ActivateCharacterWindowAsync(ch);
             Assert.IsTrue(ok);
@@ -154,7 +191,7 @@ namespace FFXIManager.Tests.Services
             var pi = new ProcessInfo { ProcessId = 3, ProcessName = "pol", Windows = new List<WindowInfo> { new WindowInfo { Handle = hwnd, Title = "Old" } }, LastSeen = DateTime.UtcNow };
             _proc.AddProcess(pi);
 
-            var characters = await _service.GetRunningCharactersAsync();
+            var characters = await _service.GetCharactersAsync();
             Assert.AreEqual(1, characters.Count);
             var ch = characters[0];
             Assert.AreEqual("Old", ch.WindowTitle);
@@ -173,7 +210,7 @@ namespace FFXIManager.Tests.Services
             var hwnd = new IntPtr(1111);
             var pi = new ProcessInfo { ProcessId = 4, ProcessName = "ffxi", Windows = new List<WindowInfo> { new WindowInfo { Handle = hwnd, Title = "Title1" } }, LastSeen = DateTime.UtcNow };
             _proc.AddProcess(pi);
-            var characters = await _service.GetRunningCharactersAsync();
+            var characters = await _service.GetCharactersAsync();
             var ch = characters[0];
             Assert.AreEqual("Title1", ch.WindowTitle);
 
@@ -191,7 +228,7 @@ namespace FFXIManager.Tests.Services
             var hwnd = new IntPtr(2222);
             var pi = new ProcessInfo { ProcessId = 5, ProcessName = "pol", Windows = new List<WindowInfo> { new WindowInfo { Handle = hwnd, Title = "Exists" } }, LastSeen = DateTime.UtcNow };
             _proc.AddProcess(pi);
-            var list = await _service.GetRunningCharactersAsync();
+            var list = await _service.GetCharactersAsync();
             Assert.AreEqual(1, list.Count);
 
             var removed = false;
