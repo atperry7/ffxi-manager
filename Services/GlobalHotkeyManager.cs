@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using FFXIManager.Infrastructure;
 using FFXIManager.Models.Settings;
 
@@ -31,6 +32,7 @@ namespace FFXIManager.Services
         }
 
         private readonly LowLevelHotkeyService _hotkeyService;
+        private readonly ControllerInputService _controllerService;
         private readonly ILoggingService _loggingService;
         private readonly Dictionary<int, DateTime> _lastHotkeyPress = new();
         private TimeSpan _hotkeyDebounceInterval = TimeSpan.FromMilliseconds(50); // **INCREASED** from 5ms to prevent system overload
@@ -54,7 +56,10 @@ namespace FFXIManager.Services
             _hotkeyService = new LowLevelHotkeyService();
             _hotkeyService.HotkeyPressed += OnLowLevelHotkeyPressed;
 
-            _loggingService.LogInfoAsync("🔥 GlobalHotkeyManager initialized with LOW-LEVEL keyboard hooks", "GlobalHotkeyManager");
+            _controllerService = new ControllerInputService();
+            _controllerService.ButtonPressed += OnControllerButtonPressed;
+
+            _loggingService.LogInfoAsync("🔥 GlobalHotkeyManager initialized with keyboard hooks + controller input", "GlobalHotkeyManager");
         }
 
         /// <summary>
@@ -106,35 +111,83 @@ namespace FFXIManager.Services
                         continue;
                     }
 
-                    bool success = _hotkeyService.RegisterHotkey(shortcut.HotkeyId, shortcut.Modifiers, shortcut.Key);
+                    var keyboardRegistered = false;
+                    var controllerRegistered = false;
 
-                    if (success)
+                    // Register keyboard input if configured
+                    if (shortcut.Key != System.Windows.Input.Key.None)
                     {
-                        registeredCount++;
-                        _loggingService.LogInfoAsync($"✓ Registered global hotkey: {shortcut.DisplayText} for slot {shortcut.SlotIndex + 1}", "GlobalHotkeyManager");
+                        keyboardRegistered = _hotkeyService.RegisterHotkey(shortcut.HotkeyId, shortcut.Modifiers, shortcut.Key);
+                        if (keyboardRegistered)
+                        {
+                            registeredCount++;
+                            _loggingService.LogInfoAsync($"✓ Registered keyboard hotkey: {shortcut.GetKeyboardDisplayText()} for slot {shortcut.SlotIndex + 1}", "GlobalHotkeyManager");
+                        }
+                        else
+                        {
+                            failedCount++;
+                            _loggingService.LogWarningAsync($"✗ Failed to register keyboard hotkey: {shortcut.GetKeyboardDisplayText()} (may be in use)", "GlobalHotkeyManager");
+                        }
                     }
-                    else
+
+                    // Register controller input if configured
+                    if (shortcut.ControllerButton != Models.Settings.ControllerButton.None)
                     {
-                        failedCount++;
-                        _loggingService.LogWarningAsync($"✗ Failed to register global hotkey: {shortcut.DisplayText} (may be in use by another application)", "GlobalHotkeyManager");
+                        controllerRegistered = _controllerService.RegisterButton(shortcut.HotkeyId, shortcut.ControllerButton);
+                        if (controllerRegistered)
+                        {
+                            registeredCount++;
+                            _loggingService.LogInfoAsync($"✓ Registered controller button: {shortcut.GetControllerDisplayText()} for slot {shortcut.SlotIndex + 1}", "GlobalHotkeyManager");
+                        }
+                        else
+                        {
+                            failedCount++;
+                            _loggingService.LogWarningAsync($"✗ Failed to register controller button: {shortcut.GetControllerDisplayText()}", "GlobalHotkeyManager");
+                        }
+                    }
+
+                    // Log overall shortcut status
+                    if (!keyboardRegistered && !controllerRegistered)
+                    {
+                        _loggingService.LogWarningAsync($"⚠ No inputs registered for slot {shortcut.SlotIndex + 1}: {shortcut.DisplayText}", "GlobalHotkeyManager");
                     }
                 }
 
                 // Register the cycle hotkey if enabled
                 if (settings.CycleHotkey != null && settings.CycleHotkey.IsEnabled)
                 {
-                    // Use the standardized cycle hotkey ID from HotkeyActivationService
-                    bool cycleSuccess = _hotkeyService.RegisterHotkey(HotkeyActivationService.CycleHotkeyId, settings.CycleHotkey.Modifiers, settings.CycleHotkey.Key);
+                    var cycleKeyboardRegistered = false;
+                    var cycleControllerRegistered = false;
 
-                    if (cycleSuccess)
+                    // Use the standardized cycle hotkey ID from HotkeyActivationService
+                    if (settings.CycleHotkey.Key != System.Windows.Input.Key.None)
                     {
-                        registeredCount++;
-                        _loggingService.LogInfoAsync($"✓ Registered cycle hotkey: {settings.CycleHotkey.DisplayText}", "GlobalHotkeyManager");
+                        cycleKeyboardRegistered = _hotkeyService.RegisterHotkey(HotkeyActivationService.CycleHotkeyId, settings.CycleHotkey.Modifiers, settings.CycleHotkey.Key);
+                        if (cycleKeyboardRegistered)
+                        {
+                            registeredCount++;
+                            _loggingService.LogInfoAsync($"✓ Registered cycle keyboard hotkey: {settings.CycleHotkey.GetKeyboardDisplayText()}", "GlobalHotkeyManager");
+                        }
+                        else
+                        {
+                            failedCount++;
+                            _loggingService.LogWarningAsync($"✗ Failed to register cycle keyboard hotkey: {settings.CycleHotkey.GetKeyboardDisplayText()}", "GlobalHotkeyManager");
+                        }
                     }
-                    else
+
+                    if (settings.CycleHotkey.ControllerButton != Models.Settings.ControllerButton.None)
                     {
-                        failedCount++;
-                        _loggingService.LogWarningAsync($"✗ Failed to register cycle hotkey: {settings.CycleHotkey.DisplayText} (may be in use by another application)", "GlobalHotkeyManager");
+                        cycleControllerRegistered = _controllerService.RegisterButton(HotkeyActivationService.CycleHotkeyId, settings.CycleHotkey.ControllerButton);
+                        if (cycleControllerRegistered)
+                        {
+                            registeredCount++;
+                            _loggingService.LogInfoAsync($"✓ Registered cycle controller button: {settings.CycleHotkey.GetControllerDisplayText()}", "GlobalHotkeyManager");
+                        }
+                        else
+                        {
+                            failedCount++;
+                            _loggingService.LogWarningAsync($"✗ Failed to register cycle controller button: {settings.CycleHotkey.GetControllerDisplayText()}", "GlobalHotkeyManager");
+                        }
                     }
                 }
 
@@ -157,8 +210,9 @@ namespace FFXIManager.Services
             {
                 _loggingService.LogInfoAsync("🔄 Refreshing keyboard shortcuts due to settings change", "GlobalHotkeyManager");
 
-                // Unregister all current hotkeys
+                // Unregister all current hotkeys and controller buttons
                 _hotkeyService.UnregisterAll();
+                _controllerService.UnregisterAll();
 
                 // Re-register based on current settings
                 RegisterHotkeysFromSettings();
@@ -179,7 +233,8 @@ namespace FFXIManager.Services
             try
             {
                 _hotkeyService.UnregisterAll();
-                _loggingService.LogInfoAsync("All hotkeys unregistered", "GlobalHotkeyManager");
+                _controllerService.UnregisterAll();
+                _loggingService.LogInfoAsync("All hotkeys and controller buttons unregistered", "GlobalHotkeyManager");
             }
             catch (Exception ex)
             {
@@ -234,6 +289,55 @@ namespace FFXIManager.Services
                 _loggingService.LogErrorAsync("Error handling hotkey press", ex, "GlobalHotkeyManager");
             }
         }
+
+        private void OnControllerButtonPressed(object? sender, ControllerButtonPressedEventArgs e)
+        {
+            try
+            {
+                // **EMERGENCY FLOOD PROTECTION**: Check global hotkey rate (shared with keyboard)
+                if (IsHotkeyFloodProtectionActive())
+                {
+                    _loggingService.LogWarningAsync($"Controller button press ignored: flood protection active ({e.Button})", "GlobalHotkeyManager");
+                    return;
+                }
+                
+                // Debouncing: check if this hotkey was pressed recently (shared debounce with keyboard)
+                var now = DateTime.UtcNow;
+                if (_lastHotkeyPress.TryGetValue(e.HotkeyId, out var lastPress))
+                {
+                    var timeSinceLastPress = now - lastPress;
+                    if (timeSinceLastPress < _hotkeyDebounceInterval)
+                    {
+                        // Ignore this press - too soon after the last one
+                        _loggingService.LogInfoAsync($"⏰ Ignoring rapid controller button press: {e.Button} (debounced - {timeSinceLastPress.TotalMilliseconds:F0}ms since last press)", "GlobalHotkeyManager");
+                        return;
+                    }
+                }
+
+                // Update the last press time for this hotkey
+                _lastHotkeyPress[e.HotkeyId] = now;
+
+                // Check if this is the cycle hotkey
+                if (e.HotkeyId == HotkeyActivationService.CycleHotkeyId)
+                {
+                    _loggingService.LogInfoAsync($"🎮 Cycle controller button pressed: {e.Button}", "GlobalHotkeyManager");
+                }
+                else
+                {
+                    // Convert hotkey ID back to slot index for character shortcuts
+                    int slotIndex = KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(e.HotkeyId);
+                    _loggingService.LogInfoAsync($"🎮 Controller button pressed: {e.Button} (slot {slotIndex + 1}, Controller {e.ControllerId})", "GlobalHotkeyManager");
+                }
+
+                // Create a compatible HotkeyPressedEventArgs to forward to existing handlers
+                var hotkeyArgs = new HotkeyPressedEventArgs(e.HotkeyId, ModifierKeys.None, Key.None);
+                HotkeyPressed?.Invoke(this, hotkeyArgs);
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogErrorAsync("Error handling controller button press", ex, "GlobalHotkeyManager");
+            }
+        }
         
         /// <summary>
         /// **EMERGENCY PROTECTION**: Manages hotkey flood protection to prevent system overload
@@ -285,6 +389,7 @@ namespace FFXIManager.Services
             try
             {
                 _hotkeyService?.Dispose();
+                _controllerService?.Dispose();
                 _loggingService.LogInfoAsync("GlobalHotkeyManager disposed", "GlobalHotkeyManager");
             }
             catch (Exception ex)

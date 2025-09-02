@@ -17,18 +17,40 @@
 
         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="0,0,0,10">
-                <!-- Character Keyboard Shortcuts Section -->
-                <GroupBox Header="Character Keyboard Shortcuts" BorderBrush="{DynamicResource BorderBrush}" Foreground="{DynamicResource PrimaryTextBrush}" Margin="0,0,0,10">
+                <!-- Character Input Shortcuts Section -->
+                <GroupBox Header="Character Input Shortcuts" BorderBrush="{DynamicResource BorderBrush}" Foreground="{DynamicResource PrimaryTextBrush}" Margin="0,0,0,10">
                     <StackPanel Margin="8">
-                        <TextBlock Text="Configure global hotkeys to switch between FFXI character windows." 
+                        <TextBlock Text="Configure global hotkeys using keyboard keys and/or controller buttons to switch between FFXI character windows." 
                                    FontSize="11" Margin="0,0,0,10" 
                                    Style="{StaticResource SecondaryTextBlock}"/>
                         
                         <CheckBox x:Name="EnableHotkeysCheckBox"
-                                  Content="Enable global keyboard shortcuts" 
+                                  Content="Enable global hotkeys (keyboard + controller)" 
                                   IsChecked="{Binding EnableHotkeys, Mode=TwoWay}" 
                                   Foreground="{DynamicResource PrimaryTextBrush}" 
                                   Margin="0,0,0,10"/>
+                        
+                        <!-- Controller Status Indicator -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <TextBlock Text="🎮" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                            <TextBlock x:Name="ControllerStatusText" 
+                                       Text="Controller: Checking..." 
+                                       FontSize="10"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource SecondaryTextBlock}"
+                                       Margin="0,0,8,0"/>
+                            <Button x:Name="RefreshControllerButton"
+                                    Content="🔄"
+                                    FontSize="11"
+                                    Width="24"
+                                    Height="20"
+                                    ToolTip="Refresh controller status"
+                                    Click="RefreshController_Click"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Margin="0,0,0,0"
+                                    Padding="2"
+                                    VerticalAlignment="Center"/>
+                        </StackPanel>
                         
                         <!-- Hotkey Configuration Panel -->
                         <Border Background="{DynamicResource SurfaceBrush}" 
@@ -169,7 +191,7 @@
                                                Style="{StaticResource SecondaryTextBlock}"/>
                                 </StackPanel>
                                 
-                                <TextBlock Text="Hotkeys work globally and will switch FFXI character windows even when other applications have focus." 
+                                <TextBlock Text="Hotkeys work globally and will switch FFXI character windows even when other applications have focus. Works with both keyboard and controller inputs." 
                                            FontSize="10" 
                                            Margin="0,0,0,0" 
                                            Style="{StaticResource SecondaryTextBlock}"/>

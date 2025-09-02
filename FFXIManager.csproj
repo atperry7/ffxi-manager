@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <PackageReference Include="System.Management" Version="9.0.0" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="9.0.0" />
     <!-- Ensure Microsoft.CodeAnalysis.NetAnalyzers is available even outside SDK default -->
     <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0" PrivateAssets="all" />
   </ItemGroup>
