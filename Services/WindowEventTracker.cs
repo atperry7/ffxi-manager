@@ -80,26 +80,23 @@ namespace FFXIManager.Services
 
             try
             {
-                // **DEBUG**: Log all tracking attempts
-                _ = _logging.LogInfoAsync($"🔍 ATTEMPTING to start event tracking for PID {processId} ({processName})", "WindowEventTracker");
-                System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] StartTrackingProcess: PID {processId}, Name '{processName}'");
+                // Log tracking attempts
+                _ = _logging.LogInfoAsync($"Starting event tracking for PID {processId} ({processName})", "WindowEventTracker");
                 
                 var tracker = new ProcessWindowTracker(processId, processName, this);
                 if (_trackers.TryAdd(processId, tracker))
                 {
-                    _ = _logging.LogInfoAsync($"✅ SUCCESS: Started event-driven tracking for process {processId} ({processName})", "WindowEventTracker");
-                    System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] Successfully added tracker for PID {processId}");
+                    _ = _logging.LogInfoAsync($"Successfully started event-driven tracking for process {processId} ({processName})", "WindowEventTracker");
                 }
                 else
                 {
                     tracker.Dispose();
-                    _ = _logging.LogErrorAsync($"❌ FAILED to add tracker for process {processId} ({processName}) - already exists", null, "WindowEventTracker");
+                    _ = _logging.LogErrorAsync($"Failed to add tracker for process {processId} ({processName}) - already exists", null, "WindowEventTracker");
                 }
             }
             catch (Exception ex)
             {
-                _ = _logging.LogErrorAsync($"💥 EXCEPTION starting tracking for process {processId} ({processName})", ex, "WindowEventTracker");
-                System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] Exception in StartTrackingProcess: {ex.Message}");
+                _ = _logging.LogErrorAsync($"Exception starting tracking for process {processId} ({processName})", ex, "WindowEventTracker");
             }
         }
 
@@ -289,25 +286,19 @@ namespace FFXIManager.Services
                     WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
                 );
 
-                // **DEBUG**: Verify hook handles and log status
+                // Verify hook handles
                 bool titleHookOk = _titleChangeHook != IntPtr.Zero;
                 bool createHookOk = _createHook != IntPtr.Zero;
                 bool destroyHookOk = _destroyHook != IntPtr.Zero;
                 
-                System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] Hook setup for PID {_processId} ({_processName}):");
-                System.Diagnostics.Debug.WriteLine($"  - Title Change Hook: {(titleHookOk ? "✅ SUCCESS" : "❌ FAILED")} (Handle: 0x{_titleChangeHook.ToInt64():X})");
-                System.Diagnostics.Debug.WriteLine($"  - Create Hook: {(createHookOk ? "✅ SUCCESS" : "❌ FAILED")} (Handle: 0x{_createHook.ToInt64():X})");
-                System.Diagnostics.Debug.WriteLine($"  - Destroy Hook: {(destroyHookOk ? "✅ SUCCESS" : "❌ FAILED")} (Handle: 0x{_destroyHook.ToInt64():X})");
-                
                 if (!titleHookOk || !createHookOk || !destroyHookOk)
                 {
                     var lastError = Marshal.GetLastWin32Error();
-                    System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] SetWinEventHook failed - Last Win32 Error: {lastError}");
+                    // Hook setup failed, but continue with whatever hooks succeeded
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] Exception in SetupEventHooks for PID {_processId}: {ex.Message}");
                 throw;
             }
         }
@@ -320,43 +311,36 @@ namespace FFXIManager.Services
                 // **SMART FALLBACK**: Mark last event time
                 _lastEventTime = DateTime.UtcNow;
 
-                // **DEBUG**: Log ALL callback invocations
-                System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] Callback fired: EventType=0x{eventType:X}, HWND=0x{hwnd.ToInt64():X}, idObject={idObject}, PID={_processId}");
+                // Process window event callback
 
                 // Only handle window events (idObject == 0)
                 if (idObject != 0 || hwnd == IntPtr.Zero)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] Skipping: idObject={idObject}, hwnd={hwnd}");
-                    return;
+                        return;
                 }
 
                 // Verify this is our process
                 var threadId = GetWindowThreadProcessId(hwnd, out uint windowProcessId);
                 if (threadId == 0)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] Failed to get process ID for window 0x{hwnd.ToInt64():X}");
                     return;
                 }
                 
                 if (windowProcessId != _processId)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] PID mismatch: Expected {_processId}, Got {windowProcessId}");
                     return;
                 }
 
                 // Check window visibility
                 bool isVisible = IsWindowVisible(hwnd);
-                System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] Window 0x{hwnd.ToInt64():X} visibility: {isVisible}");
 
                 // Get current window title for debugging
                 var currentTitle = GetWindowTitle(hwnd);
-                System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] Window 0x{hwnd.ToInt64():X} current title: '{currentTitle}'");
 
                 switch (eventType)
                 {
                     case EVENT_OBJECT_NAMECHANGE:
                         var title = GetWindowTitle(hwnd);
-                        System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] 🎯 TITLE CHANGE EVENT: PID {_processId}, Handle 0x{hwnd.ToInt64():X}, Title '{title}'");
                         if (!string.IsNullOrEmpty(title))
                         {
                             _lastKnownTitles[hwnd] = title; // Update cache
@@ -364,40 +348,26 @@ namespace FFXIManager.Services
                         }
                         else
                         {
-                            System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] ⚠️ Title change event but title is empty");
                         }
                         break;
 
                     case EVENT_OBJECT_CREATE:
-                        System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] 🆕 WINDOW CREATE EVENT: PID {_processId}, Handle 0x{hwnd.ToInt64():X}");
                         _parent.OnWindowEvent(_processId, hwnd, WindowEventType.Created);
                         break;
 
                     case EVENT_OBJECT_DESTROY:
-                        System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] 💥 WINDOW DESTROY EVENT: PID {_processId}, Handle 0x{hwnd.ToInt64():X}");
                         _lastKnownTitles.Remove(hwnd); // Remove from cache
                         _parent.OnWindowEvent(_processId, hwnd, WindowEventType.Destroyed);
                         break;
                         
                     default:
-                        System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] Unknown event type: 0x{eventType:X}");
                         break;
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] 💥 Exception in callback: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] Stack trace: {ex.StackTrace}");
+                // Ignore callback exceptions to prevent destabilizing the event system
             }
-        }
-        
-        /// <summary>
-        /// DISABLED: Fallback polling was causing null character issues and race conditions
-        /// </summary>
-        private static void FallbackPollingCallback(object? state)
-        {
-            // **DISABLED**: This was causing null characters and breaking existing functionality
-            return;
         }
         
         private static List<WindowInfo> GetProcessWindows(int processId)
@@ -423,9 +393,8 @@ namespace FFXIManager.Services
                 
                 // For now, just check main window - can be expanded if needed
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] Error getting windows for PID {processId}: {ex.Message}");
             }
             
             return windows;
@@ -459,11 +428,9 @@ namespace FFXIManager.Services
                     _destroyHook = IntPtr.Zero;
                 }
 
-                System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] Disposed hooks and fallback timer for PID {_processId}");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"[WINDOW_EVENT_DEBUG] Error disposing hooks for PID {_processId}: {ex.Message}");
             }
 
             GC.SuppressFinalize(this);
