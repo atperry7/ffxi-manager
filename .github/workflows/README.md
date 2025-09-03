@@ -87,11 +87,13 @@ All workflows use:
 
 ## Secrets Required
 
-| Secret | Description | Used By |
-|--------|-------------|---------|
-| `SIGNING_KEY` | Base64 encoded .snk file | Both workflows |
-| `GH_PAT` | GitHub Personal Access Token | Release workflow |
-| `GITHUB_TOKEN` | Auto-provided by GitHub | Build workflow |
+| Secret | Description | Used By | Notes |
+|--------|-------------|---------|-------|
+| `SIGNING_KEY` | Base64 encoded .snk file | Both workflows | Required |
+| `GH_PAT` | GitHub Personal Access Token | Release workflow | Needs release permissions |
+| `GITHUB_TOKEN` | Auto-provided by GitHub | Build workflow | Limited permissions* |
+
+*Note: `GITHUB_TOKEN` has limited permissions and may not be able to comment on PRs. The build workflow handles this gracefully.
 
 ---
 

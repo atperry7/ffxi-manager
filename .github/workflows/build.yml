@@ -93,17 +93,24 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const issue_number = context.issue.number;
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const run_url = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
-            
-            await github.rest.issues.createComment({
-              owner,
-              repo,
-              issue_number,
-              body: `✅ **Build Successful!**\n\nBuild #${context.runNumber} completed successfully.\n[View build logs](${run_url})`
-            });
+            try {
+              const issue_number = context.issue.number;
+              const owner = context.repo.owner;
+              const repo = context.repo.repo;
+              const run_url = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+              
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body: `✅ **Build Successful!**\n\nBuild #${context.runNumber} completed successfully.\n[View build logs](${run_url})`
+              });
+              
+              console.log('✅ PR comment added successfully');
+            } catch (error) {
+              console.log('ℹ️ Unable to comment on PR (insufficient permissions):', error.message);
+              console.log('✅ Build completed successfully - check Actions tab for details');
+            }
 
       - name: Clean up sensitive files
         if: always()
