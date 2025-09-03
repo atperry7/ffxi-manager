@@ -90,10 +90,8 @@ All workflows use:
 | Secret | Description | Used By | Notes |
 |--------|-------------|---------|-------|
 | `SIGNING_KEY` | Base64 encoded .snk file | Both workflows | Required |
-| `GH_PAT` | GitHub Personal Access Token | Release workflow | Needs release permissions |
-| `GITHUB_TOKEN` | Auto-provided by GitHub | Build workflow | Limited permissions* |
-
-*Note: `GITHUB_TOKEN` has limited permissions and may not be able to comment on PRs. The build workflow handles this gracefully.
+| `GH_PAT` | GitHub Personal Access Token | Both workflows | Needs issues:write, pull_requests:write, contents:write |
+| `GITHUB_TOKEN` | Auto-provided by GitHub | Not used | Replaced by GH_PAT for consistent permissions |
 
 ---
 
