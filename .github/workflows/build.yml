@@ -1,0 +1,118 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ master, develop, 'feature/**' ]
+  pull_request:
+    branches: [ master ]
+    types: [ opened, synchronize, reopened ]
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  BUILD_CONFIGURATION: 'Release'
+  PROJECT_NAME: 'FFXIManager'
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better build info
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Setup signing key
+        shell: pwsh
+        run: |
+          [System.IO.File]::WriteAllBytes("ffximanager.snk", [Convert]::FromBase64String("${{ secrets.SIGNING_KEY }}"))
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.PROJECT_NAME }}.csproj
+
+      - name: Build application
+        run: dotnet build ${{ env.PROJECT_NAME }}.csproj --configuration ${{ env.BUILD_CONFIGURATION }} --no-restore
+
+      - name: Verify strong name signing
+        shell: pwsh
+        run: |
+          $assemblyPath = "bin/${{ env.BUILD_CONFIGURATION }}/net9.0-windows/${{ env.PROJECT_NAME }}.dll"
+          if (Test-Path $assemblyPath) {
+            $assembly = [System.Reflection.Assembly]::LoadFile((Resolve-Path $assemblyPath).Path)
+            $fullName = $assembly.FullName
+            Write-Host "Assembly Full Name: $fullName"
+            if ($fullName -match "PublicKeyToken=([a-f0-9]+)") {
+              Write-Host "✅ Strong name signing verified - PublicKeyToken: $($matches[1])"
+            } else {
+              Write-Error "❌ Strong name signing failed - no PublicKeyToken found"
+              exit 1
+            }
+          } else {
+            Write-Error "❌ Assembly not found at expected path: $assemblyPath"
+            exit 1
+          }
+
+      - name: Run tests (if available)
+        run: |
+          if (Test-Path "*.Tests.csproj") {
+            dotnet test --configuration ${{ env.BUILD_CONFIGURATION }} --no-build --logger "console;verbosity=normal"
+          } else {
+            Write-Host "ℹ️ No test projects found - skipping tests"
+          }
+        shell: pwsh
+
+      - name: Create build artifacts (PR only)
+        if: github.event_name == 'pull_request'
+        run: dotnet publish ${{ env.PROJECT_NAME }}.csproj --configuration ${{ env.BUILD_CONFIGURATION }} --no-build --output publish
+
+      - name: Upload PR artifacts
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-build-${{ github.event.pull_request.number }}
+          path: publish/
+          retention-days: 7
+
+      - name: Add build status comment (PR only)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue_number = context.issue.number;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const run_url = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number,
+              body: `✅ **Build Successful!**\n\nBuild #${context.runNumber} completed successfully.\n[View build logs](${run_url})`
+            });
+
+      - name: Clean up sensitive files
+        if: always()
+        shell: pwsh
+        run: |
+          $sensitiveFiles = @("ffximanager.snk")
+          foreach ($file in $sensitiveFiles) {
+            if (Test-Path $file) {
+              Remove-Item $file -Force
+              Write-Host "✅ Sensitive file cleaned up: $file"
+            }
+          }
