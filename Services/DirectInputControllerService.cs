@@ -18,6 +18,9 @@ namespace FFXIManager.Services
     {
         private const int POLLING_INTERVAL_MS = 16; // ~60fps polling
         private const int DEADZONE = 5000; // Analog stick deadzone
+        
+        // Known PlayStation controller GUIDs
+        private static readonly Guid PS5_DUALSENSE_GUID = new Guid("054c0ce5-0000-0000-0000-504944564944");
 
         // PS5 DualSense button mappings (based on DirectInput button indices)
         private const int PS5_BUTTON_SQUARE = 0;    // Square/X on Xbox layout
@@ -77,7 +80,7 @@ namespace FFXIManager.Services
                                           name.Contains("ps5") || 
                                           name.Contains("ps4") ||
                                           name.Contains("wireless controller") || // Generic PS controller name
-                                          deviceInstance.ProductGuid == new Guid("054c0ce5-0000-0000-0000-504944564944"); // PS5 controller GUID
+                                          deviceInstance.ProductGuid == PS5_DUALSENSE_GUID;
                         
                         if (!isPlayStation)
                         {
@@ -229,7 +232,7 @@ namespace FFXIManager.Services
                         var args = new DirectInputButtonPressedEventArgs(hotkeyId, button, controllerId);
                         ButtonPressed?.Invoke(this, args);
 
-                        _ = _loggingService.LogInfoAsync(
+                        await _loggingService.LogInfoAsync(
                             $"🎮 DirectInput button pressed: {button.GetDescription()} (Controller {controllerId:N}, ID: {hotkeyId})",
                             "DirectInputController");
                     }
@@ -295,7 +298,11 @@ namespace FFXIManager.Services
                         joystick.Unacquire();
                         joystick.Dispose();
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        // Log but don't rethrow during disposal
+                        _loggingService?.LogWarningAsync($"Error disposing joystick: {ex.Message}", "DirectInputController");
+                    }
                 }
                 _joysticks.Clear();
 
@@ -326,7 +333,11 @@ namespace FFXIManager.Services
                         joystick.Unacquire();
                         joystick.Dispose();
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        // Log but don't rethrow during disposal
+                        _loggingService?.LogWarningAsync($"Error disposing joystick: {ex.Message}", "DirectInputController");
+                    }
                 }
                 _joysticks.Clear();
 
