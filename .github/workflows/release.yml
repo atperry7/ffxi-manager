@@ -1,0 +1,235 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0, v1.3.1-beta, etc.
+  workflow_dispatch:  # Manual trigger with inputs
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.3.1)'
+        required: true
+      prerelease:
+        description: 'Is this a pre-release?'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  BUILD_CONFIGURATION: 'Release'
+  PROJECT_NAME: 'FFXIManager'
+
+jobs:
+  build-release:
+    name: Build Release Package
+    runs-on: windows-latest
+    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      zip-name: ${{ steps.package.outputs.zip-name }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for changelog generation
+
+      - name: Extract version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "push") {
+            # Extract from tag
+            $version = "${{ github.ref_name }}".TrimStart('v')
+          } else {
+            # Use manual input
+            $version = "${{ github.event.inputs.version }}".TrimStart('v')
+          }
+          Write-Host "📦 Building version: $version"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Setup signing key
+        shell: pwsh
+        run: |
+          [System.IO.File]::WriteAllBytes("ffximanager.snk", [Convert]::FromBase64String("${{ secrets.SIGNING_KEY }}"))
+
+      - name: Update project version
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $projectFile = "${{ env.PROJECT_NAME }}.csproj"
+          $xml = [xml](Get-Content $projectFile)
+          
+          # Update version numbers
+          $xml.Project.PropertyGroup.Version = $version
+          $xml.Project.PropertyGroup.AssemblyVersion = $version.Split('-')[0]  # Strip pre-release suffix for assembly version
+          $xml.Project.PropertyGroup.FileVersion = $version.Split('-')[0]
+          
+          $xml.Save($projectFile)
+          Write-Host "✅ Updated project version to $version"
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.PROJECT_NAME }}.csproj
+
+      - name: Build application
+        run: dotnet build ${{ env.PROJECT_NAME }}.csproj --configuration ${{ env.BUILD_CONFIGURATION }} --no-restore
+
+      - name: Verify strong name signing
+        shell: pwsh
+        run: |
+          $assemblyPath = "bin/${{ env.BUILD_CONFIGURATION }}/net9.0-windows/${{ env.PROJECT_NAME }}.dll"
+          if (Test-Path $assemblyPath) {
+            $assembly = [System.Reflection.Assembly]::LoadFile((Resolve-Path $assemblyPath).Path)
+            $fullName = $assembly.FullName
+            Write-Host "Assembly Full Name: $fullName"
+            if ($fullName -match "PublicKeyToken=([a-f0-9]+)") {
+              Write-Host "✅ Strong name signing verified - PublicKeyToken: $($matches[1])"
+            } else {
+              Write-Error "❌ Strong name signing failed - no PublicKeyToken found"
+              exit 1
+            }
+          }
+
+      - name: Publish application
+        run: dotnet publish ${{ env.PROJECT_NAME }}.csproj --configuration ${{ env.BUILD_CONFIGURATION }} --no-build --output publish
+
+      - name: Create release info
+        shell: pwsh
+        run: |
+          $releaseInfo = @{
+            Version = "${{ steps.version.outputs.version }}"
+            BuildDate = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss UTC")
+            GitCommit = "${{ github.sha }}"
+            GitRef = "${{ github.ref }}"
+            BuildNumber = "${{ github.run_number }}"
+            Configuration = "${{ env.BUILD_CONFIGURATION }}"
+            IsPreRelease = if ("${{ steps.version.outputs.version }}" -match "-") { $true } else { $false }
+          } | ConvertTo-Json -Depth 2
+          $releaseInfo | Out-File -FilePath "publish/ReleaseInfo.json" -Encoding UTF8
+          Write-Host "✅ Release info created"
+
+      - name: Create ZIP package
+        id: package
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $zipName = "${{ env.PROJECT_NAME }}-v$version-windows.zip"
+          
+          # Create the ZIP
+          Compress-Archive -Path "publish/*" -DestinationPath $zipName -CompressionLevel Optimal
+          
+          # Calculate checksum
+          $hash = Get-FileHash $zipName -Algorithm SHA256
+          "$($hash.Hash)  $zipName" | Out-File -FilePath "$zipName.sha256"
+          
+          Write-Host "✅ Created package: $zipName"
+          Write-Host "📝 SHA256: $($hash.Hash)"
+          
+          echo "zip-name=$zipName" >> $env:GITHUB_OUTPUT
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-package
+          path: |
+            ${{ steps.package.outputs.zip-name }}
+            ${{ steps.package.outputs.zip-name }}.sha256
+
+      - name: Clean up sensitive files
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path "ffximanager.snk") {
+            Remove-Item "ffximanager.snk" -Force
+            Write-Host "✅ Sensitive files cleaned up"
+          }
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-release
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-package
+
+      - name: Determine release type
+        id: release-type
+        run: |
+          VERSION="${{ needs.build-release.outputs.version }}"
+          if [[ "$VERSION" == *"-"* ]] || [[ "${{ github.event.inputs.prerelease }}" == "true" ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+            echo "📦 This is a pre-release version"
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "📦 This is a stable release"
+          fi
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          CURRENT_TAG="v${{ needs.build-release.outputs.version }}"
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "📝 First release - no previous version for comparison"
+            CHANGELOG="Initial release of ${{ env.PROJECT_NAME }}"
+          else
+            echo "📝 Generating changelog from $PREVIOUS_TAG to $CURRENT_TAG"
+            CHANGELOG=$(git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD | grep -v "^- Merge" || echo "No changes documented")
+          fi
+          
+          # Save to file for the release body
+          echo "$CHANGELOG" > changelog.txt
+
+      - name: Check for release notes file
+        id: release-notes
+        run: |
+          RELEASE_NOTES_FILE="RELEASE_NOTES_v${{ needs.build-release.outputs.version }}.md"
+          if [ -f "$RELEASE_NOTES_FILE" ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "file=$RELEASE_NOTES_FILE" >> $GITHUB_OUTPUT
+            echo "📄 Found custom release notes: $RELEASE_NOTES_FILE"
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "📄 No custom release notes found"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.build-release.outputs.version }}
+          name: |
+            ${{ steps.release-type.outputs.prerelease == 'true' && '🧪 ' || '🎉 ' }}FFXI Manager v${{ needs.build-release.outputs.version }}
+          body_path: ${{ steps.release-notes.outputs.found == 'true' && steps.release-notes.outputs.file || 'changelog.txt' }}
+          draft: false
+          prerelease: ${{ steps.release-type.outputs.prerelease }}
+          files: |
+            ${{ needs.build-release.outputs.zip-name }}
+            ${{ needs.build-release.outputs.zip-name }}.sha256
+          generate_release_notes: ${{ steps.release-notes.outputs.found == 'false' }}  # Auto-generate if no custom notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+
+      - name: Post-release notification
+        if: success()
+        run: |
+          echo "✅ Release created successfully!"
+          echo "🔗 Release URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ needs.build-release.outputs.version }}"
