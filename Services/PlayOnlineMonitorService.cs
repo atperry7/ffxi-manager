@@ -308,8 +308,8 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                // **IMPROVED**: Use safe logging that won't throw
-                await SafeLogErrorAsync($"Error in debounced activation for {characterToActivate.DisplayName}", ex);
+            // **IMPROVED**: Use safe logging that won't throw
+            await SafeLogErrorAsync("Error in debounced activation for {CharacterName}", characterToActivate.DisplayName, ex);
             }
         }
 
@@ -358,7 +358,7 @@ namespace FFXIManager.Services
                         WindowActivationFailureReason.InvalidHandle => "Window handle is no longer valid",
                         WindowActivationFailureReason.WindowDestroyed => "Window has been destroyed",
                         WindowActivationFailureReason.AccessDenied => "Access denied to window",
-                        WindowActivationFailureReason.Timeout => $"Activation timed out after {fastTimeoutMs}ms",
+                        WindowActivationFailureReason.Timeout => "Activation timed out after " + fastTimeoutMs + "ms",
                         _ => result.DiagnosticInfo ?? "Unknown failure reason"
                     };
                     
@@ -428,7 +428,7 @@ namespace FFXIManager.Services
             // **FIX**: Additional protection against null/empty/invalid titles
             if (string.IsNullOrWhiteSpace(windowTitle) || windowTitle.Equals("NULL", StringComparison.OrdinalIgnoreCase))
             {
-                windowTitle = $"FFXI Process {process.ProcessId}";
+                windowTitle = "FFXI Process " + process.ProcessId;
                 _ = _logging.LogDebugAsync("ConvertToCharacter: Using fallback title '{WindowTitle}' for process {ProcessId}", "PlayOnlineMonitorService", windowTitle, process.ProcessId);
             }
             
@@ -637,7 +637,7 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                _ = SafeLogErrorAsync($"Error getting cached character slot index for {character.DisplayName}", ex);
+                _ = SafeLogErrorAsync("Error getting cached character slot index for {CharacterName}", character.DisplayName, ex);
             }
 
             return -1; // Not found or error
@@ -663,13 +663,13 @@ namespace FFXIManager.Services
                         IsValid = true
                     };
 
-                    _characterCache[cacheKey] = cached;
-                    _ = SafeLogInfoAsync($"Updated character cache: {character.CharacterName} (PID: {character.ProcessId})");
+                _characterCache[cacheKey] = cached;
+                _ = SafeLogInfoAsync("Updated character cache: {CharacterName} (PID: {ProcessId})", character.CharacterName, character.ProcessId);
                 }
             }
             catch (Exception ex)
             {
-                _ = SafeLogErrorAsync($"Error updating character cache for {character.DisplayName}", ex);
+                _ = SafeLogErrorAsync("Error updating character cache for {CharacterName}", character.DisplayName, ex);
             }
         }
 
@@ -689,12 +689,12 @@ namespace FFXIManager.Services
                     {
                         _characterCache.TryRemove(key, out _);
                     }
-                    _ = SafeLogInfoAsync($"Removed character from cache (PID: {processId})");
+                    _ = SafeLogInfoAsync("Removed character from cache (PID: {ProcessId})", processId);
                 }
             }
             catch (Exception ex)
             {
-                _ = SafeLogErrorAsync($"Error removing character from cache (PID: {processId})", ex);
+                _ = SafeLogErrorAsync("Error removing character from cache (PID: {ProcessId})", processId.ToString(), ex);
             }
         }
 
@@ -758,6 +758,21 @@ namespace FFXIManager.Services
         }
 
         /// <summary>
+        /// Safe structured logging that won't throw exceptions
+        /// </summary>
+        private async Task SafeLogInfoAsync(string messageTemplate, params object[] args)
+        {
+            try
+            {
+                await _logging.LogInfoAsync(messageTemplate, "PlayOnlineMonitorService", args);
+            }
+            catch
+            {
+                // Ignore logging errors to prevent cascading failures
+            }
+        }
+
+        /// <summary>
         /// Safe error logging that won't throw exceptions
         /// </summary>
         private async Task SafeLogErrorAsync(string message, Exception ex)
@@ -765,6 +780,22 @@ namespace FFXIManager.Services
             try
             {
                 await _logging.LogErrorAsync(message, ex, "PlayOnlineMonitorService");
+            }
+            catch
+            {
+                // Last resort - could write to Debug output or Event Log
+                // But for now, fail silently to prevent crashes
+            }
+        }
+
+        /// <summary>
+        /// Safe structured error logging that won't throw exceptions
+        /// </summary>
+        private async Task SafeLogErrorAsync(string messageTemplate, string arg, Exception ex)
+        {
+            try
+            {
+                await _logging.LogErrorAsync(messageTemplate, "PlayOnlineMonitorService", ex, arg);
             }
             catch
             {

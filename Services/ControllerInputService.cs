@@ -72,7 +72,7 @@ namespace FFXIManager.Services
             StartPolling();
             
             var inputTypes = _directInputService != null ? "XInput and DirectInput" : "XInput only";
-            _loggingService.LogInfoAsync($"🎮 ControllerInputService initialized with {inputTypes} polling", "ControllerInputService");
+            _loggingService.LogInfoAsync("🎮 ControllerInputService initialized with {InputTypes} polling", "ControllerInputService", inputTypes);
         }
 
         /// <summary>
@@ -93,12 +93,12 @@ namespace FFXIManager.Services
                 // Also register with DirectInput service if available
                 _directInputService?.RegisterButton(hotkeyId, button);
                 
-                _loggingService.LogInfoAsync($"✓ Registered controller button: {button.GetDescription()} (ID: {hotkeyId})", "ControllerInputService");
+                _loggingService.LogInfoAsync("✓ Registered controller button: {ButtonDescription} (ID: {HotkeyId})", "ControllerInputService", button.GetDescription(), hotkeyId);
                 return true;
             }
             catch (Exception ex)
             {
-                _loggingService.LogErrorAsync($"Failed to register controller button: {button}", ex, "ControllerInputService");
+                _loggingService.LogErrorAsync("Failed to register controller button: {Button}", ex, "ControllerInputService", button);
                 return false;
             }
         }
@@ -182,7 +182,7 @@ namespace FFXIManager.Services
             {
                 IsXInputControllerConnected = anyConnected;
                 var status = anyConnected ? "connected" : "disconnected";
-                await _loggingService.LogInfoAsync($"🎮 XInput controller status changed: {status}", "ControllerInputService");
+                await _loggingService.LogInfoAsync("🎮 XInput controller status changed: {Status}", "ControllerInputService", status);
             }
         }
 
@@ -220,8 +220,8 @@ namespace FFXIManager.Services
                         ButtonPressed?.Invoke(this, args);
 
                         await _loggingService.LogInfoAsync(
-                            $"🎮 Controller button pressed: {button.GetDescription()} (Controller {controllerId}, ID: {hotkeyId})",
-                            "ControllerInputService");
+                            "🎮 Controller button pressed: {ButtonDescription} (Controller {ControllerId}, ID: {HotkeyId})",
+                            "ControllerInputService", button.GetDescription(), controllerId, hotkeyId);
                     }
                     else
                     {
@@ -305,8 +305,8 @@ namespace FFXIManager.Services
             try
             {
                 _loggingService.LogInfoAsync("🔍 Starting initial controller detection...", "ControllerInputService");
-                _loggingService.LogInfoAsync($"🔍 Windows Version: {Environment.OSVersion}", "ControllerInputService");
-                _loggingService.LogInfoAsync($"🔍 XInput version being used: {GetXInputVersionInfo()}", "ControllerInputService");
+                _loggingService.LogInfoAsync("🔍 Windows Version: {WindowsVersion}", "ControllerInputService", Environment.OSVersion);
+                _loggingService.LogInfoAsync("🔍 XInput version being used: {XInputVersion}", "ControllerInputService", GetXInputVersionInfo());
                 
                 // Windows 11 specific check
                 if (IsWindows11())
@@ -320,12 +320,12 @@ namespace FFXIManager.Services
                     var state = new XINPUT_STATE();
                     var result = XInputGetState(controllerId, ref state);
                     
-                    _loggingService.LogInfoAsync($"🎮 XInput slot {controllerId}: Result={result} (0=connected, 1167=disconnected)", "ControllerInputService");
+                    _loggingService.LogInfoAsync("🎮 XInput slot {ControllerId}: Result={Result} (0=connected, 1167=disconnected)", "ControllerInputService", controllerId, result);
 
                     if (result == 0) // ERROR_SUCCESS
                     {
                         IsXInputControllerConnected = true;
-                        _loggingService.LogInfoAsync($"🎮 XInput controller detected on startup: Controller {controllerId} (PacketNumber: {state.dwPacketNumber})", "ControllerInputService");
+                        _loggingService.LogInfoAsync("🎮 XInput controller detected on startup: Controller {ControllerId} (PacketNumber: {PacketNumber})", "ControllerInputService", controllerId, state.dwPacketNumber);
                         return; // Found at least one, no need to check others
                     }
                     else
@@ -338,7 +338,7 @@ namespace FFXIManager.Services
                             87 => "ERROR_INVALID_PARAMETER - Invalid slot number",
                             _ => $"Unknown XInput error code: {result}"
                         };
-                        _loggingService.LogInfoAsync($"🔍 XInput slot {controllerId} details: {errorMessage}", "ControllerInputService");
+                        _loggingService.LogInfoAsync("🔍 XInput slot {ControllerId} details: {ErrorMessage}", "ControllerInputService", controllerId, errorMessage);
                     }
                 }
                 
@@ -402,7 +402,7 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                _loggingService.LogWarningAsync($"⚠️ DirectInput initialization failed: {ex.Message} - PlayStation controllers will not be supported", "ControllerInputService");
+                _loggingService.LogWarningAsync("⚠️ DirectInput initialization failed: {ErrorMessage} - PlayStation controllers will not be supported", "ControllerInputService", ex.Message);
                 _directInputService = null;
             }
         }
@@ -426,7 +426,7 @@ namespace FFXIManager.Services
             {
                 // Check Xbox Game Bar process
                 var gameBarProcesses = System.Diagnostics.Process.GetProcessesByName("GameBar");
-                _loggingService.LogInfoAsync($"🎮 Xbox Game Bar processes: {gameBarProcesses.Length}", "ControllerInputService");
+                _loggingService.LogInfoAsync("🎮 Xbox Game Bar processes: {ProcessCount}", "ControllerInputService", gameBarProcesses.Length);
 
                 // Check for Xbox-related services
                 var xboxServices = new[] { "XboxGipSvc", "XboxNetApiSvc", "XblAuthManager", "XblGameSave" };
@@ -435,11 +435,11 @@ namespace FFXIManager.Services
                     try
                     {
                         using var service = new System.ServiceProcess.ServiceController(serviceName);
-                        _loggingService.LogInfoAsync($"🔧 Service {serviceName}: {service.Status}", "ControllerInputService");
+                        _loggingService.LogInfoAsync("🔧 Service {ServiceName}: {ServiceStatus}", "ControllerInputService", serviceName, service.Status);
                     }
                     catch
                     {
-                        _loggingService.LogInfoAsync($"🔧 Service {serviceName}: Not found or inaccessible", "ControllerInputService");
+                        _loggingService.LogInfoAsync("🔧 Service {ServiceName}: Not found or inaccessible", "ControllerInputService", serviceName);
                     }
                 }
 
@@ -458,7 +458,7 @@ namespace FFXIManager.Services
                 }
                 catch (Exception ex)
                 {
-                    _loggingService.LogWarningAsync($"⚠️ Could not check Gaming Services registry: {ex.Message}", "ControllerInputService");
+                    _loggingService.LogWarningAsync("⚠️ Could not check Gaming Services registry: {ErrorMessage}", "ControllerInputService", ex.Message);
                 }
             }
             catch (Exception ex)
