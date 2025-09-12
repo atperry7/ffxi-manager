@@ -81,7 +81,7 @@ namespace FFXIManager.Services
         {
             if (!Directory.Exists(PlayOnlineDirectory))
             {
-                _loggingService.LogWarningAsync($"PlayOnline directory does not exist: {PlayOnlineDirectory}", "ProfileService");
+                _loggingService.LogWarningAsync("PlayOnline directory does not exist: {PlayOnlineDirectory}", "ProfileService", PlayOnlineDirectory);
                 return new List<ProfileInfo>();
             }
 
@@ -134,11 +134,11 @@ namespace FFXIManager.Services
                         : string.Compare(x.Name, y.Name, StringComparison.OrdinalIgnoreCase); // User profiles alphabetically
                 });
 
-                _loggingService.LogInfoAsync($"Successfully loaded {profiles.Count} profiles (includeAutoBackups: {includeAutoBackups})", "ProfileService");
+                _loggingService.LogInfoAsync("Successfully loaded {ProfileCount} profiles (includeAutoBackups: {IncludeAutoBackups})", "ProfileService", profiles.Count, includeAutoBackups);
             }
             catch (Exception ex)
             {
-                _loggingService.LogErrorAsync($"Error reading profiles from {PlayOnlineDirectory}", ex, "ProfileService");
+                _loggingService.LogErrorAsync("Error reading profiles from {PlayOnlineDirectory}", ex, "ProfileService", PlayOnlineDirectory);
                 throw new InvalidOperationException($"Error reading profiles: {ex.Message}", ex);
             }
 
@@ -194,7 +194,7 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                _loggingService.LogErrorAsync($"Error reading active login file: {activeLoginPath}", ex, "ProfileService");
+                _loggingService.LogErrorAsync("Error reading active login file: {ActiveLoginPath}", ex, "ProfileService", activeLoginPath);
                 throw new InvalidOperationException($"Error reading active login file: {ex.Message}", ex);
             }
         }
@@ -206,7 +206,7 @@ namespace FFXIManager.Services
         {
             ArgumentNullException.ThrowIfNull(targetProfile);
 
-            await _loggingService.LogInfoAsync($"Starting profile swap to: {targetProfile.Name}", "ProfileService");
+            await _loggingService.LogInfoAsync("Starting profile swap to: {ProfileName}", "ProfileService", targetProfile.Name);
 
             if (targetProfile.IsSystemFile)
             {
@@ -221,7 +221,7 @@ namespace FFXIManager.Services
             if (!File.Exists(targetProfile.FilePath))
             {
                 var error = $"Profile file not found: {targetProfile.FilePath}";
-                await _loggingService.LogErrorAsync(error, null, "ProfileService");
+                await _loggingService.LogErrorAsync("Profile file not found: {ProfileFilePath}", null, "ProfileService", targetProfile.FilePath);
                 throw new FileNotFoundException(error);
             }
 
@@ -233,7 +233,7 @@ namespace FFXIManager.Services
                     var backupPath = Path.Combine(PlayOnlineDirectory,
                         $"{config.AutoBackupPrefix}{DateTime.Now.ToString(config.AutoBackupDateTimeFormat)}{config.BackupFileExtension}");
 
-                    await _loggingService.LogDebugAsync($"Creating auto-backup: {backupPath}", "ProfileService");
+                    await _loggingService.LogDebugAsync("Creating auto-backup: {BackupPath}", "ProfileService", backupPath);
                     File.Copy(activeLoginPath, backupPath, true);
 
                     // Clean up old backups asynchronously
@@ -241,7 +241,7 @@ namespace FFXIManager.Services
                 }
 
                 // Copy target profile to active location
-                await _loggingService.LogDebugAsync($"Copying profile from {targetProfile.FilePath} to {activeLoginPath}", "ProfileService");
+                await _loggingService.LogDebugAsync("Copying profile from {SourcePath} to {DestinationPath}", "ProfileService", targetProfile.FilePath, activeLoginPath);
                 await RetryIOAsync(() => { File.Copy(targetProfile.FilePath, activeLoginPath, true); return Task.CompletedTask; });
 
                 // Remember user's choice
@@ -250,11 +250,11 @@ namespace FFXIManager.Services
                 // Invalidate relevant caches
                 await InvalidateProfileCaches();
 
-                await _loggingService.LogInfoAsync($"Successfully swapped to profile: {targetProfile.Name}", "ProfileService");
+                await _loggingService.LogInfoAsync("Successfully swapped to profile: {ProfileName}", "ProfileService", targetProfile.Name);
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync($"Error swapping to profile: {targetProfile.Name}", ex, "ProfileService");
+                await _loggingService.LogErrorAsync("Error swapping to profile: {ProfileName}", ex, "ProfileService", targetProfile.Name);
                 throw new InvalidOperationException($"Error swapping profile: {ex.Message}", ex);
             }
         }
@@ -267,7 +267,7 @@ namespace FFXIManager.Services
             if (string.IsNullOrWhiteSpace(backupName))
                 throw new ArgumentException("Backup name cannot be empty", nameof(backupName));
 
-            await _loggingService.LogInfoAsync($"Creating backup: {backupName}", "ProfileService");
+            await _loggingService.LogInfoAsync("Creating backup: {BackupName}", "ProfileService", backupName);
 
             var config = _configService.ProfileConfig;
             var activeLoginPath = Path.Combine(PlayOnlineDirectory, config.DefaultLoginFileName);
@@ -284,7 +284,7 @@ namespace FFXIManager.Services
             if (File.Exists(backupPath))
             {
                 var error = $"Backup file already exists: {sanitizedName}{config.BackupFileExtension}";
-                await _loggingService.LogWarningAsync(error, "ProfileService");
+                await _loggingService.LogWarningAsync("Backup file already exists: {BackupFileName}", "ProfileService", $"{sanitizedName}{config.BackupFileExtension}");
                 throw new InvalidOperationException(error);
             }
 
@@ -307,12 +307,12 @@ namespace FFXIManager.Services
                     // Invalidate caches since we added a new profile
                     await InvalidateProfileCaches();
 
-                    await _loggingService.LogInfoAsync($"Successfully created backup: {sanitizedName}", "ProfileService");
+                    await _loggingService.LogInfoAsync("Successfully created backup: {BackupName}", "ProfileService", sanitizedName);
                     return profile;
                 }
                 catch (Exception ex)
                 {
-                    await _loggingService.LogErrorAsync($"Error creating backup: {backupName}", ex, "ProfileService");
+                    await _loggingService.LogErrorAsync("Error creating backup: {BackupName}", ex, "ProfileService", backupName);
                     throw new InvalidOperationException($"Error creating backup: {ex.Message}", ex);
                 }
             });
@@ -325,7 +325,7 @@ namespace FFXIManager.Services
         {
             ArgumentNullException.ThrowIfNull(profile);
 
-            await _loggingService.LogInfoAsync($"Deleting profile: {profile.Name}", "ProfileService");
+            await _loggingService.LogInfoAsync("Deleting profile: {ProfileName}", "ProfileService", profile.Name);
 
             var config = _configService.ProfileConfig;
             if (profile.IsSystemFile || config.ExcludedFiles.Contains(Path.GetFileName(profile.FilePath)))
@@ -339,14 +339,14 @@ namespace FFXIManager.Services
             if (profile.IsCurrentlyActive)
             {
                 var error = $"Cannot delete the currently active profile '{profile.Name}'. Please switch to a different profile first.";
-                await _loggingService.LogWarningAsync(error, "ProfileService");
+                await _loggingService.LogWarningAsync("Cannot delete the currently active profile '{ProfileName}'. Please switch to a different profile first.", "ProfileService", profile.Name);
                 throw new InvalidOperationException(error);
             }
 
             if (!File.Exists(profile.FilePath))
             {
                 var error = $"Profile file not found: {profile.FilePath}";
-                await _loggingService.LogWarningAsync(error, "ProfileService");
+                await _loggingService.LogWarningAsync("Profile file not found: {ProfileFilePath}", "ProfileService", profile.FilePath);
                 throw new FileNotFoundException(error);
             }
 
@@ -359,11 +359,11 @@ namespace FFXIManager.Services
                     // Invalidate caches since we removed a profile
                     await InvalidateProfileCaches();
 
-                    await _loggingService.LogInfoAsync($"Successfully deleted profile: {profile.Name}", "ProfileService");
+                    await _loggingService.LogInfoAsync("Successfully deleted profile: {ProfileName}", "ProfileService", profile.Name);
                 }
                 catch (Exception ex)
                 {
-                    await _loggingService.LogErrorAsync($"Error deleting profile: {profile.Name}", ex, "ProfileService");
+                    await _loggingService.LogErrorAsync("Error deleting profile: {ProfileName}", ex, "ProfileService", profile.Name);
                     throw new InvalidOperationException($"Error deleting profile: {ex.Message}", ex);
                 }
             });
@@ -378,7 +378,7 @@ namespace FFXIManager.Services
             if (string.IsNullOrWhiteSpace(newName))
                 throw new ArgumentException("New name cannot be empty", nameof(newName));
 
-            await _loggingService.LogInfoAsync($"Renaming profile from '{profile.Name}' to '{newName}'", "ProfileService");
+            await _loggingService.LogInfoAsync("Renaming profile from '{OldProfileName}' to '{NewProfileName}'", "ProfileService", profile.Name, newName);
 
             if (profile.IsSystemFile)
             {
@@ -394,14 +394,14 @@ namespace FFXIManager.Services
             if (File.Exists(newFilePath))
             {
                 var error = $"A profile with the name '{sanitizedName}' already exists";
-                await _loggingService.LogWarningAsync(error, "ProfileService");
+                await _loggingService.LogWarningAsync("A profile with the name '{ProfileName}' already exists", "ProfileService", sanitizedName);
                 throw new InvalidOperationException(error);
             }
 
             if (!File.Exists(profile.FilePath))
             {
                 var error = $"Profile file not found: {profile.FilePath}";
-                await _loggingService.LogWarningAsync(error, "ProfileService");
+                await _loggingService.LogWarningAsync("Profile file not found: {ProfileFilePath}", "ProfileService", profile.FilePath);
                 throw new FileNotFoundException(error);
             }
 
@@ -422,11 +422,11 @@ namespace FFXIManager.Services
                     // Invalidate caches since we changed a profile
                     await InvalidateProfileCaches();
 
-                    await _loggingService.LogInfoAsync($"Successfully renamed profile to: {sanitizedName}", "ProfileService");
+                    await _loggingService.LogInfoAsync("Successfully renamed profile to: {NewProfileName}", "ProfileService", sanitizedName);
                 }
                 catch (Exception ex)
                 {
-                    await _loggingService.LogErrorAsync($"Error renaming profile from '{profile.Name}' to '{newName}'", ex, "ProfileService");
+                    await _loggingService.LogErrorAsync("Error renaming profile from '{OldProfileName}' to '{NewProfileName}'", ex, "ProfileService", profile.Name, newName);
                     throw new InvalidOperationException($"Error renaming profile: {ex.Message}", ex);
                 }
             });
@@ -464,7 +464,7 @@ namespace FFXIManager.Services
                         }
                         catch
                         {
-                            await _loggingService.LogWarningAsync($"Failed to delete auto-backup: {file.Name}", "ProfileService");
+                            await _loggingService.LogWarningAsync("Failed to delete auto-backup: {BackupFileName}", "ProfileService", file.Name);
                         }
                     }
 
@@ -472,7 +472,7 @@ namespace FFXIManager.Services
                     {
                         // Invalidate auto-backup cache
                         await _cachingService.RemoveAsync(CacheKeys.AutoBackupsList);
-                        await _loggingService.LogInfoAsync($"Cleaned up {deletedCount} old auto-backup files", "ProfileService");
+                        await _loggingService.LogInfoAsync("Cleaned up {DeletedCount} old auto-backup files", "ProfileService", deletedCount);
                     }
                 }
                 catch (Exception ex)
@@ -510,7 +510,7 @@ namespace FFXIManager.Services
 
             if (!exists)
             {
-                _loggingService.LogWarningAsync($"PlayOnline directory validation failed: {PlayOnlineDirectory}", "ProfileService");
+                _loggingService.LogWarningAsync("PlayOnline directory validation failed: {PlayOnlineDirectory}", "ProfileService", PlayOnlineDirectory);
             }
 
             return exists;
@@ -542,7 +542,7 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                _loggingService.LogWarningAsync($"Failed to update last active profile: {ex.Message}", "ProfileService");
+                _loggingService.LogWarningAsync("Failed to update last active profile: {ErrorMessage}", "ProfileService", ex.Message);
             }
         }
 
