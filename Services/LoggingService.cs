@@ -15,10 +15,22 @@ namespace FFXIManager.Services
     /// </summary>
     public interface ILoggingService
     {
+        // Structured logging methods with message templates
+        Task LogInfoAsync(string messageTemplate, params object[] args);
+        Task LogInfoAsync(string messageTemplate, string? category, params object[] args);
+        Task LogWarningAsync(string messageTemplate, params object[] args);
+        Task LogWarningAsync(string messageTemplate, string? category, params object[] args);
+        Task LogErrorAsync(string messageTemplate, Exception? exception = null, params object[] args);
+        Task LogErrorAsync(string messageTemplate, string? category, Exception? exception = null, params object[] args);
+        Task LogDebugAsync(string messageTemplate, params object[] args);
+        Task LogDebugAsync(string messageTemplate, string? category, params object[] args);
+        
+        // Legacy methods for backward compatibility
         Task LogInfoAsync(string message, string? category = null);
         Task LogWarningAsync(string message, string? category = null);
         Task LogErrorAsync(string message, Exception? exception = null, string? category = null);
         Task LogDebugAsync(string message, string? category = null);
+        
         Task<List<LogEntry>> GetRecentLogsAsync(int count = 100);
         Task ClearLogsAsync();
     }
@@ -85,6 +97,23 @@ namespace FFXIManager.Services
             }
         }
 
+        // Structured logging implementations
+        public Task LogInfoAsync(string messageTemplate, params object[] args)
+        {
+            _logger.LogInformation(messageTemplate, args);
+            AddToBuffer(FFXIManagerLogLevel.Info, string.Format(messageTemplate, args), null, null);
+            return Task.CompletedTask;
+        }
+        
+        public Task LogInfoAsync(string messageTemplate, string? category, params object[] args)
+        {
+            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
+            _logger.LogInformation(messageTemplate, args);
+            AddToBuffer(FFXIManagerLogLevel.Info, string.Format(messageTemplate, args), null, category);
+            return Task.CompletedTask;
+        }
+        
+        // Legacy method for backward compatibility
         public Task LogInfoAsync(string message, string? category = null)
         {
             using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
@@ -93,6 +122,22 @@ namespace FFXIManager.Services
             return Task.CompletedTask;
         }
 
+        public Task LogWarningAsync(string messageTemplate, params object[] args)
+        {
+            _logger.LogWarning(messageTemplate, args);
+            AddToBuffer(FFXIManagerLogLevel.Warning, string.Format(messageTemplate, args), null, null);
+            return Task.CompletedTask;
+        }
+        
+        public Task LogWarningAsync(string messageTemplate, string? category, params object[] args)
+        {
+            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
+            _logger.LogWarning(messageTemplate, args);
+            AddToBuffer(FFXIManagerLogLevel.Warning, string.Format(messageTemplate, args), null, category);
+            return Task.CompletedTask;
+        }
+        
+        // Legacy method for backward compatibility
         public Task LogWarningAsync(string message, string? category = null)
         {
             using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
@@ -101,6 +146,22 @@ namespace FFXIManager.Services
             return Task.CompletedTask;
         }
 
+        public Task LogErrorAsync(string messageTemplate, Exception? exception = null, params object[] args)
+        {
+            _logger.LogError(exception, messageTemplate, args);
+            AddToBuffer(FFXIManagerLogLevel.Error, string.Format(messageTemplate, args), exception, null);
+            return Task.CompletedTask;
+        }
+        
+        public Task LogErrorAsync(string messageTemplate, string? category, Exception? exception = null, params object[] args)
+        {
+            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
+            _logger.LogError(exception, messageTemplate, args);
+            AddToBuffer(FFXIManagerLogLevel.Error, string.Format(messageTemplate, args), exception, category);
+            return Task.CompletedTask;
+        }
+        
+        // Legacy method for backward compatibility
         public Task LogErrorAsync(string message, Exception? exception = null, string? category = null)
         {
             using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
@@ -109,6 +170,22 @@ namespace FFXIManager.Services
             return Task.CompletedTask;
         }
 
+        public Task LogDebugAsync(string messageTemplate, params object[] args)
+        {
+            _logger.LogDebug(messageTemplate, args);
+            AddToBuffer(FFXIManagerLogLevel.Debug, string.Format(messageTemplate, args), null, null);
+            return Task.CompletedTask;
+        }
+        
+        public Task LogDebugAsync(string messageTemplate, string? category, params object[] args)
+        {
+            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
+            _logger.LogDebug(messageTemplate, args);
+            AddToBuffer(FFXIManagerLogLevel.Debug, string.Format(messageTemplate, args), null, category);
+            return Task.CompletedTask;
+        }
+        
+        // Legacy method for backward compatibility
         public Task LogDebugAsync(string message, string? category = null)
         {
             using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;

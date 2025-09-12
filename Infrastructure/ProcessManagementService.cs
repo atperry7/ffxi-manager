@@ -283,16 +283,13 @@ namespace FFXIManager.Infrastructure
                     var processInfos = await ConvertToProcessInfoAsync(processes);
                     result.AddRange(processInfos);
                 }
-                catch (Win32Exception ex)
+                catch (Win32Exception)
                 {
-                    // Specific handling for Win32 access issues
-                    await _loggingService.LogDebugAsync($"Win32 access denied for process '{processName}': {ex.Message}",
-                        "ProcessManagementService");
+                    // Win32 access denied is common and expected - don't log in hot path
                 }
                 catch (Exception ex)
                 {
-                    await _loggingService.LogDebugAsync($"Error getting processes for {processName}: {ex.Message}",
-                        "ProcessManagementService");
+                    await _loggingService.LogWarningAsync("Unexpected error getting processes for {ProcessName}: {ErrorMessage}", "ProcessManagementService", processName, ex.Message);
                 }
             }
 
@@ -306,9 +303,9 @@ namespace FFXIManager.Infrastructure
                 var processes = Process.GetProcesses();
                 return await ConvertToProcessInfoAsync(processes);
             }
-            catch (Win32Exception ex)
+            catch (Win32Exception)
             {
-                await _loggingService.LogDebugAsync($"Win32 access issue getting all processes: {ex.Message}", "ProcessManagementService");
+                // Win32 access issues are common - return empty list without logging
                 return new List<ProcessInfo>();
             }
             catch (Exception ex)
@@ -336,13 +333,11 @@ namespace FFXIManager.Infrastructure
             }
             catch (Win32Exception ex)
             {
-                await _loggingService.LogDebugAsync($"Win32 access denied for process {processId}: {ex.Message}",
-                    "ProcessManagementService");
+                await _loggingService.LogDebugAsync("Win32 access denied for process {ProcessId}: {ErrorMessage}", "ProcessManagementService", processId, ex.Message);
             }
             catch (Exception ex)
             {
-                await _loggingService.LogDebugAsync($"Error getting process {processId}: {ex.Message}",
-                    "ProcessManagementService");
+                await _loggingService.LogDebugAsync("Error getting process {ProcessId}: {ErrorMessage}", "ProcessManagementService", processId, ex.Message);
             }
 
             return null;
@@ -363,8 +358,7 @@ namespace FFXIManager.Infrastructure
                         process.WaitForExit(timeoutMs);
                     }, cts.Token);
 
-                    await _loggingService.LogInfoAsync($"Successfully killed process {processId}",
-                        "ProcessManagementService");
+                    await _loggingService.LogInfoAsync("Successfully killed process {ProcessId}", "ProcessManagementService", processId);
                     return true;
                 }
             }
@@ -375,13 +369,11 @@ namespace FFXIManager.Infrastructure
             }
             catch (Win32Exception ex)
             {
-                await _loggingService.LogWarningAsync($"Win32 access denied killing process {processId}: {ex.Message}",
-                    "ProcessManagementService");
+                await _loggingService.LogWarningAsync("Win32 access denied killing process {ProcessId}: {ErrorMessage}", "ProcessManagementService", processId, ex.Message);
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync($"Error killing process {processId}", ex,
-                    "ProcessManagementService");
+                await _loggingService.LogErrorAsync("Error killing process {ProcessId}", "ProcessManagementService", ex, processId);
             }
 
             return false;
@@ -401,8 +393,6 @@ namespace FFXIManager.Infrastructure
             // **OPTIMIZATION**: Quick visibility check - don't activate if already visible and foreground
             if (GetForegroundWindow() == windowHandle && IsWindowVisible(windowHandle))
             {
-                await _loggingService.LogDebugAsync($"Window {windowHandle:X8} already active, skipping activation",
-                    "ProcessManagementService");
                 return true;
             }
 
@@ -415,24 +405,16 @@ namespace FFXIManager.Infrastructure
                     return await PerformOptimizedWindowActivation(windowHandle);
                 }, cts.Token);
 
-                if (success)
-                {
-                    await _loggingService.LogDebugAsync($"Successfully activated window {windowHandle:X8}",
-                        "ProcessManagementService");
-                }
-
                 return success;
             }
             catch (Win32Exception ex)
             {
-                await _loggingService.LogDebugAsync($"Win32 error activating window {windowHandle:X8}: {ex.Message}",
-                    "ProcessManagementService");
+                await _loggingService.LogDebugAsync("Win32 error activating window {WindowHandle:X8}: {ErrorMessage}", "ProcessManagementService", windowHandle, ex.Message);
                 return false;
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync($"Error activating window {windowHandle:X8}", ex,
-                    "ProcessManagementService");
+                await _loggingService.LogErrorAsync("Error activating window {WindowHandle:X8}", "ProcessManagementService", ex, windowHandle);
                 return false;
             }
         }
@@ -494,19 +476,17 @@ namespace FFXIManager.Infrastructure
                     catch (Win32Exception ex)
                     {
                         // Log but don't throw - this is expected for some processes
-                        _ = _loggingService.LogDebugAsync($"Win32 error enumerating windows for process {processId}: {ex.Message}", "ProcessManagementService");
+                        _ = _loggingService.LogDebugAsync("Win32 error enumerating windows for process {ProcessId}: {ErrorMessage}", "ProcessManagementService", processId, ex.Message);
                     }
                 }, cts.Token);
             }
             catch (OperationCanceledException)
             {
-                await _loggingService.LogDebugAsync($"Window enumeration timeout for process {processId}",
-                    "ProcessManagementService");
+                await _loggingService.LogDebugAsync("Window enumeration timeout for process {ProcessId}", "ProcessManagementService", processId);
             }
             catch (Exception ex)
             {
-                await _loggingService.LogDebugAsync($"Error enumerating windows for process {processId}: {ex.Message}",
-                    "ProcessManagementService");
+                await _loggingService.LogDebugAsync("Error enumerating windows for process {ProcessId}: {ErrorMessage}", "ProcessManagementService", processId, ex.Message);
             }
 
             return windows;
@@ -701,7 +681,7 @@ namespace FFXIManager.Infrastructure
                 catch (Exception ex)
                 {
                     // Log but continue with other processes
-                    await _loggingService.LogDebugAsync($"Error converting process {process?.Id}: {ex.Message}", "ProcessManagementService");
+                    await _loggingService.LogDebugAsync("Error converting process {ProcessId}: {ErrorMessage}", "ProcessManagementService", process?.Id ?? -1, ex.Message);
                 }
                 finally
                 {
@@ -867,8 +847,7 @@ namespace FFXIManager.Infrastructure
             }
             catch (Exception ex)
             {
-                await _loggingService.LogDebugAsync($"Error in global monitoring: {ex.Message}",
-                    "ProcessManagementService");
+                await _loggingService.LogDebugAsync("Error in global monitoring: {ErrorMessage}", "ProcessManagementService", ex.Message);
             }
             finally
             {
@@ -908,7 +887,7 @@ namespace FFXIManager.Infrastructure
                     var diag = _settingsService.LoadSettings()?.Diagnostics;
                     if (diag?.EnableDiagnostics == true)
                     {
-                        await _loggingService.LogDebugAsync($"Discovery matched {relevantProcesses.Count} processes (includes={includePatterns.Count}, excludes={excludePatterns.Count})", "ProcessManagementService");
+                        await _loggingService.LogDebugAsync("Discovery matched {ProcessCount} processes (includes={IncludeCount}, excludes={ExcludeCount})", "ProcessManagementService", relevantProcesses.Count, includePatterns.Count, excludePatterns.Count);
                     }
                 }
                 catch { }

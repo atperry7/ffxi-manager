@@ -14,7 +14,7 @@ FFXIManager uses Serilog for high-performance structured logging, integrated wit
 - **File Location**: `%APPDATA%\FFXIManager\logs\`
 - **File Format**: JSON (Compact JSON formatter for structured logs)
 - **Rotation**: Daily with size limits (50MB production, 10MB development)
-- **Retention**: 14 days (production), 7 days (development), 30 days (production env)
+- **Retention**: 7 days (development), 14 days (production base), 30 days (production environment override)
 
 ### Configuration Structure
 ```json

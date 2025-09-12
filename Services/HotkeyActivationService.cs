@@ -197,7 +197,7 @@ namespace FFXIManager.Services
                 if (character == null)
                 {
                     var notMappedResult = HotkeyActivationResult.NotMapped(hotkeyId);
-                    await _loggingService.LogDebugAsync($"No character mapped to hotkey {hotkeyId}", "HotkeyActivationService");
+                    await _loggingService.LogDebugAsync("No character mapped to hotkey {HotkeyId}", "HotkeyActivationService", hotkeyId);
                     
                     // Record metrics and fire event
                     _performanceMonitor.RecordActivation(notMappedResult.ToMetrics());
@@ -215,7 +215,7 @@ namespace FFXIManager.Services
                 // Show toast notification for activation result
                 await ShowActivationToastAsync(result);
                 
-                await _loggingService.LogInfoAsync($"Hotkey {hotkeyId} → {character.DisplayName}: {(result.Success ? "✓" : "✗")} ({result.Duration.TotalMilliseconds:F0}ms)", "HotkeyActivationService");
+                await _loggingService.LogInfoAsync("Hotkey {HotkeyId} → {CharacterName}: {Result} ({DurationMs:F0}ms)", "HotkeyActivationService", hotkeyId, character.DisplayName, result.Success ? "✓" : "✗", result.Duration.TotalMilliseconds);
                 
                 return result;
             }
@@ -231,7 +231,7 @@ namespace FFXIManager.Services
                     Source = ActivationSource.Hotkey
                 };
                 
-                await _loggingService.LogErrorAsync($"Error activating hotkey {hotkeyId}", ex, "HotkeyActivationService");
+                await _loggingService.LogErrorAsync("Error activating hotkey {HotkeyId}", "HotkeyActivationService", ex, hotkeyId);
                 
                 _performanceMonitor.RecordActivation(errorResult.ToMetrics());
                 CharacterActivated?.Invoke(this, errorResult);
@@ -272,7 +272,7 @@ namespace FFXIManager.Services
                     await ShowActivationToastAsync(result);
                 }
                 
-                await _loggingService.LogInfoAsync($"Direct activation: {character.DisplayName}: {(result.Success ? "✓" : "✗")} ({result.Duration.TotalMilliseconds:F0}ms)", "HotkeyActivationService");
+                await _loggingService.LogInfoAsync("Direct activation: {CharacterName}: {Result} ({DurationMs:F0}ms)", "HotkeyActivationService", character.DisplayName, result.Success ? "✓" : "✗", result.Duration.TotalMilliseconds);
                 
                 return result;
             }
@@ -288,7 +288,7 @@ namespace FFXIManager.Services
                     Source = ActivationSource.UI
                 };
                 
-                await _loggingService.LogErrorAsync($"Error activating character {character.DisplayName}", ex, "HotkeyActivationService");
+                await _loggingService.LogErrorAsync("Error activating character {CharacterName}", "HotkeyActivationService", ex, character.DisplayName);
                 
                 _performanceMonitor.RecordActivation(errorResult.ToMetrics());
                 CharacterActivated?.Invoke(this, errorResult);
@@ -405,7 +405,7 @@ namespace FFXIManager.Services
                         }
                         
                         await _notificationService.ShowToastAsync(positionText, NotificationType.Success);
-                        await _loggingService.LogInfoAsync($"Cycled to {positionText}", "HotkeyActivationService");
+                        await _loggingService.LogInfoAsync("Cycled to {PositionText}", "HotkeyActivationService", positionText);
                     });
                     
                     stopwatch.Stop();
@@ -473,7 +473,7 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync($"Error in reverse hotkey lookup for {character.DisplayName}", ex, "HotkeyActivationService");
+                await _loggingService.LogErrorAsync("Error in reverse hotkey lookup for {CharacterName}", ex, "HotkeyActivationService", character.DisplayName);
                 return null;
             }
         }
@@ -551,14 +551,14 @@ namespace FFXIManager.Services
                 catch (ArgumentException ex)
                 {
                     // Invalid window handle - don't retry
-                    await _loggingService.LogWarningAsync($"Invalid window handle for {character.DisplayName} - not retrying", "HotkeyActivationService");
+                    await _loggingService.LogWarningAsync("Invalid window handle for {CharacterName} - not retrying", "HotkeyActivationService", character.DisplayName);
                     lastException = ex;
                     break;
                 }
                 catch (System.ComponentModel.Win32Exception win32Ex) when (win32Ex.NativeErrorCode == 5)
                 {
                     // Access denied - don't retry
-                    await _loggingService.LogWarningAsync($"Access denied activating {character.DisplayName} - not retrying", "HotkeyActivationService");
+                    await _loggingService.LogWarningAsync("Access denied activating {CharacterName} - not retrying", "HotkeyActivationService", character.DisplayName);
                     lastException = win32Ex;
                     break;
                 }
@@ -567,7 +567,7 @@ namespace FFXIManager.Services
                     // Transient error - retry with exponential backoff
                     retryCount++;
                     var delay = baseDelayMs * (int)Math.Pow(2, attempt - 1);
-                    await _loggingService.LogDebugAsync($"Activation attempt {attempt} failed for {character.DisplayName}, retrying in {delay}ms: {ex.Message}", "HotkeyActivationService");
+                    await _loggingService.LogDebugAsync("Activation attempt {Attempt} failed for {CharacterName}, retrying in {DelayMs}ms: {ErrorMessage}", "HotkeyActivationService", attempt, character.DisplayName, delay, ex.Message);
                     await Task.Delay(delay, cancellationToken);
                     lastException = ex;
                 }
@@ -638,7 +638,7 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync($"Error showing activation toast: {ex.Message}", ex, "HotkeyActivationService");
+                await _loggingService.LogErrorAsync("Error showing activation toast: {ErrorMessage}", ex, "HotkeyActivationService", ex.Message);
             }
         }
 
