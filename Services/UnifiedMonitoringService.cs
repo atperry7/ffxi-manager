@@ -77,8 +77,8 @@ namespace FFXIManager.Services
             {
                 _profiles[profile.Id] = profile;
 
-                _ = _logging.LogInfoAsync($"Registered monitor '{profile.Name}' (ID: {profile.Id}) for processes: {string.Join(", ", profile.ProcessNames)}",
-                    "UnifiedMonitoringService");
+                _ = _logging.LogInfoAsync("Registered monitor '{MonitorName}' (ID: {MonitorId}) for processes: {ProcessNames}",
+                    "UnifiedMonitoringService", profile.Name, profile.Id, string.Join(", ", profile.ProcessNames));
 
                 // If monitoring is active, scan for existing processes
                 if (_isMonitoring)
@@ -114,7 +114,7 @@ namespace FFXIManager.Services
                         _processes.Remove(pid);
                     }
 
-                    _ = _logging.LogInfoAsync($"Unregistered monitor {monitorId}", "UnifiedMonitoringService");
+                    _ = _logging.LogInfoAsync("Unregistered monitor {MonitorId}", "UnifiedMonitoringService", monitorId);
                 }
             }
         }
@@ -130,7 +130,7 @@ namespace FFXIManager.Services
                     profile.Id = monitorId;
                     _profiles[monitorId] = profile;
 
-                    _ = _logging.LogInfoAsync($"Updated monitor profile {monitorId}", "UnifiedMonitoringService");
+                    _ = _logging.LogInfoAsync("Updated monitor profile {MonitorId}", "UnifiedMonitoringService", monitorId);
 
                     // Rescan for this profile
                     if (_isMonitoring)
@@ -242,7 +242,7 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                _ = _logging.LogWarningAsync($"Failed to start WMI watchers: {ex.Message}", "UnifiedMonitoringService");
+                _ = _logging.LogWarningAsync("Failed to start WMI watchers: {ErrorMessage}", "UnifiedMonitoringService", ex.Message);
             }
         }
 
@@ -270,7 +270,7 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                _ = _logging.LogDebugAsync($"Error stopping WMI watchers: {ex.Message}", "UnifiedMonitoringService");
+                _ = _logging.LogDebugAsync("Error stopping WMI watchers: {ErrorMessage}", "UnifiedMonitoringService", ex.Message);
             }
         }
 
@@ -316,16 +316,16 @@ namespace FFXIManager.Services
                         }
                         catch (Exception ex)
                         {
-                            await _logging.LogDebugAsync($"Error handling process creation: {ex.Message}",
-                                "UnifiedMonitoringService");
+                            await _logging.LogDebugAsync("Error handling process creation: {ErrorMessage}",
+                                "UnifiedMonitoringService", ex.Message);
                         }
                     });
                 }
             }
             catch (Exception ex)
             {
-                _ = _logging.LogDebugAsync($"Exception in WMI process creation handler: {ex.Message}",
-                    "UnifiedMonitoringService");
+                _ = _logging.LogDebugAsync("Exception in WMI process creation handler: {ErrorMessage}",
+                    "UnifiedMonitoringService", ex.Message);
             }
         }
 
@@ -377,13 +377,13 @@ namespace FFXIManager.Services
                     GlobalProcessRemoved?.Invoke(this, pid);
                 });
 
-                _ = _logging.LogInfoAsync($"Process terminated: {process.ProcessName} (PID: {pid})",
-                    "UnifiedMonitoringService");
+                _ = _logging.LogInfoAsync("Process terminated: {ProcessName} (PID: {ProcessId})",
+                    "UnifiedMonitoringService", process.ProcessName, pid);
             }
             catch (Exception ex)
             {
-                _ = _logging.LogDebugAsync($"Exception in WMI process deletion handler: {ex.Message}",
-                    "UnifiedMonitoringService");
+                _ = _logging.LogDebugAsync("Exception in WMI process deletion handler: {ErrorMessage}",
+                    "UnifiedMonitoringService", ex.Message);
             }
         }
 
@@ -499,7 +499,7 @@ namespace FFXIManager.Services
                 }
                 catch (Exception ex)
                 {
-                    await _logging.LogErrorAsync($"Error handling window title change for PID {e.ProcessId}", ex, "UnifiedMonitoringService");
+                    await _logging.LogErrorAsync("Error handling window title change for PID {ProcessId}", ex, "UnifiedMonitoringService", e.ProcessId);
                 }
             });
         }
@@ -516,12 +516,12 @@ namespace FFXIManager.Services
             {
                 try
                 {
-                    await _logging.LogDebugAsync($"[EVENT-DRIVEN] Window created: PID {e.ProcessId}, '{e.WindowTitle}' (Handle: 0x{e.WindowHandle.ToInt64():X})", "UnifiedMonitoringService");
+                    await _logging.LogDebugAsync("[EVENT-DRIVEN] Window created: PID {ProcessId}, '{WindowTitle}' (Handle: 0x{WindowHandle:X})", "UnifiedMonitoringService", e.ProcessId, e.WindowTitle, e.WindowHandle.ToInt64());
                     // Window creation is handled by title change events
                 }
                 catch (Exception ex)
                 {
-                    await _logging.LogErrorAsync($"Error handling window creation for PID {e.ProcessId}", ex, "UnifiedMonitoringService");
+                    await _logging.LogErrorAsync("Error handling window creation for PID {ProcessId}", ex, "UnifiedMonitoringService", e.ProcessId);
                 }
             });
         }
@@ -581,7 +581,7 @@ namespace FFXIManager.Services
                 }
                 catch (Exception ex)
                 {
-                    await _logging.LogErrorAsync($"Error handling window destruction for PID {e.ProcessId}", ex, "UnifiedMonitoringService");
+                    await _logging.LogErrorAsync("Error handling window destruction for PID {ProcessId}", ex, "UnifiedMonitoringService", e.ProcessId);
                 }
             });
         }
@@ -643,8 +643,8 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                await _logging.LogDebugAsync($"Error scanning for profile {profileId}: {ex.Message}",
-                    "UnifiedMonitoringService");
+                await _logging.LogDebugAsync("Error scanning for profile {ProfileId}: {ErrorMessage}",
+                    "UnifiedMonitoringService", profileId, ex.Message);
             }
         }
 
@@ -723,8 +723,8 @@ namespace FFXIManager.Services
             if (isNew)
             {
                 FireProcessDetected(monitoredProcess, profile);
-                await _logging.LogInfoAsync($"Process detected: {processInfo.ProcessName} (PID: {processInfo.ProcessId}) for monitor '{profile.Name}'",
-                    "UnifiedMonitoringService");
+                await _logging.LogInfoAsync("Process detected: {ProcessName} (PID: {ProcessId}) for monitor '{MonitorName}'",
+                    "UnifiedMonitoringService", processInfo.ProcessName, processInfo.ProcessId, profile.Name);
             }
         }
 
@@ -790,8 +790,8 @@ namespace FFXIManager.Services
                                 GlobalProcessRemoved?.Invoke(this, pid);
                             });
 
-                            await _logging.LogInfoAsync($"Process terminated (periodic scan): {process.ProcessName} (PID: {pid})",
-                                "UnifiedMonitoringService");
+                            await _logging.LogInfoAsync("Process terminated (periodic scan): {ProcessName} (PID: {ProcessId})",
+                                "UnifiedMonitoringService", process.ProcessName, pid);
                         }
                     }
 
@@ -800,8 +800,8 @@ namespace FFXIManager.Services
                 }
                 catch (Exception ex)
                 {
-                    await _logging.LogDebugAsync($"Error in periodic scan: {ex.Message}",
-                        "UnifiedMonitoringService");
+                    await _logging.LogDebugAsync("Error in periodic scan: {ErrorMessage}",
+                        "UnifiedMonitoringService", ex.Message);
                 }
             });
         }
