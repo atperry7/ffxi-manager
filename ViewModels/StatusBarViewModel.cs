@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -6,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using FFXIManager.Infrastructure;
 using FFXIManager.Services;
+using FFXIManager.Models;
 using FFXIManager.ViewModels.Base;
 
 namespace FFXIManager.ViewModels
@@ -28,6 +30,10 @@ namespace FFXIManager.ViewModels
         private bool _isLoading;
         private bool _disposed;
         private string _appVersion = string.Empty;
+        private NotificationType _currentMessageType = NotificationType.Info;
+        private bool _isHistoryOpen;
+
+        public ObservableCollection<StatusMessageEntry> RecentMessages { get; } = new();
 
         public StatusBarViewModel(
             IStatusMessageService statusService,
@@ -42,6 +48,13 @@ namespace FFXIManager.ViewModels
 
             // Subscribe to status message changes
             _statusService.MessageChanged += OnStatusMessageChanged;
+            _statusService.MessageEnqueued += OnMessageEnqueued;
+
+            // Seed history
+            foreach (var entry in _statusService.History)
+            {
+                RecentMessages.Add(entry);
+            }
 
             // Set up refresh timer for contextual info
             _refreshTimer = new DispatcherTimer
@@ -103,6 +116,18 @@ namespace FFXIManager.ViewModels
 
         public string AppVersion => _appVersion;
 
+        public bool IsHistoryOpen
+        {
+            get => _isHistoryOpen;
+            set => SetProperty(ref _isHistoryOpen, value);
+        }
+
+        public NotificationType CurrentMessageType
+        {
+            get => _currentMessageType;
+            set => SetProperty(ref _currentMessageType, value);
+        }
+
         private void OnStatusMessageChanged(object? sender, string message)
         {
             StatusMessage = string.IsNullOrWhiteSpace(message) ? "Ready" : message;
@@ -159,6 +184,17 @@ namespace FFXIManager.ViewModels
             }
         }
 
+        private void OnMessageEnqueued(object? sender, StatusMessageEntry entry)
+        {
+            RecentMessages.Add(entry);
+            CurrentMessageType = entry.Type;
+            // Trim to a reasonable number for the UI (e.g., last 50)
+            while (RecentMessages.Count > _statusService.MaxHistory)
+            {
+                RecentMessages.RemoveAt(0);
+            }
+        }
+
         private static string? NormalizeVersion(string? v)
         {
             if (string.IsNullOrWhiteSpace(v)) return v;
@@ -184,6 +220,7 @@ namespace FFXIManager.ViewModels
 
             _refreshTimer?.Stop();
             _statusService.MessageChanged -= OnStatusMessageChanged;
+            _statusService.MessageEnqueued -= OnMessageEnqueued;
 
             GC.SuppressFinalize(this);
         }

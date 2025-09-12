@@ -101,7 +101,7 @@ namespace FFXIManager.Services
         public Task LogInfoAsync(string messageTemplate, params object[] args)
         {
             _logger.LogInformation(messageTemplate, args);
-            AddToBuffer(FFXIManagerLogLevel.Info, string.Format(messageTemplate, args), null, null);
+            AddToBuffer(FFXIManagerLogLevel.Info, SafeFormat(messageTemplate, args), null, null);
             return Task.CompletedTask;
         }
         
@@ -109,7 +109,7 @@ namespace FFXIManager.Services
         {
             using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
             _logger.LogInformation(messageTemplate, args);
-            AddToBuffer(FFXIManagerLogLevel.Info, string.Format(messageTemplate, args), null, category);
+            AddToBuffer(FFXIManagerLogLevel.Info, SafeFormat(messageTemplate, args), null, category);
             return Task.CompletedTask;
         }
         
@@ -125,7 +125,7 @@ namespace FFXIManager.Services
         public Task LogWarningAsync(string messageTemplate, params object[] args)
         {
             _logger.LogWarning(messageTemplate, args);
-            AddToBuffer(FFXIManagerLogLevel.Warning, string.Format(messageTemplate, args), null, null);
+            AddToBuffer(FFXIManagerLogLevel.Warning, SafeFormat(messageTemplate, args), null, null);
             return Task.CompletedTask;
         }
         
@@ -133,7 +133,7 @@ namespace FFXIManager.Services
         {
             using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
             _logger.LogWarning(messageTemplate, args);
-            AddToBuffer(FFXIManagerLogLevel.Warning, string.Format(messageTemplate, args), null, category);
+            AddToBuffer(FFXIManagerLogLevel.Warning, SafeFormat(messageTemplate, args), null, category);
             return Task.CompletedTask;
         }
         
@@ -149,7 +149,7 @@ namespace FFXIManager.Services
         public Task LogErrorAsync(string messageTemplate, Exception? exception = null, params object[] args)
         {
             _logger.LogError(exception, messageTemplate, args);
-            AddToBuffer(FFXIManagerLogLevel.Error, string.Format(messageTemplate, args), exception, null);
+            AddToBuffer(FFXIManagerLogLevel.Error, SafeFormat(messageTemplate, args), exception, null);
             return Task.CompletedTask;
         }
         
@@ -157,7 +157,7 @@ namespace FFXIManager.Services
         {
             using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
             _logger.LogError(exception, messageTemplate, args);
-            AddToBuffer(FFXIManagerLogLevel.Error, string.Format(messageTemplate, args), exception, category);
+            AddToBuffer(FFXIManagerLogLevel.Error, SafeFormat(messageTemplate, args), exception, category);
             return Task.CompletedTask;
         }
         
@@ -173,7 +173,7 @@ namespace FFXIManager.Services
         public Task LogDebugAsync(string messageTemplate, params object[] args)
         {
             _logger.LogDebug(messageTemplate, args);
-            AddToBuffer(FFXIManagerLogLevel.Debug, string.Format(messageTemplate, args), null, null);
+            AddToBuffer(FFXIManagerLogLevel.Debug, SafeFormat(messageTemplate, args), null, null);
             return Task.CompletedTask;
         }
         
@@ -181,8 +181,31 @@ namespace FFXIManager.Services
         {
             using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
             _logger.LogDebug(messageTemplate, args);
-            AddToBuffer(FFXIManagerLogLevel.Debug, string.Format(messageTemplate, args), null, category);
+            AddToBuffer(FFXIManagerLogLevel.Debug, SafeFormat(messageTemplate, args), null, category);
             return Task.CompletedTask;
+        }
+
+        private static string SafeFormat(string messageTemplate, object[] args)
+        {
+            if (args == null || args.Length == 0) return messageTemplate;
+            try
+            {
+                return string.Format(messageTemplate, args);
+            }
+            catch (FormatException)
+            {
+                // Fallback for named templates like "Processed {Count} items";
+                // append args for readability without throwing.
+                try
+                {
+                    var renderedArgs = string.Join(", ", args.Select(a => a?.ToString() ?? "null"));
+                    return $"{messageTemplate} | Args: {renderedArgs}";
+                }
+                catch
+                {
+                    return messageTemplate;
+                }
+            }
         }
         
         // Legacy method for backward compatibility

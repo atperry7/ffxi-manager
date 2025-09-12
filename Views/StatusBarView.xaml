@@ -1,9 +1,29 @@
 <UserControl x:Class="FFXIManager.Views.StatusBarView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:FFXIManager.Converters">
     
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
+        <converters:NotificationTypeToBrushConverter x:Key="NotificationTypeToBrush"/>
+        <converters:NotificationTypeToIconConverter x:Key="NotificationTypeToIcon"/>
+        
+        <!-- A toggle button style that looks like plain text -->
+        <Style x:Key="TextToggle" TargetType="{x:Type ToggleButton}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                        <ContentPresenter/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
     
     <Border Background="{DynamicResource HeaderBackgroundBrush}" Padding="6">
@@ -11,7 +31,6 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
@@ -46,14 +65,60 @@
                 </Border>
             </StackPanel>
             
-            <!-- Status Message -->
-            <DockPanel Grid.Column="1" VerticalAlignment="Center">
-                <TextBlock Text="{Binding StatusMessage}" 
-                           Foreground="White"
-                           VerticalAlignment="Center"
-                           FontSize="11"
-                           TextTrimming="CharacterEllipsis"/>
-            </DockPanel>
+            <!-- Status Message acts as the toggle; click to open history -->
+            <Grid Grid.Column="1" VerticalAlignment="Center">
+                <ToggleButton x:Name="StatusToggle"
+                              Style="{StaticResource TextToggle}"
+                              IsChecked="{Binding IsHistoryOpen, Mode=TwoWay}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding CurrentMessageType, Converter={StaticResource NotificationTypeToIcon}}"
+                                   Foreground="{Binding CurrentMessageType, Converter={StaticResource NotificationTypeToBrush}}"
+                                   Margin="0,0,6,0"/>
+                        <TextBlock Text="{Binding StatusMessage}"
+                                   Foreground="{Binding CurrentMessageType, Converter={StaticResource NotificationTypeToBrush}}"
+                                   VerticalAlignment="Center"
+                                   FontSize="11"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text=" ▼" Foreground="#C1C7CD"/>
+                    </StackPanel>
+                </ToggleButton>
+
+                <Popup PlacementTarget="{Binding ElementName=StatusToggle}"
+                       Placement="Top"
+                       AllowsTransparency="True"
+                       StaysOpen="False"
+                       IsOpen="{Binding IsChecked, ElementName=StatusToggle}">
+                    <Border Background="{DynamicResource HeaderBackgroundBrush}"
+                            BorderBrush="#4A5568" BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="8" MinWidth="420">
+                        <StackPanel>
+                            <TextBlock Text="Recent Messages" FontWeight="SemiBold" Foreground="#C1C7CD"/>
+                            <Separator Margin="0,4,0,6"/>
+                            <ScrollViewer MaxHeight="240">
+                                <ItemsControl ItemsSource="{Binding RecentMessages}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" Margin="0,2">
+                                                <TextBlock Text="[" Foreground="#9AA0A6"/>
+                                                <TextBlock Text="{Binding Timestamp, StringFormat=HH:mm:ss}" Foreground="#9AA0A6"/>
+                                                <TextBlock Text="] " Foreground="#9AA0A6"/>
+                                                <TextBlock Text="{Binding Type, Converter={StaticResource NotificationTypeToIcon}}"
+                                                           Foreground="{Binding Type, Converter={StaticResource NotificationTypeToBrush}}"
+                                                           Margin="2,0"/>
+                                                <TextBlock Text=": " Foreground="#C1C7CD"/>
+                                                <TextBlock Text="{Binding Message}"
+                                                           Foreground="{Binding Type, Converter={StaticResource NotificationTypeToBrush}}"
+                                                           TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+                </Popup>
+            </Grid>
             
             <!-- Backup Info -->
             <Border Grid.Column="2" BorderBrush="#4A5568" BorderThickness="1,0,0,0"
@@ -73,6 +138,8 @@
                            VerticalAlignment="Center"
                            ToolTip="Application Version"/>
             </Border>
+
+            <!-- Removed separate Message History column; integrated into column 1 -->
         </Grid>
     </Border>
 </UserControl>
