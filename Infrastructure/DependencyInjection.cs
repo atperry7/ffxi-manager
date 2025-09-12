@@ -56,7 +56,7 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<IProfileOperationsService, ProfileOperationsService>();
 
             // UI Commanding / Dialogs
-            services.AddSingleton<UICommandService>();
+            services.AddSingleton<IUICommandService, UICommandService>();
             services.AddSingleton<IDialogService, DialogService>();
 
             // ViewModels and Views
