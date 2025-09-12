@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
@@ -12,6 +13,7 @@ using Serilog.Extensions.Logging;
 using Serilog.Extensions.Hosting;
 using FFXIManager.Infrastructure;
 using FFXIManager.Models;
+using FFXIManager.Models.Settings;
 using FFXIManager.Services;
 
 namespace FFXIManager
@@ -48,9 +50,35 @@ namespace FFXIManager
                 var logDirectory = Path.Combine(appDataPath, "FFXIManager", "logs");
                 Directory.CreateDirectory(logDirectory);
 
-                // Configure bootstrap logger with fallback to console
-                var logPath = Path.Combine(logDirectory, "log-.json");
-                
+                // Build configuration from appsettings files
+                var configuration = new ConfigurationBuilder()
+                    .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
+                    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                    .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? "Production"}.json", optional: true, reloadOnChange: true)
+                    .AddEnvironmentVariables()
+                    .Build();
+
+                // Check if Serilog section exists in configuration
+                var serilogSection = configuration.GetSection("Serilog");
+                if (serilogSection.Exists() && serilogSection.GetChildren().Any())
+                {
+                    // Use Serilog configuration from appsettings
+                    Log.Logger = new LoggerConfiguration()
+                        .ReadFrom.Configuration(configuration)
+                        .CreateLogger();
+                    
+                    Log.Information("Bootstrap Serilog logger configured from appsettings");
+                }
+                else
+                {
+                    // Fallback: Use legacy DiagnosticsOptions for backward compatibility
+                    Log.Logger = CreateLoggerFromDiagnosticsOptions(logDirectory);
+                    Log.Information("Bootstrap Serilog logger configured from legacy DiagnosticsOptions (fallback mode)");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Fallback to minimal console-only logger if configuration fails
                 Log.Logger = new LoggerConfiguration()
                     .MinimumLevel.Information()
                     .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
@@ -58,30 +86,89 @@ namespace FFXIManager
                     .Enrich.FromLogContext()
                     .Enrich.WithMachineName()
                     .Enrich.WithThreadId()
-                    .Enrich.WithProperty("Application", "FFXIManager")
-                    .WriteTo.Console(
-                        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
-                    .WriteTo.Async(a => a.File(
-                        new Serilog.Formatting.Compact.CompactJsonFormatter(),
-                        logPath,
-                        rollingInterval: RollingInterval.Day,
-                        rollOnFileSizeLimit: true,
-                        fileSizeLimitBytes: 50 * 1024 * 1024, // 50MB
-                        retainedFileCountLimit: 14,
-                        shared: true))
+                    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
                     .CreateLogger();
+                    
+                Log.Warning(ex, "Failed to configure logger from appsettings, using fallback configuration");
+            }
+        }
+
+        /// <summary>
+        /// Creates a Serilog logger based on legacy DiagnosticsOptions for backward compatibility
+        /// </summary>
+        private static ILogger CreateLoggerFromDiagnosticsOptions(string logDirectory)
+        {
+            try
+            {
+                // Try to load settings to get DiagnosticsOptions
+                var settingsFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FFXIManager", "settings.json");
+                DiagnosticsOptions? diagnostics = null;
                 
-                Log.Information("Bootstrap Serilog logger configured successfully");
+                if (File.Exists(settingsFilePath))
+                {
+                    try
+                    {
+                        var settingsJson = File.ReadAllText(settingsFilePath);
+                        var settings = System.Text.Json.JsonSerializer.Deserialize<Models.Settings.ApplicationSettings>(settingsJson);
+                        diagnostics = settings?.Diagnostics;
+                    }
+                    catch
+                    {
+                        // Ignore settings loading errors, use defaults
+                    }
+                }
+
+                // Apply DiagnosticsOptions mapping
+                diagnostics ??= new Models.Settings.DiagnosticsOptions();
+                
+                var logConfig = new LoggerConfiguration()
+                    .Enrich.FromLogContext()
+                    .Enrich.WithMachineName()
+                    .Enrich.WithThreadId()
+                    .Enrich.WithProperty("Application", "FFXIManager");
+
+                // Map EnableDiagnostics and VerboseLogging to minimum level
+                if (!diagnostics.EnableDiagnostics)
+                {
+                    logConfig.MinimumLevel.Warning();
+                }
+                else if (diagnostics.VerboseLogging)
+                {
+                    logConfig.MinimumLevel.Debug();
+                }
+                else
+                {
+                    logConfig.MinimumLevel.Information();
+                }
+                
+                // Always suppress noisy Microsoft/System logs
+                logConfig.MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning);
+                logConfig.MinimumLevel.Override("System", Serilog.Events.LogEventLevel.Warning);
+
+                // Add console sink
+                logConfig.WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}");
+
+                // Add async file sink
+                var logPath = Path.Combine(logDirectory, "log-.json");
+                logConfig.WriteTo.Async(a => a.File(
+                    new Serilog.Formatting.Compact.CompactJsonFormatter(),
+                    logPath,
+                    rollingInterval: RollingInterval.Day,
+                    rollOnFileSizeLimit: true,
+                    fileSizeLimitBytes: 50 * 1024 * 1024, // 50MB
+                    retainedFileCountLimit: 14,
+                    shared: true));
+
+                return logConfig.CreateLogger();
             }
             catch (Exception ex)
             {
-                // Fallback to minimal console-only logger if file setup fails
-                Log.Logger = new LoggerConfiguration()
+                // Ultimate fallback - basic console logger
+                Log.Warning(ex, "Failed to create logger from DiagnosticsOptions, using minimal fallback");
+                return new LoggerConfiguration()
                     .MinimumLevel.Information()
                     .WriteTo.Console()
                     .CreateLogger();
-                    
-                Log.Warning(ex, "Failed to configure full bootstrap logger, using console fallback");
             }
         }
 
