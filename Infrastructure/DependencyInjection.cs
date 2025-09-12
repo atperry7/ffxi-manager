@@ -1,5 +1,7 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Serilog;
 using FFXIManager.Services;
 using FFXIManager.Configuration;
 using FFXIManager.ViewModels;
@@ -12,6 +14,14 @@ namespace FFXIManager.Infrastructure
     {
         public static IServiceCollection AddAppServices(this IServiceCollection services)
         {
+            // Configure Serilog as the logging provider
+            services.AddLogging(builder =>
+            {
+                builder.ClearProviders();
+                builder.AddSerilog(dispose: true);
+                builder.SetMinimumLevel(LogLevel.Debug); // Allow all levels, let Serilog filter
+            });
+
             // Core services
             services.AddSingleton<ISettingsService, SettingsService>();
             services.AddSingleton<IConfigurationService, ConfigurationService>();

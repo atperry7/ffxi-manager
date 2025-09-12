@@ -1,11 +1,15 @@
 using System;
 using System.Configuration;
 using System.Data;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog;
+using Serilog.Extensions.Logging;
+using Serilog.Extensions.Hosting;
 using FFXIManager.Infrastructure;
 using FFXIManager.Models;
 using FFXIManager.Services;
@@ -23,11 +27,73 @@ namespace FFXIManager
 
         public static IServiceProvider Services => ((App)Current)._host!.Services;
 
+        /// <summary>
+        /// Configure bootstrap Serilog logging before DI container is built
+        /// </summary>
+        private static void ConfigureBootstrapLogging()
+        {
+            try
+            {
+                // Enable self-diagnostics to a fallback file
+                var tempPath = Path.GetTempPath();
+                var selfLogPath = Path.Combine(tempPath, "FFXIManager-serilog-selflog.txt");
+                Serilog.Debugging.SelfLog.Enable(msg => 
+                {
+                    try { File.AppendAllText(selfLogPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {msg}{Environment.NewLine}"); }
+                    catch { /* Ignore self-log failures */ }
+                });
+
+                // Create logs directory
+                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var logDirectory = Path.Combine(appDataPath, "FFXIManager", "logs");
+                Directory.CreateDirectory(logDirectory);
+
+                // Configure bootstrap logger with fallback to console
+                var logPath = Path.Combine(logDirectory, "log-.json");
+                
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.Information()
+                    .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
+                    .MinimumLevel.Override("System", Serilog.Events.LogEventLevel.Warning)
+                    .Enrich.FromLogContext()
+                    .Enrich.WithMachineName()
+                    .Enrich.WithThreadId()
+                    .Enrich.WithProperty("Application", "FFXIManager")
+                    .WriteTo.Console(
+                        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+                    .WriteTo.Async(a => a.File(
+                        new Serilog.Formatting.Compact.CompactJsonFormatter(),
+                        logPath,
+                        rollingInterval: RollingInterval.Day,
+                        rollOnFileSizeLimit: true,
+                        fileSizeLimitBytes: 50 * 1024 * 1024, // 50MB
+                        retainedFileCountLimit: 14,
+                        shared: true))
+                    .CreateLogger();
+                
+                Log.Information("Bootstrap Serilog logger configured successfully");
+            }
+            catch (Exception ex)
+            {
+                // Fallback to minimal console-only logger if file setup fails
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.Information()
+                    .WriteTo.Console()
+                    .CreateLogger();
+                    
+                Log.Warning(ex, "Failed to configure full bootstrap logger, using console fallback");
+            }
+        }
+
         protected override async void OnStartup(StartupEventArgs e)
         {
+            // Configure early bootstrap Serilog logger
+            ConfigureBootstrapLogging();
+            
             base.OnStartup(e);
 
             _host = Host.CreateDefaultBuilder()
+                .UseSerilog() // Use Serilog as the logging provider
                 .ConfigureServices(services => services.AddAppServices())
                 .Build();
 
@@ -177,6 +243,14 @@ namespace FFXIManager
             catch { }
 
             _host?.Dispose();
+            
+            // Ensure all logs are flushed before exit
+            try
+            {
+                Log.CloseAndFlush();
+            }
+            catch { }
+            
             base.OnExit(e);
         }
     }
