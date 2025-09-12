@@ -17,16 +17,19 @@ namespace FFXIManager.ViewModels
         private readonly IExternalApplicationService _applicationService;
         private readonly IStatusMessageService _statusService;
         private readonly ILoggingService _loggingService;
+        private readonly IUiDispatcher _uiDispatcher;
         private bool _isBusy;
 
         public ApplicationManagementViewModel(
             IExternalApplicationService applicationService,
             IStatusMessageService statusService,
-            ILoggingService loggingService)
+            ILoggingService loggingService,
+            IUiDispatcher uiDispatcher)
         {
             _applicationService = applicationService ?? throw new ArgumentNullException(nameof(applicationService));
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
 
             ExternalApplications = new ObservableCollection<ExternalApplication>();
 
@@ -90,7 +93,7 @@ namespace FFXIManager.ViewModels
                 var applications = await _applicationService.GetApplicationsAsync();
                 await _applicationService.RefreshApplicationStatusAsync();
 
-                await ServiceLocator.UiDispatcher.InvokeAsync(() =>
+                await _uiDispatcher.InvokeAsync(() =>
                 {
                     ExternalApplications.Clear();
                     foreach (var app in applications)
@@ -209,7 +212,7 @@ namespace FFXIManager.ViewModels
                 _statusService.SetMessage($"Opening configuration for {application.Name}...");
 
                 // Create and show dialog on UI thread
-                var dialogResult = await ServiceLocator.UiDispatcher.InvokeAsync(() =>
+                var dialogResult = await _uiDispatcher.InvokeAsync(() =>
                 {
                     try
                     {
@@ -302,7 +305,7 @@ namespace FFXIManager.ViewModels
                 };
 
                 // Create and show dialog on UI thread
-                var dialogResult = await ServiceLocator.UiDispatcher.InvokeAsync(() =>
+            var dialogResult = await _uiDispatcher.InvokeAsync(() =>
                 {
                     try
                     {
@@ -347,7 +350,7 @@ namespace FFXIManager.ViewModels
         private void OnApplicationStatusChanged(object? sender, ExternalApplication application)
         {
             // Update UI on status changes - this runs on a background thread
-            ServiceLocator.UiDispatcher.BeginInvoke(() =>
+            _uiDispatcher.BeginInvoke(() =>
             {
                 // Force command CanExecute reevaluation when application status changes
                 ((RelayCommandWithParameter<ExternalApplication>)KillApplicationCommand).RaiseCanExecuteChanged();

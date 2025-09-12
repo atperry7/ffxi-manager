@@ -187,7 +187,7 @@ For additional help, consult the Documentation folder or open an issue in the re
 
 ## Contributing
 
-We welcome contributions to improve FFXI Manager! Please feel free to:
+We welcome contributions to improve FFXI Manager! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for workflow and releases, and [AGENTS.md](./AGENTS.md) for coding standards and tests. Please feel free to:
 - Report bugs and request features via GitHub Issues
 - Submit pull requests for bug fixes and enhancements
 - Share feedback and suggestions for improvements

@@ -1,4 +1,4 @@
-﻿using FFXIManager.Configuration;
+using FFXIManager.Configuration;
 using FFXIManager.Infrastructure;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
@@ -14,22 +14,6 @@ namespace FFXIManager.ViewModels
         private readonly IStatusMessageService _statusService;
         private readonly IConfigurationService _configService;
 
-        public MainViewModel() : this(
-            ServiceLocator.SettingsService,
-            ServiceLocator.ProfileService,
-            ServiceLocator.ProfileOperationsService,
-            ServiceLocator.StatusMessageService,
-            new UICommandService(),
-            new DialogService(),
-            ServiceLocator.ConfigurationService,
-            ServiceLocator.ValidationService,
-            ServiceLocator.LoggingService,
-            ServiceLocator.NotificationService,
-            ServiceLocator.ExternalApplicationService,
-            ServiceLocator.PlayOnlineMonitorService)
-        {
-        }
-
         public MainViewModel(
             ISettingsService settingsService,
             IProfileService profileService,
@@ -41,8 +25,13 @@ namespace FFXIManager.ViewModels
             IValidationService validationService,
             ILoggingService loggingService,
             INotificationService notificationService,
+            INotificationServiceEnhanced notificationServiceEnhanced,
             IExternalApplicationService applicationService,
-            IPlayOnlineMonitorService playOnlineMonitorService)
+            IPlayOnlineMonitorService playOnlineMonitorService,
+            ICharacterOrderingService characterOrderingService,
+            IHotkeyActivationService hotkeyActivationService,
+            IUiDispatcher uiDispatcher,
+            IHotkeyMappingService hotkeyMappingService)
         {
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
             _configService = configService ?? throw new ArgumentNullException(nameof(configService));
@@ -50,16 +39,19 @@ namespace FFXIManager.ViewModels
             // Create specialized ViewModels with their specific dependencies
             ProfileManagement = new ProfileManagementViewModel(
                 profileOperations, statusService, settingsService,
-                profileService, dialogService, validationService, 
-                ServiceLocator.NotificationServiceEnhanced);
+                profileService, dialogService, validationService,
+                notificationServiceEnhanced,
+                uiDispatcher);
 
             ApplicationManagement = new ApplicationManagementViewModel(
-                applicationService, statusService, loggingService);
+                applicationService, statusService, loggingService, uiDispatcher);
 
             PlayOnlineMonitor = new PlayOnlineMonitorViewModel(
-                playOnlineMonitorService, statusService, loggingService);
+                playOnlineMonitorService, statusService, loggingService,
+                characterOrderingService, hotkeyActivationService,
+                settingsService, hotkeyMappingService);
 
-            UICommands = new UICommandsViewModel(uiCommandService, ServiceLocator.NotificationServiceEnhanced);
+            UICommands = new UICommandsViewModel(uiCommandService, notificationServiceEnhanced);
 
             // Subscribe to status message changes
             _statusService.MessageChanged += (_, message) => OnPropertyChanged(nameof(StatusMessage));
@@ -224,3 +216,4 @@ namespace FFXIManager.ViewModels
         #endregion
     }
 }
+

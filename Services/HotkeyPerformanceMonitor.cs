@@ -46,6 +46,7 @@ namespace FFXIManager.Services
     public class HotkeyPerformanceMonitor : IHotkeyPerformanceMonitor, IDisposable
     {
         private readonly ILoggingService _loggingService;
+        private readonly ISettingsService _settingsService;
         private readonly ConcurrentQueue<HotkeyActivationMetrics> _recentActivations = new();
         private readonly object _statsLock = new object();
         
@@ -64,9 +65,10 @@ namespace FFXIManager.Services
         
         public event EventHandler<PerformanceThresholdEventArgs>? ThresholdExceeded;
 
-        public HotkeyPerformanceMonitor(ILoggingService loggingService)
+        public HotkeyPerformanceMonitor(ILoggingService loggingService, ISettingsService settingsService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
             
             // **SETTINGS-DRIVEN**: Load performance thresholds from configuration
             LoadPerformanceSettingsFromConfiguration();
@@ -252,8 +254,7 @@ namespace FFXIManager.Services
         {
             try
             {
-                var settingsService = ServiceLocator.SettingsService;
-                var settings = settingsService.LoadSettings();
+                var settings = _settingsService.LoadSettings();
                 
                 _warningThresholdMs = settings.PerformanceWarningThresholdMs;
                 _criticalThresholdMs = settings.PerformanceCriticalThresholdMs;

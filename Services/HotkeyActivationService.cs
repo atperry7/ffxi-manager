@@ -120,21 +120,23 @@ namespace FFXIManager.Services
         private readonly IHotkeyPerformanceMonitor _performanceMonitor;
         private readonly ILoggingService _loggingService;
         private readonly INotificationServiceEnhanced _notificationService;
-        
+        private readonly ISettingsService _settingsService;
+        private readonly ICharacterOrderingService _characterOrderingService;
+
         private bool _disposed;
-        
+
         // **SPAM PREVENTION**: Track last activation times to prevent rapid-fire hotkeys
         private readonly ConcurrentDictionary<int, DateTime> _lastActivationTimes = new();
-        
+
         // **CYCLE TRACKING**: Track current position for character cycling
         private int _currentCycleIndex = -1;
         private DateTime _lastCycleTime = DateTime.MinValue;
         private readonly object _cycleLock = new();
-        
+
         // **CYCLE CONSTANTS**: Configuration for cycle behavior
         private const int CYCLE_TIMEOUT_SECONDS = 30;
         public const int CycleHotkeyId = 999;
-        
+
         public event EventHandler<HotkeyActivationResult>? CharacterActivated;
 
         public HotkeyActivationService(
@@ -142,14 +144,18 @@ namespace FFXIManager.Services
             IPlayOnlineMonitorService monitorService,
             IHotkeyPerformanceMonitor performanceMonitor,
             ILoggingService loggingService,
-            INotificationServiceEnhanced notificationService)
+            INotificationServiceEnhanced notificationService,
+            ISettingsService settingsService,
+            ICharacterOrderingService characterOrderingService)
         {
             _mappingService = mappingService ?? throw new ArgumentNullException(nameof(mappingService));
             _monitorService = monitorService ?? throw new ArgumentNullException(nameof(monitorService));
             _performanceMonitor = performanceMonitor ?? throw new ArgumentNullException(nameof(performanceMonitor));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
-            
+            _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+            _characterOrderingService = characterOrderingService ?? throw new ArgumentNullException(nameof(characterOrderingService));
+
             _ = _loggingService.LogInfoAsync("HotkeyActivationService initialized", "HotkeyActivationService");
         }
 
@@ -166,7 +172,7 @@ namespace FFXIManager.Services
                 var now = DateTime.UtcNow;
                 if (_lastActivationTimes.TryGetValue(hotkeyId, out var lastActivation))
                 {
-                    var settings = ServiceLocator.SettingsService.LoadSettings();
+                    var settings = _settingsService.LoadSettings();
                     var timeSinceLastMs = (now - lastActivation).TotalMilliseconds;
                     
                     if (timeSinceLastMs < settings.HotkeySpamCooldownMs)
@@ -301,7 +307,7 @@ namespace FFXIManager.Services
             try
             {
                 // Get characters in user-defined order
-                var characterOrdering = ServiceLocator.CharacterOrderingService;
+                var characterOrdering = _characterOrderingService;
                 var orderedCharacters = await characterOrdering.GetOrderedCharactersAsync();
                 
                 if (orderedCharacters == null || orderedCharacters.Count == 0)
@@ -447,7 +453,7 @@ namespace FFXIManager.Services
                 // we'd add a reverse mapping cache to HotkeyMappingService
                 
                 // For now, we'll use the character's position in the ordered list
-                var characterOrdering = ServiceLocator.CharacterOrderingService;
+                var characterOrdering = _characterOrderingService;
                 var characters = await characterOrdering.GetOrderedCharactersAsync();
                 
                 for (int i = 0; i < characters.Count; i++)
@@ -455,7 +461,7 @@ namespace FFXIManager.Services
                     if (characters[i].ProcessId == character.ProcessId)
                     {
                         // Convert slot index to hotkey ID using the same logic as hotkey registration
-                        var settings = ServiceLocator.SettingsService.LoadSettings();
+                        var settings = _settingsService.LoadSettings();
                         var hotkeyMapping = settings.CharacterSwitchShortcuts.FirstOrDefault(s => 
                             Models.Settings.KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(s.HotkeyId) == i && s.IsEnabled);
                         
@@ -648,4 +654,5 @@ namespace FFXIManager.Services
         }
     }
 }
+
 

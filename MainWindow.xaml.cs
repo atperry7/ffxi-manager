@@ -1,7 +1,7 @@
 ﻿using System;
 using System.ComponentModel;
 using System.Windows;
-using FFXIManager.Infrastructure;
+using FFXIManager.Services;
 using FFXIManager.ViewModels;
 
 namespace FFXIManager
@@ -12,11 +12,13 @@ namespace FFXIManager
     public partial class MainWindow : Window
     {
         private bool _isClosing;
+        private readonly ISettingsService _settingsService;
 
-        public MainWindow()
+        public MainWindow(MainViewModel viewModel, ISettingsService settingsService)
         {
             InitializeComponent();
-            DataContext = new MainViewModel();
+            DataContext = viewModel;
+            _settingsService = settingsService;
 
             // Load and apply saved window state
             LoadWindowState();
@@ -32,7 +34,7 @@ namespace FFXIManager
         {
             try
             {
-                var settings = ServiceLocator.SettingsService.LoadSettings();
+                var settings = _settingsService.LoadSettings();
 
                 if (settings.RememberWindowPosition)
                 {
@@ -72,7 +74,7 @@ namespace FFXIManager
 
             try
             {
-                var settings = ServiceLocator.SettingsService.LoadSettings();
+                var settings = _settingsService.LoadSettings();
 
                 if (settings.RememberWindowPosition)
                 {
@@ -96,7 +98,7 @@ namespace FFXIManager
                     }
 
                     // Use SettingsService.UpdateWindowBounds with debounce mechanism
-                    ServiceLocator.SettingsService.UpdateWindowBounds(width, height, left, top, isMaximized, settings.RememberWindowPosition);
+                    _settingsService.UpdateWindowBounds(width, height, left, top, isMaximized, settings.RememberWindowPosition);
                 }
             }
             catch (Exception ex)

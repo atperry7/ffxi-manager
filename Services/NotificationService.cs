@@ -35,16 +35,18 @@ namespace FFXIManager.Services
     public class NotificationService : INotificationService
     {
         private readonly ILoggingService _loggingService;
+        private readonly IUiDispatcher _uiDispatcher;
 
-        public NotificationService(ILoggingService loggingService)
+        public NotificationService(ILoggingService loggingService, IUiDispatcher uiDispatcher)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         }
 
         public async Task ShowSuccessAsync(string message, string? title = null)
         {
             await _loggingService.LogInfoAsync($"Success notification: {message}", "NotificationService");
-            await ServiceLocator.UiDispatcher.InvokeAsync(() =>
+            await _uiDispatcher.InvokeAsync(() =>
             {
                 MessageBox.Show(message, title ?? "Success", MessageBoxButton.OK, MessageBoxImage.Information);
             });
@@ -53,7 +55,7 @@ namespace FFXIManager.Services
         public async Task ShowWarningAsync(string message, string? title = null)
         {
             await _loggingService.LogWarningAsync($"Warning notification: {message}", "NotificationService");
-            await ServiceLocator.UiDispatcher.InvokeAsync(() =>
+            await _uiDispatcher.InvokeAsync(() =>
             {
                 MessageBox.Show(message, title ?? "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
             });
@@ -62,7 +64,7 @@ namespace FFXIManager.Services
         public async Task ShowErrorAsync(string message, string? title = null)
         {
             await _loggingService.LogErrorAsync($"Error notification: {message}", null, "NotificationService");
-            await ServiceLocator.UiDispatcher.InvokeAsync(() =>
+            await _uiDispatcher.InvokeAsync(() =>
             {
                 MessageBox.Show(message, title ?? "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             });
@@ -71,7 +73,7 @@ namespace FFXIManager.Services
         public async Task ShowInfoAsync(string message, string? title = null)
         {
             await _loggingService.LogInfoAsync($"Info notification: {message}", "NotificationService");
-            await ServiceLocator.UiDispatcher.InvokeAsync(() =>
+            await _uiDispatcher.InvokeAsync(() =>
             {
                 MessageBox.Show(message, title ?? "Information", MessageBoxButton.OK, MessageBoxImage.Information);
             });
@@ -80,7 +82,7 @@ namespace FFXIManager.Services
         public async Task<bool> ShowConfirmationAsync(string message, string? title = null)
         {
             await _loggingService.LogInfoAsync($"Confirmation requested: {message}", "NotificationService");
-            return await ServiceLocator.UiDispatcher.InvokeAsync(() =>
+            return await _uiDispatcher.InvokeAsync(() =>
             {
                 var result = MessageBox.Show(message, title ?? "Confirm", MessageBoxButton.YesNo, MessageBoxImage.Question);
                 var confirmed = result == MessageBoxResult.Yes;

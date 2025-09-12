@@ -1,5 +1,6 @@
 using System.Windows.Controls;
 using FFXIManager.ViewModels.CharacterMonitor;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FFXIManager.Views
 {
@@ -13,8 +14,8 @@ namespace FFXIManager.Views
         {
             InitializeComponent();
             
-            // Create and set the view model
-            DataContext = new EmbeddedCharacterMonitorViewModel();
+            // Resolve and set the view model
+            DataContext = App.Services.GetRequiredService<EmbeddedCharacterMonitorViewModel>();
         }
     }
 }

@@ -17,6 +17,7 @@ namespace FFXIManager.Services
     {
         private readonly IUnifiedMonitoringService _unifiedMonitoring;
         private readonly ILoggingService _logging;
+        private readonly IProcessManagementService _processManagement;
         private readonly ISettingsService _settings;
 
         private readonly List<ExternalApplication> _applications = new();
@@ -31,11 +32,13 @@ namespace FFXIManager.Services
         public ExternalApplicationService(
             IUnifiedMonitoringService unifiedMonitoring,
             ILoggingService logging,
-            ISettingsService settings)
+            ISettingsService settings,
+            IProcessManagementService processManagement)
         {
             _unifiedMonitoring = unifiedMonitoring ?? throw new ArgumentNullException(nameof(unifiedMonitoring));
             _logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            _processManagement = processManagement ?? throw new ArgumentNullException(nameof(processManagement));
 
             // Load applications from settings
             LoadApplicationsFromSettings();
@@ -188,13 +191,12 @@ namespace FFXIManager.Services
 
             try
             {
-                var processManagement = ServiceLocator.ProcessManagementService;
                 bool anyFailed = false;
 
                 var pids = application.ProcessIds.ToList();
                 foreach (var pid in pids)
                 {
-                    var success = await processManagement.KillProcessAsync(pid, 5000);
+                    var success = await _processManagement.KillProcessAsync(pid, 5000);
                     if (!success)
                     {
                         anyFailed = true;

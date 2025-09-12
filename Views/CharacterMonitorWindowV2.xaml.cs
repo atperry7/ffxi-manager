@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Input;
 using FFXIManager.ViewModels.CharacterMonitor;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FFXIManager.Views
 {
@@ -19,8 +20,8 @@ namespace FFXIManager.Views
         {
             InitializeComponent();
             
-            // Create and set the view model
-            _viewModel = new CharacterMonitorViewModel();
+            // Resolve and set the view model
+            _viewModel = App.Services.GetRequiredService<CharacterMonitorViewModel>();
             DataContext = _viewModel;
             
             // Subscribe to close request from view model

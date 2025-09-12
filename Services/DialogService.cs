@@ -11,9 +11,16 @@ namespace FFXIManager.Services
     /// </summary>
     public class DialogService : IDialogService
     {
+        private readonly IUiDispatcher _uiDispatcher;
+
+        public DialogService(IUiDispatcher uiDispatcher)
+        {
+            _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
+        }
+
         public async Task<string?> ShowRenameDialogAsync(string currentName, bool isSystemFile)
         {
-            return await ServiceLocator.UiDispatcher.InvokeAsync(() =>
+            return await _uiDispatcher.InvokeAsync(() =>
             {
                 var dialog = new RenameProfileDialog(currentName, isSystemFile);
                 return dialog.ShowDialog() == true ? dialog.NewProfileName : null;
@@ -22,7 +29,7 @@ namespace FFXIManager.Services
 
         public async Task<bool> ShowConfirmationDialogAsync(string title, string message)
         {
-            return await ServiceLocator.UiDispatcher.InvokeAsync(() =>
+            return await _uiDispatcher.InvokeAsync(() =>
             {
                 var result = MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question);
                 return result == MessageBoxResult.Yes;
@@ -31,7 +38,7 @@ namespace FFXIManager.Services
 
         public async Task ShowMessageDialogAsync(string title, string message)
         {
-            await ServiceLocator.UiDispatcher.InvokeAsync(() =>
+            await _uiDispatcher.InvokeAsync(() =>
             {
                 MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
             });
@@ -39,7 +46,7 @@ namespace FFXIManager.Services
 
         public async Task<string?> ShowFolderBrowserDialogAsync(string title, string initialDirectory)
         {
-            return await ServiceLocator.UiDispatcher.InvokeAsync(() =>
+            return await _uiDispatcher.InvokeAsync(() =>
             {
                 try
                 {

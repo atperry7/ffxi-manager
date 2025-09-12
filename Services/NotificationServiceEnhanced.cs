@@ -17,15 +17,19 @@ namespace FFXIManager.Services
     public class NotificationServiceEnhanced : INotificationServiceEnhanced
     {
         private readonly ILoggingService _loggingService;
+        private readonly IUiDispatcher _uiDispatcher;
+        private readonly IStatusMessageService _statusService;
         private readonly ConcurrentQueue<QueuedNotification> _notificationQueue = new();
         private readonly DispatcherTimer _batchTimer;
         private readonly List<ToastNotification> _activeToasts = new();
         private const int MAX_CONCURRENT_TOASTS = 5;
         private const int TOAST_VERTICAL_SPACING = 5;
 
-        public NotificationServiceEnhanced(ILoggingService loggingService)
+        public NotificationServiceEnhanced(ILoggingService loggingService, IUiDispatcher uiDispatcher, IStatusMessageService statusService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
+            _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
             
             // Setup batch timer to flush queued notifications
             _batchTimer = new DispatcherTimer
@@ -65,7 +69,7 @@ namespace FFXIManager.Services
         {
             // Confirmations still use MessageBox since they need user interaction
             await _loggingService.LogInfoAsync($"Confirmation requested: {message}", "NotificationService");
-            return await ServiceLocator.UiDispatcher.InvokeAsync(() =>
+            return await _uiDispatcher.InvokeAsync(() =>
             {
                 var result = MessageBox.Show(message, title ?? "Confirm", MessageBoxButton.YesNo, MessageBoxImage.Question);
                 var confirmed = result == MessageBoxResult.Yes;
@@ -85,7 +89,7 @@ namespace FFXIManager.Services
 
         public async Task ShowToastAsync(string message, NotificationType type = NotificationType.Info, int durationMs = 8000)
         {
-            await ServiceLocator.UiDispatcher.InvokeAsync(() =>
+            await _uiDispatcher.InvokeAsync(() =>
             {
                 try
                 {
@@ -153,7 +157,7 @@ namespace FFXIManager.Services
         {
             // Delegate to existing StatusMessageService for status bar updates
             var duration = type == NotificationType.Error ? TimeSpan.FromSeconds(10) : TimeSpan.FromSeconds(3);
-            ServiceLocator.StatusMessageService.SetTemporaryMessage(message, duration);
+            _statusService.SetTemporaryMessage(message, duration);
         }
 
         public void QueueNotification(string message, NotificationType type)

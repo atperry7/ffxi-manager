@@ -1,7 +1,6 @@
 using System;
 using System.ComponentModel;
 using System.Windows.Input;
-using FFXIManager.Infrastructure;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 
@@ -16,33 +15,33 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         private readonly ILoggingService _loggingService;
         private bool _disposed;
 
-        public CharacterMonitorViewModel()
+        public CharacterMonitorViewModel(
+            ISettingsService settingsService,
+            ILoggingService loggingService,
+            IPlayOnlineMonitorService monitorService,
+            ICharacterOrderingService orderingService,
+            IHotkeyActivationService activationService,
+            IStatusMessageService statusService)
         {
-            // Get services from ServiceLocator
-            var settingsService = ServiceLocator.SettingsService;
-            _loggingService = ServiceLocator.LoggingService;
-            var monitorService = ServiceLocator.PlayOnlineMonitorService;
-            var orderingService = ServiceLocator.CharacterOrderingService;
-            var activationService = ServiceLocator.HotkeyActivationService;
-            var statusService = ServiceLocator.StatusMessageService;
-            
+            _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+
             // Initialize sub-view models
             WindowViewModel = new CharacterMonitorWindowViewModel(settingsService, _loggingService);
             CollectionViewModel = new CharacterCollectionViewModel(
-                monitorService, 
-                orderingService, 
-                activationService, 
-                statusService, 
+                monitorService,
+                orderingService,
+                activationService,
+                statusService,
                 _loggingService);
-            
+
             // Wire up events
             WindowViewModel.OnCloseRequested += OnWindowCloseRequested;
             CollectionViewModel.PropertyChanged += OnCollectionPropertyChanged;
-            
+
             InitializeCommands();
-            
+
             _ = _loggingService.LogInfoAsync(
-                "Character Monitor initialized with new architecture", 
+                "Character Monitor initialized with new architecture",
                 "CharacterMonitorViewModel");
         }
 

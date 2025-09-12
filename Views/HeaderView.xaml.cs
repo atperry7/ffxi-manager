@@ -1,6 +1,6 @@
 ﻿using System.Windows.Controls;
-using FFXIManager.Infrastructure;
 using FFXIManager.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FFXIManager.Views
 {
@@ -9,12 +9,8 @@ namespace FFXIManager.Views
         public HeaderView()
         {
             InitializeComponent();
-            // Ensure DataContext is set to the HeaderViewModel so bindings and commands work
-            DataContext = new HeaderViewModel(
-                ServiceLocator.UiDispatcher,
-                ServiceLocator.SettingsService,
-                ServiceLocator.ExternalApplicationService,
-                ServiceLocator.PlayOnlineMonitorService);
+            // Resolve ViewModel via DI
+            DataContext = App.Services.GetRequiredService<HeaderViewModel>();
         }
     }
 }

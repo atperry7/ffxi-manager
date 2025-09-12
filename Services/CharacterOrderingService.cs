@@ -19,6 +19,7 @@ namespace FFXIManager.Services
         private readonly object _lock = new object();
         
         private bool _disposed;
+        private IPlayOnlineMonitorService? _connectedMonitor;
         
         public event EventHandler<CharacterCacheUpdatedEventArgs>? CharacterCacheUpdated;
         
@@ -43,9 +44,10 @@ namespace FFXIManager.Services
             try
             {
                 // Subscribe to monitor events
-                monitorService.CharacterDetected += OnCharacterDetected;
-                monitorService.CharacterUpdated += OnCharacterUpdated;
-                monitorService.CharacterRemoved += OnCharacterRemoved;
+                _connectedMonitor = monitorService;
+                _connectedMonitor.CharacterDetected += OnCharacterDetected;
+                _connectedMonitor.CharacterUpdated += OnCharacterUpdated;
+                _connectedMonitor.CharacterRemoved += OnCharacterRemoved;
                 
                 await _loggingService.LogInfoAsync("CharacterOrderingService connected to monitor", "CharacterOrderingService");
                 
@@ -286,12 +288,12 @@ namespace FFXIManager.Services
             try
             {
                 // Unsubscribe from monitor events
-                var monitorService = ServiceLocator.PlayOnlineMonitorService;
-                if (monitorService != null)
+                if (_connectedMonitor != null)
                 {
-                    monitorService.CharacterDetected -= OnCharacterDetected;
-                    monitorService.CharacterUpdated -= OnCharacterUpdated;
-                    monitorService.CharacterRemoved -= OnCharacterRemoved;
+                    _connectedMonitor.CharacterDetected -= OnCharacterDetected;
+                    _connectedMonitor.CharacterUpdated -= OnCharacterUpdated;
+                    _connectedMonitor.CharacterRemoved -= OnCharacterRemoved;
+                    _connectedMonitor = null;
                 }
             }
             catch (Exception ex)

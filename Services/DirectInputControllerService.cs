@@ -51,9 +51,9 @@ namespace FFXIManager.Services
         public event EventHandler<DirectInputButtonPressedEventArgs>? ButtonPressed;
         public bool IsAnyControllerConnected { get; private set; }
 
-        public DirectInputControllerService()
+        public DirectInputControllerService(ILoggingService loggingService)
         {
-            _loggingService = ServiceLocator.LoggingService;
+            _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             Initialize();
         }
 

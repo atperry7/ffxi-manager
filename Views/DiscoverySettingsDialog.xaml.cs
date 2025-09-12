@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using FFXIManager.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FFXIManager.Views
 {
@@ -43,7 +44,7 @@ namespace FFXIManager.Views
             try
             {
                 // Use dedicated ControllerInputService for detection
-                using var controllerService = new ControllerInputService();
+                using var controllerService = new ControllerInputService(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<ILoggingService>(App.Services));
                 
                 // Allow time for XInput detection (controllers can take a moment to enumerate)
                 await Task.Delay(500);
@@ -95,3 +96,5 @@ namespace FFXIManager.Views
         }
     }
 }
+
+

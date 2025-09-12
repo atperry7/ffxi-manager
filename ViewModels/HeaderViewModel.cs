@@ -5,6 +5,7 @@ using System.Windows.Input;
 using FFXIManager.Infrastructure;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FFXIManager.ViewModels
 {
@@ -141,7 +142,7 @@ namespace FFXIManager.ViewModels
             {
                 var dlg = new Views.DiscoverySettingsDialog();
                 dlg.Owner = System.Windows.Application.Current?.MainWindow;
-                dlg.DataContext = new ViewModels.DiscoverySettingsViewModel();
+                dlg.DataContext = App.Services.GetRequiredService<ViewModels.DiscoverySettingsViewModel>();
                 dlg.ShowDialog();
             }
             catch { }

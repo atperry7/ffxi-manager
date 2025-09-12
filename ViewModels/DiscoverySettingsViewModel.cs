@@ -23,8 +23,6 @@ namespace FFXIManager.ViewModels
         /// </summary>
         public static event EventHandler? HotkeySettingsChanged;
 
-        public DiscoverySettingsViewModel() : this(ServiceLocator.SettingsService) { }
-
         public DiscoverySettingsViewModel(ISettingsService settingsService)
         {
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));

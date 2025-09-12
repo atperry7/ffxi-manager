@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FFXIManager.Models.Settings;
 using FFXIManager.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FFXIManager.Controls
 {
@@ -80,7 +81,7 @@ namespace FFXIManager.Controls
                 _tempHookService.HotkeyPressed += OnKeyPressed;
 
                 // Create temporary controller service
-                _tempControllerService = new ControllerInputService();
+                _tempControllerService = new ControllerInputService(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<ILoggingService>(App.Services));
                 _tempControllerService.ButtonPressed += OnControllerButtonPressed;
 
                 // Register ALL controller buttons for temporary recording (like we do for keyboard)
@@ -430,3 +431,5 @@ namespace FFXIManager.Controls
         }
     }
 }
+
+

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -59,9 +59,9 @@ namespace FFXIManager.Services
         private bool IsXInputControllerConnected { get; set; }
         private bool IsDirectInputControllerConnected => _directInputService?.IsAnyControllerConnected ?? false;
 
-        public ControllerInputService()
+        public ControllerInputService(ILoggingService loggingService)
         {
-            _loggingService = ServiceLocator.LoggingService;
+            _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             
             // Initialize XInput for Xbox controllers
             CheckInitialControllerConnection();
@@ -386,7 +386,7 @@ namespace FFXIManager.Services
             {
                 _loggingService.LogInfoAsync("🎮 Initializing DirectInput for PlayStation controller support...", "ControllerInputService");
                 
-                _directInputService = new DirectInputControllerService();
+                _directInputService = new DirectInputControllerService(_loggingService);
                 
                 // Subscribe to DirectInput button press events
                 _directInputService.ButtonPressed += OnDirectInputButtonPressed;
@@ -503,7 +503,7 @@ namespace FFXIManager.Services
                 // Try XInput 1.4 first (Windows 8+)
                 var result = XInputGetState_1_4(dwUserIndex, ref pState);
                 _workingXInputVersion = 1;
-                ServiceLocator.LoggingService.LogInfoAsync("✅ Using XInput 1.4 (xinput1_4.dll)", "ControllerInputService");
+                System.Diagnostics.Debug.WriteLine("Using XInput 1.4 (xinput1_4.dll)");
                 return result;
             }
             catch (DllNotFoundException)
@@ -513,7 +513,7 @@ namespace FFXIManager.Services
                     // Fall back to XInput 1.3 (Windows Vista/7)
                     var result = XInputGetState_1_3(dwUserIndex, ref pState);
                     _workingXInputVersion = 2;
-                    ServiceLocator.LoggingService.LogInfoAsync("✅ Using XInput 1.3 (xinput1_3.dll)", "ControllerInputService");
+                    System.Diagnostics.Debug.WriteLine("Using XInput 1.3 (xinput1_3.dll)");
                     return result;
                 }
                 catch (DllNotFoundException)
@@ -523,14 +523,14 @@ namespace FFXIManager.Services
                         // Fall back to XInput 9.1.0 (Windows XP)
                         var result = XInputGetState_9_1_0(dwUserIndex, ref pState);
                         _workingXInputVersion = 3;
-                        ServiceLocator.LoggingService.LogInfoAsync("✅ Using XInput 9.1.0 (xinput9_1_0.dll)", "ControllerInputService");
+                        System.Diagnostics.Debug.WriteLine("Using XInput 9.1.0 (xinput9_1_0.dll)");
                         return result;
                     }
                     catch (DllNotFoundException)
                     {
                         // No XInput available
                         _workingXInputVersion = -1;
-                        ServiceLocator.LoggingService.LogWarningAsync("❌ No XInput runtime found - controller support disabled", "ControllerInputService");
+                        System.Diagnostics.Debug.WriteLine("No XInput runtime found - controller support disabled");
                         return 1167; // ERROR_DEVICE_NOT_CONNECTED
                     }
                 }
@@ -599,3 +599,8 @@ namespace FFXIManager.Services
         }
     }
 }
+
+
+
+
+

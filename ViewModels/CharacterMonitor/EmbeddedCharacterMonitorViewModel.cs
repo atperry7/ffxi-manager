@@ -17,15 +17,16 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         private readonly ILoggingService _loggingService;
         private bool _disposed;
 
-        public EmbeddedCharacterMonitorViewModel()
+        public EmbeddedCharacterMonitorViewModel(
+            IPlayOnlineMonitorService monitorService,
+            ICharacterOrderingService orderingService,
+            IHotkeyActivationService activationService,
+            IStatusMessageService statusService,
+            ILoggingService loggingService)
         {
-            // Get services
-            var monitorService = ServiceLocator.PlayOnlineMonitorService;
-            var orderingService = ServiceLocator.CharacterOrderingService;
-            var activationService = ServiceLocator.HotkeyActivationService;
-            _statusService = ServiceLocator.StatusMessageService;
-            _loggingService = ServiceLocator.LoggingService;
-            
+            _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
+            _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+
             // Create the collection view model (shared logic with main window)
             CollectionViewModel = new CharacterCollectionViewModel(
                 monitorService,
@@ -33,14 +34,14 @@ namespace FFXIManager.ViewModels.CharacterMonitor
                 activationService,
                 _statusService,
                 _loggingService);
-            
+
             // Subscribe to property changes for UI updates
             CollectionViewModel.PropertyChanged += OnCollectionPropertyChanged;
-            
+
             InitializeCommands();
-            
+
             _ = _loggingService.LogInfoAsync(
-                "Embedded Character Monitor initialized", 
+                "Embedded Character Monitor initialized",
                 "EmbeddedCharacterMonitorViewModel");
         }
 

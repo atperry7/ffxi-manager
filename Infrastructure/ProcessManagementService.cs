@@ -107,6 +107,7 @@ namespace FFXIManager.Infrastructure
     public class ProcessManagementService : IProcessManagementService, IDisposable
     {
         private readonly ILoggingService _loggingService;
+        private readonly ISettingsService _settingsService;
         private readonly IUiDispatcher _uiDispatcher;
         private readonly Dictionary<int, ProcessInfo> _trackedProcesses = new();
         private readonly SemaphoreSlim _processLock = new(1, 1);
@@ -143,10 +144,11 @@ namespace FFXIManager.Infrastructure
         public event EventHandler<ProcessInfo>? ProcessTerminated;
         public event EventHandler<ProcessInfo>? ProcessUpdated;
 
-        public ProcessManagementService(ILoggingService loggingService, IUiDispatcher uiDispatcher)
+        public ProcessManagementService(ILoggingService loggingService, IUiDispatcher uiDispatcher, ISettingsService settingsService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
+            _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
 
             // Single global monitoring timer for all process tracking
             _globalMonitoringTimer = new Timer(GlobalMonitoringCallback, null,
@@ -903,7 +905,7 @@ namespace FFXIManager.Infrastructure
 
                 try
                 {
-                    var diag = ServiceLocator.SettingsService.LoadSettings()?.Diagnostics;
+                    var diag = _settingsService.LoadSettings()?.Diagnostics;
                     if (diag?.EnableDiagnostics == true)
                     {
                         await _loggingService.LogDebugAsync($"Discovery matched {relevantProcesses.Count} processes (includes={includePatterns.Count}, excludes={excludePatterns.Count})", "ProcessManagementService");

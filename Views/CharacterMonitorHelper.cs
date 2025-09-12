@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
-using FFXIManager.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
+using FFXIManager.Services;
 using FFXIManager.ViewModels;
 
 namespace FFXIManager.Views
@@ -40,14 +41,14 @@ namespace FFXIManager.Views
                     _currentWindow.Closed += OnWindowClosed;
                     _currentWindow.Show();
                     
-                    var loggingService = ServiceLocator.LoggingService;
+                    var loggingService = App.Services.GetRequiredService<ILoggingService>();
                     _ = loggingService.LogInfoAsync(
                         "Character Monitor window opened (new architecture)", 
                         "CharacterMonitorHelper");
                 }
                 catch (Exception ex)
                 {
-                    var loggingService = ServiceLocator.LoggingService;
+                    var loggingService = App.Services.GetRequiredService<ILoggingService>();
                     _ = loggingService.LogErrorAsync(
                         "Failed to open Character Monitor window", 
                         ex, 

@@ -1,6 +1,6 @@
 ﻿using System.Windows.Controls;
-using FFXIManager.Infrastructure;
 using FFXIManager.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FFXIManager.Views
 {
@@ -9,12 +9,8 @@ namespace FFXIManager.Views
         public StatusBarView()
         {
             InitializeComponent();
-            // Set DataContext to StatusBarViewModel for operational status
-            DataContext = new StatusBarViewModel(
-                ServiceLocator.StatusMessageService,
-                ServiceLocator.SettingsService,
-                ServiceLocator.ProfileService,
-                ServiceLocator.LoggingService);
+            // Resolve ViewModel via DI
+            DataContext = App.Services.GetRequiredService<StatusBarViewModel>();
         }
     }
 }

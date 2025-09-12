@@ -34,7 +34,8 @@ namespace FFXIManager.ViewModels
             IProfileService profileService,
             IDialogService dialogService,
             IValidationService validationService,
-            INotificationServiceEnhanced notificationService)
+            INotificationServiceEnhanced notificationService,
+            IUiDispatcher uiDispatcher)
         {
             _profileOperations = profileOperations ?? throw new ArgumentNullException(nameof(profileOperations));
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
@@ -43,6 +44,7 @@ namespace FFXIManager.ViewModels
             _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
             _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
             _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
+            UiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
 
             _settings = _settingsService.LoadSettings();
             _profileService.PlayOnlineDirectory = _settings.PlayOnlineDirectory;
@@ -205,7 +207,7 @@ namespace FFXIManager.ViewModels
                 var profiles = await _profileOperations.LoadProfilesAsync(_settings.ShowAutoBackupsInList);
                 var activeLoginInfo = await _profileOperations.GetActiveLoginInfoAsync();
 
-                await ServiceLocator.UiDispatcher.InvokeAsync(() => UpdateProfilesCollection(profiles, activeLoginInfo));
+                await UiDispatcher.InvokeAsync(() => UpdateProfilesCollection(profiles, activeLoginInfo));
 
                 // Keep the status concise; detailed counts are shown in the status bar's backup info
                 _statusService.SetMessage("Profiles loaded.");
@@ -227,6 +229,8 @@ namespace FFXIManager.ViewModels
         }
 
         #endregion
+
+        private IUiDispatcher UiDispatcher { get; }
 
         #region Private Methods
 
@@ -293,7 +297,7 @@ namespace FFXIManager.ViewModels
                 if (success && newProfile != null)
                 {
                     await _notificationService.ShowToastAsync($"Created backup: '{NewBackupName}'", NotificationType.Success);
-                    await ServiceLocator.UiDispatcher.InvokeAsync(() => Profiles.Add(newProfile));
+                    await UiDispatcher.InvokeAsync(() => Profiles.Add(newProfile));
                     NewBackupName = string.Empty;
                 }
                 else
@@ -330,7 +334,7 @@ namespace FFXIManager.ViewModels
                 if (success)
                 {
                     await _notificationService.ShowToastAsync($"Deleted profile: '{profile.Name}'", NotificationType.Warning);
-                    await ServiceLocator.UiDispatcher.InvokeAsync(() =>
+                    await UiDispatcher.InvokeAsync(() =>
                     {
                         Profiles.Remove(profile);
                         if (SelectedProfile == profile)

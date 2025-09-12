@@ -4,6 +4,8 @@ using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using FFXIManager.Infrastructure;
 using FFXIManager.Models;
 using FFXIManager.Services;
@@ -15,61 +17,68 @@ namespace FFXIManager
     /// </summary>
     public partial class App : Application
     {
+        private IHost? _host;
         private static readonly Uri LightThemeUri = new Uri("Themes/LightTheme.xaml", UriKind.Relative);
         private static readonly Uri DarkThemeUri = new Uri("Themes/DarkTheme.xaml", UriKind.Relative);
+
+        public static IServiceProvider Services => ((App)Current)._host!.Services;
 
         protected override async void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
 
+            _host = Host.CreateDefaultBuilder()
+                .ConfigureServices(services => services.AddAppServices())
+                .Build();
+
             // Load the initial theme from settings
             try
             {
-                var settingsService = ServiceLocator.SettingsService;
+                var settingsService = Services.GetRequiredService<ISettingsService>();
                 var settings = settingsService.LoadSettings();
                 ApplyTheme(settings.IsDarkTheme);
 
                 // Centralize global hotkey registration at app startup so it works regardless of UI windows
-                Services.GlobalHotkeyManager.Instance.RegisterHotkeysFromSettings();
+                Services.GetRequiredService<GlobalHotkeyManager>().RegisterHotkeysFromSettings();
 
                 // Ensure PlayOnline monitoring is started regardless of UI windows
-                ServiceLocator.PlayOnlineMonitorService.StartMonitoring();
+                Services.GetRequiredService<IPlayOnlineMonitorService>().StartMonitoring();
                 
                 // Connect the character ordering service to the monitor and wait for completion
-                if (ServiceLocator.CharacterOrderingService is CharacterOrderingService orderingService)
+                if (Services.GetRequiredService<ICharacterOrderingService>() is CharacterOrderingService orderingService)
                 {
                     try
                     {
-                        await orderingService.ConnectToMonitorAsync(ServiceLocator.PlayOnlineMonitorService);
+                        await orderingService.ConnectToMonitorAsync(Services.GetRequiredService<IPlayOnlineMonitorService>());
                     }
                     catch (Exception ex)
                     {
-                        _ = ServiceLocator.LoggingService.LogErrorAsync("Error connecting character ordering service to monitor", ex, "App");
+                        _ = Services.GetRequiredService<ILoggingService>().LogErrorAsync("Error connecting character ordering service to monitor", ex, "App");
                     }
                 }
 
                 // **GAMING OPTIMIZATION**: Ultra-fast hotkey processing via unified service
-                Services.GlobalHotkeyManager.Instance.HotkeyPressed += async (_, e) =>
+                Services.GetRequiredService<GlobalHotkeyManager>().HotkeyPressed += async (_, e) =>
                 {
                     // Check if this is the cycle hotkey
-                    if (e.HotkeyId == Services.HotkeyActivationService.CycleHotkeyId)
+                    if (e.HotkeyId == HotkeyActivationService.CycleHotkeyId)
                     {
                         // Handle cycle hotkey
-                        var cycleResult = await ServiceLocator.HotkeyActivationService.CycleToNextCharacterAsync();
+                        var cycleResult = await Services.GetRequiredService<IHotkeyActivationService>().CycleToNextCharacterAsync();
                         
                         if (!cycleResult.Success && IsUnexpectedHotkeyError(cycleResult.ErrorMessage))
                         {
-                            _ = ServiceLocator.NotificationServiceEnhanced?.ShowToastAsync($"Cycle failed: {cycleResult.ErrorMessage}", NotificationType.Error);
+                            _ = Services.GetRequiredService<INotificationServiceEnhanced>()?.ShowToastAsync($"Cycle failed: {cycleResult.ErrorMessage}", NotificationType.Error);
                         }
                     }
                     else
                     {
                         // **UNIFIED PIPELINE**: All hotkey activation through optimized service
-                        var result = await ServiceLocator.HotkeyActivationService.ActivateCharacterByHotkeyAsync(e.HotkeyId);
+                        var result = await Services.GetRequiredService<IHotkeyActivationService>().ActivateCharacterByHotkeyAsync(e.HotkeyId);
                         
                         if (!result.Success && IsUnexpectedHotkeyError(result.ErrorMessage))
                         {
-                            _ = ServiceLocator.NotificationServiceEnhanced?.ShowToastAsync($"Hotkey failed: {result.ErrorMessage}", NotificationType.Error);
+                            _ = Services.GetRequiredService<INotificationServiceEnhanced>()?.ShowToastAsync($"Hotkey failed: {result.ErrorMessage}", NotificationType.Error);
                         }
                     }
                 };
@@ -79,11 +88,11 @@ namespace FFXIManager
                 {
                     try
                     {
-                        await ServiceLocator.HotkeyMappingService.RefreshMappingsAsync();
+                        await Services.GetRequiredService<IHotkeyMappingService>().RefreshMappingsAsync();
                     }
                     catch (Exception ex)
                     {
-                        _ = ServiceLocator.LoggingService.LogErrorAsync("Error initializing hotkey mappings", ex, "App");
+                        _ = Services.GetRequiredService<ILoggingService>().LogErrorAsync("Error initializing hotkey mappings", ex, "App");
                     }
                 });
                 
@@ -92,8 +101,8 @@ namespace FFXIManager
                 {
                     try
                     {
-                        Services.GlobalHotkeyManager.Instance.RefreshHotkeys();
-                        _ = Task.Run(() => ServiceLocator.HotkeyMappingService.RefreshMappingsAsync());
+                        Services.GetRequiredService<GlobalHotkeyManager>().RefreshHotkeys();
+                        _ = Task.Run(() => Services.GetRequiredService<IHotkeyMappingService>().RefreshMappingsAsync());
                     }
                     catch { }
                 };
@@ -103,6 +112,10 @@ namespace FFXIManager
                 // Default to dark theme if settings can't be loaded
                 ApplyTheme(true);
             }
+
+            // Show main window via DI
+            var window = Services.GetRequiredService<MainWindow>();
+            window.Show();
         }
         
 
@@ -159,12 +172,11 @@ namespace FFXIManager
             try
             {
                 // Unregister global hotkeys on exit to avoid leaving hooks active
-                Services.GlobalHotkeyManager.Instance.UnregisterAllHotkeys();
+                Services.GetRequiredService<GlobalHotkeyManager>().UnregisterAllHotkeys();
             }
             catch { }
 
-            // Properly dispose of all services before exiting
-            ServiceLocator.DisposeAll();
+            _host?.Dispose();
             base.OnExit(e);
         }
     }

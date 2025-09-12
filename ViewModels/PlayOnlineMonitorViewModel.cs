@@ -19,6 +19,9 @@ namespace FFXIManager.ViewModels
         private readonly IStatusMessageService _statusService;
         private readonly ILoggingService _loggingService;
         private readonly ICharacterOrderingService _characterOrderingService;
+        private readonly IHotkeyActivationService _hotkeyActivationService;
+        private readonly ISettingsService _settingsService;
+        private readonly IHotkeyMappingService _hotkeyMappingService;
         private readonly SemaphoreSlim _updateSemaphore = new(1, 1);
         private bool _isMonitoring = true;
         private bool _autoRefresh = true;
@@ -29,12 +32,19 @@ namespace FFXIManager.ViewModels
         public PlayOnlineMonitorViewModel(
             IPlayOnlineMonitorService monitorService,
             IStatusMessageService statusService,
-            ILoggingService loggingService)
+            ILoggingService loggingService,
+            ICharacterOrderingService characterOrderingService,
+            IHotkeyActivationService hotkeyActivationService,
+            ISettingsService settingsService,
+            IHotkeyMappingService hotkeyMappingService)
         {
             _monitorService = monitorService ?? throw new ArgumentNullException(nameof(monitorService));
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
-            _characterOrderingService = ServiceLocator.CharacterOrderingService;
+            _characterOrderingService = characterOrderingService ?? throw new ArgumentNullException(nameof(characterOrderingService));
+            _hotkeyActivationService = hotkeyActivationService ?? throw new ArgumentNullException(nameof(hotkeyActivationService));
+            _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+            _hotkeyMappingService = hotkeyMappingService ?? throw new ArgumentNullException(nameof(hotkeyMappingService));
 
             Characters = new ObservableCollection<PlayOnlineCharacter>();
 
@@ -52,7 +62,7 @@ namespace FFXIManager.ViewModels
             _monitorService.CharacterRemoved += OnCharacterRemoved;
             
             // Subscribe to hotkey activation service for persistent green border updates
-            ServiceLocator.HotkeyActivationService.CharacterActivated += OnCharacterActivatedViaHotkey;
+            _hotkeyActivationService.CharacterActivated += OnCharacterActivatedViaHotkey;
             
             // Start monitoring AFTER UI is ready to receive events
             _monitorService.StartMonitoring();
@@ -326,8 +336,7 @@ namespace FFXIManager.ViewModels
                 if (index < 0) return "No Hotkey";
 
                 // Get the hotkey settings
-                var settingsService = ServiceLocator.SettingsService;
-                var settings = settingsService.LoadSettings();
+                var settings = _settingsService.LoadSettings();
 
                 // Find the corresponding hotkey for this slot index
                 var shortcut = settings.CharacterSwitchShortcuts.FirstOrDefault(s => s.SlotIndex == index);
@@ -357,8 +366,7 @@ namespace FFXIManager.ViewModels
                 _statusService.SetMessage($"Activating {character.DisplayName}...");
 
                 // **CONSOLIDATION**: Use the unified activation service for consistency and performance
-                var activationService = ServiceLocator.HotkeyActivationService;
-                var result = await activationService.ActivateCharacterDirectAsync(character, _cts.Token);
+                var result = await _hotkeyActivationService.ActivateCharacterDirectAsync(character, _cts.Token);
 
                 if (result.Success)
                 {
@@ -400,9 +408,8 @@ namespace FFXIManager.ViewModels
         {
             try
             {
-                var activationService = ServiceLocator.HotkeyActivationService;
-                var stats = activationService.GetPerformanceStats();
-                var cacheStats = ServiceLocator.CharacterOrderingService.GetCacheStatistics();
+                var stats = _hotkeyActivationService.GetPerformanceStats();
+                var cacheStats = _characterOrderingService.GetCacheStatistics();
                 
                 AverageActivationTimeMs = stats.AverageActivationTimeMs;
                 CacheHitRate = (int)cacheStats.HitRate;
@@ -482,10 +489,10 @@ namespace FFXIManager.ViewModels
                         try
                         {
                             // Force immediate cache invalidation so hotkey system sees new character
-                            await ServiceLocator.CharacterOrderingService.InvalidateCacheAsync();
+                            await _characterOrderingService.InvalidateCacheAsync();
                             
                             // Refresh hotkey mappings so new character gets proper hotkey assignment
-                            await ServiceLocator.HotkeyMappingService.RefreshMappingsAsync();
+                            await _hotkeyMappingService.RefreshMappingsAsync();
                             
                             await _loggingService.LogInfoAsync($"✅ Character '{character.DisplayName}' is now available for hotkey switching", "PlayOnlineMonitorViewModel");
                         }
@@ -644,7 +651,7 @@ namespace FFXIManager.ViewModels
                 _monitorService.CharacterDetected -= OnCharacterDetected;
                 _monitorService.CharacterUpdated -= OnCharacterUpdated;
                 _monitorService.CharacterRemoved -= OnCharacterRemoved;
-                ServiceLocator.HotkeyActivationService.CharacterActivated -= OnCharacterActivatedViaHotkey;
+                _hotkeyActivationService.CharacterActivated -= OnCharacterActivatedViaHotkey;
                 
                 // Stop monitoring
                 _monitorService.StopMonitoring();

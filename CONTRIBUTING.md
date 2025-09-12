@@ -138,6 +138,11 @@ master (main branch)
    - [ ] Builds successfully
    ```
 
+### PR Requirements
+- Follow the coding rules in `AGENTS.md` and `.editorconfig`.
+- Do not bump `<Version>` in `FFXIManager.csproj`; versioning is handled by the release workflow via tags.
+- Include screenshots/GIFs for UI changes when helpful.
+
 ### PR Review Flow:
 1. **Automated build** runs via `build.yml`
 2. **Build artifacts** created for testing

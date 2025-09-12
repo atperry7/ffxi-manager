@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +18,8 @@ namespace FFXIManager.Services
         private readonly IUnifiedMonitoringService _unifiedMonitoring;
         private readonly ILoggingService _logging;
         private readonly IUiDispatcher _uiDispatcher;
+        private readonly IProcessUtilityService _processUtility;
+        private readonly ISettingsService _settingsService;
 
         private Guid _monitorId;
         private bool _isMonitoring;
@@ -92,12 +94,16 @@ namespace FFXIManager.Services
             IUnifiedMonitoringService unifiedMonitoring,
             ILoggingService logging,
             IUiDispatcher uiDispatcher,
-            IProcessManagementService? processManagement = null)
+            IProcessManagementService? processManagement,
+            IProcessUtilityService processUtility,
+            ISettingsService settingsService)
         {
             _unifiedMonitoring = unifiedMonitoring ?? throw new ArgumentNullException(nameof(unifiedMonitoring));
             _logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
             _processManagement = processManagement; // null = use ServiceLocator fallback
+            _processUtility = processUtility ?? throw new ArgumentNullException(nameof(processUtility));
+            _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
 
             // Load gaming-optimized settings
             LoadPerformanceSettings();
@@ -213,9 +219,8 @@ namespace FFXIManager.Services
             }
 
             // **CRITICAL FIX**: Validate window handle is still valid
-            var processUtility = ServiceLocator.ProcessUtilityService;
-            if (!processUtility.IsWindowValid(character.WindowHandle))
-            {
+            if (!_processUtility.IsWindowValid(character.WindowHandle))
+                {
                 await _logging.LogWarningAsync($"Cannot activate {character.DisplayName}: window handle 0x{character.WindowHandle.ToInt64():X} is no longer valid (process may have updated window title)", "PlayOnlineMonitorService");
                 
                 // Try to refresh character data to get updated window handle
@@ -331,8 +336,7 @@ namespace FFXIManager.Services
                 System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Starting for {character.DisplayName}");
 
                 // **ENHANCED**: Use ProcessUtilityService with detailed failure detection
-                var processUtility = ServiceLocator.ProcessUtilityService;
-                var result = await processUtility.ActivateWindowEnhancedAsync(character.WindowHandle, fastTimeoutMs);
+                var result = await _processUtility.ActivateWindowEnhancedAsync(character.WindowHandle, fastTimeoutMs);
 
                 if (result.Success)
                 {
@@ -593,8 +597,7 @@ namespace FFXIManager.Services
         {
             try
             {
-                var settingsService = ServiceLocator.SettingsService;
-                var settings = settingsService.LoadSettings();
+                var settings = _settingsService.LoadSettings();
 
                 _activationDebounceMs = settings.ActivationDebounceIntervalMs;
                 _minActivationIntervalMs = settings.MinActivationIntervalMs;
@@ -807,8 +810,7 @@ namespace FFXIManager.Services
                             await _logging.LogDebugAsync($"🔍 POL Title Check: Process {character.ProcessId} has no window handle, trying to find windows", "PlayOnlineMonitorService");
                             
                             // Get windows directly from ProcessUtilityService
-                            var processUtility = ServiceLocator.ProcessUtilityService;
-                            var windows = await processUtility.GetProcessWindowsAsync(character.ProcessId);
+                            var windows = await _processUtility.GetProcessWindowsAsync(character.ProcessId);
                             
                             if (windows.Count > 0)
                             {
@@ -920,3 +922,5 @@ namespace FFXIManager.Services
         #endregion
     }
 }
+
+
