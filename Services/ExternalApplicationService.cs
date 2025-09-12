@@ -69,7 +69,7 @@ namespace FFXIManager.Services
         {
             if (application == null) throw new ArgumentNullException(nameof(application));
 
-            await _logging.LogInfoAsync($"Adding application: {application.Name}", "ExternalApplicationService");
+            await _logging.LogInfoAsync("Adding application: {ApplicationName}", "ExternalApplicationService", application.Name);
 
             lock (_lock)
             {
@@ -92,7 +92,7 @@ namespace FFXIManager.Services
         {
             if (application == null) throw new ArgumentNullException(nameof(application));
 
-            await _logging.LogInfoAsync($"Updating application: {application.Name}", "ExternalApplicationService");
+            await _logging.LogInfoAsync("Updating application: {ApplicationName}", "ExternalApplicationService", application.Name);
 
             // Update monitoring profile
             UpdateApplicationProfile(application);
@@ -108,7 +108,7 @@ namespace FFXIManager.Services
         {
             if (application == null) throw new ArgumentNullException(nameof(application));
 
-            await _logging.LogInfoAsync($"Removing application: {application.Name}", "ExternalApplicationService");
+            await _logging.LogInfoAsync("Removing application: {ApplicationName}", "ExternalApplicationService", application.Name);
 
             // Kill if running
             if (application.IsRunning)
@@ -132,19 +132,19 @@ namespace FFXIManager.Services
         {
             if (application == null) throw new ArgumentNullException(nameof(application));
 
-            await _logging.LogInfoAsync($"Launching application: {application.Name}", "ExternalApplicationService");
+            await _logging.LogInfoAsync("Launching application: {ApplicationName}", "ExternalApplicationService", application.Name);
 
             if (!application.ExecutableExists)
             {
-                await _logging.LogWarningAsync($"Application executable not found: {application.ExecutablePath}",
-                    "ExternalApplicationService");
+                await _logging.LogWarningAsync("Application executable not found: {ExecutablePath}",
+                    "ExternalApplicationService", application.ExecutablePath);
                 return false;
             }
 
             if (!application.AllowMultipleInstances && application.IsRunning)
             {
-                await _logging.LogWarningAsync($"Application {application.Name} is already running",
-                    "ExternalApplicationService");
+                await _logging.LogWarningAsync("Application {ApplicationName} is already running",
+                    "ExternalApplicationService", application.Name);
                 return false;
             }
 
@@ -166,8 +166,8 @@ namespace FFXIManager.Services
                     application.AddProcessId(process.Id);
                     application.LastLaunched = DateTime.Now;
 
-                    await _logging.LogInfoAsync($"Successfully launched {application.Name} (PID: {process.Id})",
-                        "ExternalApplicationService");
+                    await _logging.LogInfoAsync("Successfully launched {ApplicationName} (PID: {ProcessId})",
+                        "ExternalApplicationService", application.Name, process.Id);
 
                     ApplicationStatusChanged?.Invoke(this, application);
                     return true;
@@ -177,7 +177,7 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                await _logging.LogErrorAsync($"Error launching {application.Name}", ex, "ExternalApplicationService");
+                await _logging.LogErrorAsync("Error launching {ApplicationName}", ex, "ExternalApplicationService", application.Name);
                 return false;
             }
         }
@@ -187,7 +187,7 @@ namespace FFXIManager.Services
             if (application == null || !application.IsRunning)
                 return false;
 
-            await _logging.LogInfoAsync($"Killing application: {application.Name}", "ExternalApplicationService");
+            await _logging.LogInfoAsync("Killing application: {ApplicationName}", "ExternalApplicationService", application.Name);
 
             try
             {
@@ -209,7 +209,7 @@ namespace FFXIManager.Services
 
                 if (!application.IsRunning)
                 {
-                    await _logging.LogInfoAsync($"Successfully killed {application.Name}", "ExternalApplicationService");
+                    await _logging.LogInfoAsync("Successfully killed {ApplicationName}", "ExternalApplicationService", application.Name);
                     ApplicationStatusChanged?.Invoke(this, application);
                 }
 
@@ -217,7 +217,7 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                await _logging.LogErrorAsync($"Error killing {application.Name}", ex, "ExternalApplicationService");
+                await _logging.LogErrorAsync("Error killing {ApplicationName}", ex, "ExternalApplicationService", application.Name);
                 return false;
             }
         }
@@ -269,16 +269,16 @@ namespace FFXIManager.Services
                     application.OnPropertyChanged(nameof(application.StatusColor));
                     application.OnPropertyChanged(nameof(application.StatusText));
 
-                    await _logging.LogInfoAsync($"Application {application.Name} status changed: {(application.IsRunning ? "STARTED" : "STOPPED")}",
-                        "ExternalApplicationService");
+                    await _logging.LogInfoAsync("Application {ApplicationName} status changed: {Status}",
+                        "ExternalApplicationService", application.Name, application.IsRunning ? "STARTED" : "STOPPED");
 
                     ApplicationStatusChanged?.Invoke(this, application);
                 }
             }
             catch (Exception ex)
             {
-                await _logging.LogWarningAsync($"Error refreshing status for {application.Name}: {ex.Message}",
-                    "ExternalApplicationService");
+                await _logging.LogWarningAsync("Error refreshing status for {ApplicationName}: {ErrorMessage}",
+                    "ExternalApplicationService", application.Name, ex.Message);
             }
         }
 
@@ -346,8 +346,8 @@ namespace FFXIManager.Services
                 _monitorToAppMap[monitorId] = app;
             }
 
-            _ = _logging.LogDebugAsync($"Registered monitoring profile for {app.Name} (Monitor: {monitorId})",
-                "ExternalApplicationService");
+            _ = _logging.LogDebugAsync("Registered monitoring profile for {ApplicationName} (Monitor: {MonitorId})",
+                "ExternalApplicationService", app.Name, monitorId);
         }
 
         private void UpdateApplicationProfile(ExternalApplication app)
@@ -416,8 +416,8 @@ namespace FFXIManager.Services
                 app.AddProcessId(e.Process.ProcessId);
                 ApplicationStatusChanged?.Invoke(this, app);
 
-                _ = _logging.LogInfoAsync($"Process detected for {app.Name}: PID {e.Process.ProcessId}",
-                    "ExternalApplicationService");
+                _ = _logging.LogInfoAsync("Process detected for {ApplicationName}: PID {ProcessId}",
+                    "ExternalApplicationService", app.Name, e.Process.ProcessId);
             }
         }
 
@@ -441,8 +441,8 @@ namespace FFXIManager.Services
                 app.RemoveProcessId(e.Process.ProcessId);
                 ApplicationStatusChanged?.Invoke(this, app);
 
-                _ = _logging.LogInfoAsync($"Process terminated for {app.Name}: PID {e.Process.ProcessId}",
-                    "ExternalApplicationService");
+                _ = _logging.LogInfoAsync("Process terminated for {ApplicationName}: PID {ProcessId}",
+                    "ExternalApplicationService", app.Name, e.Process.ProcessId);
             }
         }
 
@@ -469,8 +469,8 @@ namespace FFXIManager.Services
                         _applications.Add(application);
                     }
 
-                    _ = _logging.LogInfoAsync($"Loaded {_applications.Count} applications from settings",
-                        "ExternalApplicationService");
+                    _ = _logging.LogInfoAsync("Loaded {ApplicationCount} applications from settings",
+                        "ExternalApplicationService", _applications.Count);
                 }
                 else
                 {
@@ -515,7 +515,7 @@ namespace FFXIManager.Services
 
                 _settings.SaveSettings(settings);
 
-                await _logging.LogInfoAsync($"Saved {apps.Count} applications to settings", "ExternalApplicationService");
+                await _logging.LogInfoAsync("Saved {ApplicationCount} applications to settings", "ExternalApplicationService", apps.Count);
             }
             catch (Exception ex)
             {
