@@ -84,7 +84,7 @@ namespace FFXIManager.Services
                         
                         if (!isPlayStation)
                         {
-                            _loggingService.LogInfoAsync($"⏭️ Skipping non-PlayStation controller: {deviceInstance.ProductName}", "DirectInputController");
+                            _loggingService.LogInfoAsync("⏭️ Skipping non-PlayStation controller: {ProductName}", "DirectInputController", deviceInstance.ProductName);
                             continue;
                         }
 
@@ -99,12 +99,12 @@ namespace FFXIManager.Services
                         _joysticks.Add(joystick);
                         IsAnyControllerConnected = true;
                         
-                        _loggingService.LogInfoAsync($"✅ PlayStation controller detected: {deviceInstance.ProductName} (GUID: {deviceInstance.InstanceGuid})", "DirectInputController");
-                        _loggingService.LogInfoAsync($"   Type: {deviceInstance.Type}, Subtype: {deviceInstance.Subtype}", "DirectInputController");
+                        _loggingService.LogInfoAsync("✅ PlayStation controller detected: {ProductName} (GUID: {InstanceGuid})", "DirectInputController", deviceInstance.ProductName, deviceInstance.InstanceGuid);
+                        _loggingService.LogInfoAsync("   Type: {Type}, Subtype: {Subtype}", "DirectInputController", deviceInstance.Type, deviceInstance.Subtype);
                     }
                     catch (Exception ex)
                     {
-                        _loggingService.LogErrorAsync($"Failed to initialize controller: {deviceInstance.ProductName}", ex, "DirectInputController");
+                        _loggingService.LogErrorAsync("Failed to initialize controller: {ProductName}", "DirectInputController", ex, deviceInstance.ProductName);
                     }
                 }
 
@@ -132,12 +132,12 @@ namespace FFXIManager.Services
             try
             {
                 _registeredButtons.TryAdd(button, hotkeyId);
-                _loggingService.LogInfoAsync($"✓ Registered DirectInput button: {button.GetDescription()} (ID: {hotkeyId})", "DirectInputController");
+                _loggingService.LogInfoAsync("✓ Registered DirectInput button: {ButtonDescription} (ID: {HotkeyId})", "DirectInputController", button.GetDescription(), hotkeyId);
                 return true;
             }
             catch (Exception ex)
             {
-                _loggingService.LogErrorAsync($"Failed to register DirectInput button: {button}", ex, "DirectInputController");
+                _loggingService.LogErrorAsync("Failed to register DirectInput button: {Button}", "DirectInputController", ex, button);
                 return false;
             }
         }
@@ -200,7 +200,7 @@ namespace FFXIManager.Services
                 catch (SharpDX.SharpDXException ex) when ((uint)ex.HResult == 0x8007001E) // DIERR_INPUTLOST
                 {
                     // Controller disconnected
-                    _loggingService.LogInfoAsync($"🔌 PlayStation controller disconnected: {joystick.Information.InstanceGuid}", "DirectInputController");
+                    _loggingService.LogInfoAsync("🔌 PlayStation controller disconnected: {InstanceGuid}", "DirectInputController", joystick.Information.InstanceGuid);
                     _joysticks.Remove(joystick);
                     joystick.Dispose();
                     IsAnyControllerConnected = _joysticks.Count > 0;
@@ -233,8 +233,8 @@ namespace FFXIManager.Services
                         ButtonPressed?.Invoke(this, args);
 
                         await _loggingService.LogInfoAsync(
-                            $"🎮 DirectInput button pressed: {button.GetDescription()} (Controller {controllerId:N}, ID: {hotkeyId})",
-                            "DirectInputController");
+                            "🎮 DirectInput button pressed: {ButtonDescription} (Controller {ControllerId:N}, ID: {HotkeyId})",
+                            "DirectInputController", button.GetDescription(), controllerId, hotkeyId);
                     }
                 }
             }
@@ -301,7 +301,7 @@ namespace FFXIManager.Services
                     catch (Exception ex)
                     {
                         // Log but don't rethrow during disposal
-                        _loggingService?.LogWarningAsync($"Error disposing joystick: {ex.Message}", "DirectInputController");
+                        _loggingService?.LogWarningAsync("Error disposing joystick: {ErrorMessage}", "DirectInputController", ex.Message);
                     }
                 }
                 _joysticks.Clear();
@@ -336,7 +336,7 @@ namespace FFXIManager.Services
                     catch (Exception ex)
                     {
                         // Log but don't rethrow during disposal
-                        _loggingService?.LogWarningAsync($"Error disposing joystick: {ex.Message}", "DirectInputController");
+                        _loggingService?.LogWarningAsync("Error disposing joystick: {ErrorMessage}", "DirectInputController", ex.Message);
                     }
                 }
                 _joysticks.Clear();
