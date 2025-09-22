@@ -32,7 +32,8 @@ namespace FFXIManager.ViewModels
             IHotkeyActivationService hotkeyActivationService,
             IUiDispatcher uiDispatcher,
             IHotkeyMappingService hotkeyMappingService,
-            IPlayOnlineMemberAccountService memberAccountService)
+            IPlayOnlineMemberAccountService memberAccountService,
+            IOTPService otpService)
         {
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
             _configService = configService ?? throw new ArgumentNullException(nameof(configService));
@@ -54,7 +55,7 @@ namespace FFXIManager.ViewModels
 
             PlayOnlineMemberAccounts = new PlayOnlineMemberAccountsViewModel(
                 memberAccountService, statusService, loggingService,
-                dialogService, uiDispatcher);
+                dialogService, uiDispatcher, otpService);
 
             UICommands = new UICommandsViewModel(uiCommandService, notificationServiceEnhanced);
 

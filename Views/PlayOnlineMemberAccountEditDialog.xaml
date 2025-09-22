@@ -61,17 +61,36 @@
 
                 <!-- OTP Configuration -->
                 <Label Content="One-Time Password (OTP):" Margin="0,15,0,0"/>
-                <CheckBox Content="Enable OTP for this account"
+                <CheckBox x:Name="OTPEnabledCheckBox"
+                          Content="Enable OTP for this account"
                           IsChecked="{Binding Account.OTPConfiguration.IsEnabled}"
                           Margin="0,5,0,0"
                           ToolTip="Check this if you use a Security Token or Software Token"/>
 
-                <TextBlock Text="📱 OTP token generation will be implemented in a future version."
-                           FontSize="10"
-                           Foreground="{DynamicResource SecondaryTextBrush}"
-                           Margin="0,5,0,0"
-                           TextWrapping="Wrap"
-                           Visibility="{Binding Account.OTPConfiguration.IsEnabled, Converter={StaticResource BoolToVisConverter}}"/>
+                <!-- OTP Authentication Key Input -->
+                <StackPanel Visibility="{Binding Account.OTPConfiguration.IsEnabled, Converter={StaticResource BoolToVisConverter}}"
+                            Margin="0,10,0,0">
+                    <Label Content="Square Enix Authentication Key:" Target="{Binding ElementName=AuthKeyTextBox}"/>
+                    <TextBox x:Name="AuthKeyTextBox"
+                             Text="{Binding AuthenticationKeyInput, UpdateSourceTrigger=PropertyChanged}"
+                             TextChanged="AuthKeyTextBox_TextChanged"
+                             ToolTip="Enter your 32-character Square Enix authentication key (with or without spaces)"
+                             MaxLength="39"
+                             CharacterCasing="Upper"/>
+
+                    <TextBlock Text="Example: OBQV O3CU GA4V A6SN PJGW Q33B I5DF EVKW"
+                               FontSize="10"
+                               Foreground="{DynamicResource SecondaryTextBrush}"
+                               FontStyle="Italic"
+                               Margin="0,2,0,0"/>
+
+                    <TextBlock x:Name="OTPSecretStatusText"
+                               Text="🔐 OTP secret is securely stored"
+                               FontSize="10"
+                               Foreground="{DynamicResource SuccessBrush}"
+                               Margin="0,5,0,0"
+                               Visibility="{Binding Account.OTPConfiguration.HasStoredSecret, Converter={StaticResource BoolToVisConverter}}"/>
+                </StackPanel>
 
                 <!-- Information Panel -->
                 <Border Background="{DynamicResource InfoBackgroundBrush}"

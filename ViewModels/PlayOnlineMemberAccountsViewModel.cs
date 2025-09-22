@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Windows.Threading;
 using FFXIManager.Infrastructure;
 using FFXIManager.Models;
 using FFXIManager.Services;
@@ -16,31 +17,36 @@ namespace FFXIManager.ViewModels
     /// <summary>
     /// ViewModel for managing PlayOnline Member Account associations
     /// </summary>
-    public class PlayOnlineMemberAccountsViewModel : ViewModelBase
+    public class PlayOnlineMemberAccountsViewModel : ViewModelBase, IDisposable
     {
         private readonly IPlayOnlineMemberAccountService _accountService;
         private readonly IStatusMessageService _statusService;
         private readonly ILoggingService _loggingService;
         private readonly IDialogService _dialogService;
         private readonly IUiDispatcher _uiDispatcher;
+        private readonly IOTPService _otpService;
 
         private ProfileInfo? _currentProfile;
         private PlayOnlineMemberAccount? _selectedAccount;
         private bool _isLoading;
         private string _accountsHeader = "PlayOnline Member Accounts";
+        private DispatcherTimer? _otpRefreshTimer;
+        private bool _disposed;
 
         public PlayOnlineMemberAccountsViewModel(
             IPlayOnlineMemberAccountService accountService,
             IStatusMessageService statusService,
             ILoggingService loggingService,
             IDialogService dialogService,
-            IUiDispatcher uiDispatcher)
+            IUiDispatcher uiDispatcher,
+            IOTPService otpService)
         {
             _accountService = accountService ?? throw new ArgumentNullException(nameof(accountService));
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
+            _otpService = otpService ?? throw new ArgumentNullException(nameof(otpService));
 
             Accounts = new ObservableCollection<PlayOnlineMemberAccount>();
             Accounts.CollectionChanged += (_, _) =>
@@ -49,6 +55,7 @@ namespace FFXIManager.ViewModels
                 UpdateCommandStates();
             };
             InitializeCommands();
+            InitializeOTPTimer();
         }
 
         #region Properties
@@ -68,6 +75,9 @@ namespace FFXIManager.ViewModels
             {
                 if (SetProperty(ref _currentProfile, value))
                 {
+                    // Stop timer when profile changes since all OTP codes will be cleared
+                    _otpRefreshTimer?.Stop();
+
                     _ = RefreshAccountsAsync();
                     UpdateAccountsHeader();
                     OnPropertyChanged(nameof(HasProfileSelected));
@@ -132,6 +142,7 @@ namespace FFXIManager.ViewModels
         // Parameter-based commands for context menu
         public ICommand EditAccountParameterCommand { get; private set; } = null!;
         public ICommand DeleteAccountParameterCommand { get; private set; } = null!;
+        public ICommand ToggleOTPVisibilityCommand { get; private set; } = null!;
 
         private void InitializeCommands()
         {
@@ -142,6 +153,7 @@ namespace FFXIManager.ViewModels
 
             EditAccountParameterCommand = new RelayCommandWithParameter<PlayOnlineMemberAccount>(async account => await EditAccountAsync(account));
             DeleteAccountParameterCommand = new RelayCommandWithParameter<PlayOnlineMemberAccount>(async account => await DeleteAccountAsync(account));
+            ToggleOTPVisibilityCommand = new RelayCommandWithParameter<PlayOnlineMemberAccount>(async account => await ToggleOTPVisibilityAsync(account));
         }
 
         #endregion
@@ -187,6 +199,20 @@ namespace FFXIManager.ViewModels
                         editVm.Account.HasStoredPassword = true;
                     }
 
+                    // Store OTP authentication key if provided
+                    if (editVm.Account.OTPConfiguration?.IsEnabled == true && !string.IsNullOrWhiteSpace(dialog.EnteredAuthenticationKey))
+                    {
+                        var otpStored = await _otpService.StoreOTPSecretAsync(CurrentProfile.FilePath, editVm.Account.Id, dialog.EnteredAuthenticationKey);
+                        if (otpStored)
+                        {
+                            editVm.Account.OTPConfiguration.HasStoredSecret = true;
+                        }
+                        else
+                        {
+                            _statusService.SetTemporaryMessage("Failed to store OTP authentication key", TimeSpan.FromSeconds(3));
+                        }
+                    }
+
                     await RefreshAccountsAsync();
                     _statusService.SetTemporaryMessage($"Added account: {editVm.Account.DisplayName}", TimeSpan.FromSeconds(3));
                 }
@@ -219,7 +245,12 @@ namespace FFXIManager.ViewModels
                 AccountName = account.AccountName,
                 HasStoredPassword = account.HasStoredPassword,
                 OTPConfiguration = account.OTPConfiguration != null
-                    ? new OTPConfiguration { IsEnabled = account.OTPConfiguration.IsEnabled }
+                    ? new OTPConfiguration
+                    {
+                        IsEnabled = account.OTPConfiguration.IsEnabled,
+                        HasStoredSecret = account.OTPConfiguration.HasStoredSecret,
+                        ProviderName = account.OTPConfiguration.ProviderName
+                    }
                     : null
             };
 
@@ -242,6 +273,26 @@ namespace FFXIManager.ViewModels
                     {
                         await _accountService.SetAccountPasswordAsync(CurrentProfile.FilePath, editVm.Account.Id, dialog.EnteredPassword);
                         editVm.Account.HasStoredPassword = true;
+                    }
+
+                    // Update OTP authentication key if provided
+                    if (editVm.Account.OTPConfiguration?.IsEnabled == true && !string.IsNullOrWhiteSpace(dialog.EnteredAuthenticationKey))
+                    {
+                        var otpStored = await _otpService.StoreOTPSecretAsync(CurrentProfile.FilePath, editVm.Account.Id, dialog.EnteredAuthenticationKey);
+                        if (otpStored)
+                        {
+                            editVm.Account.OTPConfiguration.HasStoredSecret = true;
+                        }
+                        else
+                        {
+                            _statusService.SetTemporaryMessage("Failed to store OTP authentication key", TimeSpan.FromSeconds(3));
+                        }
+                    }
+                    else if (editVm.Account.OTPConfiguration?.IsEnabled == false)
+                    {
+                        // OTP was disabled, remove stored secret
+                        await _otpService.DeleteOTPSecretAsync(CurrentProfile.FilePath, editVm.Account.Id);
+                        editVm.Account.OTPConfiguration.HasStoredSecret = false;
                     }
 
                     await RefreshAccountsAsync();
@@ -277,6 +328,12 @@ namespace FFXIManager.ViewModels
 
                 if (success)
                 {
+                    // Clean up OTP secret if it exists
+                    if (account.OTPConfiguration?.HasStoredSecret == true)
+                    {
+                        await _otpService.DeleteOTPSecretAsync(CurrentProfile.FilePath, account.Id);
+                    }
+
                     await RefreshAccountsAsync();
                     _statusService.SetTemporaryMessage($"Deleted account: {account.DisplayName}", TimeSpan.FromSeconds(3));
                 }
@@ -287,12 +344,61 @@ namespace FFXIManager.ViewModels
             }
         }
 
+        private async Task ToggleOTPVisibilityAsync(PlayOnlineMemberAccount account)
+        {
+            if (CurrentProfile == null || account == null || !account.IsOTPEnabled)
+                return;
+
+            try
+            {
+                if (account.IsOTPCodeVisible)
+                {
+                    // Hide the code
+                    account.IsOTPCodeVisible = false;
+                    account.CurrentOTPCode = null;
+                    account.OTPTimeRemaining = 100.0; // Reset progress
+                }
+                else
+                {
+                    // Show the code - generate current OTP
+                    var otpCode = await _otpService.GenerateOTPCodeAsync(CurrentProfile.FilePath, account.Id);
+                    if (otpCode != null)
+                    {
+                        account.CurrentOTPCode = otpCode;
+                        account.IsOTPCodeVisible = true;
+
+                        // Initialize progress for the current time window
+                        var unixTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                        var secondsInWindow = (int)(unixTime % 30);
+                        account.OTPTimeRemaining = (30 - secondsInWindow) / 30.0 * 100.0;
+
+                        // Start timer if this is the first visible OTP
+                        CheckAndStartOTPTimer();
+                    }
+                    else
+                    {
+                        _statusService.SetTemporaryMessage("Failed to generate OTP code", TimeSpan.FromSeconds(3));
+                    }
+                }
+
+                // Check if we should stop the timer (no visible OTPs)
+                CheckAndStopOTPTimer();
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error toggling OTP visibility", ex);
+                _statusService.SetTemporaryMessage("Error displaying OTP code", TimeSpan.FromSeconds(3));
+            }
+        }
+
         private async Task RefreshAccountsAsync()
         {
             if (CurrentProfile == null || CurrentProfile.IsSystemFile)
             {
                 await _uiDispatcher.InvokeAsync(() =>
                 {
+                    // Stop timer before clearing accounts to prevent accessing deleted accounts
+                    _otpRefreshTimer?.Stop();
                     Accounts.Clear();
                     OnPropertyChanged(nameof(HasProfileSelected));
                     OnPropertyChanged(nameof(CanAddAccount));
@@ -307,6 +413,8 @@ namespace FFXIManager.ViewModels
 
                 await _uiDispatcher.InvokeAsync(() =>
                 {
+                    // Stop timer before clearing accounts to prevent accessing deleted accounts
+                    _otpRefreshTimer?.Stop();
                     Accounts.Clear();
                     foreach (var account in accounts.OrderBy(a => a.POLMemberSlot))
                     {
@@ -327,6 +435,146 @@ namespace FFXIManager.ViewModels
             finally
             {
                 IsLoading = false;
+            }
+        }
+
+        #endregion
+
+        #region OTP Timer Management
+
+        private void InitializeOTPTimer()
+        {
+            _otpRefreshTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1) // Update every second for smooth progress bars
+            };
+            _otpRefreshTimer.Tick += async (_, _) => await UpdateOTPCodesAndProgressAsync();
+        }
+
+        private void CheckAndStartOTPTimer()
+        {
+            if (_otpRefreshTimer?.IsEnabled != true && HasVisibleOTPCodes())
+            {
+                _otpRefreshTimer?.Start();
+                _loggingService.LogDebugAsync("Started OTP refresh timer");
+            }
+        }
+
+        private void CheckAndStopOTPTimer()
+        {
+            if (_otpRefreshTimer?.IsEnabled == true && !HasVisibleOTPCodes())
+            {
+                _otpRefreshTimer?.Stop();
+                _loggingService.LogDebugAsync("Stopped OTP refresh timer");
+            }
+        }
+
+        private bool HasVisibleOTPCodes()
+        {
+            try
+            {
+                return Accounts?.Any(a => a != null && a.IsOTPCodeVisible) == true;
+            }
+            catch
+            {
+                // Collection modified during enumeration - assume no visible codes
+                return false;
+            }
+        }
+
+        private async Task UpdateOTPCodesAndProgressAsync()
+        {
+            // Safety check - if disposed or invalid state, stop timer
+            if (_disposed || CurrentProfile == null || Accounts == null)
+            {
+                _otpRefreshTimer?.Stop();
+                return;
+            }
+
+            // Get visible accounts safely
+            List<PlayOnlineMemberAccount> visibleAccounts;
+            try
+            {
+                visibleAccounts = Accounts.Where(a => a != null && a.IsOTPCodeVisible).ToList();
+            }
+            catch (Exception ex)
+            {
+                // Collection may have been modified during enumeration
+                await _loggingService.LogWarningAsync("OTP timer: Accounts collection modified during enumeration", ex);
+                _otpRefreshTimer?.Stop();
+                return;
+            }
+
+            if (visibleAccounts.Count == 0)
+            {
+                CheckAndStopOTPTimer();
+                return;
+            }
+
+            // Calculate current time within TOTP 30-second window
+            var unixTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var secondsInWindow = (int)(unixTime % 30);
+            var progressPercentage = (30 - secondsInWindow) / 30.0 * 100.0;
+
+            // Update progress for all visible accounts
+            foreach (var account in visibleAccounts)
+            {
+                account.OTPTimeRemaining = progressPercentage;
+            }
+
+            // Refresh OTP codes when we hit a new 30-second window (secondsInWindow == 0 or close to it)
+            if (secondsInWindow <= 1) // Refresh in the first second of each new window
+            {
+                foreach (var account in visibleAccounts)
+                {
+                    try
+                    {
+                        var otpCode = await _otpService.GenerateOTPCodeAsync(CurrentProfile.FilePath, account.Id);
+                        if (otpCode != null)
+                        {
+                            account.CurrentOTPCode = otpCode;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        await _loggingService.LogErrorAsync($"Error refreshing OTP code for account {account.AccountName}", ex);
+                        // Don't stop the timer for individual account failures
+                    }
+                }
+
+                await _loggingService.LogDebugAsync($"Refreshed {visibleAccounts.Count} visible OTP codes");
+            }
+        }
+
+        /// <summary>
+        /// Cleanup resources when ViewModel is disposed
+        /// </summary>
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed && disposing)
+            {
+                // Stop and dispose timer
+                _otpRefreshTimer?.Stop();
+                _otpRefreshTimer = null;
+
+                // Clear any visible OTP codes to ensure clean state
+                if (Accounts != null)
+                {
+                    foreach (var account in Accounts.Where(a => a != null && a.IsOTPCodeVisible))
+                    {
+                        account.IsOTPCodeVisible = false;
+                        account.CurrentOTPCode = null;
+                        account.OTPTimeRemaining = 100.0;
+                    }
+                }
+
+                _disposed = true;
             }
         }
 
@@ -381,6 +629,7 @@ namespace FFXIManager.ViewModels
     public class PlayOnlineMemberAccountEditViewModel : ViewModelBase
     {
         private readonly List<PlayOnlineMemberAccount> _existingAccounts;
+        private string _authenticationKeyInput = string.Empty;
 
         public PlayOnlineMemberAccountEditViewModel(
             PlayOnlineMemberAccount account,
@@ -403,6 +652,15 @@ namespace FFXIManager.ViewModels
         public bool IsEditMode => Account.Id != Guid.Empty;
 
         public string DialogTitle => IsEditMode ? "Edit PlayOnline Member Account" : "Add PlayOnline Member Account";
+
+        /// <summary>
+        /// Authentication key input for OTP configuration
+        /// </summary>
+        public string AuthenticationKeyInput
+        {
+            get => _authenticationKeyInput;
+            set => SetProperty(ref _authenticationKeyInput, value);
+        }
 
         /// <summary>
         /// Available POL Member Slots (1-4)

@@ -15,6 +15,9 @@ namespace FFXIManager.Models
         private OTPConfiguration? _otpConfiguration;
         private string _accountName = string.Empty;
         private bool _hasStoredPassword;
+        private bool _isOTPCodeVisible = false;
+        private string? _currentOTPCode;
+        private double _otpTimeRemaining = 100.0;
 
         /// <summary>
         /// Unique identifier for this account association
@@ -86,6 +89,53 @@ namespace FFXIManager.Models
         public bool IsOTPEnabled => OTPConfiguration?.IsEnabled ?? false;
 
         /// <summary>
+        /// Gets or sets whether the OTP code is currently visible (not masked)
+        /// </summary>
+        public bool IsOTPCodeVisible
+        {
+            get => _isOTPCodeVisible;
+            set => SetProperty(ref _isOTPCodeVisible, value);
+        }
+
+        /// <summary>
+        /// Gets or sets the current OTP code for display
+        /// </summary>
+        public string? CurrentOTPCode
+        {
+            get => _currentOTPCode;
+            set => SetProperty(ref _currentOTPCode, value);
+        }
+
+        /// <summary>
+        /// Gets or sets the time remaining on the current OTP code (0-100%)
+        /// </summary>
+        public double OTPTimeRemaining
+        {
+            get => _otpTimeRemaining;
+            set => SetProperty(ref _otpTimeRemaining, value);
+        }
+
+        /// <summary>
+        /// Gets the display text for OTP code (masked or actual code)
+        /// </summary>
+        public string OTPCodeDisplay
+        {
+            get
+            {
+                if (!IsOTPEnabled)
+                    return "N/A";
+
+                if (!OTPConfiguration?.HasStoredSecret == true)
+                    return "No Key";
+
+                if (string.IsNullOrEmpty(CurrentOTPCode))
+                    return "------";
+
+                return IsOTPCodeVisible ? CurrentOTPCode : "••••••";
+            }
+        }
+
+        /// <summary>
         /// Gets a display-friendly description of this account
         /// </summary>
         public string DisplayName
@@ -114,7 +164,7 @@ namespace FFXIManager.Models
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
-            // Update DisplayName when relevant properties change
+            // Update computed properties when dependencies change
             if (propertyName == nameof(AccountName) ||
                 propertyName == nameof(POLMemberSlot) ||
                 propertyName == nameof(FFXICharacterSlot) ||
@@ -125,7 +175,15 @@ namespace FFXIManager.Models
                 if (propertyName == nameof(OTPConfiguration))
                 {
                     OnPropertyChanged(nameof(IsOTPEnabled));
+                    OnPropertyChanged(nameof(OTPCodeDisplay));
                 }
+            }
+
+            // Update OTP display when visibility or code changes
+            if (propertyName == nameof(IsOTPCodeVisible) ||
+                propertyName == nameof(CurrentOTPCode))
+            {
+                OnPropertyChanged(nameof(OTPCodeDisplay));
             }
         }
 

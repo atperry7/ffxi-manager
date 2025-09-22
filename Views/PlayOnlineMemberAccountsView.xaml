@@ -94,27 +94,6 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTemplateColumn Header="OTP" Width="50">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding IsOTPEnabled, Converter={StaticResource BoolToYesNoConverter}}"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsOTPEnabled}" Value="True">
-                                                    <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}"/>
-                                                    <Setter Property="FontWeight" Value="SemiBold"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
                     <DataGridTemplateColumn Header="Password" Width="80">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
@@ -135,6 +114,60 @@
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="OTP" Width="110">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <StackPanel Orientation="Vertical" VerticalAlignment="Center" Width="70">
+                                        <TextBlock Text="{Binding OTPCodeDisplay}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
+                                                   FontFamily="Consolas"
+                                                   FontSize="11"
+                                                   Margin="0,0,0,2">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsOTPEnabled}" Value="True">
+                                                            <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <ProgressBar Value="{Binding OTPTimeRemaining}"
+                                                     Height="3"
+                                                     Maximum="100"
+                                                     Minimum="0"
+                                                     Background="Transparent"
+                                                     BorderThickness="0">
+                                            <ProgressBar.Style>
+                                                <Style TargetType="ProgressBar">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsOTPCodeVisible}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ProgressBar.Style>
+                                        </ProgressBar>
+                                    </StackPanel>
+                                    <Button Content="👁️"
+                                            Style="{StaticResource InfoIconButton}"
+                                            Command="{Binding DataContext.ToggleOTPVisibilityCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip="Show/Hide OTP Code"
+                                            Margin="4,0,0,0"
+                                            Width="20"
+                                            Height="20"
+                                            FontSize="10"
+                                            Visibility="{Binding IsOTPEnabled, Converter={StaticResource BoolToVisConverter}}"/>
+                                </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>

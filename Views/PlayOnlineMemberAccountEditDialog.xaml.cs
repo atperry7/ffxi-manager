@@ -22,6 +22,11 @@ namespace FFXIManager.Views
         /// </summary>
         public bool HasPasswordUpdate => !string.IsNullOrWhiteSpace(PasswordBox.Password) || (ViewModel?.Account?.HasStoredPassword == true);
 
+        /// <summary>
+        /// Gets the entered authentication key for OTP (for secure storage via Windows Credentials)
+        /// </summary>
+        public string EnteredAuthenticationKey => AuthKeyTextBox.Text;
+
         public PlayOnlineMemberAccountEditDialog()
         {
             InitializeComponent();
@@ -33,8 +38,12 @@ namespace FFXIManager.Views
             // Clear password box for security - passwords will be managed separately
             PasswordBox.Password = string.Empty;
 
-            // Set initial password field border color based on stored password status
+            // Clear authentication key box for security - keys will be managed separately
+            AuthKeyTextBox.Text = string.Empty;
+
+            // Set initial field border colors based on stored status
             UpdatePasswordFieldColor();
+            UpdateAuthKeyFieldColor();
 
             // Focus the first input
             if (string.IsNullOrEmpty(AccountNameTextBox.Text))
@@ -52,6 +61,11 @@ namespace FFXIManager.Views
             // Mark as typing when user changes password
             _isUserTyping = !string.IsNullOrEmpty(PasswordBox.Password);
             UpdatePasswordFieldColor();
+        }
+
+        private void AuthKeyTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            UpdateAuthKeyFieldColor();
         }
 
         private void OkButton_Click(object sender, RoutedEventArgs e)
@@ -126,6 +140,44 @@ namespace FFXIManager.Views
             }
             // If hasExistingPassword is true and no new password entered, keep existing password
 
+            // Handle OTP validation if enabled
+            if (ViewModel.Account.OTPConfiguration?.IsEnabled == true)
+            {
+                bool hasNewAuthKey = !string.IsNullOrWhiteSpace(AuthKeyTextBox.Text);
+                bool hasExistingAuthKey = ViewModel?.Account?.OTPConfiguration?.HasStoredSecret == true;
+
+                if (hasNewAuthKey)
+                {
+                    // Validate the authentication key format
+                    var normalizedKey = ValidateAuthenticationKey(AuthKeyTextBox.Text);
+                    if (normalizedKey == null)
+                    {
+                        MessageBox.Show(
+                            "Invalid authentication key format. Please enter a 32-character Square Enix authentication key (with or without spaces).\n\nExample: OBQV O3CU GA4V A6SN PJGW Q33B I5DF EVKW",
+                            "Invalid Authentication Key",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+                        AuthKeyTextBox.Focus();
+                        return;
+                    }
+                }
+                else if (!hasExistingAuthKey)
+                {
+                    // OTP is enabled but no authentication key provided
+                    var result = MessageBox.Show(
+                        "OTP is enabled but no authentication key was provided. OTP functionality will not work without an authentication key.\n\nDo you want to continue without an authentication key?",
+                        "Missing Authentication Key",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+
+                    if (result == MessageBoxResult.No)
+                    {
+                        AuthKeyTextBox.Focus();
+                        return;
+                    }
+                }
+            }
+
             DialogResult = true;
         }
 
@@ -167,6 +219,61 @@ namespace FFXIManager.Views
 
             // Set border thickness to make the color more visible
             PasswordBox.BorderThickness = new System.Windows.Thickness(2);
+        }
+
+        private void UpdateAuthKeyFieldColor()
+        {
+            if (ViewModel?.Account?.OTPConfiguration == null || !ViewModel.Account.OTPConfiguration.IsEnabled) return;
+
+            if (!string.IsNullOrWhiteSpace(AuthKeyTextBox.Text))
+            {
+                var normalizedKey = ValidateAuthenticationKey(AuthKeyTextBox.Text);
+                if (normalizedKey != null)
+                {
+                    // Green: Valid key format
+                    AuthKeyTextBox.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94)); // Green
+                }
+                else
+                {
+                    // Red: Invalid key format
+                    AuthKeyTextBox.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68)); // Red
+                }
+            }
+            else if (ViewModel.Account.OTPConfiguration.HasStoredSecret)
+            {
+                // Blue: No input but has stored secret
+                AuthKeyTextBox.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(59, 130, 246)); // Blue
+            }
+            else
+            {
+                // Orange: No input and no stored secret
+                AuthKeyTextBox.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11)); // Orange
+            }
+
+            // Set border thickness to make the color more visible
+            AuthKeyTextBox.BorderThickness = new System.Windows.Thickness(2);
+        }
+
+        private string? ValidateAuthenticationKey(string authenticationKey)
+        {
+            if (string.IsNullOrWhiteSpace(authenticationKey))
+                return null;
+
+            // Remove all spaces and convert to uppercase
+            var normalized = authenticationKey.Replace(" ", "").ToUpperInvariant();
+
+            // Square Enix authentication keys are typically 32 characters (Base32)
+            if (normalized.Length != 32)
+                return null;
+
+            // Validate Base32 format (A-Z, 2-7)
+            foreach (char c in normalized)
+            {
+                if (!((c >= 'A' && c <= 'Z') || (c >= '2' && c <= '7')))
+                    return null;
+            }
+
+            return normalized;
         }
     }
 }

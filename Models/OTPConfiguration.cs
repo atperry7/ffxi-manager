@@ -1,16 +1,17 @@
+using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
 namespace FFXIManager.Models
 {
     /// <summary>
-    /// Configuration for One-Time Password (OTP) authentication
+    /// Configuration for One-Time Password (OTP) authentication using Square Enix Security Token
     /// </summary>
     public class OTPConfiguration : INotifyPropertyChanged
     {
         private bool _isEnabled;
-        private string? _secretKey;
-        private string? _backupCodes;
+        private bool _hasStoredSecret;
+        private string _providerName = "Square Enix";
 
         /// <summary>
         /// Indicates whether OTP is enabled for the account
@@ -22,29 +23,39 @@ namespace FFXIManager.Models
         }
 
         /// <summary>
-        /// Secret key for TOTP generation (future implementation)
-        /// TODO: Implement secure storage and TOTP generation
+        /// Indicates whether an OTP secret key is securely stored in Windows Credential Manager
         /// </summary>
-        public string? SecretKey
+        public bool HasStoredSecret
         {
-            get => _secretKey;
-            set => SetProperty(ref _secretKey, value);
+            get => _hasStoredSecret;
+            set => SetProperty(ref _hasStoredSecret, value);
         }
 
         /// <summary>
-        /// Backup codes for OTP recovery (future implementation)
+        /// OTP Provider name (defaults to Square Enix)
         /// </summary>
-        public string? BackupCodes
+        public string ProviderName
         {
-            get => _backupCodes;
-            set => SetProperty(ref _backupCodes, value);
+            get => _providerName;
+            set => SetProperty(ref _providerName, value ?? "Square Enix");
         }
+
+        /// <summary>
+        /// Gets whether OTP is properly configured (enabled and has stored secret)
+        /// </summary>
+        public bool IsConfigured => IsEnabled && HasStoredSecret;
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
         protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+            // Update computed properties when dependencies change
+            if (propertyName == nameof(IsEnabled) || propertyName == nameof(HasStoredSecret))
+            {
+                OnPropertyChanged(nameof(IsConfigured));
+            }
         }
 
         protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
