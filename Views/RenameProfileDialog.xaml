@@ -7,7 +7,7 @@
         ResizeMode="NoResize"
         Background="{DynamicResource BackgroundBrush}">
     <Window.Resources>
-        <conv:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+        <!-- Note: Converters are now registered globally in App.xaml -->
     </Window.Resources>
     <Grid Margin="15">
         <Grid.RowDefinitions>

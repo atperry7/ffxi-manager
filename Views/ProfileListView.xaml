@@ -4,10 +4,7 @@
              xmlns:converters="clr-namespace:FFXIManager.Converters">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
-        <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisConverter"/>
-        <converters:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
-        <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
-        <converters:ProfileStatusConverter x:Key="ProfileStatusConverter"/>
+        <!-- Note: Other converters are now registered globally in App.xaml -->
     </UserControl.Resources>
     
     <GroupBox Header="Backup Profiles">
