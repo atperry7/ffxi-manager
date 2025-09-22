@@ -27,7 +27,17 @@ namespace FFXIManager
         private static readonly Uri LightThemeUri = new Uri("Themes/LightTheme.xaml", UriKind.Relative);
         private static readonly Uri DarkThemeUri = new Uri("Themes/DarkTheme.xaml", UriKind.Relative);
 
-        public static IServiceProvider Services => ((App)Current)._host!.Services;
+        public static IServiceProvider? Services
+        {
+            get
+            {
+                // Design-time safety: return null if not our App type
+                if (Current is not App app)
+                    return null;
+                    
+                return app._host?.Services;
+            }
+        }
 
         /// <summary>
         /// Configure bootstrap Serilog logging before DI container is built

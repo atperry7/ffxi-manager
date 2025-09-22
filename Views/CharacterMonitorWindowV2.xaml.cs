@@ -20,12 +20,15 @@ namespace FFXIManager.Views
         {
             InitializeComponent();
             
-            // Resolve and set the view model
-            _viewModel = App.Services.GetRequiredService<CharacterMonitorViewModel>();
-            DataContext = _viewModel;
-            
-            // Subscribe to close request from view model
-            _viewModel.OnCloseRequested += OnViewModelCloseRequested;
+            // Resolve and set the view model - null safety check
+            if (App.Services != null)
+            {
+                _viewModel = App.Services.GetRequiredService<CharacterMonitorViewModel>();
+                DataContext = _viewModel;
+                
+                // Subscribe to close request from view model
+                _viewModel.OnCloseRequested += OnViewModelCloseRequested;
+            }
             
             // Set initial properties
             ShowInTaskbar = true;

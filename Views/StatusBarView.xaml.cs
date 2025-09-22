@@ -1,4 +1,6 @@
-﻿using System.Windows.Controls;
+﻿using System.ComponentModel;
+using System.Windows;
+using System.Windows.Controls;
 using FFXIManager.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -9,8 +11,11 @@ namespace FFXIManager.Views
         public StatusBarView()
         {
             InitializeComponent();
-            // Resolve ViewModel via DI
-            DataContext = App.Services.GetRequiredService<StatusBarViewModel>();
+            // Resolve ViewModel via DI - skip in design time
+            if (!DesignerProperties.GetIsInDesignMode(this) && App.Services != null)
+            {
+                DataContext = App.Services.GetRequiredService<StatusBarViewModel>();
+            }
         }
     }
 }

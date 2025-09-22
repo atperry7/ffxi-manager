@@ -14,7 +14,7 @@
     <Version>1.4.0-beta</Version>
     <AssemblyVersion>1.4.0.0</AssemblyVersion>
     <FileVersion>1.4.0.0</FileVersion>
-    <AssemblyInformationalVersion>1.4.0-beta</AssemblyInformationalVersion>
+    <AssemblyInformationalVersion>1.4.0.0</AssemblyInformationalVersion>
 
     <!-- Strong name signing -->
     <SignAssembly>true</SignAssembly>

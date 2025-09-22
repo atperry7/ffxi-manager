@@ -81,17 +81,21 @@ namespace FFXIManager.Controls
                 _tempHookService.HotkeyPressed += OnKeyPressed;
 
                 // Create temporary controller service
-                _tempControllerService = new ControllerInputService(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<ILoggingService>(App.Services));
-                _tempControllerService.ButtonPressed += OnControllerButtonPressed;
+                var loggingService = App.Services?.GetRequiredService<ILoggingService>();
+                if (loggingService != null)
+                {
+                    _tempControllerService = new ControllerInputService(loggingService);
+                    _tempControllerService.ButtonPressed += OnControllerButtonPressed;
 
-                // Register ALL controller buttons for temporary recording (like we do for keyboard)
-                RegisterAllControllerButtonsForRecording();
+                    // Register ALL controller buttons for temporary recording (like we do for keyboard)
+                    RegisterAllControllerButtonsForRecording();
+                }
 
                 // Update UI
                 RecordButton.Content = "⏹ Stop";
                 RecordButton.Background = System.Windows.Media.Brushes.Orange;
                 KeyDisplayText.Text = "Recording... Press keyboard or controller";
-                StatusText.Text = _tempControllerService.IsAnyControllerConnected ? 
+                StatusText.Text = _tempControllerService?.IsAnyControllerConnected == true ? 
                     "Press any keyboard key or controller button. Recording will stop automatically." :
                     "Press any keyboard key. (No controller detected)";
 

@@ -99,7 +99,7 @@ namespace FFXIManager.ViewModels
                     _settings.PlayOnlineDirectory = value;
                     _settingsService.SaveSettings(_settings);
                     OnPropertyChanged();
-                    _ = Task.Run(async () => await RefreshProfilesAsync());
+                    _ = RefreshProfilesAsync();
                 }
             }
         }
@@ -114,7 +114,7 @@ namespace FFXIManager.ViewModels
                     _settings.ShowAutoBackupsInList = value;
                     _settingsService.SaveSettings(_settings);
                     OnPropertyChanged();
-                    _ = Task.Run(async () => await RefreshProfilesAsync());
+                    _ = RefreshProfilesAsync();
                 }
             }
         }

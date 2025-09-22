@@ -48,6 +48,7 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<IHotkeyMappingService, HotkeyMappingService>();
             services.AddSingleton<IHotkeyPerformanceMonitor, HotkeyPerformanceMonitor>();
             services.AddSingleton<IHotkeyActivationService, HotkeyActivationService>();
+            services.AddSingleton<IPlayOnlineMemberAccountService, PlayOnlineMemberAccountService>();
             services.AddSingleton<IProfileService>(sp =>
             {
                 var config = sp.GetRequiredService<IConfigurationService>();

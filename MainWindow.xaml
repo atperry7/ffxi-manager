@@ -7,10 +7,11 @@
         xmlns:views="clr-namespace:FFXIManager.Views"
         xmlns:converters="clr-namespace:FFXIManager.Converters"
         mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=local:MainWindow, IsDesignTimeCreatable=False}"
         Title="{Binding ApplicationTitle}" Height="700" Width="1200" MinHeight="500" MinWidth="800"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource BackgroundBrush}">
-    
+
     <Window.Resources>
         <!-- Modern TextBox and Label styles to complement buttons -->
         <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
@@ -27,7 +28,7 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
-        
+
         <Style TargetType="Label">
             <Setter Property="Margin" Value="4,4,4,0"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -35,20 +36,20 @@
             <Setter Property="FontWeight" Value="Medium"/>
             <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
         </Style>
-        
+
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
     </Window.Resources>
-    
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        
+
         <!-- Header Section -->
         <views:HeaderView Grid.Row="0" Loaded="HeaderView_Loaded"/>
-        
+
         <!-- Main Content -->
         <Grid Grid.Row="1" Margin="10">
             <Grid.ColumnDefinitions>
@@ -56,18 +57,31 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            
-            <!-- Profiles List -->
-            <views:ProfileListView Grid.Column="0" Margin="0,0,5,0" DataContext="{Binding}"/>
-            
+
+            <!-- Profiles List and Member Accounts -->
+            <Grid Grid.Column="0" Margin="0,0,5,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition/>
+                    <RowDefinition Height="Auto" MinHeight="244.12"/>
+                </Grid.RowDefinitions>
+
+                <!-- Profiles List -->
+                <views:ProfileListView Grid.Row="0" DataContext="{Binding}"/>
+
+                <!-- PlayOnline Member Accounts -->
+                <views:PlayOnlineMemberAccountsView Grid.Row="1"
+                                                    DataContext="{Binding PlayOnlineMemberAccounts}"
+                                                    Margin="0,10,0,0"/>
+            </Grid>
+
             <!-- Splitter -->
             <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource DividerBrush}"/>
-            
+
             <!-- Actions Panel -->
             <views:ProfileActionsView Grid.Column="2" Margin="5,0,0,0" DataContext="{Binding}"/>
         </Grid>
-        
-        	<!-- Status Bar -->
-        	<views:StatusBarView Grid.Row="2"/>
-    	</Grid>
+
+        <!-- Status Bar -->
+        <views:StatusBarView Grid.Row="2"/>
+    </Grid>
 </Window>

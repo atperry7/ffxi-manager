@@ -17,6 +17,8 @@
         <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
         <converters:ProfileStatusConverter x:Key="ProfileStatusConverter"/>
         <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+        <converters:BoolToYesNoConverter x:Key="BoolToYesNoConverter"/>
+        <converters:StringIsNotNullOrEmptyConverter x:Key="StringIsNotNullOrEmptyConverter"/>
             
         <!-- Global Tooltip Timing Configuration for Snappy Responsiveness -->
         <Style TargetType="{x:Type FrameworkElement}">

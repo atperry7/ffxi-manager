@@ -31,7 +31,8 @@ namespace FFXIManager.ViewModels
             ICharacterOrderingService characterOrderingService,
             IHotkeyActivationService hotkeyActivationService,
             IUiDispatcher uiDispatcher,
-            IHotkeyMappingService hotkeyMappingService)
+            IHotkeyMappingService hotkeyMappingService,
+            IPlayOnlineMemberAccountService memberAccountService)
         {
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
             _configService = configService ?? throw new ArgumentNullException(nameof(configService));
@@ -50,6 +51,10 @@ namespace FFXIManager.ViewModels
                 playOnlineMonitorService, statusService, loggingService,
                 characterOrderingService, hotkeyActivationService,
                 settingsService, hotkeyMappingService);
+
+            PlayOnlineMemberAccounts = new PlayOnlineMemberAccountsViewModel(
+                memberAccountService, statusService, loggingService,
+                dialogService, uiDispatcher);
 
             UICommands = new UICommandsViewModel(uiCommandService, notificationServiceEnhanced);
 
@@ -85,6 +90,15 @@ namespace FFXIManager.ViewModels
                 }
             };
 
+            // Update PlayOnlineMemberAccounts when profile selection changes
+            ProfileManagement.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(ProfileManagement.SelectedProfile))
+                {
+                    PlayOnlineMemberAccounts.CurrentProfile = ProfileManagement.SelectedProfile;
+                }
+            };
+
             // Initialize commands and data
             InitializeCommands();
             InitializeAsync();
@@ -106,6 +120,11 @@ namespace FFXIManager.ViewModels
         /// Play Online Character Monitor ViewModel - handles character detection and window switching
         /// </summary>
         public PlayOnlineMonitorViewModel PlayOnlineMonitor { get; }
+
+        /// <summary>
+        /// PlayOnline Member Accounts ViewModel - handles POL account associations
+        /// </summary>
+        public PlayOnlineMemberAccountsViewModel PlayOnlineMemberAccounts { get; }
 
         /// <summary>
         /// UI Commands ViewModel - handles UI-specific commands like copy/open

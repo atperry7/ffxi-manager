@@ -150,6 +150,11 @@ namespace FFXIManager.Models.Settings
         public bool MainWindowMaximized { get; set; }
         public bool RememberWindowPosition { get; set; } = true;
 
+        // PlayOnline Member Account associations
+        // Key: ProfileInfo.FilePath (unique identifier for each profile)
+        // Value: List of PlayOnlineMemberAccount objects associated with that profile
+        public Dictionary<string, List<PlayOnlineMemberAccount>> PlayOnlineMemberAccounts { get; set; } = new();
+
         /// <summary>
         /// Gets the default keyboard shortcuts for character switching (Win+F1 through Win+F11)
         /// Uses Windows key to avoid conflicts with FFXI's Ctrl/Alt macro system

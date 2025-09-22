@@ -139,4 +139,36 @@ namespace FFXIManager.Converters
             throw new NotSupportedException("InverseBooleanConverter only supports OneWay binding");
         }
     }
+
+    /// <summary>
+    /// Converts boolean to "Yes"/"No" text
+    /// </summary>
+    public class BoolToYesNoConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            return value is true ? "Yes" : "No";
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    /// <summary>
+    /// Checks if a string is not null or empty
+    /// </summary>
+    public class StringIsNotNullOrEmptyConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            return !string.IsNullOrEmpty(value?.ToString());
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
 }
