@@ -126,8 +126,8 @@
                                             <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
                                             <Setter Property="FontStyle" Value="Italic"/>
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Path=POLPassword, Converter={StaticResource StringIsNotNullOrEmptyConverter}}" Value="True">
-                                                    <Setter Property="Text" Value="••••••"/>
+                                                <DataTrigger Binding="{Binding Path=HasStoredPassword}" Value="True">
+                                                    <Setter Property="Text" Value="Secured"/>
                                                     <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}"/>
                                                     <Setter Property="FontStyle" Value="Normal"/>
                                                 </DataTrigger>

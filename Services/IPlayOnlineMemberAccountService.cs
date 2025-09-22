@@ -69,6 +69,31 @@ namespace FFXIManager.Services
         /// <param name="profileFilePath">The file path of the ProfileInfo</param>
         /// <returns>Number of accounts removed</returns>
         Task<int> RemoveAllAccountsForProfileAsync(string profileFilePath);
+
+        /// <summary>
+        /// Sets the password for an account using Windows Credential Manager
+        /// </summary>
+        /// <param name="profileFilePath">The file path of the ProfileInfo</param>
+        /// <param name="accountId">The account ID</param>
+        /// <param name="password">The password to store securely</param>
+        /// <returns>True if successful, false otherwise</returns>
+        Task<bool> SetAccountPasswordAsync(string profileFilePath, Guid accountId, string password);
+
+        /// <summary>
+        /// Gets the password for an account from Windows Credential Manager
+        /// </summary>
+        /// <param name="profileFilePath">The file path of the ProfileInfo</param>
+        /// <param name="accountId">The account ID</param>
+        /// <returns>The password if found, null otherwise</returns>
+        Task<string?> GetAccountPasswordAsync(string profileFilePath, Guid accountId);
+
+        /// <summary>
+        /// Removes the stored password for an account from Windows Credential Manager
+        /// </summary>
+        /// <param name="profileFilePath">The file path of the ProfileInfo</param>
+        /// <param name="accountId">The account ID</param>
+        /// <returns>True if successful, false otherwise</returns>
+        Task<bool> RemoveAccountPasswordAsync(string profileFilePath, Guid accountId);
     }
 
     /// <summary>

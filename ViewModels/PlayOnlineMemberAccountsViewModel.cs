@@ -180,6 +180,13 @@ namespace FFXIManager.ViewModels
 
                 if (success)
                 {
+                    // Store password if provided
+                    if (!string.IsNullOrWhiteSpace(dialog.EnteredPassword))
+                    {
+                        await _accountService.SetAccountPasswordAsync(CurrentProfile.FilePath, editVm.Account.Id, dialog.EnteredPassword);
+                        editVm.Account.HasStoredPassword = true;
+                    }
+
                     await RefreshAccountsAsync();
                     _statusService.SetTemporaryMessage($"Added account: {editVm.Account.DisplayName}", TimeSpan.FromSeconds(3));
                 }
@@ -210,7 +217,7 @@ namespace FFXIManager.ViewModels
                 POLMemberSlot = account.POLMemberSlot,
                 FFXICharacterSlot = account.FFXICharacterSlot,
                 AccountName = account.AccountName,
-                POLPassword = account.POLPassword,
+                HasStoredPassword = account.HasStoredPassword,
                 OTPConfiguration = account.OTPConfiguration != null
                     ? new OTPConfiguration { IsEnabled = account.OTPConfiguration.IsEnabled }
                     : null
@@ -230,6 +237,13 @@ namespace FFXIManager.ViewModels
 
                 if (success)
                 {
+                    // Update password if provided
+                    if (!string.IsNullOrWhiteSpace(dialog.EnteredPassword))
+                    {
+                        await _accountService.SetAccountPasswordAsync(CurrentProfile.FilePath, editVm.Account.Id, dialog.EnteredPassword);
+                        editVm.Account.HasStoredPassword = true;
+                    }
+
                     await RefreshAccountsAsync();
                     _statusService.SetTemporaryMessage($"Updated account: {editVm.Account.DisplayName}", TimeSpan.FromSeconds(3));
                 }

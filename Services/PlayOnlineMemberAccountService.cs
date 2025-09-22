@@ -14,19 +14,22 @@ namespace FFXIManager.Services
     {
         private readonly ISettingsService _settingsService;
         private readonly ILoggingService _loggingService;
+        private readonly IWindowsCredentialsService _credentialsService;
         private readonly object _lockObject = new();
 
         public PlayOnlineMemberAccountService(
             ISettingsService settingsService,
-            ILoggingService loggingService)
+            ILoggingService loggingService,
+            IWindowsCredentialsService credentialsService)
         {
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            _credentialsService = credentialsService ?? throw new ArgumentNullException(nameof(credentialsService));
         }
 
         public Task<List<PlayOnlineMemberAccount>> GetAccountsForProfileAsync(string profileFilePath)
         {
-            return Task.Run(() =>
+            return Task.Run(async () =>
             {
                 lock (_lockObject)
                 {
@@ -35,7 +38,16 @@ namespace FFXIManager.Services
                         var settings = _settingsService.LoadSettings();
                         if (settings.PlayOnlineMemberAccounts.TryGetValue(profileFilePath, out var accounts))
                         {
-                            return accounts ?? new List<PlayOnlineMemberAccount>();
+                            var accountList = accounts ?? new List<PlayOnlineMemberAccount>();
+
+                            // Update HasStoredPassword status for each account
+                            foreach (var account in accountList)
+                            {
+                                var target = _credentialsService.GenerateCredentialTarget(profileFilePath, account.Id);
+                                account.HasStoredPassword = _credentialsService.CredentialExistsAsync(target, account.AccountName).Result;
+                            }
+
+                            return accountList;
                         }
                         return new List<PlayOnlineMemberAccount>();
                     }
@@ -181,6 +193,13 @@ namespace FFXIManager.Services
                             return false;
                         }
 
+                        // Remove stored password from Windows Credentials
+                        var target = _credentialsService.GenerateCredentialTarget(profileFilePath, accountId);
+                        var username = string.IsNullOrWhiteSpace(accountToRemove.AccountName)
+                            ? $"Slot{accountToRemove.POLMemberSlot}-{accountToRemove.FFXICharacterSlot}"
+                            : accountToRemove.AccountName;
+                        _ = _credentialsService.DeletePasswordAsync(target, username);
+
                         // Remove the account
                         accounts.Remove(accountToRemove);
 
@@ -226,12 +245,8 @@ namespace FFXIManager.Services
                 errors.Add("FFXI Character Slot must be between 1 and 16");
             }
 
-            // TODO: Add password validation when implementing secure storage
-            // For MVP, we allow empty passwords but log a warning
-            if (string.IsNullOrWhiteSpace(account.POLPassword))
-            {
-                _ = _loggingService.LogDebugAsync("Account has no password set - this may cause auto-login issues");
-            }
+            // Note: Password validation is handled separately through Windows Credentials service
+            // The HasStoredPassword property indicates if a password is securely stored
 
             return errors.Count == 0 ? AccountValidationResult.Success() : AccountValidationResult.Failure(errors.ToArray());
         }
@@ -314,6 +329,123 @@ namespace FFXIManager.Services
                         _ = _loggingService.LogErrorAsync("Error removing all accounts for profile", ex);
                         return 0;
                     }
+                }
+            });
+        }
+
+        public Task<bool> SetAccountPasswordAsync(string profileFilePath, Guid accountId, string password)
+        {
+            return Task.Run(async () =>
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(profileFilePath))
+                        throw new ArgumentException("Profile file path cannot be null or empty", nameof(profileFilePath));
+                    if (string.IsNullOrWhiteSpace(password))
+                        throw new ArgumentException("Password cannot be null or empty", nameof(password));
+
+                    // Get the account to find the username
+                    var accounts = await GetAccountsForProfileAsync(profileFilePath);
+                    var account = accounts.FirstOrDefault(a => a.Id == accountId);
+                    if (account == null)
+                    {
+                        await _loggingService.LogWarningAsync($"Account {accountId} not found for password storage");
+                        return false;
+                    }
+
+                    var target = _credentialsService.GenerateCredentialTarget(profileFilePath, accountId);
+                    var username = string.IsNullOrWhiteSpace(account.AccountName) ? $"Slot{account.POLMemberSlot}-{account.FFXICharacterSlot}" : account.AccountName;
+
+                    bool result = await _credentialsService.StorePasswordAsync(target, username, password);
+                    if (result)
+                    {
+                        // Update the HasStoredPassword property
+                        account.HasStoredPassword = true;
+                        await _loggingService.LogInfoAsync($"Password stored securely for account {account.DisplayName}");
+                    }
+
+                    return result;
+                }
+                catch (Exception ex)
+                {
+                    await _loggingService.LogErrorAsync("Error setting account password", ex);
+                    return false;
+                }
+            });
+        }
+
+        public Task<string?> GetAccountPasswordAsync(string profileFilePath, Guid accountId)
+        {
+            return Task.Run(async () =>
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(profileFilePath))
+                        throw new ArgumentException("Profile file path cannot be null or empty", nameof(profileFilePath));
+
+                    // Get the account to find the username
+                    var accounts = await GetAccountsForProfileAsync(profileFilePath);
+                    var account = accounts.FirstOrDefault(a => a.Id == accountId);
+                    if (account == null)
+                    {
+                        await _loggingService.LogWarningAsync($"Account {accountId} not found for password retrieval");
+                        return null;
+                    }
+
+                    var target = _credentialsService.GenerateCredentialTarget(profileFilePath, accountId);
+                    var username = string.IsNullOrWhiteSpace(account.AccountName) ? $"Slot{account.POLMemberSlot}-{account.FFXICharacterSlot}" : account.AccountName;
+
+                    var password = await _credentialsService.RetrievePasswordAsync(target, username);
+                    if (password != null)
+                    {
+                        await _loggingService.LogDebugAsync($"Password retrieved successfully for account {account.DisplayName}");
+                    }
+
+                    return password;
+                }
+                catch (Exception ex)
+                {
+                    await _loggingService.LogErrorAsync("Error getting account password", ex);
+                    return null;
+                }
+            });
+        }
+
+        public Task<bool> RemoveAccountPasswordAsync(string profileFilePath, Guid accountId)
+        {
+            return Task.Run(async () =>
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(profileFilePath))
+                        throw new ArgumentException("Profile file path cannot be null or empty", nameof(profileFilePath));
+
+                    // Get the account to find the username
+                    var accounts = await GetAccountsForProfileAsync(profileFilePath);
+                    var account = accounts.FirstOrDefault(a => a.Id == accountId);
+                    if (account == null)
+                    {
+                        await _loggingService.LogWarningAsync($"Account {accountId} not found for password removal");
+                        return false;
+                    }
+
+                    var target = _credentialsService.GenerateCredentialTarget(profileFilePath, accountId);
+                    var username = string.IsNullOrWhiteSpace(account.AccountName) ? $"Slot{account.POLMemberSlot}-{account.FFXICharacterSlot}" : account.AccountName;
+
+                    bool result = await _credentialsService.DeletePasswordAsync(target, username);
+                    if (result)
+                    {
+                        // Update the HasStoredPassword property
+                        account.HasStoredPassword = false;
+                        await _loggingService.LogInfoAsync($"Password removed for account {account.DisplayName}");
+                    }
+
+                    return result;
+                }
+                catch (Exception ex)
+                {
+                    await _loggingService.LogErrorAsync("Error removing account password", ex);
+                    return false;
                 }
             });
         }

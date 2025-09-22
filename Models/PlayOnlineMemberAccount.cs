@@ -13,8 +13,8 @@ namespace FFXIManager.Models
         private int _polMemberSlot = 1;
         private int _ffxiCharacterSlot = 1;
         private OTPConfiguration? _otpConfiguration;
-        private string _polPassword = string.Empty;
         private string _accountName = string.Empty;
+        private bool _hasStoredPassword;
 
         /// <summary>
         /// Unique identifier for this account association
@@ -63,13 +63,12 @@ namespace FFXIManager.Models
         }
 
         /// <summary>
-        /// PlayOnline Square Enix Password
-        /// TODO: Implement secure storage using Windows Credential Manager
+        /// Indicates whether a password is stored securely in Windows Credential Manager
         /// </summary>
-        public string POLPassword
+        public bool HasStoredPassword
         {
-            get => _polPassword;
-            set => SetProperty(ref _polPassword, value ?? string.Empty);
+            get => _hasStoredPassword;
+            set => SetProperty(ref _hasStoredPassword, value);
         }
 
         /// <summary>
@@ -96,7 +95,16 @@ namespace FFXIManager.Models
                 var name = string.IsNullOrWhiteSpace(AccountName)
                     ? $"Slot {POLMemberSlot}-{FFXICharacterSlot}"
                     : AccountName;
-                return IsOTPEnabled ? $"{name} (OTP)" : name;
+
+                var suffix = string.Empty;
+                if (IsOTPEnabled && HasStoredPassword)
+                    suffix = " (OTP, Secured)";
+                else if (IsOTPEnabled)
+                    suffix = " (OTP)";
+                else if (HasStoredPassword)
+                    suffix = " (Secured)";
+
+                return name + suffix;
             }
         }
 
@@ -110,7 +118,8 @@ namespace FFXIManager.Models
             if (propertyName == nameof(AccountName) ||
                 propertyName == nameof(POLMemberSlot) ||
                 propertyName == nameof(FFXICharacterSlot) ||
-                propertyName == nameof(OTPConfiguration))
+                propertyName == nameof(OTPConfiguration) ||
+                propertyName == nameof(HasStoredPassword))
             {
                 OnPropertyChanged(nameof(DisplayName));
                 if (propertyName == nameof(OTPConfiguration))

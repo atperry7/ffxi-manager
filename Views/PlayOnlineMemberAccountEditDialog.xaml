@@ -57,12 +57,7 @@
                 <Label Content="PlayOnline SE Password:" Target="{Binding ElementName=PasswordBox}" Margin="0,10,0,0"/>
                 <PasswordBox x:Name="PasswordBox"
                              PasswordChanged="PasswordBox_PasswordChanged"
-                             ToolTip="Your PlayOnline Square Enix password (stored locally - will be encrypted in future version)"/>
-                <TextBlock Text="⚠️ Passwords are currently stored as plain text. Secure storage will be implemented in a future update."
-                           FontSize="10"
-                           Foreground="{DynamicResource WarningBrush}"
-                           Margin="0,2,0,0"
-                           TextWrapping="Wrap"/>
+                             ToolTip="Your PlayOnline Square Enix password (securely stored using Windows Credential Manager)"/>
 
                 <!-- OTP Configuration -->
                 <Label Content="One-Time Password (OTP):" Margin="0,15,0,0"/>
@@ -100,7 +95,7 @@
                             <LineBreak/>
                             <Run Text="• FFXI Character Slot: The character position in FFXI"/>
                             <LineBreak/>
-                            <Run Text="• Password: Your Square Enix account password"/>
+                            <Run Text="• Password: Your Square Enix account password (securely encrypted)"/>
                             <LineBreak/>
                             <Run Text="• OTP: Enable if you use Security Token authentication"/>
                         </TextBlock>

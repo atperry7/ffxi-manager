@@ -30,6 +30,7 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<INotificationService, NotificationService>();
             services.AddSingleton<INotificationServiceEnhanced, NotificationServiceEnhanced>();
             services.AddSingleton<IValidationService, ValidationService>();
+            services.AddSingleton<IWindowsCredentialsService, WindowsCredentialsService>();
 
             // UI/Threading
             services.AddSingleton<IUiDispatcher, WpfUiDispatcher>();
