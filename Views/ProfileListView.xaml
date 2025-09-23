@@ -11,37 +11,57 @@
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
-            
-            <!-- Directory Settings -->
-            <StackPanel Grid.Row="0" Orientation="Vertical" Margin="5">
-                <Label Content="PlayOnline Directory:"/>
-                <DockPanel>
-                    <Button DockPanel.Dock="Right" 
-                            Content="Browse..." 
-                            Style="{StaticResource InfoButton}"
-                            Command="{Binding ChangeDirectoryCommand}" 
-                            Width="90"/>
-                    <TextBox Text="{Binding PlayOnlineDirectory}" IsReadOnly="True"/>
-                </DockPanel>
-                
-                <DockPanel>
-                    <CheckBox DockPanel.Dock="Right" 
-                              Content="Show auto-backups" 
+
+            <!-- Directory Settings - Collapsible -->
+            <Expander Grid.Row="0" Header="Directory Settings" IsExpanded="False" Margin="5,5,5,0">
+                <StackPanel Orientation="Vertical" Margin="5">
+                    <Label Content="PlayOnline Directory:"/>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right"
+                                Content="Browse..."
+                                Style="{StaticResource InfoButton}"
+                                Command="{Binding ChangeDirectoryCommand}"
+                                Width="90"/>
+                        <TextBox Text="{Binding PlayOnlineDirectory}" IsReadOnly="True"/>
+                    </DockPanel>
+
+                    <CheckBox Content="Show auto-backups"
                               IsChecked="{Binding ShowAutoBackups}"
                               VerticalAlignment="Center"
-                              Margin="5,0,0,0"/>
-                    <Button Content="Refresh" 
+                              Margin="0,5,0,0"/>
+                </StackPanel>
+            </Expander>
+
+            <!-- Toolbar -->
+            <Border Grid.Row="1"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,1,0,1"
+                    Margin="5,5,5,0">
+                <DockPanel Margin="8,4">
+                    <Button DockPanel.Dock="Left"
+                            Content="➕ Add Profile"
+                            Style="{StaticResource PrimaryButton}"
+                            Command="{Binding ShowAddProfileDialogCommand}"
+                            Padding="8,4"
+                            FontSize="11"
+                            MinWidth="100"/>
+                    <Button DockPanel.Dock="Right"
+                            Content="🔄 Refresh"
                             Style="{StaticResource SuccessButton}"
-                            Command="{Binding RefreshCommand}" 
-                            HorizontalAlignment="Left"/>
+                            Command="{Binding RefreshCommand}"
+                            Padding="8,4"
+                            FontSize="11"
+                            MinWidth="80"/>
+                    <Border/> <!-- Spacer -->
                 </DockPanel>
-            </StackPanel>
-            
+            </Border>
+
             <!-- Profiles DataGrid -->
-            <DataGrid Grid.Row="1" 
+            <DataGrid Grid.Row="2" 
                       Style="{StaticResource DataGridBase}"
                       ItemsSource="{Binding Profiles}" 
                       SelectedItem="{Binding SelectedProfile}"
@@ -50,20 +70,32 @@
                       IsReadOnly="True"
                       MouseDoubleClick="DataGrid_MouseDoubleClick">
                 <DataGrid.ContextMenu>
-                    <ContextMenu>
+                    <ContextMenu Background="{DynamicResource SurfaceBrush}"
+                               BorderBrush="{DynamicResource BorderBrush}"
+                               Foreground="{DynamicResource PrimaryTextBrush}">
                         <MenuItem Header="🔄 Swap to This Profile"
                                   Command="{Binding SwapProfileCommand}"
-                                  FontWeight="Bold"/>
-                        <Separator/>
+                                  FontWeight="Bold"
+                                  Background="{DynamicResource SurfaceBrush}"
+                                  Foreground="{DynamicResource PrimaryTextBrush}"/>
+                        <Separator Background="{DynamicResource DividerBrush}"/>
                         <MenuItem Header="✏️ Rename Profile" 
-                                  Command="{Binding RenameProfileCommand}"/>
+                                  Command="{Binding RenameProfileCommand}"
+                                  Background="{DynamicResource SurfaceBrush}"
+                                  Foreground="{DynamicResource PrimaryTextBrush}"/>
                         <MenuItem Header="🗑️ Delete Profile" 
-                                  Command="{Binding DeleteProfileCommand}"/>
-                        <Separator/>
+                                  Command="{Binding DeleteProfileCommand}"
+                                  Background="{DynamicResource SurfaceBrush}"
+                                  Foreground="{DynamicResource PrimaryTextBrush}"/>
+                        <Separator Background="{DynamicResource DividerBrush}"/>
                         <MenuItem Header="📋 Copy Profile Name" 
-                                  Command="{Binding CopyProfileNameCommand}"/>
+                                  Command="{Binding CopyProfileNameCommand}"
+                                  Background="{DynamicResource SurfaceBrush}"
+                                  Foreground="{DynamicResource PrimaryTextBrush}"/>
                         <MenuItem Header="📁 Open File Location"
-                                  Command="{Binding OpenFileLocationCommand}"/>
+                                  Command="{Binding OpenFileLocationCommand}"
+                                  Background="{DynamicResource SurfaceBrush}"
+                                  Foreground="{DynamicResource PrimaryTextBrush}"/>
                     </ContextMenu>
                 </DataGrid.ContextMenu>
                 <DataGrid.ColumnHeaderStyle>
@@ -72,7 +104,7 @@
                         <Setter Property="Foreground" Value="White"/>
                         <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
                         <Setter Property="BorderThickness" Value="0,0,0,1"/>
-                        <Setter Property="Padding" Value="12,8"/>
+                        <Setter Property="Padding" Value="8,6"/>
                         <Setter Property="FontWeight" Value="SemiBold"/>
                         <Setter Property="HorizontalContentAlignment" Value="Left"/>
                         <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -134,7 +166,7 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTemplateColumn Header="Status" Width="140">
+                    <DataGridTemplateColumn Header="Status" Width="100">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock FontWeight="{Binding IsCurrentlyActive, Mode=OneWay, Converter={StaticResource BoolToFontWeightConverter}}"
@@ -150,44 +182,49 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Actions" Width="150">
+                    <DataGridTemplateColumn Header="Actions" Width="60">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
-                                            Visibility="{Binding IsSystemFile, Mode=OneWay, Converter={StaticResource InverseBoolToVisConverter}}">
-                                    <!-- All action buttons hidden for system files -->
-                                    <Button Content="🔄" 
-                                            Style="{StaticResource PrimaryIconButton}"
-                                            Command="{Binding DataContext.SwapProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                            CommandParameter="{Binding}"
-                                            ToolTip="Swap to this profile"
-                                            Margin="1"/>
-                                    <Button Content="✏️" 
-                                            Style="{StaticResource WarningIconButton}"
-                                            Command="{Binding DataContext.RenameProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                            CommandParameter="{Binding}"
-                                            ToolTip="Rename this profile"
-                                            Margin="1"/>
-                                    <Button Content="🗑️" 
-                                            Style="{StaticResource DangerIconButton}"
-                                            Command="{Binding DataContext.DeleteProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                            CommandParameter="{Binding}"
-                                            ToolTip="Delete this profile"
-                                            Margin="1"/>
-                                </StackPanel>
+                                <Button Content="⋯"
+                                        Style="{StaticResource InfoIconButton}"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Width="24"
+                                        Height="24"
+                                        FontSize="16"
+                                        FontWeight="Bold"
+                                        ToolTip="Profile Actions"
+                                        Visibility="{Binding IsSystemFile, Mode=OneWay, Converter={StaticResource InverseBoolToVisConverter}}"
+                                        Click="ActionsButton_Click">
+                                    <Button.ContextMenu>
+                                        <ContextMenu Background="{DynamicResource SurfaceBrush}"
+                                                   BorderBrush="{DynamicResource BorderBrush}"
+                                                   Foreground="{DynamicResource PrimaryTextBrush}">
+                                            <MenuItem Header="🔄 Swap to This Profile"
+                                                      Command="{Binding DataContext.SwapProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                      CommandParameter="{Binding}"
+                                                      FontWeight="Bold"
+                                                      Background="{DynamicResource SurfaceBrush}"
+                                                      Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                            <Separator Background="{DynamicResource DividerBrush}"/>
+                                            <MenuItem Header="✏️ Rename Profile"
+                                                      Command="{Binding DataContext.RenameProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                      CommandParameter="{Binding}"
+                                                      Background="{DynamicResource SurfaceBrush}"
+                                                      Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                            <MenuItem Header="🗑️ Delete Profile"
+                                                      Command="{Binding DataContext.DeleteProfileParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                      CommandParameter="{Binding}"
+                                                      Background="{DynamicResource SurfaceBrush}"
+                                                      Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
                 </DataGrid.Columns>
             </DataGrid>
-            <!-- Add Profile Button moved below DataGrid -->
-            <Button Grid.Row="2"
-                    Content="➕ Add Profile" 
-                    Style="{StaticResource PrimaryButton}"
-                    Command="{Binding ShowAddProfileDialogCommand}"
-                    Margin="10,10,0,0" 
-                    Width="140" 
-                    HorizontalAlignment="Left"/>
         </Grid>
     </GroupBox>
 </UserControl>

@@ -84,6 +84,9 @@ namespace FFXIManager.ViewModels
                 else if (e.PropertyName == nameof(ProfileManagement.SelectedProfile))
                 {
                     OnPropertyChanged(nameof(SelectedProfile));
+                    // Notify command can execute changed for commands that depend on SelectedProfile
+                    ((RelayCommand)CopyProfileNameCommand).RaiseCanExecuteChanged();
+                    ((RelayCommand)OpenFileLocationCommand).RaiseCanExecuteChanged();
                 }
                 else if (e.PropertyName == nameof(ProfileManagement.ActiveLoginStatus))
                 {
@@ -195,6 +198,8 @@ namespace FFXIManager.ViewModels
         // UI Commands
         public System.Windows.Input.ICommand CopyProfileNameParameterCommand => UICommands.CopyProfileNameParameterCommand;
         public System.Windows.Input.ICommand OpenFileLocationParameterCommand => UICommands.OpenFileLocationParameterCommand;
+        public System.Windows.Input.ICommand CopyProfileNameCommand { get; private set; } = null!;
+        public System.Windows.Input.ICommand OpenFileLocationCommand { get; private set; } = null!;
 
         // Main ViewModel specific commands
         public System.Windows.Input.ICommand ShowAddProfileDialogCommand { get; private set; } = null!;
@@ -202,6 +207,8 @@ namespace FFXIManager.ViewModels
         private void InitializeCommands()
         {
             ShowAddProfileDialogCommand = new RelayCommand(ShowAddProfileDialog);
+            CopyProfileNameCommand = new RelayCommand(CopySelectedProfileName, () => SelectedProfile != null);
+            OpenFileLocationCommand = new RelayCommand(OpenSelectedFileLocation, () => SelectedProfile != null);
         }
 
         private void ShowAddProfileDialog()
@@ -210,6 +217,22 @@ namespace FFXIManager.ViewModels
             dialog.DataContext = this;
             var result = dialog.ShowDialog();
             // Profile creation is handled by ProfileManagement.CreateBackupCommand
+        }
+
+        private void CopySelectedProfileName()
+        {
+            if (SelectedProfile != null)
+            {
+                UICommands.CopyProfileNameParameterCommand.Execute(SelectedProfile);
+            }
+        }
+
+        private void OpenSelectedFileLocation()
+        {
+            if (SelectedProfile != null)
+            {
+                UICommands.OpenFileLocationParameterCommand.Execute(SelectedProfile);
+            }
         }
 
         #endregion

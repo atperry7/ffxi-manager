@@ -33,8 +33,7 @@
                       AutoGenerateColumns="False"
                       SelectionMode="Single"
                       IsReadOnly="True"
-                      Visibility="{Binding HasProfileSelected, Converter={StaticResource BoolToVisConverter}}"
-                      MaxHeight="200">
+                      Visibility="{Binding HasProfileSelected, Converter={StaticResource BoolToVisConverter}}">
                 <DataGrid.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="✏️ Edit Account"
