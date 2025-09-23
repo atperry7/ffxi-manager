@@ -58,6 +58,12 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<ILoginTaskHandler, FFXIGameHandler>();
             services.AddSingleton<ILoginTaskHandlerResolver, LoginTaskHandlerResolver>();
 
+            // Auto-login queue services (refactored for SOLID principles)
+            services.AddSingleton<IQueueCollectionManager, QueueCollectionManager>();
+            services.AddSingleton<IQueueStateMachine, QueueStateMachine>();
+            services.AddSingleton<IQueuePersistenceService, QueuePersistenceService>();
+            services.AddSingleton<IQueueStatisticsService, QueueStatisticsService>();
+            services.AddSingleton<IQueueExecutionOrchestrator, QueueExecutionOrchestrator>();
             services.AddSingleton<IAutoLoginTaskExecutor, AutoLoginTaskExecutor>();
             services.AddSingleton<IAutoLoginQueueService, AutoLoginQueueService>();
             services.AddSingleton<IProfileService>(sp =>
