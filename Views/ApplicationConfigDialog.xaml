@@ -40,10 +40,11 @@
                      Text="{Binding ExecutablePath, UpdateSourceTrigger=PropertyChanged}" 
                      Height="28" Margin="0,0,5,0"/>
             <Button Grid.Column="1" 
-                    Content="Browse..." 
-                    Style="{StaticResource InfoButton}"
+                    Content="📁" 
+                    Style="{StaticResource CircularInfoButton}"
                     Click="BrowseExecutable_Click" 
-                    Width="90" Height="32"/>
+                    ToolTip="Browse for Executable"
+                    AutomationProperties.Name="Browse for Executable"/>
         </Grid>
         
         <!-- Command Line Arguments -->
@@ -53,19 +54,19 @@
 
         <!-- Buttons -->
         <StackPanel Grid.Row="8" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
-            <Button Content="Cancel" 
-                    Style="{StaticResource SecondaryButton}"
-                    Height="30"
-                    Width="80" 
-                    Margin="0,0,10,0" 
+            <Button Content="✖" 
+                    Style="{StaticResource CircularSecondaryButton}"
                     Click="Cancel_Click" 
-                    IsCancel="True"/>
-            <Button Content="OK" 
-                    Style="{StaticResource SuccessButton}"
-                    Height="30"
-                    Width="80" 
+                    IsCancel="True"
+                    ToolTip="Cancel"
+                    AutomationProperties.Name="Cancel"
+                    Margin="0,0,10,0"/>
+            <Button Content="✓" 
+                    Style="{StaticResource CircularSuccessButton}"
                     Click="OK_Click" 
-                    IsDefault="True"/>
+                    IsDefault="True"
+                    ToolTip="Save Configuration"
+                    AutomationProperties.Name="Save Configuration"/>
         </StackPanel>
     </Grid>
 </Window>

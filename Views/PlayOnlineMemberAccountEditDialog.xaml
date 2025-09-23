@@ -128,19 +128,19 @@
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
                     Margin="0,20,0,0">
-            <Button Content="OK"
-                    Style="{StaticResource PrimaryButton}"
+            <Button Content="✓"
+                    Style="{StaticResource CircularPrimaryButton}"
                     IsDefault="True"
-                    Width="80"
-                    Height="30"
-                    Margin="0,0,10,0"
-                    Click="OkButton_Click"/>
-            <Button Content="Cancel"
-                    Style="{StaticResource SecondaryButton}"
+                    Click="OkButton_Click"
+                    ToolTip="Save Account"
+                    AutomationProperties.Name="Save Account"
+                    Margin="0,0,10,0"/>
+            <Button Content="✖"
+                    Style="{StaticResource CircularSecondaryButton}"
                     IsCancel="True"
-                    Width="80"
-                    Height="30"
-                    Click="CancelButton_Click"/>
+                    Click="CancelButton_Click"
+                    ToolTip="Cancel"
+                    AutomationProperties.Name="Cancel"/>
         </StackPanel>
     </Grid>
 </Window>

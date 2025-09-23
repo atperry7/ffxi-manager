@@ -52,7 +52,7 @@
                                    VerticalAlignment="Center"
                                    FontSize="11"
                                    TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Text=" ▼" Foreground="#C1C7CD"/>
+                        <TextBlock Text=" ▼" Foreground="{DynamicResource HeaderSecondaryTextBrush}"/>
                     </StackPanel>
                 </ToggleButton>
 
@@ -62,24 +62,24 @@
                        StaysOpen="False"
                        IsOpen="{Binding IsChecked, ElementName=StatusToggle}">
                     <Border Background="{DynamicResource HeaderBackgroundBrush}"
-                            BorderBrush="#4A5568" BorderThickness="1"
+                            BorderBrush="{DynamicResource HeaderBorderBrush}" BorderThickness="1"
                             CornerRadius="4"
                             Padding="8" MinWidth="420">
                         <StackPanel>
-                            <TextBlock Text="Recent Messages" FontWeight="SemiBold" Foreground="#C1C7CD"/>
+                            <TextBlock Text="Recent Messages" FontWeight="SemiBold" Foreground="{DynamicResource HeaderSecondaryTextBrush}"/>
                             <Separator Margin="0,4,0,6"/>
                             <ScrollViewer MaxHeight="240">
                                 <ItemsControl ItemsSource="{Binding RecentMessages}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal" Margin="0,2">
-                                                <TextBlock Text="[" Foreground="#9AA0A6"/>
-                                                <TextBlock Text="{Binding Timestamp, StringFormat=HH:mm:ss}" Foreground="#9AA0A6"/>
-                                                <TextBlock Text="] " Foreground="#9AA0A6"/>
+                                                <TextBlock Text="[" Foreground="{DynamicResource HeaderSecondaryTextBrush}"/>
+                                                <TextBlock Text="{Binding Timestamp, StringFormat=HH:mm:ss}" Foreground="{DynamicResource HeaderSecondaryTextBrush}"/>
+                                                <TextBlock Text="] " Foreground="{DynamicResource HeaderSecondaryTextBrush}"/>
                                                 <TextBlock Text="{Binding Type, Converter={StaticResource NotificationTypeToIcon}}"
                                                            Foreground="{Binding Type, Converter={StaticResource NotificationTypeToBrush}}"
                                                            Margin="2,0"/>
-                                                <TextBlock Text=": " Foreground="#C1C7CD"/>
+                                                <TextBlock Text=": " Foreground="{DynamicResource HeaderSecondaryTextBrush}"/>
                                                 <TextBlock Text="{Binding Message}"
                                                            Foreground="{Binding Type, Converter={StaticResource NotificationTypeToBrush}}"
                                                            TextWrapping="Wrap"/>
@@ -94,19 +94,19 @@
             </Grid>
             
             <!-- Backup Info -->
-            <Border Grid.Column="1" BorderBrush="#4A5568" BorderThickness="1,0,0,0"
+            <Border Grid.Column="1" BorderBrush="{DynamicResource HeaderBorderBrush}" BorderThickness="1,0,0,0"
                     Padding="10,0,10,0" Margin="10,0,0,0">
                 <TextBlock Text="{Binding BackupInfo}" 
-                           Foreground="#C1C7CD"
+                           Foreground="{DynamicResource HeaderSecondaryTextBrush}"
                            FontSize="11"
                            VerticalAlignment="Center"/>
             </Border>
 
             <!-- App Version -->
-            <Border Grid.Column="2" BorderBrush="#4A5568" BorderThickness="1,0,0,0"
+            <Border Grid.Column="2" BorderBrush="{DynamicResource HeaderBorderBrush}" BorderThickness="1,0,0,0"
                     Padding="10,0,10,0" Margin="10,0,0,0">
                 <TextBlock Text="{Binding AppVersion, StringFormat='v{0}'}" 
-                           Foreground="#C1C7CD"
+                           Foreground="{DynamicResource HeaderSecondaryTextBrush}"
                            FontSize="11"
                            VerticalAlignment="Center"
                            ToolTip="Application Version"/>

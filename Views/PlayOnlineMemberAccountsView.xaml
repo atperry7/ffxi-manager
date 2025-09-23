@@ -136,14 +136,13 @@
                                         </ProgressBar>
                                     </StackPanel>
                                     <Button Content="👁️"
-                                            Style="{StaticResource InfoIconButton}"
+                                            Style="{StaticResource CircularSmallButton}"
+                                            Background="{DynamicResource InfoBrush}"
                                             Command="{Binding DataContext.ToggleOTPVisibilityCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                             CommandParameter="{Binding}"
                                             ToolTip="Show/Hide OTP Code"
+                                            AutomationProperties.Name="Show/Hide OTP Code"
                                             Margin="4,0,0,0"
-                                            Width="20"
-                                            Height="20"
-                                            FontSize="10"
                                             Visibility="{Binding IsOTPEnabled, Converter={StaticResource BoolToVisConverter}}"/>
                                 </StackPanel>
                             </DataTemplate>
@@ -154,16 +153,20 @@
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                     <Button Content="✏️"
-                                            Style="{StaticResource WarningIconButton}"
+                                            Style="{StaticResource CircularSmallButton}"
+                                            Background="{DynamicResource WarningBrush}"
                                             Command="{Binding DataContext.EditAccountParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                             CommandParameter="{Binding}"
                                             ToolTip="Edit this account"
+                                            AutomationProperties.Name="Edit Account"
                                             Margin="2"/>
                                     <Button Content="🗑️"
-                                            Style="{StaticResource DangerIconButton}"
+                                            Style="{StaticResource CircularSmallButton}"
+                                            Background="{DynamicResource DangerBrush}"
                                             Command="{Binding DataContext.DeleteAccountParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                             CommandParameter="{Binding}"
                                             ToolTip="Delete this account"
+                                            AutomationProperties.Name="Delete Account"
                                             Margin="2"/>
                                 </StackPanel>
                             </DataTemplate>
@@ -178,12 +181,11 @@
                         HorizontalAlignment="Left"
                         Margin="5,5,0,0"
                         Visibility="{Binding HasProfileSelected, Converter={StaticResource BoolToVisConverter}}">
-                <Button Content="➕ Add Account"
-                        Style="{StaticResource PrimaryButton}"
+                <Button Content="➕"
+                        Style="{StaticResource CircularPrimaryButton}"
                         Command="{Binding AddAccountCommand}"
                         IsEnabled="{Binding CanAddAccount}"
-                        Width="120"
-                        Height="30"
+                        AutomationProperties.Name="Add Account"
                         Margin="0,0,5,0">
                     <Button.ToolTip>
                         <ToolTip>
@@ -202,10 +204,11 @@
                         </ToolTip>
                     </Button.ToolTip>
                 </Button>
-                <Button Content="🔄 Refresh"
-                        Style="{StaticResource InfoButton}"
+                <Button Content="🔄"
+                        Style="{StaticResource CircularInfoButton}"
                         Command="{Binding RefreshCommand}"
-                        Width="100" Height="30"/>
+                        ToolTip="Refresh"
+                        AutomationProperties.Name="Refresh Accounts"/>
             </StackPanel>
 
             <!-- Loading Indicator -->

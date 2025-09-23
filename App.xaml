@@ -8,7 +8,9 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <!-- Theme dictionary will be loaded dynamically -->
-                <ResourceDictionary x:Name="ThemeDictionary" Source="Themes/DarkTheme.xaml"/>
+                <ResourceDictionary x:Name="ThemeDictionary" Source="Themes/LightTheme.xaml"/>
+                <!-- Circular Button Styles -->
+                <ResourceDictionary Source="Styles/CircularButtonStyles.xaml"/>
             </ResourceDictionary.MergedDictionaries>
             
         <!-- Global Converter Resources -->
@@ -285,6 +287,7 @@
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Margin" Value="2"/>
         </Style>
+
 
         <!-- Implicit Styles for Text Controls -->
         <!-- TextBlock implicit style -->

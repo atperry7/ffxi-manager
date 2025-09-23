@@ -41,14 +41,11 @@
                                        Margin="0,0,8,0"/>
                             <Button x:Name="RefreshControllerButton"
                                     Content="🔄"
-                                    FontSize="11"
-                                    Width="24"
-                                    Height="20"
                                     ToolTip="Refresh controller status"
                                     Click="RefreshController_Click"
-                                    Style="{StaticResource SecondaryButton}"
-                                    Margin="0,0,0,0"
-                                    Padding="2"
+                                    Style="{StaticResource CircularSmallButton}"
+                                    Background="{DynamicResource SecondaryBrush}"
+                                    AutomationProperties.Name="Refresh Controller Status"
                                     VerticalAlignment="Center"/>
                         </StackPanel>
                         
@@ -96,14 +93,15 @@
                                                                Foreground="{DynamicResource AccentBrush}" 
                                                                FontFamily="Consolas"/>
                                                     
-                                                    <Button Grid.Column="2" 
-                                                            Content="Edit" 
-                                                            Style="{StaticResource InfoIconButton}" 
-                                                            Width="50" 
-                                                            Height="25" 
-                                                            Margin="5,0,5,0"
-                                                            Command="{Binding DataContext.EditHotkeyCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                            CommandParameter="{Binding}"/>
+                                        <Button Grid.Column="2" 
+                                                Content="✏️" 
+                                                Style="{StaticResource CircularSmallButton}" 
+                                                Background="{DynamicResource InfoBrush}"
+                                                Margin="5,0,5,0"
+                                                Command="{Binding DataContext.EditHotkeyCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip="Edit Hotkey"
+                                                AutomationProperties.Name="Edit Hotkey"/>
                                                     
                                                     <CheckBox Grid.Column="3" 
                                                               Content="Enabled" 
@@ -150,13 +148,14 @@
                                                    FontFamily="Consolas"/>
                                         
                                         <Button Grid.Column="2" 
-                                                Content="Edit" 
-                                                Style="{StaticResource InfoIconButton}" 
-                                                Width="50" 
-                                                Height="25" 
+                                                Content="✏️" 
+                                                Style="{StaticResource CircularSmallButton}" 
+                                                Background="{DynamicResource InfoBrush}"
                                                 Margin="5,0,5,0"
                                                 Command="{Binding EditHotkeyCommand}"
-                                                CommandParameter="{Binding CycleHotkey}"/>
+                                                CommandParameter="{Binding CycleHotkey}"
+                                                ToolTip="Edit Cycle Hotkey"
+                                                AutomationProperties.Name="Edit Cycle Hotkey"/>
                                         
                                         <CheckBox Grid.Column="3" 
                                                   Content="Enabled" 
@@ -220,8 +219,19 @@
         </ScrollViewer>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="Save" Width="90" Height="40" Margin="0,0,8,0" IsDefault="True" Command="{Binding SaveCommand}" Click="Save_Click" Style="{StaticResource PrimaryButton}"/>
-            <Button Content="Cancel" Width="90" Height="40" IsCancel="True" Style="{StaticResource SecondaryButton}"/>
+            <Button Content="💾" 
+                    IsDefault="True" 
+                    Command="{Binding SaveCommand}" 
+                    Click="Save_Click" 
+                    Style="{StaticResource CircularPrimaryButton}"
+                    ToolTip="Save Settings"
+                    AutomationProperties.Name="Save Settings"
+                    Margin="0,0,8,0"/>
+            <Button Content="✖" 
+                    IsCancel="True" 
+                    Style="{StaticResource CircularSecondaryButton}"
+                    ToolTip="Cancel"
+                    AutomationProperties.Name="Cancel"/>
         </StackPanel>
     </Grid>
 </Window>

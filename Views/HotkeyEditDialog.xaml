@@ -46,18 +46,18 @@
                     Orientation="Horizontal" 
                     HorizontalAlignment="Right" 
                     Margin="0,15,0,0">
-            <Button Content="Apply" 
-                    Width="80" 
-                    Height="35" 
-                    Margin="0,0,10,0" 
+            <Button Content="✓" 
                     IsDefault="True"
                     Click="Apply_Click"
-                    Style="{StaticResource PrimaryButton}"/>
-            <Button Content="Cancel" 
-                    Width="80" 
-                    Height="35" 
+                    Style="{StaticResource CircularPrimaryButton}"
+                    ToolTip="Apply Hotkey"
+                    AutomationProperties.Name="Apply Hotkey"
+                    Margin="0,0,10,0"/>
+            <Button Content="✖" 
                     IsCancel="True"
-                    Style="{StaticResource SecondaryButton}"/>
+                    Style="{StaticResource CircularSecondaryButton}"
+                    ToolTip="Cancel"
+                    AutomationProperties.Name="Cancel"/>
         </StackPanel>
     </Grid>
 </Window>

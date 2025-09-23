@@ -4,7 +4,7 @@
     <!-- Light Theme Colors -->
     <Color x:Key="BackgroundColor">#FFFFFF</Color>
     <Color x:Key="SurfaceColor">#F9FAFB</Color>
-    <Color x:Key="HeaderBackgroundColor">#1F2937</Color> <!-- Dark blue-gray for header/footer -->
+    <Color x:Key="HeaderBackgroundColor">#E5E7EB</Color> <!-- Light gray background for light theme headers -->
     <Color x:Key="CardBackgroundColor">#FFFFFF</Color>
     <Color x:Key="PillBackgroundColor">#E5E7EB</Color>
     
@@ -27,6 +27,9 @@
     <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}"/>
     <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
     <SolidColorBrush x:Key="HeaderBackgroundBrush" Color="{StaticResource HeaderBackgroundColor}"/>
+    <SolidColorBrush x:Key="HeaderTextBrush" Color="{StaticResource PrimaryTextColor}"/>
+    <SolidColorBrush x:Key="HeaderSecondaryTextBrush" Color="{StaticResource SecondaryTextColor}"/>
+    <SolidColorBrush x:Key="HeaderBorderBrush" Color="{StaticResource BorderColor}"/>
     <SolidColorBrush x:Key="CardBackgroundBrush" Color="{StaticResource CardBackgroundColor}"/>
     <SolidColorBrush x:Key="PillBackgroundBrush" Color="{StaticResource PillBackgroundColor}"/>
     
@@ -94,7 +97,7 @@
     <!-- DataGrid Column Header Style -->
     <Style x:Key="DataGridColumnHeaderStyle" TargetType="{x:Type DataGridColumnHeader}">
         <Setter Property="Background" Value="{DynamicResource HeaderBackgroundBrush}"/>
-        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
         <Setter Property="BorderThickness" Value="0,0,0,1"/>
         <Setter Property="Padding" Value="12,8"/>

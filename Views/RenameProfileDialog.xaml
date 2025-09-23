@@ -40,21 +40,18 @@
 
         <!-- Buttons -->
         <StackPanel Grid.Row="4" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
-            <Button Content="Cancel" 
-                    Style="{StaticResource SecondaryButton}"
-                    MinHeight="30"
-                    Height="30"
-                    Width="80" 
-                    Margin="0,0,10,0" 
-                    Command="{Binding CancelCommand}"/>
-            <Button Content="Rename" 
-                    Style="{StaticResource PrimaryButton}"
-                    MinHeight="30"
-                    Height="30"
-                    Width="80" 
+            <Button Content="✖" 
+                    Style="{StaticResource CircularSecondaryButton}"
+                    Command="{Binding CancelCommand}"
+                    ToolTip="Cancel"
+                    AutomationProperties.Name="Cancel"
+                    Margin="0,0,10,0"/>
+            <Button Content="✏️" 
+                    Style="{StaticResource CircularPrimaryButton}"
                     Command="{Binding ConfirmCommand}" 
                     IsDefault="True" 
-                    ToolTip="Enter a new name for this profile"/>
+                    ToolTip="Rename Profile"
+                    AutomationProperties.Name="Rename Profile"/>
         </StackPanel>
     </Grid>
 </Window>

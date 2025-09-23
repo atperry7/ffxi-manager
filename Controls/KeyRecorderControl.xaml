@@ -58,21 +58,19 @@
                         Orientation="Horizontal" 
                         HorizontalAlignment="Center">
                 <Button x:Name="RecordButton"
-                        Content="📹 Record"
-                        Style="{StaticResource ModernButtonBase}"
-                        Background="{StaticResource SuccessBrush}"
-                        Width="80"
-                        Height="32"
-                        Margin="0,0,8,0"
-                        Click="RecordButton_Click"/>
+                        Content="📹"
+                        Style="{StaticResource CircularSuccessButton}"
+                        Click="RecordButton_Click"
+                        ToolTip="Record Hotkey"
+                        AutomationProperties.Name="Record Hotkey"
+                        Margin="0,0,8,0"/>
                 
                 <Button x:Name="ClearButton"
-                        Content="🗑 Clear"
-                        Style="{StaticResource ModernButtonBase}"
-                        Background="{StaticResource SecondaryBrush}"
-                        Width="80"
-                        Height="32"
-                        Click="ClearButton_Click"/>
+                        Content="🗑️"
+                        Style="{StaticResource CircularSecondaryButton}"
+                        Click="ClearButton_Click"
+                        ToolTip="Clear Hotkey"
+                        AutomationProperties.Name="Clear Hotkey"/>
             </StackPanel>
         </Grid>
     </Border>

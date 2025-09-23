@@ -27,6 +27,9 @@
     <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}"/>
     <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
     <SolidColorBrush x:Key="HeaderBackgroundBrush" Color="{StaticResource HeaderBackgroundColor}"/>
+    <SolidColorBrush x:Key="HeaderTextBrush" Color="White"/>
+    <SolidColorBrush x:Key="HeaderSecondaryTextBrush" Color="#C1C7CD"/>
+    <SolidColorBrush x:Key="HeaderBorderBrush" Color="#4A5568"/>
     <SolidColorBrush x:Key="CardBackgroundBrush" Color="{StaticResource CardBackgroundColor}"/>
     <SolidColorBrush x:Key="PillBackgroundBrush" Color="{StaticResource PillBackgroundColor}"/>
     

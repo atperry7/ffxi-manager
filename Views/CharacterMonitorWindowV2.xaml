@@ -107,37 +107,36 @@
                                 Margin="0,2,0,0">
                         
                         <!-- Activate Button (when click-to-switch is off) -->
-                        <Button Content="Switch"
-                                FontSize="9"
-                                Padding="8,2"
-                                Margin="0,0,2,0"
+                        <Button Content="⇄"
                                 Command="{Binding ActivateCommand}"
                                 Visibility="{Binding DataContext.WindowViewModel.ShowSwitchButtons, 
                                            RelativeSource={RelativeSource AncestorType=Window},
                                            Converter={StaticResource BoolToVis}}"
-                                Style="{DynamicResource CompactButton}"/>
+                                Style="{DynamicResource CircularSmallButton}"
+                                Background="{DynamicResource PrimaryBrush}"
+                                ToolTip="Switch to Character"
+                                AutomationProperties.Name="Switch to Character"/>
                         
                         <!-- Reorder Buttons -->
                         <Button Content="▲"
-                                Width="20" Height="20"
-                                FontSize="8"
-                                Margin="0,0,2,0"
                                 Command="{Binding DataContext.CollectionViewModel.MoveCharacterUpCommand,
                                         RelativeSource={RelativeSource AncestorType=Window}}"
                                 CommandParameter="{Binding}"
                                 IsEnabled="{Binding CanMoveUp}"
-                                Style="{DynamicResource MiniButton}"
-                                ToolTip="Move Up"/>
+                                Style="{DynamicResource CircularSmallButton}"
+                                Background="{DynamicResource SecondaryBrush}"
+                                ToolTip="Move Up"
+                                AutomationProperties.Name="Move Character Up"/>
                         
                         <Button Content="▼"
-                                Width="20" Height="20"
-                                FontSize="8"
                                 Command="{Binding DataContext.CollectionViewModel.MoveCharacterDownCommand,
                                         RelativeSource={RelativeSource AncestorType=Window}}"
                                 CommandParameter="{Binding}"
                                 IsEnabled="{Binding CanMoveDown}"
-                                Style="{DynamicResource MiniButton}"
-                                ToolTip="Move Down"/>
+                                Style="{DynamicResource CircularSmallButton}"
+                                Background="{DynamicResource SecondaryBrush}"
+                                ToolTip="Move Down"
+                                AutomationProperties.Name="Move Character Down"/>
                     </StackPanel>
                 </Grid>
                 
