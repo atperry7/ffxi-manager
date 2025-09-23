@@ -197,51 +197,60 @@ namespace FFXIManager
             // Load the initial theme from settings
             try
             {
-                var settingsService = Services.GetRequiredService<ISettingsService>();
+                var settingsService = Services?.GetRequiredService<ISettingsService>();
+                if (settingsService == null)
+                {
+                    Log.Warning("Services provider not available, using default dark theme");
+                    ApplyTheme(true);
+                    return;
+                }
                 var settings = settingsService.LoadSettings();
                 ApplyTheme(settings.IsDarkTheme);
 
+                // At this point we know Services is not null since settingsService was resolved
+                var services = Services!;
+                
                 // Centralize global hotkey registration at app startup so it works regardless of UI windows
-                Services.GetRequiredService<GlobalHotkeyManager>().RegisterHotkeysFromSettings();
+                services.GetRequiredService<GlobalHotkeyManager>().RegisterHotkeysFromSettings();
 
                 // Ensure PlayOnline monitoring is started regardless of UI windows
-                Services.GetRequiredService<IPlayOnlineMonitorService>().StartMonitoring();
+                services.GetRequiredService<IPlayOnlineMonitorService>().StartMonitoring();
                 
                 // Connect the character ordering service to the monitor and wait for completion
-                if (Services.GetRequiredService<ICharacterOrderingService>() is CharacterOrderingService orderingService)
+                if (services.GetRequiredService<ICharacterOrderingService>() is CharacterOrderingService orderingService)
                 {
                     try
                     {
-                        await orderingService.ConnectToMonitorAsync(Services.GetRequiredService<IPlayOnlineMonitorService>());
+                        await orderingService.ConnectToMonitorAsync(services.GetRequiredService<IPlayOnlineMonitorService>());
                     }
                     catch (Exception ex)
                     {
-                        _ = Services.GetRequiredService<ILoggingService>().LogErrorAsync("Error connecting character ordering service to monitor", ex, "App");
+                        _ = services.GetRequiredService<ILoggingService>().LogErrorAsync("Error connecting character ordering service to monitor", ex, "App");
                     }
                 }
 
                 // **GAMING OPTIMIZATION**: Ultra-fast hotkey processing via unified service
-                Services.GetRequiredService<GlobalHotkeyManager>().HotkeyPressed += async (_, e) =>
+                services.GetRequiredService<GlobalHotkeyManager>().HotkeyPressed += async (_, e) =>
                 {
                     // Check if this is the cycle hotkey
                     if (e.HotkeyId == HotkeyActivationService.CycleHotkeyId)
                     {
                         // Handle cycle hotkey
-                        var cycleResult = await Services.GetRequiredService<IHotkeyActivationService>().CycleToNextCharacterAsync();
+                        var cycleResult = await services.GetRequiredService<IHotkeyActivationService>().CycleToNextCharacterAsync();
                         
                         if (!cycleResult.Success && IsUnexpectedHotkeyError(cycleResult.ErrorMessage))
                         {
-                            _ = Services.GetRequiredService<INotificationServiceEnhanced>()?.ShowToastAsync($"Cycle failed: {cycleResult.ErrorMessage}", NotificationType.Error);
+                            _ = services.GetRequiredService<INotificationServiceEnhanced>()?.ShowToastAsync($"Cycle failed: {cycleResult.ErrorMessage}", NotificationType.Error);
                         }
                     }
                     else
                     {
                         // **UNIFIED PIPELINE**: All hotkey activation through optimized service
-                        var result = await Services.GetRequiredService<IHotkeyActivationService>().ActivateCharacterByHotkeyAsync(e.HotkeyId);
+                        var result = await services.GetRequiredService<IHotkeyActivationService>().ActivateCharacterByHotkeyAsync(e.HotkeyId);
                         
                         if (!result.Success && IsUnexpectedHotkeyError(result.ErrorMessage))
                         {
-                            _ = Services.GetRequiredService<INotificationServiceEnhanced>()?.ShowToastAsync($"Hotkey failed: {result.ErrorMessage}", NotificationType.Error);
+                            _ = services.GetRequiredService<INotificationServiceEnhanced>()?.ShowToastAsync($"Hotkey failed: {result.ErrorMessage}", NotificationType.Error);
                         }
                     }
                 };
@@ -251,11 +260,11 @@ namespace FFXIManager
                 {
                     try
                     {
-                        await Services.GetRequiredService<IHotkeyMappingService>().RefreshMappingsAsync();
+                        await services.GetRequiredService<IHotkeyMappingService>().RefreshMappingsAsync();
                     }
                     catch (Exception ex)
                     {
-                        _ = Services.GetRequiredService<ILoggingService>().LogErrorAsync("Error initializing hotkey mappings", ex, "App");
+                        _ = services.GetRequiredService<ILoggingService>().LogErrorAsync("Error initializing hotkey mappings", ex, "App");
                     }
                 });
                 
@@ -264,8 +273,8 @@ namespace FFXIManager
                 {
                     try
                     {
-                        Services.GetRequiredService<GlobalHotkeyManager>().RefreshHotkeys();
-                        _ = Task.Run(() => Services.GetRequiredService<IHotkeyMappingService>().RefreshMappingsAsync());
+                        services.GetRequiredService<GlobalHotkeyManager>().RefreshHotkeys();
+                        _ = Task.Run(() => services.GetRequiredService<IHotkeyMappingService>().RefreshMappingsAsync());
                     }
                     catch { }
                 };
@@ -277,7 +286,13 @@ namespace FFXIManager
             }
 
             // Show main window via DI
-            var window = Services.GetRequiredService<MainWindow>();
+            var window = Services?.GetRequiredService<MainWindow>();
+            if (window == null)
+            {
+                Log.Error("Failed to resolve MainWindow from services provider");
+                Shutdown(1);
+                return;
+            }
             window.Show();
         }
         
@@ -335,7 +350,7 @@ namespace FFXIManager
             try
             {
                 // Unregister global hotkeys on exit to avoid leaving hooks active
-                Services.GetRequiredService<GlobalHotkeyManager>().UnregisterAllHotkeys();
+                Services?.GetRequiredService<GlobalHotkeyManager>().UnregisterAllHotkeys();
             }
             catch { }
 

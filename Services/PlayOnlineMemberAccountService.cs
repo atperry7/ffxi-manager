@@ -29,7 +29,7 @@ namespace FFXIManager.Services
 
         public Task<List<PlayOnlineMemberAccount>> GetAccountsForProfileAsync(string profileFilePath)
         {
-            return Task.Run(async () =>
+            return Task.Run(() =>
             {
                 lock (_lockObject)
                 {
@@ -62,7 +62,7 @@ namespace FFXIManager.Services
 
         public Task<bool> AddAccountAsync(string profileFilePath, PlayOnlineMemberAccount account)
         {
-            return Task.Run(async () =>
+            return Task.Run(() =>
             {
                 lock (_lockObject)
                 {
@@ -114,7 +114,7 @@ namespace FFXIManager.Services
 
         public Task<bool> UpdateAccountAsync(string profileFilePath, PlayOnlineMemberAccount account)
         {
-            return Task.Run(async () =>
+            return Task.Run(() =>
             {
                 lock (_lockObject)
                 {

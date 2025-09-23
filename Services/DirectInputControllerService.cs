@@ -199,8 +199,8 @@ namespace FFXIManager.Services
                 }
                 catch (SharpDX.SharpDXException ex) when ((uint)ex.HResult == 0x8007001E) // DIERR_INPUTLOST
                 {
-                    // Controller disconnected
-                    _loggingService.LogInfoAsync("🔌 PlayStation controller disconnected: {InstanceGuid}", "DirectInputController", joystick.Information.InstanceGuid);
+                    // Controller disconnected (fire-and-forget logging is intentional)
+                    _ = _loggingService.LogInfoAsync("🔌 PlayStation controller disconnected: {InstanceGuid}", "DirectInputController", joystick.Information.InstanceGuid);
                     _joysticks.Remove(joystick);
                     joystick.Dispose();
                     IsAnyControllerConnected = _joysticks.Count > 0;
@@ -343,7 +343,7 @@ namespace FFXIManager.Services
 
                 _directInput?.Dispose();
                 
-                _loggingService.LogInfoAsync("DirectInputControllerService disposed", "DirectInputController");
+                _loggingService?.LogInfoAsync("DirectInputControllerService disposed", "DirectInputController");
             }
             catch (Exception ex)
             {

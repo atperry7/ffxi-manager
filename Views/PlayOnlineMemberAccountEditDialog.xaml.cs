@@ -140,8 +140,8 @@ namespace FFXIManager.Views
             }
             // If hasExistingPassword is true and no new password entered, keep existing password
 
-            // Handle OTP validation if enabled
-            if (ViewModel.Account.OTPConfiguration?.IsEnabled == true)
+            // Handle OTP validation if enabled (we know ViewModel and ViewModel.Account are not null at this point)
+            if (ViewModel!.Account!.OTPConfiguration?.IsEnabled == true)
             {
                 bool hasNewAuthKey = !string.IsNullOrWhiteSpace(AuthKeyTextBox.Text);
                 bool hasExistingAuthKey = ViewModel?.Account?.OTPConfiguration?.HasStoredSecret == true;

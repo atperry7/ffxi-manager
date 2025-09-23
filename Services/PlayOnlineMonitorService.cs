@@ -873,7 +873,7 @@ namespace FFXIManager.Services
                         // Check if title has changed
                         if (!_lastPolTitles.TryGetValue(character.WindowHandle, out var lastTitle) || lastTitle != currentTitle)
                         {
-                            await _logging.LogInfoAsync("📊 POL TITLE CHANGE: PID {ProcessId}, Handle 0x{WindowHandle:X}, '{OldTitle}' → '{NewTitle}'", "PlayOnlineMonitorService", character.ProcessId, character.WindowHandle.ToInt64(), lastTitle, currentTitle);
+                            await _logging.LogInfoAsync("📊 POL TITLE CHANGE: PID {ProcessId}, Handle 0x{WindowHandle:X}, '{OldTitle}' → '{NewTitle}'", "PlayOnlineMonitorService", character.ProcessId, character.WindowHandle.ToInt64(), lastTitle ?? "<unknown>", currentTitle);
                             
                             _lastPolTitles[character.WindowHandle] = currentTitle;
 

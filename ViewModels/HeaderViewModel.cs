@@ -142,7 +142,7 @@ namespace FFXIManager.ViewModels
             {
                 var dlg = new Views.DiscoverySettingsDialog();
                 dlg.Owner = System.Windows.Application.Current?.MainWindow;
-                dlg.DataContext = App.Services.GetRequiredService<ViewModels.DiscoverySettingsViewModel>();
+                dlg.DataContext = App.Services?.GetRequiredService<ViewModels.DiscoverySettingsViewModel>();
                 dlg.ShowDialog();
             }
             catch { }

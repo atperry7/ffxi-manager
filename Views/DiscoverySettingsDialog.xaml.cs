@@ -44,7 +44,10 @@ namespace FFXIManager.Views
             try
             {
                 // Use dedicated ControllerInputService for detection
-                using var controllerService = new ControllerInputService(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<ILoggingService>(App.Services));
+                var loggingService = App.Services?.GetRequiredService<ILoggingService>();
+                if (loggingService == null) return;
+                
+                using var controllerService = new ControllerInputService(loggingService);
                 
                 // Allow time for XInput detection (controllers can take a moment to enumerate)
                 await Task.Delay(500);

@@ -41,15 +41,16 @@ namespace FFXIManager.Views
                     _currentWindow.Closed += OnWindowClosed;
                     _currentWindow.Show();
                     
-                    var loggingService = App.Services.GetRequiredService<ILoggingService>();
+                    var loggingService = App.Services?.GetRequiredService<ILoggingService>();
+                    if (loggingService != null)
                     _ = loggingService.LogInfoAsync(
                         "Character Monitor window opened (new architecture)", 
                         "CharacterMonitorHelper");
                 }
                 catch (Exception ex)
                 {
-                    var loggingService = App.Services.GetRequiredService<ILoggingService>();
-                    _ = loggingService.LogErrorAsync(
+                    var loggingService = App.Services?.GetRequiredService<ILoggingService>();
+                    _ = loggingService?.LogErrorAsync(
                         "Failed to open Character Monitor window", 
                         ex, 
                         "CharacterMonitorHelper");
