@@ -118,13 +118,27 @@
                             Margin="0,0,5,0"/>
                 </StackPanel>
 
-                <!-- Overall Progress Bar -->
-                <ProgressBar Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                             Value="{Binding OverallProgress, Mode=OneWay}"
-                             Maximum="100"
-                             Height="8"
-                             Margin="0,10,0,0"
-                             Visibility="{Binding ShowProgressBars, Converter={StaticResource BoolToVisConverter}}"/>
+                <!-- Stacked Color-Coded Progress Bar -->
+                <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                      Height="8" Margin="0,10,0,0"
+                      Visibility="{Binding ShowProgressBars, Converter={StaticResource BoolToVisConverter}}">
+
+                    <!-- Layer 1: Background/Pending (bottom layer) -->
+                    <ProgressBar Value="100" Maximum="100"
+                                 Style="{StaticResource PendingProgressBarStyle}"/>
+
+                    <!-- Layer 2: All processed items (total progress) -->
+                    <ProgressBar Value="{Binding ProcessedPercentage, Mode=OneWay}" Maximum="100"
+                                 Style="{StaticResource FailedProgressBarStyle}"/>
+
+                    <!-- Layer 3: Completed + Cancelled items (non-failed) -->
+                    <ProgressBar Value="{Binding CompletedAndCancelledPercentage, Mode=OneWay}" Maximum="100"
+                                 Style="{StaticResource CancelledProgressBarStyle}"/>
+
+                    <!-- Layer 4: Only completed items (green on top) -->
+                    <ProgressBar Value="{Binding CompletedPercentage, Mode=OneWay}" Maximum="100"
+                                 Style="{StaticResource CompletedProgressBarStyle}"/>
+                </Grid>
             </Grid>
         </GroupBox>
 

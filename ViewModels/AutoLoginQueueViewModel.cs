@@ -188,10 +188,11 @@ namespace FFXIManager.ViewModels
         public bool CanShowResetButton => ExecutionState == QueueExecutionState.Idle;
 
         /// <summary>
-        /// Whether progress bars should be visible (queue is executing)
+        /// Whether progress bars should be visible (queue is executing or has results to show)
         /// </summary>
         public bool ShowProgressBars => ExecutionState is QueueExecutionState.Starting or QueueExecutionState.Processing
-                                        or QueueExecutionState.Transitioning or QueueExecutionState.Stopping;
+                                        or QueueExecutionState.Transitioning or QueueExecutionState.Stopping
+                                        || (ProcessedItems > 0 && TotalQueueItems > 0);
 
         /// <summary>
         /// Total number of items in queue
@@ -209,9 +210,63 @@ namespace FFXIManager.ViewModels
         public int FailedItems => _queueService.FailedItems;
 
         /// <summary>
+        /// Number of cancelled/skipped items
+        /// </summary>
+        public int CancelledItems => _queueService.CancelledItems;
+
+        /// <summary>
+        /// Total number of processed items (completed + failed + cancelled)
+        /// </summary>
+        public int ProcessedItems => _queueService.ProcessedItems;
+
+        /// <summary>
         /// Overall queue progress percentage
         /// </summary>
         public int OverallProgress => _queueService.OverallProgress;
+
+        /// <summary>
+        /// Percentage of completed items for progress bar visualization
+        /// </summary>
+        public double CompletedPercentage => TotalQueueItems > 0 ? (double)CompletedItems / TotalQueueItems * 100 : 0;
+
+        /// <summary>
+        /// Percentage of failed items for progress bar visualization
+        /// </summary>
+        public double FailedPercentage => TotalQueueItems > 0 ? (double)FailedItems / TotalQueueItems * 100 : 0;
+
+        /// <summary>
+        /// Percentage of cancelled/skipped items for progress bar visualization
+        /// </summary>
+        public double CancelledPercentage => TotalQueueItems > 0 ? (double)CancelledItems / TotalQueueItems * 100 : 0;
+
+        /// <summary>
+        /// Combined percentage of failed and cancelled items for stacked progress bar
+        /// </summary>
+        public double FailedAndCancelledPercentage => FailedPercentage + CancelledPercentage;
+
+        /// <summary>
+        /// Combined percentage of completed and cancelled items (non-failed) for stacked progress bar
+        /// </summary>
+        public double CompletedAndCancelledPercentage => CompletedPercentage + CancelledPercentage;
+
+        /// <summary>
+        /// Total percentage of all processed items for stacked progress bar
+        /// </summary>
+        public double ProcessedPercentage => TotalQueueItems > 0 ? (double)ProcessedItems / TotalQueueItems * 100 : 0;
+
+        /// <summary>
+        /// Gets the correct processing status text to avoid double-counting items
+        /// </summary>
+        private string GetProcessingStatusText()
+        {
+            if (TotalQueueItems == 0) return "Running";
+
+            // Calculate current position: processed items + 1 for active item
+            // But only if there's actually an active item (not all items are already processed)
+            var currentPosition = ProcessedItems < TotalQueueItems ? ProcessedItems + 1 : ProcessedItems;
+
+            return $"Running ({currentPosition}/{TotalQueueItems})";
+        }
 
         /// <summary>
         /// Current item being processed
@@ -239,7 +294,7 @@ namespace FFXIManager.ViewModels
                 {
                     QueueExecutionState.Idle => "Ready",
                     QueueExecutionState.Starting => "Starting",
-                    QueueExecutionState.Processing => $"Running ({CompletedItems + FailedItems + 1}/{TotalQueueItems})",
+                    QueueExecutionState.Processing => GetProcessingStatusText(),
                     QueueExecutionState.Transitioning => "Transitioning",
                     QueueExecutionState.Paused => "Paused",
                     QueueExecutionState.Stopping => "Stopping",
@@ -257,8 +312,7 @@ namespace FFXIManager.ViewModels
             get
             {
                 if (TotalQueueItems == 0) return "No items in queue";
-                var processedItems = CompletedItems + FailedItems;
-                return $"{processedItems}/{TotalQueueItems} items processed ({OverallProgress}%)";
+                return $"{ProcessedItems}/{TotalQueueItems} items processed ({OverallProgress}%)";
             }
         }
 
@@ -323,14 +377,16 @@ namespace FFXIManager.ViewModels
                 if (TotalQueueItems == 0)
                     return "Ready to start - Add accounts to the queue";
 
-                if (CompletedItems == TotalQueueItems)
-                    return $"Queue completed - {CompletedItems} accounts processed successfully";
+                if (ProcessedItems == TotalQueueItems)
+                {
+                    if (FailedItems == 0 && CancelledItems == 0)
+                        return $"Queue completed - {CompletedItems} accounts processed successfully";
+                    else
+                        return $"Queue finished - {CompletedItems} completed, {FailedItems} failed, {CancelledItems} skipped";
+                }
 
-                if (FailedItems > 0 && CompletedItems + FailedItems == TotalQueueItems)
-                    return $"Queue finished - {CompletedItems} completed, {FailedItems} failed";
-
-                if (CompletedItems > 0 || FailedItems > 0)
-                    return $"Queue paused - {CompletedItems + FailedItems}/{TotalQueueItems} items processed";
+                if (ProcessedItems > 0)
+                    return $"Queue paused - {ProcessedItems}/{TotalQueueItems} items processed";
 
                 return "Queue ready - Click Start to begin auto-login";
             }
@@ -602,6 +658,13 @@ namespace FFXIManager.ViewModels
         {
             try
             {
+                // Auto-reset completed items for fresh run while preserving the queue configuration
+                if (QueueItems.Any(x => x.Status == AutoLoginQueueStatus.Completed || x.Status == AutoLoginQueueStatus.Failed))
+                {
+                    await _loggingService.LogInfoAsync("Resetting completed/failed items for fresh queue run");
+                    await _queueService.ResetQueueAsync();
+                }
+
                 _statusService.SetMessage("Starting auto-login queue...");
                 await _queueService.StartQueueAsync(_cancellationTokenSource.Token);
             }
@@ -801,18 +864,10 @@ namespace FFXIManager.ViewModels
                 UpdateCommandStates();
                 _statusService.SetMessage($"Auto-login queue stopped: {e.Message}");
 
-                // Auto-reset queue if it completed successfully
+                // Allow user to review completion results - no auto-reset
                 if (e.Reason == QueueStopReason.Completed)
                 {
-                    try
-                    {
-                        await _queueService.ResetQueueAsync();
-                        await _loggingService.LogInfoAsync("Queue automatically reset after successful completion");
-                    }
-                    catch (Exception ex)
-                    {
-                        await _loggingService.LogErrorAsync("Failed to auto-reset queue after completion", ex);
-                    }
+                    await _loggingService.LogInfoAsync("Queue completed successfully - results preserved for user review");
                 }
             });
         }
@@ -958,7 +1013,15 @@ namespace FFXIManager.ViewModels
             OnPropertyChanged(nameof(TotalQueueItems));
             OnPropertyChanged(nameof(CompletedItems));
             OnPropertyChanged(nameof(FailedItems));
+            OnPropertyChanged(nameof(CancelledItems));
+            OnPropertyChanged(nameof(ProcessedItems));
             OnPropertyChanged(nameof(OverallProgress));
+            OnPropertyChanged(nameof(CompletedPercentage));
+            OnPropertyChanged(nameof(FailedPercentage));
+            OnPropertyChanged(nameof(CancelledPercentage));
+            OnPropertyChanged(nameof(FailedAndCancelledPercentage));
+            OnPropertyChanged(nameof(CompletedAndCancelledPercentage));
+            OnPropertyChanged(nameof(ProcessedPercentage));
             OnPropertyChanged(nameof(CurrentItem));
             OnPropertyChanged(nameof(QueueStatusDisplay));
             OnPropertyChanged(nameof(QueueProgressDisplay));
@@ -1006,6 +1069,20 @@ namespace FFXIManager.ViewModels
             if (_disposed) return;
 
             _disposed = true;
+
+            // Reset queue items to pending for clean application restart
+            try
+            {
+                if (QueueItems.Any(x => x.Status != AutoLoginQueueStatus.Pending))
+                {
+                    _queueService.ResetQueueAsync().Wait(TimeSpan.FromSeconds(2)); // Brief wait for clean shutdown
+                    _loggingService.LogInfoAsync("Reset queue items to pending on application closure").Wait(TimeSpan.FromSeconds(1));
+                }
+            }
+            catch
+            {
+                // Ignore exceptions during disposal
+            }
 
             // Unsubscribe from events
             _queueService.QueueStarted -= OnQueueStarted;

@@ -18,6 +18,7 @@ namespace FFXIManager.Models
         private DateTime? _startTime;
         private DateTime? _endTime;
         private string _errorMessage = string.Empty;
+        private AutoLoginTask? _task;
 
         /// <summary>
         /// Unique identifier for this queue item
@@ -189,9 +190,36 @@ namespace FFXIManager.Models
         }
 
         /// <summary>
-        /// List of completed login steps
+        /// List of completed login steps (legacy - maintained for backward compatibility)
         /// </summary>
         public List<LoginTaskStep> CompletedSteps { get; set; } = new();
+
+        /// <summary>
+        /// The auto-login task associated with this queue item
+        /// </summary>
+        public AutoLoginTask? Task
+        {
+            get => _task;
+            set
+            {
+                if (_task != null)
+                {
+                    _task.PropertyChanged -= OnTaskPropertyChanged;
+                }
+
+                _task = value;
+
+                if (_task != null)
+                {
+                    _task.PropertyChanged += OnTaskPropertyChanged;
+                }
+
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(TaskProgress));
+                OnPropertyChanged(nameof(CurrentTaskDisplay));
+                OnPropertyChanged(nameof(CurrentSubtaskDisplay));
+            }
+        }
 
         #region Computed Properties
 
@@ -255,7 +283,7 @@ namespace FFXIManager.Models
         };
 
         /// <summary>
-        /// Overall progress percentage (0-100)
+        /// Overall progress percentage (0-100) - Uses task progress if available, falls back to step progress
         /// </summary>
         public int OverallProgress
         {
@@ -264,6 +292,13 @@ namespace FFXIManager.Models
                 if (Status == AutoLoginQueueStatus.Completed) return 100;
                 if (Status == AutoLoginQueueStatus.Failed || Status == AutoLoginQueueStatus.Cancelled) return 0;
 
+                // Use task progress if available (new architecture)
+                if (Task != null)
+                {
+                    return Task.Progress;
+                }
+
+                // Fall back to legacy step-based progress
                 var totalSteps = Enum.GetValues<LoginTaskStep>().Length - 1; // Exclude None
                 var completedSteps = CompletedSteps.Count;
                 var currentStepProgress = CurrentStepProgress / 100.0;
@@ -271,6 +306,21 @@ namespace FFXIManager.Models
                 return (int)((completedSteps + currentStepProgress) / totalSteps * 100);
             }
         }
+
+        /// <summary>
+        /// Task progress percentage (0-100) - New task-based progress
+        /// </summary>
+        public int TaskProgress => Task?.Progress ?? 0;
+
+        /// <summary>
+        /// Current task display text
+        /// </summary>
+        public string CurrentTaskDisplay => Task?.StatusMessage ?? CurrentStepDisplay;
+
+        /// <summary>
+        /// Current subtask display text
+        /// </summary>
+        public string CurrentSubtaskDisplay => Task?.CurrentSubtask?.Name ?? "Waiting";
 
         /// <summary>
         /// Duration of login process
@@ -354,6 +404,9 @@ namespace FFXIManager.Models
             EndTime = null;
             ErrorMessage = string.Empty;
             CompletedSteps.Clear();
+
+            // Reset task if available
+            Task?.Reset();
         }
 
         /// <summary>
@@ -382,6 +435,23 @@ namespace FFXIManager.Models
         }
 
         /// <summary>
+        /// Handle property changes from the associated Task
+        /// </summary>
+        private void OnTaskPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(AutoLoginTask.Progress) ||
+                e.PropertyName == nameof(AutoLoginTask.Status) ||
+                e.PropertyName == nameof(AutoLoginTask.CurrentSubtask) ||
+                e.PropertyName == nameof(AutoLoginTask.StatusMessage))
+            {
+                OnPropertyChanged(nameof(TaskProgress));
+                OnPropertyChanged(nameof(OverallProgress));
+                OnPropertyChanged(nameof(CurrentTaskDisplay));
+                OnPropertyChanged(nameof(CurrentSubtaskDisplay));
+            }
+        }
+
+        /// <summary>
         /// Clean up event subscriptions
         /// </summary>
         public void Cleanup()
@@ -393,6 +463,11 @@ namespace FFXIManager.Models
             if (_profile != null)
             {
                 _profile.PropertyChanged -= OnProfilePropertyChanged;
+            }
+            if (_task != null)
+            {
+                _task.PropertyChanged -= OnTaskPropertyChanged;
+                _task.Cleanup();
             }
         }
     }

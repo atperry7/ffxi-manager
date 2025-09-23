@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using FFXIManager.Services;
+using FFXIManager.Services.AutoLogin;
 using FFXIManager.Configuration;
 using FFXIManager.ViewModels;
 using FFXIManager;
@@ -51,6 +52,13 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<IHotkeyPerformanceMonitor, HotkeyPerformanceMonitor>();
             services.AddSingleton<IHotkeyActivationService, HotkeyActivationService>();
             services.AddSingleton<IPlayOnlineMemberAccountService, PlayOnlineMemberAccountService>();
+            // Auto-login handlers
+            services.AddSingleton<ILoginTaskHandler, WindowerLaunchHandler>();
+            services.AddSingleton<ILoginTaskHandler, PlayOnlineAuthHandler>();
+            services.AddSingleton<ILoginTaskHandler, FFXIGameHandler>();
+            services.AddSingleton<ILoginTaskHandlerResolver, LoginTaskHandlerResolver>();
+
+            services.AddSingleton<IAutoLoginTaskExecutor, AutoLoginTaskExecutor>();
             services.AddSingleton<IAutoLoginQueueService, AutoLoginQueueService>();
             services.AddSingleton<IProfileService>(sp =>
             {

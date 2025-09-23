@@ -20,6 +20,7 @@ namespace FFXIManager.Services
         private readonly IProfileService _profileService;
         private readonly IPlayOnlineMemberAccountService _accountService;
         private readonly IUiDispatcher _uiDispatcher;
+        private readonly IAutoLoginTaskExecutor _taskExecutor;
         private readonly object _lockObject = new();
         private readonly SemaphoreSlim _executionSemaphore = new(1, 1);
 
@@ -34,16 +35,21 @@ namespace FFXIManager.Services
             ILoggingService loggingService,
             IProfileService profileService,
             IPlayOnlineMemberAccountService accountService,
-            IUiDispatcher uiDispatcher)
+            IUiDispatcher uiDispatcher,
+            IAutoLoginTaskExecutor taskExecutor)
         {
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
             _accountService = accountService ?? throw new ArgumentNullException(nameof(accountService));
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
+            _taskExecutor = taskExecutor ?? throw new ArgumentNullException(nameof(taskExecutor));
 
             QueueItems = new ObservableCollection<AutoLoginQueueItem>();
             QueueItems.CollectionChanged += (_, _) => UpdateQueuePositions();
+
+            // Subscribe to task executor events for enhanced progress reporting
+            SetupTaskExecutorEventHandlers();
 
             // Load settings
             LoadConfigurationFromSettings();
@@ -69,13 +75,16 @@ namespace FFXIManager.Services
 
         public int FailedItems => QueueItems.Count(x => x.Status == AutoLoginQueueStatus.Failed);
 
+        public int CancelledItems => QueueItems.Count(x => x.Status == AutoLoginQueueStatus.Cancelled);
+
+        public int ProcessedItems => CompletedItems + FailedItems + CancelledItems;
+
         public int OverallProgress
         {
             get
             {
                 if (TotalItems == 0) return 0;
-                var processedItems = CompletedItems + FailedItems;
-                return (int)((double)processedItems / TotalItems * 100);
+                return (int)((double)ProcessedItems / TotalItems * 100);
             }
         }
 
@@ -145,10 +154,33 @@ namespace FFXIManager.Services
 
         #region Queue Management
 
+        /// <summary>
+        /// Checks if the specified account is already in the queue
+        /// </summary>
+        public bool IsAccountAlreadyQueued(PlayOnlineMemberAccount account)
+        {
+            if (account == null) return false;
+
+            lock (_lockObject)
+            {
+                return QueueItems.Any(item => item.Account.Id == account.Id);
+            }
+        }
+
         public async Task<AutoLoginQueueItem> AddToQueueAsync(PlayOnlineMemberAccount account, ProfileInfo profile)
         {
             if (account == null) throw new ArgumentNullException(nameof(account));
             if (profile == null) throw new ArgumentNullException(nameof(profile));
+
+            // Check for duplicate account (by GUID) to prevent conflicts
+            lock (_lockObject)
+            {
+                var existingItem = QueueItems.FirstOrDefault(item => item.Account.Id == account.Id);
+                if (existingItem != null)
+                {
+                    throw new InvalidOperationException($"Account '{account.DisplayName}' is already in the queue. Duplicate accounts cannot be added as this would cause login conflicts.");
+                }
+            }
 
             var queueItem = new AutoLoginQueueItem
             {
@@ -380,6 +412,10 @@ namespace FFXIManager.Services
             if (ExecutionState != QueueExecutionState.Processing) return;
 
             TransitionToState(QueueExecutionState.Paused, "Queue paused by user");
+
+            // Pause the current task execution
+            await _taskExecutor.PauseCurrentTaskAsync();
+
             await _loggingService.LogInfoAsync("Paused auto-login queue");
             QueuePaused?.Invoke(this, EventArgs.Empty);
 
@@ -394,6 +430,10 @@ namespace FFXIManager.Services
             if (ExecutionState != QueueExecutionState.Paused) return;
 
             TransitionToState(QueueExecutionState.Processing, "Queue resumed by user");
+
+            // Resume the current task execution
+            await _taskExecutor.ResumeCurrentTaskAsync();
+
             await _loggingService.LogInfoAsync("Resumed auto-login queue");
             QueueResumed?.Invoke(this, EventArgs.Empty);
 
@@ -591,8 +631,8 @@ namespace FFXIManager.Services
                     ProfileSwapped?.Invoke(this, new ProfileSwappedEventArgs(fromProfile, item.Profile));
                 }
 
-                // Execute login steps with combined cancellation token
-                await ExecuteLoginStepsAsync(item, combinedToken);
+                // Execute login task using the task executor
+                await _taskExecutor.ExecuteAsync(item, combinedToken);
 
                 // Mark as completed if we got through all steps
                 if (item.Status == AutoLoginQueueStatus.InProgress)
@@ -772,12 +812,10 @@ namespace FFXIManager.Services
 
                     if (account != null && profile != null)
                     {
-                        // Determine status: reset non-completed items to pending for fresh start experience
-                        var restoredStatus = serializedItem.Status switch
-                        {
-                            AutoLoginQueueStatus.Completed => AutoLoginQueueStatus.Completed, // Keep completed items
-                            _ => AutoLoginQueueStatus.Pending // Reset all others (InProgress, Failed, Cancelled, Paused) to Pending
-                        };
+                        // Preserve completed status during session, only reset on application restart
+                        var restoredStatus = serializedItem.Status == AutoLoginQueueStatus.Completed
+                            ? AutoLoginQueueStatus.Completed
+                            : AutoLoginQueueStatus.Pending;
 
                         var item = new AutoLoginQueueItem
                         {
@@ -786,16 +824,12 @@ namespace FFXIManager.Services
                             Profile = profile,
                             Position = serializedItem.Position,
                             Status = restoredStatus,
-                            CurrentStep = LoginTaskStep.None, // Always reset step
-                            CompletedSteps = restoredStatus == AutoLoginQueueStatus.Completed
-                                ? new List<LoginTaskStep>(serializedItem.CompletedSteps)
-                                : new List<LoginTaskStep>(), // Clear steps for reset items
+                            CurrentStep = restoredStatus == AutoLoginQueueStatus.Completed ? serializedItem.CurrentStep : LoginTaskStep.None,
+                            CompletedSteps = restoredStatus == AutoLoginQueueStatus.Completed ? new List<LoginTaskStep>(serializedItem.CompletedSteps) : new List<LoginTaskStep>(),
                             StartTime = restoredStatus == AutoLoginQueueStatus.Completed ? serializedItem.StartTime : null,
                             EndTime = restoredStatus == AutoLoginQueueStatus.Completed ? serializedItem.EndTime : null,
-                            ErrorMessage = string.Empty, // Clear error messages for fresh start
-                            StatusMessage = restoredStatus == AutoLoginQueueStatus.Completed
-                                ? serializedItem.StatusMessage ?? string.Empty
-                                : "Ready to start"
+                            ErrorMessage = restoredStatus == AutoLoginQueueStatus.Completed ? (serializedItem.ErrorMessage ?? string.Empty) : string.Empty,
+                            StatusMessage = restoredStatus == AutoLoginQueueStatus.Completed ? (serializedItem.StatusMessage ?? "Completed") : "Ready to start"
                         };
 
                         restoredItems.Add(item);
@@ -815,16 +849,9 @@ namespace FFXIManager.Services
                 });
 
                 // Log the reset behavior for user awareness
-                var resetCount = restoredItems.Count(x => x.Status == AutoLoginQueueStatus.Pending);
-                var completedCount = restoredItems.Count(x => x.Status == AutoLoginQueueStatus.Completed);
-
-                if (resetCount > 0)
+                if (restoredItems.Any())
                 {
-                    await _loggingService.LogInfoAsync($"Queue state loaded: {resetCount} items reset to pending, {completedCount} completed items preserved");
-                }
-                else if (restoredItems.Any())
-                {
-                    await _loggingService.LogInfoAsync($"Queue state loaded: {restoredItems.Count} items restored");
+                    await _loggingService.LogInfoAsync($"Queue state loaded: {restoredItems.Count} items reset to pending for fresh auto-login session");
                 }
 
                 _originalProfilePath = queueState.OriginalProfilePath;
@@ -970,6 +997,102 @@ namespace FFXIManager.Services
 
         #endregion
 
+        #region Task Executor Event Handling
+
+        /// <summary>
+        /// Sets up event handlers for the task executor to enhance progress reporting
+        /// </summary>
+        private void SetupTaskExecutorEventHandlers()
+        {
+            // Task-level events
+            _taskExecutor.TaskStarted += OnTaskExecutorTaskStarted;
+            _taskExecutor.TaskCompleted += OnTaskExecutorTaskCompleted;
+            _taskExecutor.TaskFailed += OnTaskExecutorTaskFailed;
+            _taskExecutor.TaskProgressUpdated += OnTaskExecutorTaskProgressUpdated;
+
+            // Subtask-level events
+            _taskExecutor.SubtaskStarted += OnTaskExecutorSubtaskStarted;
+            _taskExecutor.SubtaskCompleted += OnTaskExecutorSubtaskCompleted;
+            _taskExecutor.SubtaskFailed += OnTaskExecutorSubtaskFailed;
+            _taskExecutor.SubtaskProgressUpdated += OnTaskExecutorSubtaskProgressUpdated;
+        }
+
+        /// <summary>
+        /// Cleans up task executor event handlers
+        /// </summary>
+        private void CleanupTaskExecutorEventHandlers()
+        {
+            // Task-level events
+            _taskExecutor.TaskStarted -= OnTaskExecutorTaskStarted;
+            _taskExecutor.TaskCompleted -= OnTaskExecutorTaskCompleted;
+            _taskExecutor.TaskFailed -= OnTaskExecutorTaskFailed;
+            _taskExecutor.TaskProgressUpdated -= OnTaskExecutorTaskProgressUpdated;
+
+            // Subtask-level events
+            _taskExecutor.SubtaskStarted -= OnTaskExecutorSubtaskStarted;
+            _taskExecutor.SubtaskCompleted -= OnTaskExecutorSubtaskCompleted;
+            _taskExecutor.SubtaskFailed -= OnTaskExecutorSubtaskFailed;
+            _taskExecutor.SubtaskProgressUpdated -= OnTaskExecutorSubtaskProgressUpdated;
+        }
+
+        // Task-level event handlers
+        private void OnTaskExecutorTaskStarted(object? sender, AutoLoginTaskEventArgs e)
+        {
+            _ = Task.Run(async () => _loggingService.LogDebugAsync($"Task started: {e.Task.Name} for {e.QueueItem.DisplayName}"));
+        }
+
+        private void OnTaskExecutorTaskCompleted(object? sender, AutoLoginTaskEventArgs e)
+        {
+            _ = Task.Run(async () => _loggingService.LogDebugAsync($"Task completed: {e.Task.Name} for {e.QueueItem.DisplayName}"));
+        }
+
+        private void OnTaskExecutorTaskFailed(object? sender, AutoLoginTaskEventArgs e)
+        {
+            _ = Task.Run(async () => _loggingService.LogWarningAsync($"Task failed: {e.Task.Name} for {e.QueueItem.DisplayName} - {e.Message}"));
+        }
+
+        private void OnTaskExecutorTaskProgressUpdated(object? sender, AutoLoginTaskEventArgs e)
+        {
+            // Update queue item progress and notify UI
+            ItemProgressUpdated?.Invoke(this, new AutoLoginQueueItemEventArgs(e.QueueItem, e.Message));
+        }
+
+        // Subtask-level event handlers
+        private void OnTaskExecutorSubtaskStarted(object? sender, AutoLoginSubtaskEventArgs e)
+        {
+            _ = Task.Run(async () => _loggingService.LogDebugAsync($"Subtask started: {e.Subtask.Name} for {e.QueueItem.DisplayName}"));
+
+            // Update legacy queue item properties for backward compatibility
+            e.QueueItem.CurrentStep = e.Subtask.TaskStep;
+            e.QueueItem.StatusMessage = e.Subtask.StatusMessage;
+        }
+
+        private void OnTaskExecutorSubtaskCompleted(object? sender, AutoLoginSubtaskEventArgs e)
+        {
+            _ = Task.Run(async () => _loggingService.LogDebugAsync($"Subtask completed: {e.Subtask.Name} for {e.QueueItem.DisplayName}"));
+
+            // Update legacy completed steps for backward compatibility
+            e.QueueItem.CompleteStep(e.Subtask.TaskStep);
+        }
+
+        private void OnTaskExecutorSubtaskFailed(object? sender, AutoLoginSubtaskEventArgs e)
+        {
+            _ = Task.Run(async () => _loggingService.LogWarningAsync($"Subtask failed: {e.Subtask.Name} for {e.QueueItem.DisplayName} - {e.Message}"));
+        }
+
+        private void OnTaskExecutorSubtaskProgressUpdated(object? sender, AutoLoginSubtaskEventArgs e)
+        {
+            _ = Task.Run(async () => _loggingService.LogDebugAsync($"Subtask progress: {e.Subtask.Name} - {e.Subtask.Progress}% for {e.QueueItem.DisplayName}"));
+
+            // Update legacy queue item progress for backward compatibility
+            e.QueueItem.CurrentStepProgress = e.Subtask.Progress;
+
+            // Notify UI of progress update
+            ItemProgressUpdated?.Invoke(this, new AutoLoginQueueItemEventArgs(e.QueueItem, $"{e.Subtask.Name}: {e.Subtask.Progress}%"));
+        }
+
+        #endregion
+
         #region IDisposable
 
         public void Dispose()
@@ -977,6 +1100,9 @@ namespace FFXIManager.Services
             if (_disposed) return;
 
             _disposed = true;
+
+            // Clean up task executor event handlers
+            CleanupTaskExecutorEventHandlers();
 
             // Cancel any running execution
             _executionCancellationTokenSource?.Cancel();
@@ -995,6 +1121,8 @@ namespace FFXIManager.Services
             _executionCancellationTokenSource?.Dispose();
             _currentItemCancellationTokenSource?.Dispose();
             _executionSemaphore?.Dispose();
+
+            // Task executor disposal handled by DI container
 
             GC.SuppressFinalize(this);
         }

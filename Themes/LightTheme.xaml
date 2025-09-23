@@ -77,6 +77,32 @@
     <!-- Info Button - Light Purple -->
     <SolidColorBrush x:Key="InfoBrush" Color="#A78BFA"/>
     <SolidColorBrush x:Key="InfoHoverBrush" Color="#8B5CF6"/>
+
+    <!-- Progress Bar Styles for Queue Status -->
+    <Style x:Key="CompletedProgressBarStyle" TargetType="ProgressBar">
+        <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+
+    <Style x:Key="CancelledProgressBarStyle" TargetType="ProgressBar">
+        <Setter Property="Foreground" Value="{StaticResource WarningBrush}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+
+    <Style x:Key="FailedProgressBarStyle" TargetType="ProgressBar">
+        <Setter Property="Foreground" Value="{StaticResource DangerBrush}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+
+    <Style x:Key="PendingProgressBarStyle" TargetType="ProgressBar">
+        <Setter Property="Foreground" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
     <SolidColorBrush x:Key="InfoPressedBrush" Color="#7C3AED"/>
     
     <!-- Additional DataGrid Brushes -->

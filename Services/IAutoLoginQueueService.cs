@@ -60,6 +60,16 @@ namespace FFXIManager.Services
         int FailedItems { get; }
 
         /// <summary>
+        /// Number of cancelled/skipped items
+        /// </summary>
+        int CancelledItems { get; }
+
+        /// <summary>
+        /// Total number of processed items (completed + failed + cancelled)
+        /// </summary>
+        int ProcessedItems { get; }
+
+        /// <summary>
         /// Overall progress percentage (0-100)
         /// </summary>
         int OverallProgress { get; }
