@@ -554,7 +554,7 @@ namespace FFXIManager.ViewModels
             {
                 var result = await _dialogService.ShowConfirmationDialogAsync(
                     "Stop Queue",
-                    "Are you sure you want to stop the queue execution?");
+                    "Are you sure you want to stop the queue execution?\n\nThis will reset all pending/failed items back to pending state for a clean restart.");
 
                 if (result)
                 {

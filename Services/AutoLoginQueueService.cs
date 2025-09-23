@@ -360,12 +360,24 @@ namespace FFXIManager.Services
         {
             if (CurrentItem == null) return;
 
-            CurrentItem.Status = AutoLoginQueueStatus.Cancelled;
-            CurrentItem.StatusMessage = "Skipped by user";
-            CurrentItem.EndTime = DateTime.Now;
+            var skippedItem = CurrentItem;
+            skippedItem.Status = AutoLoginQueueStatus.Cancelled;
+            skippedItem.StatusMessage = "Skipped by user";
+            skippedItem.EndTime = DateTime.Now;
 
-            await _loggingService.LogInfoAsync($"Skipped current queue item: {CurrentItem.DisplayName}");
-            ItemFailed?.Invoke(this, new AutoLoginQueueItemEventArgs(CurrentItem, "Skipped by user"));
+            await _loggingService.LogInfoAsync($"Skipped current queue item: {skippedItem.DisplayName}");
+
+            // Clear the current item so the queue can move to the next pending item
+            CurrentItem = null;
+
+            // Trigger completion events and save state
+            GetStatisticsInternal().UpdateWithCompletedItem(skippedItem);
+            ItemFailed?.Invoke(this, new AutoLoginQueueItemEventArgs(skippedItem, "Skipped by user"));
+
+            if (AutoSaveQueueState)
+            {
+                await SaveQueueStateAsync();
+            }
         }
 
         public async Task RetryItemAsync(AutoLoginQueueItem item)
@@ -751,6 +763,24 @@ namespace FFXIManager.Services
             IsExecuting = false;
             IsPaused = false;
             CurrentItem = null;
+
+            // If user manually stopped the queue, reset all items to provide a clean restart
+            if (reason == QueueStopReason.UserRequested)
+            {
+                await _uiDispatcher.InvokeAsync(() =>
+                {
+                    lock (_lockObject)
+                    {
+                        // Reset all non-completed items back to pending state
+                        foreach (var item in QueueItems.Where(x => x.Status != AutoLoginQueueStatus.Completed))
+                        {
+                            item.Reset();
+                        }
+                    }
+                });
+
+                await _loggingService.LogInfoAsync("Reset queue items to pending state for clean restart");
+            }
 
             // Restore original profile if configured
             var settings = _settingsService.LoadSettings();
