@@ -43,25 +43,12 @@
                                   Command="{Binding DeleteAccountCommand}"/>
                     </ContextMenu>
                 </DataGrid.ContextMenu>
-                <DataGrid.ColumnHeaderStyle>
-                    <Style TargetType="DataGridColumnHeader">
-                        <Setter Property="Background" Value="{DynamicResource HeaderBackgroundBrush}"/>
-                        <Setter Property="Foreground" Value="White"/>
-                        <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
-                        <Setter Property="BorderThickness" Value="0,0,0,1"/>
-                        <Setter Property="Padding" Value="8,6"/>
-                        <Setter Property="FontWeight" Value="SemiBold"/>
-                        <Setter Property="HorizontalContentAlignment" Value="Left"/>
-                    </Style>
-                </DataGrid.ColumnHeaderStyle>
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Account Name"
                                         Binding="{Binding AccountName}"
                                         Width="*">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
-                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextCellStyle}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding Path=AccountName}" Value="">
                                         <Setter Property="Text" Value="(Unnamed)"/>
@@ -75,22 +62,14 @@
                                         Binding="{Binding POLMemberSlot}"
                                         Width="70">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
-                                <Setter Property="HorizontalAlignment" Value="Center"/>
-                                <Setter Property="VerticalAlignment" Value="Center"/>
-                            </Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}"/>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
                     <DataGridTextColumn Header="FFXI Slot"
                                         Binding="{Binding FFXICharacterSlot}"
                                         Width="75">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
-                                <Setter Property="HorizontalAlignment" Value="Center"/>
-                                <Setter Property="VerticalAlignment" Value="Center"/>
-                            </Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}"/>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
                     <DataGridTemplateColumn Header="Password" Width="80">
