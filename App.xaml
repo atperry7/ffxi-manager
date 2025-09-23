@@ -22,6 +22,7 @@
         <converters:BoolToYesNoConverter x:Key="BoolToYesNoConverter"/>
         <converters:StringIsNotNullOrEmptyConverter x:Key="StringIsNotNullOrEmptyConverter"/>
         <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
+        <converters:NullToInverseVisibilityConverter x:Key="NullToInverseVisibilityConverter"/>
         <converters:ZeroToVisibilityConverter x:Key="ZeroToVisibilityConverter"/>
         <converters:ZeroToInverseVisibilityConverter x:Key="ZeroToInverseVisibilityConverter"/>
             

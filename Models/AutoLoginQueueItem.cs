@@ -280,7 +280,9 @@ namespace FFXIManager.Models
             get
             {
                 if (StartTime == null) return null;
-                var endTime = EndTime ?? (IsActive ? DateTime.Now : null);
+
+                // Use EndTime if available (task completed), otherwise use current time only for active items
+                var endTime = EndTime ?? (IsActive && EndTime == null ? DateTime.Now : null);
                 return endTime?.Subtract(StartTime.Value);
             }
         }
@@ -328,6 +330,15 @@ namespace FFXIManager.Models
                 CompletedSteps.Add(step);
                 OnPropertyChanged(nameof(OverallProgress));
             }
+        }
+
+        /// <summary>
+        /// Refreshes duration display for real-time updates
+        /// </summary>
+        public void RefreshDurationDisplay()
+        {
+            OnPropertyChanged(nameof(Duration));
+            OnPropertyChanged(nameof(DurationDisplay));
         }
 
         /// <summary>

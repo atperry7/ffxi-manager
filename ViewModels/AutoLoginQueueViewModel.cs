@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Windows.Threading;
 using FFXIManager.Infrastructure;
 using FFXIManager.Models;
 using FFXIManager.Services;
@@ -33,6 +34,13 @@ namespace FFXIManager.ViewModels
         private bool _disposed;
         private CancellationTokenSource _cancellationTokenSource = new();
 
+        // Profile switching tracking
+        private string? _lastActiveProfileName;
+        private bool _isProfileSwitching;
+
+        // Duration update timer
+        private readonly DispatcherTimer _durationUpdateTimer;
+
         public AutoLoginQueueViewModel(
             IAutoLoginQueueService queueService,
             IPlayOnlineMemberAccountService accountService,
@@ -51,6 +59,13 @@ namespace FFXIManager.ViewModels
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
 
             AvailableAccounts = new ObservableCollection<PlayOnlineMemberAccount>();
+
+            // Initialize duration update timer
+            _durationUpdateTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            _durationUpdateTimer.Tick += OnDurationUpdateTimer;
 
             InitializeCommands();
             SubscribeToQueueEvents();
@@ -194,6 +209,120 @@ namespace FFXIManager.ViewModels
                 if (TotalQueueItems == 0) return "No items in queue";
                 var processedItems = CompletedItems + FailedItems;
                 return $"{processedItems}/{TotalQueueItems} items processed ({OverallProgress}%)";
+            }
+        }
+
+        /// <summary>
+        /// Whether we're currently switching between profiles
+        /// </summary>
+        public bool IsProfileSwitching
+        {
+            get => _isProfileSwitching;
+            private set => SetProperty(ref _isProfileSwitching, value);
+        }
+
+        /// <summary>
+        /// Name of the previously active profile (for transition display)
+        /// </summary>
+        public string? LastActiveProfileName
+        {
+            get => _lastActiveProfileName;
+            private set => SetProperty(ref _lastActiveProfileName, value);
+        }
+
+        /// <summary>
+        /// Profile transition message for UI display
+        /// </summary>
+        public string ProfileTransitionMessage
+        {
+            get
+            {
+                if (CurrentItem?.ProfileName != null && LastActiveProfileName != null &&
+                    CurrentItem.ProfileName != LastActiveProfileName)
+                {
+                    return $"Switched from profile '{LastActiveProfileName}' to '{CurrentItem.ProfileName}'";
+                }
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Whether to show the profile transition indicator
+        /// </summary>
+        public bool ShowProfileTransition => !string.IsNullOrEmpty(ProfileTransitionMessage) && IsProfileSwitching;
+
+        /// <summary>
+        /// Message to display when queue is idle (no current item)
+        /// </summary>
+        public string IdleStateMessage
+        {
+            get
+            {
+                if (TotalQueueItems == 0)
+                    return "Ready to start - Add accounts to the queue";
+
+                if (CompletedItems == TotalQueueItems)
+                    return $"Queue completed - {CompletedItems} accounts processed successfully";
+
+                if (FailedItems > 0 && CompletedItems + FailedItems == TotalQueueItems)
+                    return $"Queue finished - {CompletedItems} completed, {FailedItems} failed";
+
+                if (CompletedItems > 0 || FailedItems > 0)
+                    return $"Queue paused - {CompletedItems + FailedItems}/{TotalQueueItems} items processed";
+
+                return "Queue ready - Click Start to begin auto-login";
+            }
+        }
+
+        /// <summary>
+        /// Step message to display when queue is idle
+        /// </summary>
+        public string IdleStepMessage
+        {
+            get
+            {
+                if (TotalQueueItems == 0)
+                    return "Use the PlayOnline Member Accounts section to add accounts to the queue";
+
+                var lastCompletedItem = QueueItems
+                    .Where(x => x.Status == AutoLoginQueueStatus.Completed)
+                    .OrderByDescending(x => x.EndTime)
+                    .FirstOrDefault();
+
+                var lastFailedItem = QueueItems
+                    .Where(x => x.Status == AutoLoginQueueStatus.Failed)
+                    .OrderByDescending(x => x.EndTime)
+                    .FirstOrDefault();
+
+                // Show the most recent completed or failed item
+                var recentItems = new List<AutoLoginQueueItem>();
+                if (lastCompletedItem != null) recentItems.Add(lastCompletedItem);
+                if (lastFailedItem != null) recentItems.Add(lastFailedItem);
+
+                var lastProcessedItem = recentItems
+                    .OrderByDescending(x => x.EndTime ?? DateTime.MinValue)
+                    .FirstOrDefault();
+
+                if (lastProcessedItem != null)
+                {
+                    var status = lastProcessedItem.Status == AutoLoginQueueStatus.Completed ? "completed" : "failed";
+                    var duration = lastProcessedItem.DurationDisplay;
+                    return $"Last {status}: {lastProcessedItem.DisplayName} ({duration})";
+                }
+
+                return "Ready to process queue items";
+            }
+        }
+
+        /// <summary>
+        /// Progress value to display when queue is idle (0-100)
+        /// </summary>
+        public int IdleProgressValue
+        {
+            get
+            {
+                if (TotalQueueItems == 0) return 0;
+                return OverallProgress; // Reuse the existing overall progress calculation
             }
         }
 
@@ -646,6 +775,21 @@ namespace FFXIManager.ViewModels
         {
             _uiDispatcher.InvokeAsync(() =>
             {
+                // Check for profile switching
+                if (_lastActiveProfileName != null && e.Item.ProfileName != _lastActiveProfileName)
+                {
+                    IsProfileSwitching = true;
+                    _statusService.SetTemporaryMessage($"Switching from profile '{_lastActiveProfileName}' to '{e.Item.ProfileName}'", TimeSpan.FromSeconds(4));
+
+                    // Auto-hide the profile switching indicator after a few seconds
+                    _ = Task.Delay(3000).ContinueWith(_ => _uiDispatcher.InvokeAsync(() =>
+                    {
+                        IsProfileSwitching = false;
+                        OnPropertyChanged(nameof(ShowProfileTransition));
+                    }));
+                }
+
+                LastActiveProfileName = e.Item.ProfileName;
                 UpdateQueueProperties();
                 _statusService.SetMessage($"Starting login: {e.Item.DisplayName}");
             });
@@ -689,6 +833,26 @@ namespace FFXIManager.ViewModels
             });
         }
 
+        private void OnDurationUpdateTimer(object? sender, EventArgs e)
+        {
+            _uiDispatcher.InvokeAsync(() =>
+            {
+                // Update duration display only for items that are actively running
+                var activeItems = QueueItems.Where(x => x.IsActive && x.StartTime != null && x.EndTime == null).ToList();
+
+                foreach (var item in activeItems)
+                {
+                    item.RefreshDurationDisplay();
+                }
+
+                // If no items are actively running, stop the timer
+                if (activeItems.Count == 0 && _durationUpdateTimer.IsEnabled)
+                {
+                    _durationUpdateTimer.Stop();
+                }
+            });
+        }
+
         #endregion
 
         #region Helper Methods
@@ -718,6 +882,21 @@ namespace FFXIManager.ViewModels
             OnPropertyChanged(nameof(CurrentItem));
             OnPropertyChanged(nameof(QueueStatusDisplay));
             OnPropertyChanged(nameof(QueueProgressDisplay));
+            OnPropertyChanged(nameof(ProfileTransitionMessage));
+            OnPropertyChanged(nameof(ShowProfileTransition));
+            OnPropertyChanged(nameof(IdleStateMessage));
+
+            // Manage duration update timer based on execution state
+            if (IsQueueExecuting && !_durationUpdateTimer.IsEnabled)
+            {
+                _durationUpdateTimer.Start();
+            }
+            else if (!IsQueueExecuting && _durationUpdateTimer.IsEnabled)
+            {
+                _durationUpdateTimer.Stop();
+            }
+            OnPropertyChanged(nameof(IdleStepMessage));
+            OnPropertyChanged(nameof(IdleProgressValue));
         }
 
         private void UpdateCommandStates()

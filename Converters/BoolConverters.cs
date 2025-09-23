@@ -189,6 +189,22 @@ namespace FFXIManager.Converters
     }
 
     /// <summary>
+    /// Converts null objects to inverted Visibility (null = Visible, non-null = Hidden)
+    /// </summary>
+    public class NullToInverseVisibilityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            return value == null ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    /// <summary>
     /// Converts zero values to Visibility (zero = Visible, non-zero = Hidden)
     /// </summary>
     public class ZeroToVisibilityConverter : IValueConverter

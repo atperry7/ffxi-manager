@@ -91,6 +91,7 @@ namespace FFXIManager.Services
         public event EventHandler<AutoLoginQueueItemEventArgs>? ItemCompleted;
         public event EventHandler<AutoLoginQueueItemEventArgs>? ItemFailed;
         public event EventHandler<AutoLoginQueueItemEventArgs>? ItemProgressUpdated;
+        public event EventHandler<ProfileSwappedEventArgs>? ProfileSwapped;
 
         #endregion
 
@@ -476,10 +477,15 @@ namespace FFXIManager.Services
                 ItemStarted?.Invoke(this, new AutoLoginQueueItemEventArgs(item));
 
                 // Switch profile if needed
-                if (item.Profile.FilePath != (await _profileService.GetActiveLoginInfoAsync())?.FilePath)
+                var currentActiveProfile = await _profileService.GetActiveLoginInfoAsync();
+                if (item.Profile.FilePath != currentActiveProfile?.FilePath)
                 {
                     await _loggingService.LogInfoAsync($"Switching to profile: {item.Profile.Name}");
+                    var fromProfile = currentActiveProfile ?? new ProfileInfo { Name = "Unknown", FilePath = "" };
                     await _profileService.SwapProfileAsync(item.Profile);
+
+                    // Notify about profile swap
+                    ProfileSwapped?.Invoke(this, new ProfileSwappedEventArgs(fromProfile, item.Profile));
                 }
 
                 // Execute login steps

@@ -31,6 +31,17 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <!-- Profile Row Style for Queue Items -->
+        <Style x:Key="ProfileAwareRowStyle" TargetType="DataGridRow">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Status}" Value="InProgress">
+                    <Setter Property="Background" Value="{DynamicResource InfoBrush}"/>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="FontWeight" Value="Bold"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -117,37 +128,76 @@
             </Grid>
         </GroupBox>
 
-        <!-- Current Item Detail (shown when queue is executing) -->
+        <!-- Current Item Detail (always visible) -->
         <GroupBox Grid.Row="1"
-                  Header="Current Login Progress"
-                  Margin="0,0,0,10"
-                  Visibility="{Binding CurrentItem, Converter={StaticResource NullToVisibilityConverter}}">
+                  Header="Login Progress"
+                  Margin="0,0,0,10">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- Current Item Info -->
-                <TextBlock Grid.Row="0" FontWeight="Bold" Margin="0,0,0,5">
+                <!-- Profile Transition Indicator -->
+                <Border Grid.Row="0"
+                        Background="{DynamicResource InfoBrush}"
+                        CornerRadius="5"
+                        Padding="10,5"
+                        Margin="0,0,0,8"
+                        Visibility="{Binding ShowProfileTransition, Converter={StaticResource BoolToVisConverter}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🔄" FontSize="14" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                        <TextBlock Text="{Binding ProfileTransitionMessage}"
+                                   Foreground="White"
+                                   FontWeight="Bold"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Active Queue Item Info -->
+                <TextBlock Grid.Row="1" FontWeight="Bold" Margin="0,0,0,5"
+                           Visibility="{Binding CurrentItem, Converter={StaticResource NullToVisibilityConverter}}">
                     <Run Text="Logging in:"/>
                     <Run Text="{Binding CurrentItem.DisplayName, Mode=OneWay}" Foreground="{DynamicResource InfoBrush}"/>
                     <Run Text="from profile"/>
                     <Run Text="{Binding CurrentItem.ProfileName, Mode=OneWay}" Foreground="{DynamicResource InfoBrush}"/>
                 </TextBlock>
 
-                <!-- Current Step -->
-                <TextBlock Grid.Row="1"
+                <!-- Idle State Info -->
+                <TextBlock Grid.Row="1" FontWeight="Bold" Margin="0,0,0,5"
+                           Visibility="{Binding CurrentItem, Converter={StaticResource NullToInverseVisibilityConverter}}"
+                           Text="{Binding IdleStateMessage}"/>
+
+                <!-- Active Step Status -->
+                <TextBlock Grid.Row="2"
                            Text="{Binding CurrentItem.StatusMessage}"
                            Foreground="{DynamicResource SecondaryTextBrush}"
-                           Margin="0,0,0,5"/>
+                           Margin="0,0,0,5"
+                           Visibility="{Binding CurrentItem, Converter={StaticResource NullToVisibilityConverter}}"/>
 
-                <!-- Current Step Progress -->
-                <ProgressBar Grid.Row="2"
+                <!-- Idle Step Status -->
+                <TextBlock Grid.Row="2"
+                           Text="{Binding IdleStepMessage}"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           Margin="0,0,0,5"
+                           Visibility="{Binding CurrentItem, Converter={StaticResource NullToInverseVisibilityConverter}}"/>
+
+                <!-- Active Step Progress -->
+                <ProgressBar Grid.Row="3"
                              Value="{Binding CurrentItem.CurrentStepProgress, Mode=OneWay}"
                              Maximum="100"
-                             Height="10"/>
+                             Height="10"
+                             Visibility="{Binding CurrentItem, Converter={StaticResource NullToVisibilityConverter}}"/>
+
+                <!-- Idle Progress Bar -->
+                <ProgressBar Grid.Row="3"
+                             Value="{Binding IdleProgressValue, Mode=OneWay}"
+                             Maximum="100"
+                             Height="10"
+                             Visibility="{Binding CurrentItem, Converter={StaticResource NullToInverseVisibilityConverter}}"/>
             </Grid>
         </GroupBox>
 
@@ -171,6 +221,7 @@
                 <!-- Queue Items DataGrid -->
                 <DataGrid Grid.Row="0"
                           Style="{StaticResource DataGridBase}"
+                          RowStyle="{StaticResource ProfileAwareRowStyle}"
                           ItemsSource="{Binding QueueItems}"
                           SelectedItem="{Binding SelectedQueueItem}"
                           AutoGenerateColumns="False"
@@ -179,9 +230,6 @@
                           Visibility="{Binding TotalQueueItems, Converter={StaticResource ZeroToInverseVisibilityConverter}}">
                     <DataGrid.ContextMenu>
                         <ContextMenu>
-                            <MenuItem Header="🔄 Retry" Command="{Binding RetryFailedCommand}"/>
-                            <MenuItem Header="🗑️ Remove" Command="{Binding RemoveFromQueueCommand}"/>
-                            <Separator/>
                             <MenuItem Header="⬆️ Move Up" Command="{Binding MoveUpCommand}"/>
                             <MenuItem Header="⬇️ Move Down" Command="{Binding MoveDownCommand}"/>
                         </ContextMenu>
@@ -247,7 +295,7 @@
                     </DataGrid.Columns>
                 </DataGrid>
 
-                <!-- Queue Management Buttons -->
+                <!-- Queue Management Buttons (Non-redundant actions only) -->
                 <StackPanel Grid.Row="1"
                             Orientation="Horizontal"
                             HorizontalAlignment="Left"
@@ -262,16 +310,6 @@
                             Style="{StaticResource CircularInfoButton}"
                             Command="{Binding MoveDownCommand}"
                             ToolTip="Move Selected Item Down"
-                            Margin="0,0,5,0"/>
-                    <Button Content="🔄"
-                            Style="{StaticResource CircularWarningButton}"
-                            Command="{Binding RetryFailedCommand}"
-                            ToolTip="Retry Selected Failed Item"
-                            Margin="0,0,5,0"/>
-                    <Button Content="🗑️"
-                            Style="{StaticResource CircularDangerButton}"
-                            Command="{Binding RemoveFromQueueCommand}"
-                            ToolTip="Remove Selected Item"
                             Margin="0,0,10,0"/>
                     <Button Content="🗑️🗑️"
                             Style="{StaticResource CircularDangerButton}"

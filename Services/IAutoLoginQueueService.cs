@@ -98,6 +98,11 @@ namespace FFXIManager.Services
         /// </summary>
         event EventHandler<AutoLoginQueueItemEventArgs>? ItemProgressUpdated;
 
+        /// <summary>
+        /// Raised when a profile is swapped during queue execution
+        /// </summary>
+        event EventHandler<ProfileSwappedEventArgs>? ProfileSwapped;
+
         #endregion
 
         #region Queue Management
@@ -253,6 +258,21 @@ namespace FFXIManager.Services
 
         public AutoLoginQueueItem Item { get; }
         public string? Message { get; }
+    }
+
+    /// <summary>
+    /// Event arguments for profile swapped events
+    /// </summary>
+    public class ProfileSwappedEventArgs : EventArgs
+    {
+        public ProfileSwappedEventArgs(ProfileInfo fromProfile, ProfileInfo toProfile)
+        {
+            FromProfile = fromProfile;
+            ToProfile = toProfile;
+        }
+
+        public ProfileInfo FromProfile { get; }
+        public ProfileInfo ToProfile { get; }
     }
 
     /// <summary>

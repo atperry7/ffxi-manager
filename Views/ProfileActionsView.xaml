@@ -34,15 +34,24 @@
         
     </UserControl.Resources>
     
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel>
-            <!-- Auto-Login Queue Manager -->
-            <GroupBox Header="🔐 Auto-Login Queue" Margin="0,0,0,10">
-                <local:AutoLoginQueueView DataContext="{Binding AutoLoginQueueViewModel}"/>
-            </GroupBox>
+    <TabControl>
+        <!-- Character Monitor Tab (Default) -->
+        <TabItem Header="👥 Monitor">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <local:EmbeddedCharacterMonitorView/>
+            </ScrollViewer>
+        </TabItem>
 
-            <!-- Application Manager -->
-            <GroupBox Header="🚀 Application Manager" Margin="0,0,0,10">
+        <!-- Auto-Login Queue Tab -->
+        <TabItem Header="🔐 Queue">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <local:AutoLoginQueueView DataContext="{Binding AutoLoginQueueViewModel}"/>
+            </ScrollViewer>
+        </TabItem>
+
+        <!-- Application Manager Tab -->
+        <TabItem Header="🚀 Apps">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>
                     <!-- Application List (independent scroll) -->
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="300">
@@ -110,12 +119,7 @@
                                 AutomationProperties.Name="Refresh Application Status"/>
                     </StackPanel>
                 </StackPanel>
-            </GroupBox>
-
-            <!-- PlayOnline Character Monitor (New Architecture) -->
-            <GroupBox Header="👥 Character Monitor" Margin="0,0,0,10">
-                <local:EmbeddedCharacterMonitorView/>
-            </GroupBox>
-        </StackPanel>
-    </ScrollViewer>
+            </ScrollViewer>
+        </TabItem>
+    </TabControl>
 </UserControl>

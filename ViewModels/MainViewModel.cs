@@ -13,6 +13,7 @@ namespace FFXIManager.ViewModels
     {
         private readonly IStatusMessageService _statusService;
         private readonly IConfigurationService _configService;
+        private readonly IAutoLoginQueueService _autoLoginQueueService;
 
         public MainViewModel(
             ISettingsService settingsService,
@@ -39,6 +40,7 @@ namespace FFXIManager.ViewModels
         {
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
             _configService = configService ?? throw new ArgumentNullException(nameof(configService));
+            _autoLoginQueueService = autoLoginQueueService ?? throw new ArgumentNullException(nameof(autoLoginQueueService));
 
             // Create specialized ViewModels with their specific dependencies
             ProfileManagement = new ProfileManagementViewModel(
@@ -106,6 +108,13 @@ namespace FFXIManager.ViewModels
                     PlayOnlineMemberAccounts.CurrentProfile = ProfileManagement.SelectedProfile;
                     AutoLoginQueueViewModel.CurrentProfile = ProfileManagement.SelectedProfile;
                 }
+            };
+
+            // Subscribe to profile swapping during queue execution
+            _autoLoginQueueService.ProfileSwapped += async (_, e) =>
+            {
+                // Refresh the profile list to update visual indicators
+                await ProfileManagement.RefreshProfilesAsync();
             };
 
             // Initialize commands and data
