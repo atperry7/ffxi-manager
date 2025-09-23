@@ -51,6 +51,7 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<IHotkeyPerformanceMonitor, HotkeyPerformanceMonitor>();
             services.AddSingleton<IHotkeyActivationService, HotkeyActivationService>();
             services.AddSingleton<IPlayOnlineMemberAccountService, PlayOnlineMemberAccountService>();
+            services.AddSingleton<IAutoLoginQueueService, AutoLoginQueueService>();
             services.AddSingleton<IProfileService>(sp =>
             {
                 var config = sp.GetRequiredService<IConfigurationService>();
@@ -82,6 +83,7 @@ namespace FFXIManager.Infrastructure
             services.AddTransient<CharacterCollectionViewModel>();
             services.AddTransient<CharacterMonitorWindowViewModel>();
             services.AddTransient<EmbeddedCharacterMonitorViewModel>();
+            services.AddSingleton<AutoLoginQueueViewModel>();
 
             // Hotkey plumbing
             services.AddSingleton<IGlobalHotkeyService, LowLevelHotkeyService>();

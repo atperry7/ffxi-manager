@@ -9,6 +9,21 @@
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
     </UserControl.Resources>
 
+    <UserControl.InputBindings>
+        <!-- Login Now for selected account -->
+        <KeyBinding Key="L" Modifiers="Ctrl" Command="{Binding LoginNowCommand}" />
+        <!-- Add to Queue for selected account -->
+        <KeyBinding Key="Q" Modifiers="Ctrl" Command="{Binding AddToQueueCommand}" />
+        <!-- Add new account -->
+        <KeyBinding Key="A" Modifiers="Ctrl" Command="{Binding AddAccountCommand}" />
+        <!-- Refresh accounts -->
+        <KeyBinding Key="F5" Command="{Binding RefreshCommand}" />
+        <!-- Edit selected account -->
+        <KeyBinding Key="E" Modifiers="Ctrl" Command="{Binding EditAccountCommand}" />
+        <!-- Delete selected account -->
+        <KeyBinding Key="Delete" Command="{Binding DeleteAccountCommand}" />
+    </UserControl.InputBindings>
+
     <GroupBox Header="{Binding AccountsHeader}" MinHeight="150">
         <Grid>
             <Grid.RowDefinitions>
@@ -148,10 +163,26 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Actions" Width="100">
+                    <DataGridTemplateColumn Header="Actions" Width="180">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <Button Content="🚀"
+                                            Style="{StaticResource CircularSmallButton}"
+                                            Background="{DynamicResource SuccessBrush}"
+                                            Command="{Binding DataContext.LoginNowParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip="Login Now (immediate single account login)"
+                                            AutomationProperties.Name="Login Now"
+                                            Margin="2"/>
+                                    <Button Content="⏭️"
+                                            Style="{StaticResource CircularSmallButton}"
+                                            Background="{DynamicResource PrimaryBrush}"
+                                            Command="{Binding DataContext.AddToQueueParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip="Add to Auto-Login Queue"
+                                            AutomationProperties.Name="Add to Queue"
+                                            Margin="2"/>
                                     <Button Content="✏️"
                                             Style="{StaticResource CircularSmallButton}"
                                             Background="{DynamicResource WarningBrush}"

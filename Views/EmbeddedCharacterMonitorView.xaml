@@ -21,7 +21,7 @@
         </Style>
     </UserControl.Resources>
     
-    <GroupBox Header="🎮 Character Monitor">
+    <GroupBox>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>

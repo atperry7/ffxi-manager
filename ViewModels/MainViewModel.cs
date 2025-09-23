@@ -33,7 +33,9 @@ namespace FFXIManager.ViewModels
             IUiDispatcher uiDispatcher,
             IHotkeyMappingService hotkeyMappingService,
             IPlayOnlineMemberAccountService memberAccountService,
-            IOTPService otpService)
+            IOTPService otpService,
+            IAutoLoginQueueService autoLoginQueueService,
+            AutoLoginQueueViewModel autoLoginQueueViewModel)
         {
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
             _configService = configService ?? throw new ArgumentNullException(nameof(configService));
@@ -55,7 +57,9 @@ namespace FFXIManager.ViewModels
 
             PlayOnlineMemberAccounts = new PlayOnlineMemberAccountsViewModel(
                 memberAccountService, statusService, loggingService,
-                dialogService, uiDispatcher, otpService);
+                dialogService, uiDispatcher, otpService, autoLoginQueueService);
+
+            AutoLoginQueueViewModel = autoLoginQueueViewModel ?? throw new ArgumentNullException(nameof(autoLoginQueueViewModel));
 
             UICommands = new UICommandsViewModel(uiCommandService, notificationServiceEnhanced);
 
@@ -100,6 +104,7 @@ namespace FFXIManager.ViewModels
                 if (e.PropertyName == nameof(ProfileManagement.SelectedProfile))
                 {
                     PlayOnlineMemberAccounts.CurrentProfile = ProfileManagement.SelectedProfile;
+                    AutoLoginQueueViewModel.CurrentProfile = ProfileManagement.SelectedProfile;
                 }
             };
 
@@ -129,6 +134,11 @@ namespace FFXIManager.ViewModels
         /// PlayOnline Member Accounts ViewModel - handles POL account associations
         /// </summary>
         public PlayOnlineMemberAccountsViewModel PlayOnlineMemberAccounts { get; }
+
+        /// <summary>
+        /// Auto-Login Queue ViewModel - handles sequential account login queue
+        /// </summary>
+        public AutoLoginQueueViewModel AutoLoginQueueViewModel { get; }
 
         /// <summary>
         /// UI Commands ViewModel - handles UI-specific commands like copy/open

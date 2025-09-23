@@ -21,6 +21,9 @@
         <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
         <converters:BoolToYesNoConverter x:Key="BoolToYesNoConverter"/>
         <converters:StringIsNotNullOrEmptyConverter x:Key="StringIsNotNullOrEmptyConverter"/>
+        <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
+        <converters:ZeroToVisibilityConverter x:Key="ZeroToVisibilityConverter"/>
+        <converters:ZeroToInverseVisibilityConverter x:Key="ZeroToInverseVisibilityConverter"/>
             
         <!-- Global Tooltip Timing Configuration for Snappy Responsiveness -->
         <Style TargetType="{x:Type FrameworkElement}">

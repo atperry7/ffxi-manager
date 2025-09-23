@@ -155,6 +155,42 @@ namespace FFXIManager.Models.Settings
         // Value: List of PlayOnlineMemberAccount objects associated with that profile
         public Dictionary<string, List<PlayOnlineMemberAccount>> PlayOnlineMemberAccounts { get; set; } = new();
 
+        // Auto-Login Queue Settings
+        /// <summary>
+        /// Whether to automatically save queue state when it changes
+        /// </summary>
+        public bool AutoSaveQueueState { get; set; } = true;
+
+        /// <summary>
+        /// Whether to continue queue execution after a failed login attempt
+        /// </summary>
+        public bool ContinueQueueOnFailure { get; set; } = true;
+
+        /// <summary>
+        /// Delay between processing queue items in milliseconds
+        /// </summary>
+        public int QueueDelayBetweenItemsMs { get; set; } = 2000;
+
+        /// <summary>
+        /// Timeout for each login step in seconds
+        /// </summary>
+        public int LoginStepTimeoutSeconds { get; set; } = 30;
+
+        /// <summary>
+        /// Whether to restore the original profile after queue completion
+        /// </summary>
+        public bool RestoreOriginalProfileAfterQueue { get; set; } = true;
+
+        /// <summary>
+        /// Maximum number of retry attempts for failed login steps
+        /// </summary>
+        public int MaxLoginRetryAttempts { get; set; } = 2;
+
+        /// <summary>
+        /// Auto-Login Queue State - persisted queue items that survive application restart
+        /// </summary>
+        public AutoLoginQueueState? QueueState { get; set; }
+
         /// <summary>
         /// Gets the default keyboard shortcuts for character switching (Win+F1 through Win+F11)
         /// Uses Windows key to avoid conflicts with FFXI's Ctrl/Alt macro system

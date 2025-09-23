@@ -25,6 +25,7 @@ namespace FFXIManager.ViewModels
         private readonly IDialogService _dialogService;
         private readonly IUiDispatcher _uiDispatcher;
         private readonly IOTPService _otpService;
+        private readonly IAutoLoginQueueService _queueService;
 
         private ProfileInfo? _currentProfile;
         private PlayOnlineMemberAccount? _selectedAccount;
@@ -39,7 +40,8 @@ namespace FFXIManager.ViewModels
             ILoggingService loggingService,
             IDialogService dialogService,
             IUiDispatcher uiDispatcher,
-            IOTPService otpService)
+            IOTPService otpService,
+            IAutoLoginQueueService queueService)
         {
             _accountService = accountService ?? throw new ArgumentNullException(nameof(accountService));
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
@@ -47,6 +49,7 @@ namespace FFXIManager.ViewModels
             _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
             _otpService = otpService ?? throw new ArgumentNullException(nameof(otpService));
+            _queueService = queueService ?? throw new ArgumentNullException(nameof(queueService));
 
             Accounts = new ObservableCollection<PlayOnlineMemberAccount>();
             Accounts.CollectionChanged += (_, _) =>
@@ -138,11 +141,15 @@ namespace FFXIManager.ViewModels
         public ICommand EditAccountCommand { get; private set; } = null!;
         public ICommand DeleteAccountCommand { get; private set; } = null!;
         public ICommand RefreshCommand { get; private set; } = null!;
+        public ICommand LoginNowCommand { get; private set; } = null!;
+        public ICommand AddToQueueCommand { get; private set; } = null!;
 
         // Parameter-based commands for context menu
         public ICommand EditAccountParameterCommand { get; private set; } = null!;
         public ICommand DeleteAccountParameterCommand { get; private set; } = null!;
         public ICommand ToggleOTPVisibilityCommand { get; private set; } = null!;
+        public ICommand AddToQueueParameterCommand { get; private set; } = null!;
+        public ICommand LoginNowParameterCommand { get; private set; } = null!;
 
         private void InitializeCommands()
         {
@@ -150,10 +157,14 @@ namespace FFXIManager.ViewModels
             EditAccountCommand = new RelayCommand(async () => await EditSelectedAccountAsync(), () => SelectedAccount != null);
             DeleteAccountCommand = new RelayCommand(async () => await DeleteSelectedAccountAsync(), () => SelectedAccount != null);
             RefreshCommand = new RelayCommand(async () => await RefreshAccountsAsync());
+            LoginNowCommand = new RelayCommand(async () => await LoginNowSelectedAsync(), () => SelectedAccount != null);
+            AddToQueueCommand = new RelayCommand(async () => await AddToQueueSelectedAsync(), () => SelectedAccount != null);
 
             EditAccountParameterCommand = new RelayCommandWithParameter<PlayOnlineMemberAccount>(async account => await EditAccountAsync(account));
             DeleteAccountParameterCommand = new RelayCommandWithParameter<PlayOnlineMemberAccount>(async account => await DeleteAccountAsync(account));
             ToggleOTPVisibilityCommand = new RelayCommandWithParameter<PlayOnlineMemberAccount>(async account => await ToggleOTPVisibilityAsync(account));
+            AddToQueueParameterCommand = new RelayCommandWithParameter<PlayOnlineMemberAccount>(async account => await AddToQueueAsync(account));
+            LoginNowParameterCommand = new RelayCommandWithParameter<PlayOnlineMemberAccount>(async account => await LoginNowAsync(account));
         }
 
         #endregion
@@ -543,6 +554,96 @@ namespace FFXIManager.ViewModels
                 }
 
                 await _loggingService.LogDebugAsync($"Refreshed {visibleAccounts.Count} visible OTP codes");
+            }
+        }
+
+        /// <summary>
+        /// Adds the specified account to the auto-login queue
+        /// </summary>
+        /// <param name="account">The account to add to the queue</param>
+        private async Task AddToQueueAsync(PlayOnlineMemberAccount account)
+        {
+            if (account == null || CurrentProfile == null)
+            {
+                _statusService.SetTemporaryMessage("Invalid account or profile selected", TimeSpan.FromSeconds(3));
+                return;
+            }
+
+            // Validate that the account has a stored password
+            if (!account.HasStoredPassword)
+            {
+                _statusService.SetTemporaryMessage($"Cannot add {account.DisplayName} to queue - no password stored. Please edit the account and set a password first.", TimeSpan.FromSeconds(5));
+                await _loggingService.LogWarningAsync($"Attempted to add account {account.DisplayName} to queue without stored password");
+                return;
+            }
+
+            try
+            {
+                await _queueService.AddToQueueAsync(account, CurrentProfile);
+                _statusService.SetTemporaryMessage($"Added {account.DisplayName} to auto-login queue", TimeSpan.FromSeconds(3));
+                await _loggingService.LogInfoAsync($"Added account {account.DisplayName} from profile {CurrentProfile.Name} to auto-login queue");
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetTemporaryMessage($"Failed to add {account.DisplayName} to queue", TimeSpan.FromSeconds(3));
+                await _loggingService.LogErrorAsync($"Error adding account to queue: {account.DisplayName}", ex);
+            }
+        }
+
+        private async Task LoginNowAsync(PlayOnlineMemberAccount account)
+        {
+            if (account == null || CurrentProfile == null)
+            {
+                _statusService.SetTemporaryMessage("Invalid account or profile selected", TimeSpan.FromSeconds(3));
+                return;
+            }
+
+            // Validate that the account has a stored password
+            if (!account.HasStoredPassword)
+            {
+                _statusService.SetTemporaryMessage($"Cannot login {account.DisplayName} - no password stored. Please edit the account and set a password first.", TimeSpan.FromSeconds(5));
+                await _loggingService.LogWarningAsync($"Attempted to login account {account.DisplayName} without stored password");
+                return;
+            }
+
+            if (_queueService.IsExecuting)
+            {
+                _statusService.SetTemporaryMessage("Cannot start login now - queue is already executing", TimeSpan.FromSeconds(3));
+                return;
+            }
+
+            try
+            {
+                // Clear any existing queue items and add just this account
+                await _queueService.ClearQueueAsync();
+                await _queueService.AddToQueueAsync(account, CurrentProfile);
+
+                // Start the queue immediately
+                await _queueService.StartQueueAsync();
+
+                _statusService.SetTemporaryMessage($"Starting immediate login for {account.DisplayName}", TimeSpan.FromSeconds(3));
+                await _loggingService.LogInfoAsync($"Started immediate login for account {account.DisplayName} from profile {CurrentProfile.Name}");
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetTemporaryMessage($"Failed to start immediate login for {account.DisplayName}", TimeSpan.FromSeconds(3));
+                await _loggingService.LogErrorAsync($"Error starting immediate login for account: {account.DisplayName}", ex);
+            }
+        }
+
+        private async Task LoginNowSelectedAsync()
+        {
+            if (SelectedAccount != null)
+            {
+                await LoginNowAsync(SelectedAccount);
+            }
+        }
+
+        private async Task AddToQueueSelectedAsync()
+        {
+            if (SelectedAccount != null)
+            {
+                await AddToQueueAsync(SelectedAccount);
             }
         }
 

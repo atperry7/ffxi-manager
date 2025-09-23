@@ -34,14 +34,15 @@
         
     </UserControl.Resources>
     
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-        
-        <!-- Application Manager -->
-        <GroupBox Grid.Row="0" Header="🚀 Application Manager" Margin="0,0,0,10">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel>
+            <!-- Auto-Login Queue Manager -->
+            <GroupBox Header="🔐 Auto-Login Queue" Margin="0,0,0,10">
+                <local:AutoLoginQueueView DataContext="{Binding AutoLoginQueueViewModel}"/>
+            </GroupBox>
+
+            <!-- Application Manager -->
+            <GroupBox Header="🚀 Application Manager" Margin="0,0,0,10">
                 <StackPanel>
                     <!-- Application List (independent scroll) -->
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="300">
@@ -97,21 +98,24 @@
                     </ScrollViewer>
                     <!-- Application control buttons -->
                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0" HorizontalAlignment="Right">
-                        <Button Content="➕" 
+                        <Button Content="➕"
                                 Style="{StaticResource CircularPrimaryButton}"
                                 Command="{Binding AddApplicationCommand}"
                                 ToolTip="Add Application"
                                 AutomationProperties.Name="Add Application"/>
-                        <Button Content="🔄" 
+                        <Button Content="🔄"
                                 Style="{StaticResource CircularInfoButton}"
                                 Command="{Binding RefreshApplicationsCommand}"
                                 ToolTip="Refresh Status"
                                 AutomationProperties.Name="Refresh Application Status"/>
                     </StackPanel>
                 </StackPanel>
-        </GroupBox>
+            </GroupBox>
 
-        <!-- PlayOnline Character Monitor (New Architecture) -->
-        <local:EmbeddedCharacterMonitorView Grid.Row="1"/>
-    </Grid>
+            <!-- PlayOnline Character Monitor (New Architecture) -->
+            <GroupBox Header="👥 Character Monitor" Margin="0,0,0,10">
+                <local:EmbeddedCharacterMonitorView/>
+            </GroupBox>
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>
