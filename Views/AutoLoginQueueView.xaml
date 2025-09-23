@@ -79,28 +79,28 @@
                             Style="{StaticResource CircularPrimaryButton}"
                             Command="{Binding StartQueueCommand}"
                             ToolTip="Start Queue"
-                            Visibility="{Binding IsQueueExecuting, Converter={StaticResource InverseBoolToVisConverter}}"
+                            Visibility="{Binding CanShowStartButton, Converter={StaticResource BoolToVisConverter}}"
                             Margin="0,0,5,0"/>
 
                     <Button Content="⏸️"
                             Style="{StaticResource CircularWarningButton}"
                             Command="{Binding PauseQueueCommand}"
                             ToolTip="Pause Queue"
-                            Visibility="{Binding IsQueuePaused, Converter={StaticResource InverseBoolToVisConverter}}"
+                            Visibility="{Binding CanShowPauseButton, Converter={StaticResource BoolToVisConverter}}"
                             Margin="0,0,5,0"/>
 
                     <Button Content="▶️"
                             Style="{StaticResource CircularInfoButton}"
                             Command="{Binding ResumeQueueCommand}"
                             ToolTip="Resume Queue"
-                            Visibility="{Binding IsQueuePaused, Converter={StaticResource BoolToVisConverter}}"
+                            Visibility="{Binding CanShowResumeButton, Converter={StaticResource BoolToVisConverter}}"
                             Margin="0,0,5,0"/>
 
                     <Button Content="⏹️"
                             Style="{StaticResource CircularDangerButton}"
                             Command="{Binding StopQueueCommand}"
                             ToolTip="Stop Queue"
-                            Visibility="{Binding IsQueueExecuting, Converter={StaticResource BoolToVisConverter}}"
+                            Visibility="{Binding CanShowStopButton, Converter={StaticResource BoolToVisConverter}}"
                             Margin="0,0,5,0"/>
 
                     <Button Content="⏭️"
@@ -114,7 +114,7 @@
                             Style="{StaticResource CircularSecondaryButton}"
                             Command="{Binding ResetQueueCommand}"
                             ToolTip="Reset Queue (set all items back to pending)"
-                            Visibility="{Binding IsQueueExecuting, Converter={StaticResource InverseBoolToVisConverter}}"
+                            Visibility="{Binding CanShowResetButton, Converter={StaticResource BoolToVisConverter}}"
                             Margin="0,0,5,0"/>
                 </StackPanel>
 
@@ -124,7 +124,7 @@
                              Maximum="100"
                              Height="8"
                              Margin="0,10,0,0"
-                             Visibility="{Binding IsQueueExecuting, Converter={StaticResource BoolToVisConverter}}"/>
+                             Visibility="{Binding ShowProgressBars, Converter={StaticResource BoolToVisConverter}}"/>
             </Grid>
         </GroupBox>
 

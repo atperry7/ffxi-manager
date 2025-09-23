@@ -162,6 +162,38 @@ namespace FFXIManager.ViewModels
         public bool IsQueuePaused => _queueService.IsPaused;
 
         /// <summary>
+        /// Whether the Start button should be visible (queue is idle)
+        /// </summary>
+        public bool CanShowStartButton => ExecutionState == QueueExecutionState.Idle;
+
+        /// <summary>
+        /// Whether the Pause button should be visible (queue is processing or transitioning)
+        /// </summary>
+        public bool CanShowPauseButton => ExecutionState is QueueExecutionState.Processing or QueueExecutionState.Transitioning;
+
+        /// <summary>
+        /// Whether the Resume button should be visible (queue is paused)
+        /// </summary>
+        public bool CanShowResumeButton => ExecutionState == QueueExecutionState.Paused;
+
+        /// <summary>
+        /// Whether the Stop button should be visible (queue is executing)
+        /// </summary>
+        public bool CanShowStopButton => ExecutionState is QueueExecutionState.Starting or QueueExecutionState.Processing
+                                         or QueueExecutionState.Transitioning or QueueExecutionState.Paused;
+
+        /// <summary>
+        /// Whether the Reset button should be visible (queue is idle)
+        /// </summary>
+        public bool CanShowResetButton => ExecutionState == QueueExecutionState.Idle;
+
+        /// <summary>
+        /// Whether progress bars should be visible (queue is executing)
+        /// </summary>
+        public bool ShowProgressBars => ExecutionState is QueueExecutionState.Starting or QueueExecutionState.Processing
+                                        or QueueExecutionState.Transitioning or QueueExecutionState.Stopping;
+
+        /// <summary>
         /// Total number of items in queue
         /// </summary>
         public int TotalQueueItems => _queueService.TotalItems;
@@ -187,15 +219,33 @@ namespace FFXIManager.ViewModels
         public AutoLoginQueueItem? CurrentItem => _queueService.CurrentItem;
 
         /// <summary>
+        /// Current execution state of the queue
+        /// </summary>
+        public QueueExecutionState ExecutionState => _queueService.ExecutionState;
+
+        /// <summary>
+        /// Message displayed during transitions
+        /// </summary>
+        public string TransitioningMessage => _queueService.TransitioningMessage;
+
+        /// <summary>
         /// Queue execution status display
         /// </summary>
         public string QueueStatusDisplay
         {
             get
             {
-                if (!IsQueueExecuting) return "Ready";
-                if (IsQueuePaused) return "Paused";
-                return $"Running ({CompletedItems + FailedItems + 1}/{TotalQueueItems})";
+                return ExecutionState switch
+                {
+                    QueueExecutionState.Idle => "Ready",
+                    QueueExecutionState.Starting => "Starting",
+                    QueueExecutionState.Processing => $"Running ({CompletedItems + FailedItems + 1}/{TotalQueueItems})",
+                    QueueExecutionState.Transitioning => "Transitioning",
+                    QueueExecutionState.Paused => "Paused",
+                    QueueExecutionState.Stopping => "Stopping",
+                    QueueExecutionState.Completed => "Completed",
+                    _ => "Unknown"
+                };
             }
         }
 
@@ -258,6 +308,18 @@ namespace FFXIManager.ViewModels
         {
             get
             {
+                // If queue is transitioning, show the transition message
+                if (ExecutionState == QueueExecutionState.Transitioning)
+                    return TransitioningMessage;
+
+                // If queue is starting, show starting message
+                if (ExecutionState == QueueExecutionState.Starting)
+                    return "Starting queue...";
+
+                // If queue is stopping, show stopping message
+                if (ExecutionState == QueueExecutionState.Stopping)
+                    return "Stopping queue...";
+
                 if (TotalQueueItems == 0)
                     return "Ready to start - Add accounts to the queue";
 
@@ -372,23 +434,25 @@ namespace FFXIManager.ViewModels
 
             StartQueueCommand = new RelayCommand(
                 async () => await StartQueueAsync(),
-                () => TotalQueueItems > 0 && !IsQueueExecuting);
+                () => TotalQueueItems > 0 && ExecutionState == QueueExecutionState.Idle);
 
             StopQueueCommand = new RelayCommand(
                 async () => await StopQueueAsync(),
-                () => IsQueueExecuting);
+                () => ExecutionState is QueueExecutionState.Starting or QueueExecutionState.Processing
+                      or QueueExecutionState.Transitioning or QueueExecutionState.Paused);
 
             PauseQueueCommand = new RelayCommand(
                 async () => await PauseQueueAsync(),
-                () => IsQueueExecuting && !IsQueuePaused);
+                () => ExecutionState is QueueExecutionState.Processing or QueueExecutionState.Transitioning);
 
             ResumeQueueCommand = new RelayCommand(
                 async () => await ResumeQueueAsync(),
-                () => IsQueueExecuting && IsQueuePaused);
+                () => ExecutionState == QueueExecutionState.Paused);
 
             SkipCurrentCommand = new RelayCommand(
                 async () => await SkipCurrentItemAsync(),
-                () => CurrentItem != null);
+                () => CurrentItem != null &&
+                      (ExecutionState == QueueExecutionState.Processing || ExecutionState == QueueExecutionState.Paused));
 
             RetryFailedCommand = new RelayCommand(
                 async () => await RetryFailedItemAsync(),
@@ -396,7 +460,7 @@ namespace FFXIManager.ViewModels
 
             ResetQueueCommand = new RelayCommand(
                 async () => await ResetQueueAsync(),
-                () => TotalQueueItems > 0 && !IsQueueExecuting);
+                () => TotalQueueItems > 0 && ExecutionState == QueueExecutionState.Idle);
 
             RefreshAccountsCommand = new RelayCommand(
                 async () => await RefreshAvailableAccountsAsync());
@@ -800,6 +864,7 @@ namespace FFXIManager.ViewModels
             _uiDispatcher.InvokeAsync(() =>
             {
                 UpdateQueueProperties();
+                UpdateCommandStates();
                 _statusService.SetTemporaryMessage($"Completed: {e.Item.DisplayName}", TimeSpan.FromSeconds(3));
             });
         }
@@ -809,7 +874,14 @@ namespace FFXIManager.ViewModels
             _uiDispatcher.InvokeAsync(() =>
             {
                 UpdateQueueProperties();
-                _statusService.SetTemporaryMessage($"Failed: {e.Item.DisplayName} - {e.Message}", TimeSpan.FromSeconds(5));
+                UpdateCommandStates();
+
+                // Different messages for different failure types
+                var message = e.Item.Status == AutoLoginQueueStatus.Cancelled
+                    ? $"Skipped: {e.Item.DisplayName}"
+                    : $"Failed: {e.Item.DisplayName} - {e.Message}";
+
+                _statusService.SetTemporaryMessage(message, TimeSpan.FromSeconds(3));
             });
         }
 
@@ -875,6 +947,14 @@ namespace FFXIManager.ViewModels
         {
             OnPropertyChanged(nameof(IsQueueExecuting));
             OnPropertyChanged(nameof(IsQueuePaused));
+            OnPropertyChanged(nameof(ExecutionState));
+            OnPropertyChanged(nameof(TransitioningMessage));
+            OnPropertyChanged(nameof(CanShowStartButton));
+            OnPropertyChanged(nameof(CanShowPauseButton));
+            OnPropertyChanged(nameof(CanShowResumeButton));
+            OnPropertyChanged(nameof(CanShowStopButton));
+            OnPropertyChanged(nameof(CanShowResetButton));
+            OnPropertyChanged(nameof(ShowProgressBars));
             OnPropertyChanged(nameof(TotalQueueItems));
             OnPropertyChanged(nameof(CompletedItems));
             OnPropertyChanged(nameof(FailedItems));
@@ -887,11 +967,13 @@ namespace FFXIManager.ViewModels
             OnPropertyChanged(nameof(IdleStateMessage));
 
             // Manage duration update timer based on execution state
-            if (IsQueueExecuting && !_durationUpdateTimer.IsEnabled)
+            var isExecuting = ExecutionState is QueueExecutionState.Starting or QueueExecutionState.Processing
+                             or QueueExecutionState.Transitioning or QueueExecutionState.Stopping;
+            if (isExecuting && !_durationUpdateTimer.IsEnabled)
             {
                 _durationUpdateTimer.Start();
             }
-            else if (!IsQueueExecuting && _durationUpdateTimer.IsEnabled)
+            else if (!isExecuting && _durationUpdateTimer.IsEnabled)
             {
                 _durationUpdateTimer.Stop();
             }
@@ -912,6 +994,7 @@ namespace FFXIManager.ViewModels
             (ResumeQueueCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (SkipCurrentCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (RetryFailedCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (ResetQueueCommand as RelayCommand)?.RaiseCanExecuteChanged();
         }
 
         #endregion

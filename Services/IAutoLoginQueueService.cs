@@ -30,6 +30,16 @@ namespace FFXIManager.Services
         bool IsPaused { get; }
 
         /// <summary>
+        /// Current execution state of the queue
+        /// </summary>
+        QueueExecutionState ExecutionState { get; }
+
+        /// <summary>
+        /// Message to display during transitions (skip, item changes, etc.)
+        /// </summary>
+        string TransitioningMessage { get; }
+
+        /// <summary>
         /// Current queue item being processed
         /// </summary>
         AutoLoginQueueItem? CurrentItem { get; }

@@ -24,6 +24,7 @@ namespace FFXIManager.Services
         private readonly SemaphoreSlim _executionSemaphore = new(1, 1);
 
         private CancellationTokenSource? _executionCancellationTokenSource;
+        private CancellationTokenSource? _currentItemCancellationTokenSource;
         private Task? _executionTask;
         private bool _disposed;
         private string? _originalProfilePath;
@@ -58,6 +59,10 @@ namespace FFXIManager.Services
 
         public AutoLoginQueueItem? CurrentItem { get; private set; }
 
+        public QueueExecutionState ExecutionState { get; private set; } = QueueExecutionState.Idle;
+
+        public string TransitioningMessage { get; private set; } = string.Empty;
+
         public int TotalItems => QueueItems.Count;
 
         public int CompletedItems => QueueItems.Count(x => x.Status == AutoLoginQueueStatus.Completed);
@@ -78,6 +83,49 @@ namespace FFXIManager.Services
         public bool ContinueOnFailure { get; set; } = true;
         public int DelayBetweenItems { get; set; } = 2000;
         public int StepTimeoutSeconds { get; set; } = 30;
+
+        #endregion
+
+        #region State Management
+
+        /// <summary>
+        /// Transitions to a new execution state with optional message
+        /// </summary>
+        private void TransitionToState(QueueExecutionState newState, string message = "")
+        {
+            var oldState = ExecutionState;
+            ExecutionState = newState;
+            TransitioningMessage = message;
+
+            // Update legacy properties for backward compatibility
+            IsExecuting = newState is QueueExecutionState.Starting or QueueExecutionState.Processing
+                or QueueExecutionState.Transitioning or QueueExecutionState.Stopping;
+            IsPaused = newState == QueueExecutionState.Paused;
+
+            if (oldState != newState)
+            {
+                _loggingService.LogInfoAsync($"Queue state transition: {oldState} → {newState}" +
+                    (string.IsNullOrEmpty(message) ? "" : $" ({message})"));
+            }
+        }
+
+        /// <summary>
+        /// Validates if a state transition is allowed
+        /// </summary>
+        private bool CanTransitionTo(QueueExecutionState newState)
+        {
+            return ExecutionState switch
+            {
+                QueueExecutionState.Idle => newState is QueueExecutionState.Starting or QueueExecutionState.Completed,
+                QueueExecutionState.Starting => newState is QueueExecutionState.Processing or QueueExecutionState.Stopping or QueueExecutionState.Idle,
+                QueueExecutionState.Processing => newState is QueueExecutionState.Transitioning or QueueExecutionState.Paused or QueueExecutionState.Stopping or QueueExecutionState.Completed,
+                QueueExecutionState.Transitioning => newState is QueueExecutionState.Processing or QueueExecutionState.Stopping or QueueExecutionState.Completed,
+                QueueExecutionState.Paused => newState is QueueExecutionState.Processing or QueueExecutionState.Stopping,
+                QueueExecutionState.Stopping => newState is QueueExecutionState.Idle or QueueExecutionState.Completed,
+                QueueExecutionState.Completed => newState is QueueExecutionState.Idle or QueueExecutionState.Starting,
+                _ => false
+            };
+        }
 
         #endregion
 
@@ -269,9 +317,9 @@ namespace FFXIManager.Services
 
         public async Task StartQueueAsync(CancellationToken cancellationToken = default)
         {
-            if (IsExecuting)
+            if (ExecutionState != QueueExecutionState.Idle)
             {
-                await _loggingService.LogWarningAsync("Queue is already executing");
+                await _loggingService.LogWarningAsync($"Cannot start queue: current state is {ExecutionState}");
                 return;
             }
 
@@ -284,8 +332,7 @@ namespace FFXIManager.Services
             await _executionSemaphore.WaitAsync(cancellationToken);
             try
             {
-                IsExecuting = true;
-                IsPaused = false;
+                TransitionToState(QueueExecutionState.Starting, "Initializing queue execution");
                 _executionCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
                 // Store original profile
@@ -330,9 +377,9 @@ namespace FFXIManager.Services
 
         public async Task PauseQueueAsync()
         {
-            if (!IsExecuting || IsPaused) return;
+            if (ExecutionState != QueueExecutionState.Processing) return;
 
-            IsPaused = true;
+            TransitionToState(QueueExecutionState.Paused, "Queue paused by user");
             await _loggingService.LogInfoAsync("Paused auto-login queue");
             QueuePaused?.Invoke(this, EventArgs.Empty);
 
@@ -344,9 +391,9 @@ namespace FFXIManager.Services
 
         public async Task ResumeQueueAsync()
         {
-            if (!IsExecuting || !IsPaused) return;
+            if (ExecutionState != QueueExecutionState.Paused) return;
 
-            IsPaused = false;
+            TransitionToState(QueueExecutionState.Processing, "Queue resumed by user");
             await _loggingService.LogInfoAsync("Resumed auto-login queue");
             QueueResumed?.Invoke(this, EventArgs.Empty);
 
@@ -358,7 +405,11 @@ namespace FFXIManager.Services
 
         public async Task SkipCurrentItemAsync()
         {
-            if (CurrentItem == null) return;
+            if (CurrentItem == null || (ExecutionState != QueueExecutionState.Processing && ExecutionState != QueueExecutionState.Paused))
+            {
+                await _loggingService.LogWarningAsync($"Cannot skip: no current item or invalid state ({ExecutionState})");
+                return;
+            }
 
             var skippedItem = CurrentItem;
             skippedItem.Status = AutoLoginQueueStatus.Cancelled;
@@ -366,6 +417,13 @@ namespace FFXIManager.Services
             skippedItem.EndTime = DateTime.Now;
 
             await _loggingService.LogInfoAsync($"Skipped current queue item: {skippedItem.DisplayName}");
+
+            // Immediately cancel the current item's operation
+            _currentItemCancellationTokenSource?.Cancel();
+            await _loggingService.LogDebugAsync("Cancelled current item's operation for immediate skip");
+
+            // Transition to transitioning state with clear message
+            TransitionToState(QueueExecutionState.Transitioning, $"Skipping to next item after {skippedItem.DisplayName}");
 
             // Clear the current item so the queue can move to the next pending item
             CurrentItem = null;
@@ -432,33 +490,57 @@ namespace FFXIManager.Services
                 var statistics = GetStatisticsInternal();
                 statistics.UpdateExecutionStart();
 
-                var pendingItems = QueueItems.Where(x => x.Status == AutoLoginQueueStatus.Pending).ToList();
-
-                foreach (var item in pendingItems)
+                // Process items dynamically to handle skip requests properly
+                while (true)
                 {
                     if (cancellationToken.IsCancellationRequested) break;
 
+                    // Get next pending item dynamically
+                    var nextItem = QueueItems.FirstOrDefault(x => x.Status == AutoLoginQueueStatus.Pending);
+                    if (nextItem == null) break; // No more pending items
+
                     // Wait if paused
-                    while (IsPaused && !cancellationToken.IsCancellationRequested)
+                    while (ExecutionState == QueueExecutionState.Paused && !cancellationToken.IsCancellationRequested)
                     {
                         await Task.Delay(100, cancellationToken);
                     }
 
                     if (cancellationToken.IsCancellationRequested) break;
 
-                    CurrentItem = item;
-                    await ExecuteQueueItemAsync(item, cancellationToken);
+                    // Check if item is still pending (could have been skipped/cancelled while paused)
+                    if (nextItem.Status != AutoLoginQueueStatus.Pending) continue;
 
-                    // Delay between items
+                    // Transition to processing the next item
+                    CurrentItem = nextItem;
+                    TransitionToState(QueueExecutionState.Processing, $"Processing {nextItem.DisplayName}");
+
+                    await ExecuteQueueItemAsync(nextItem, cancellationToken);
+
+                    // Check if the item was skipped during execution
+                    if (nextItem.Status == AutoLoginQueueStatus.Cancelled)
+                    {
+                        await _loggingService.LogInfoAsync($"Item {nextItem.DisplayName} was skipped, continuing to next item");
+                        // State should already be Transitioning from SkipCurrentItemAsync
+                        // Continue to next iteration without delay
+                        continue;
+                    }
+
+                    // Transition between items
+                    if (nextItem.Status == AutoLoginQueueStatus.Completed || nextItem.Status == AutoLoginQueueStatus.Failed)
+                    {
+                        TransitionToState(QueueExecutionState.Transitioning, "Moving to next item");
+                    }
+
+                    // Delay between items (only if not skipped)
                     if (DelayBetweenItems > 0 && !cancellationToken.IsCancellationRequested)
                     {
                         await Task.Delay(DelayBetweenItems, cancellationToken);
                     }
 
                     // Stop if failed and not configured to continue
-                    if (item.Status == AutoLoginQueueStatus.Failed && !ContinueOnFailure)
+                    if (nextItem.Status == AutoLoginQueueStatus.Failed && !ContinueOnFailure)
                     {
-                        await FinishExecution(QueueStopReason.Failed, $"Stopped after failure: {item.ErrorMessage}");
+                        await FinishExecution(QueueStopReason.Failed, $"Stopped after failure: {nextItem.ErrorMessage}");
                         return;
                     }
                 }
@@ -479,6 +561,15 @@ namespace FFXIManager.Services
 
         private async Task ExecuteQueueItemAsync(AutoLoginQueueItem item, CancellationToken cancellationToken)
         {
+            // Create per-item cancellation token source
+            _currentItemCancellationTokenSource?.Dispose();
+            _currentItemCancellationTokenSource = new CancellationTokenSource();
+
+            // Combine queue cancellation token with per-item cancellation token
+            using var combinedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken, _currentItemCancellationTokenSource.Token);
+            var combinedToken = combinedTokenSource.Token;
+
             try
             {
                 item.Status = AutoLoginQueueStatus.InProgress;
@@ -500,8 +591,8 @@ namespace FFXIManager.Services
                     ProfileSwapped?.Invoke(this, new ProfileSwappedEventArgs(fromProfile, item.Profile));
                 }
 
-                // Execute login steps
-                await ExecuteLoginStepsAsync(item, cancellationToken);
+                // Execute login steps with combined cancellation token
+                await ExecuteLoginStepsAsync(item, combinedToken);
 
                 // Mark as completed if we got through all steps
                 if (item.Status == AutoLoginQueueStatus.InProgress)
@@ -519,7 +610,16 @@ namespace FFXIManager.Services
                 item.Status = AutoLoginQueueStatus.Cancelled;
                 item.EndTime = DateTime.Now;
                 item.StatusMessage = "Login cancelled";
-                throw;
+
+                // Only re-throw if it's the main queue cancellation, not per-item cancellation
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    // Main queue was cancelled - propagate to stop entire queue
+                    throw;
+                }
+
+                // Per-item cancellation (skip) - don't re-throw, just log and continue queue
+                await _loggingService.LogInfoAsync($"Item {item.DisplayName} was cancelled (skipped), continuing to next item");
             }
             catch (Exception ex)
             {
@@ -672,23 +772,30 @@ namespace FFXIManager.Services
 
                     if (account != null && profile != null)
                     {
+                        // Determine status: reset non-completed items to pending for fresh start experience
+                        var restoredStatus = serializedItem.Status switch
+                        {
+                            AutoLoginQueueStatus.Completed => AutoLoginQueueStatus.Completed, // Keep completed items
+                            _ => AutoLoginQueueStatus.Pending // Reset all others (InProgress, Failed, Cancelled, Paused) to Pending
+                        };
+
                         var item = new AutoLoginQueueItem
                         {
                             Id = serializedItem.Id,
                             Account = account,
                             Profile = profile,
                             Position = serializedItem.Position,
-                            Status = serializedItem.Status == AutoLoginQueueStatus.InProgress
-                                ? AutoLoginQueueStatus.Pending // Reset in-progress items to pending
-                                : serializedItem.Status,
-                            CurrentStep = LoginTaskStep.None, // Reset step
-                            CompletedSteps = new List<LoginTaskStep>(serializedItem.CompletedSteps),
-                            StartTime = serializedItem.StartTime,
-                            EndTime = serializedItem.EndTime,
-                            ErrorMessage = serializedItem.ErrorMessage ?? string.Empty,
-                            StatusMessage = serializedItem.Status == AutoLoginQueueStatus.InProgress
-                                ? "Ready to start"
-                                : serializedItem.StatusMessage ?? string.Empty
+                            Status = restoredStatus,
+                            CurrentStep = LoginTaskStep.None, // Always reset step
+                            CompletedSteps = restoredStatus == AutoLoginQueueStatus.Completed
+                                ? new List<LoginTaskStep>(serializedItem.CompletedSteps)
+                                : new List<LoginTaskStep>(), // Clear steps for reset items
+                            StartTime = restoredStatus == AutoLoginQueueStatus.Completed ? serializedItem.StartTime : null,
+                            EndTime = restoredStatus == AutoLoginQueueStatus.Completed ? serializedItem.EndTime : null,
+                            ErrorMessage = string.Empty, // Clear error messages for fresh start
+                            StatusMessage = restoredStatus == AutoLoginQueueStatus.Completed
+                                ? serializedItem.StatusMessage ?? string.Empty
+                                : "Ready to start"
                         };
 
                         restoredItems.Add(item);
@@ -706,6 +813,19 @@ namespace FFXIManager.Services
                         }
                     }
                 });
+
+                // Log the reset behavior for user awareness
+                var resetCount = restoredItems.Count(x => x.Status == AutoLoginQueueStatus.Pending);
+                var completedCount = restoredItems.Count(x => x.Status == AutoLoginQueueStatus.Completed);
+
+                if (resetCount > 0)
+                {
+                    await _loggingService.LogInfoAsync($"Queue state loaded: {resetCount} items reset to pending, {completedCount} completed items preserved");
+                }
+                else if (restoredItems.Any())
+                {
+                    await _loggingService.LogInfoAsync($"Queue state loaded: {restoredItems.Count} items restored");
+                }
 
                 _originalProfilePath = queueState.OriginalProfilePath;
 
@@ -760,8 +880,10 @@ namespace FFXIManager.Services
 
         private async Task FinishExecution(QueueStopReason reason, string message)
         {
-            IsExecuting = false;
-            IsPaused = false;
+            // Transition to stopping state first
+            TransitionToState(QueueStopReason.Completed == reason ? QueueExecutionState.Completed : QueueExecutionState.Stopping,
+                $"Finishing execution: {message}");
+
             CurrentItem = null;
 
             // If user manually stopped the queue, reset all items to provide a clean restart
@@ -807,6 +929,9 @@ namespace FFXIManager.Services
             {
                 await SaveQueueStateAsync();
             }
+
+            // Final transition to idle state
+            TransitionToState(QueueExecutionState.Idle, "Queue execution finished");
 
             QueueStopped?.Invoke(this, new QueueStoppedEventArgs(reason, message));
         }
@@ -855,6 +980,7 @@ namespace FFXIManager.Services
 
             // Cancel any running execution
             _executionCancellationTokenSource?.Cancel();
+            _currentItemCancellationTokenSource?.Cancel();
 
             // Wait for execution to complete
             try
@@ -867,6 +993,7 @@ namespace FFXIManager.Services
             }
 
             _executionCancellationTokenSource?.Dispose();
+            _currentItemCancellationTokenSource?.Dispose();
             _executionSemaphore?.Dispose();
 
             GC.SuppressFinalize(this);
