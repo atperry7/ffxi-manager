@@ -1,6 +1,8 @@
 # Handler Implementation Guide
 ## Developer Guidelines for Auto-Login Handler Development
 
+> **📝 Claude Code Users**: See [`CLAUDE_HANDLER_GUIDE.md`](./CLAUDE_HANDLER_GUIDE.md) for a streamlined, quick-reference version optimized for AI-assisted development.
+
 This guide provides comprehensive patterns and best practices for implementing auto-login handlers that integrate with the refactored AutoLoginTask/AutoLoginSubtask architecture.
 
 ## 🎯 Core Architecture Principles
@@ -535,6 +537,218 @@ Infrastructure/DependencyInjection.cs                     # Registration
 4. **Create** corresponding test file
 5. **Register** in DI container
 6. **Build** and test with `dotnet build` and `dotnet test`
+
+---
+
+## 🖼️ Screenshot Detection Integration
+
+### Overview
+Handlers can now use screenshot-based detection to identify application states and perform UI automation. This approach is more reliable than window title matching and works across different application versions.
+
+### Core Services for Screenshot Detection
+
+#### 1. IScreenshotCaptureService
+Captures screenshots of application windows:
+```csharp
+var screenshot = await _screenshotService.CaptureWindowAsync(windowHandle);
+```
+
+#### 2. ITemplateMatchingService
+Finds UI elements within screenshots:
+```csharp
+var match = await _templateService.FindElementAsync(screenshot, "Windower/launch_arrow");
+if (match.Confidence >= 0.80f)
+{
+    // Element found with high confidence
+}
+```
+
+#### 3. IUIAutomationService
+Performs clicks and keyboard input:
+```csharp
+var clickPoint = screenshot.ToScreenCoordinates(match.GetClickPoint());
+await _automationService.ClickAsync(clickPoint);
+```
+
+#### 4. IScreenStateDetectionService
+High-level state detection and waiting:
+```csharp
+var state = await _screenDetection.WaitForStateAsync(
+    LoginTaskStep.ClickLaunchButton,
+    windowHandle,
+    TimeSpan.FromSeconds(10),
+    (progress, msg) => subtask.UpdateProgress(progress, msg)
+);
+```
+
+### Enhanced Handler Pattern with Screenshot Detection
+
+```csharp
+public class ScreenDetectionHandler : IAutoLoginStepHandler
+{
+    private readonly IScreenshotCaptureService _screenshotService;
+    private readonly ITemplateMatchingService _templateService;
+    private readonly IUIAutomationService _automationService;
+    private readonly IScreenStateDetectionService _screenDetection;
+    private readonly ILoggingService _loggingService;
+
+    public LoginTaskStep HandledStep => LoginTaskStep.ClickLaunchButton;
+
+    public async Task ExecuteAsync(
+        AutoLoginSubtask subtask,
+        AutoLoginQueueItem queueItem,
+        CancellationToken cancellationToken)
+    {
+        subtask.Start();
+
+        try
+        {
+            // Wait for the expected screen state
+            subtask.UpdateProgress(20, "Waiting for application screen...");
+            var screenState = await _screenDetection.WaitForStateAsync(
+                HandledStep,
+                queueItem.WindowHandle,
+                TimeSpan.FromSeconds(subtask.EstimatedDurationSeconds * 2),
+                (progress, message) => subtask.UpdateProgress(progress, message),
+                cancellationToken);
+
+            if (!screenState.IsValid || screenState.Confidence < 0.80f)
+            {
+                subtask.Fail($"Could not detect expected screen state. Confidence: {screenState.Confidence:P}");
+                return;
+            }
+
+            // Execute the default action for this state
+            subtask.UpdateProgress(60, "Performing action...");
+            await _screenDetection.ExecuteDefaultActionAsync(
+                queueItem.WindowHandle,
+                screenState,
+                cancellationToken);
+
+            // Verify the action completed
+            subtask.UpdateProgress(80, "Verifying action result...");
+            await Task.Delay(500, cancellationToken);
+
+            // Wait for transition to next state
+            var transitioned = await _screenDetection.WaitForTransitionAsync(
+                queueItem.WindowHandle,
+                HandledStep,
+                GetNextExpectedStep(),
+                TimeSpan.FromSeconds(5),
+                cancellationToken);
+
+            if (!transitioned)
+            {
+                subtask.Fail("Action did not result in expected screen transition");
+                return;
+            }
+
+            subtask.Complete();
+        }
+        catch (OperationCanceledException)
+        {
+            subtask.Cancel();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            subtask.Fail(ex.Message);
+            await _loggingService.LogErrorAsync($"Screenshot detection handler failed", ex);
+            throw;
+        }
+    }
+}
+```
+
+### Window-Relative Coordinate System
+
+All screenshot detection uses **window-relative coordinates**:
+
+1. **Capture** - Screenshot of application window only
+2. **Match** - Find UI elements within window bounds
+3. **Convert** - Transform to screen coordinates for clicking
+
+```csharp
+// Example coordinate conversion
+var windowScreenshot = await _screenshotService.CaptureWindowAsync(windowHandle);
+var match = await _templateService.FindElementAsync(windowScreenshot, templatePath);
+
+// match.GetClickPoint() returns window-relative coordinates
+var windowRelativePoint = match.GetClickPoint();
+
+// Convert to screen coordinates for clicking
+var screenPoint = windowScreenshot.ToScreenCoordinates(windowRelativePoint);
+await _automationService.ClickAsync(screenPoint);
+```
+
+### Template Management
+
+Templates are embedded resources organized by application:
+
+```
+Templates/
+├── Windower/
+│   ├── launch_arrow.png
+│   └── launch_arrow.json
+├── PlayOnline/
+│   ├── member_dropdown.png
+│   └── member_dropdown.json
+└── FFXI/
+    ├── accept_button.png
+    └── accept_button.json
+```
+
+### Creating Templates for Your Handler
+
+1. **Capture UI Element**
+   - Use screenshot tool to capture ONLY the UI element
+   - Save as PNG in appropriate Templates folder
+   - Keep small (50-200px typically)
+
+2. **Create Metadata JSON**
+   ```json
+   {
+     "name": "Element Name",
+     "templatePath": "Application/element_name",
+     "associatedStep": "LoginTaskStep",
+     "action": {
+       "type": "click",
+       "clickOffset": { "x": 0, "y": 0 }
+     },
+     "confidenceThreshold": 0.80
+   }
+   ```
+
+3. **Test Template Matching**
+   ```csharp
+   var template = await _templateManagement.LoadTemplateAsync("Application/element_name");
+   var match = await _templateService.FindElementAsync(screenshot, template);
+   Assert.IsTrue(match.Confidence >= 0.80f);
+   ```
+
+### Performance Considerations
+
+1. **Cache Screenshots** - Don't recapture unnecessarily
+2. **Use Regions** - Capture only relevant window areas
+3. **Preload Templates** - Load at startup, not during execution
+4. **Confidence Thresholds** - Balance accuracy vs. flexibility
+
+### Debugging Screenshot Detection
+
+```csharp
+// Log match details for debugging
+await _loggingService.LogDebugAsync(
+    $"Template match: {match.Template.Name} at ({match.WindowRelativePosition.X}, {match.WindowRelativePosition.Y}) " +
+    $"with confidence {match.Confidence:P}");
+
+// Save screenshot for analysis (debug builds only)
+#if DEBUG
+if (match.Confidence < expectedConfidence)
+{
+    SaveScreenshotForDebug(windowScreenshot, $"low_confidence_{match.Template.Name}");
+}
+#endif
+```
 
 ---
 

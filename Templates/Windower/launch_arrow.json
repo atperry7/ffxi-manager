@@ -1,0 +1,21 @@
+{
+  "name": "Windower Launch Arrow",
+  "templatePath": "Windower/launch_arrow",
+  "elementType": "button",
+  "associatedStep": "ClickLaunchButton",
+  "action": {
+    "type": "click",
+    "clickOffset": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "confidenceThreshold": 0.80,
+  "tolerance": 5,
+  "version": "1.0.0",
+  "variants": [],
+  "properties": {
+    "description": "The arrow button that launches PlayOnline from Windower",
+    "waitAfterClick": 2000
+  }
+}
