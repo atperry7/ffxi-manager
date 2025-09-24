@@ -1,29 +1,100 @@
 # Handler Implementation Guide
-## Developer Guidelines for Auto-Login Task/Subtask Implementation
+## Developer Guidelines for Auto-Login Handler Development
 
-This guide provides comprehensive patterns and best practices for implementing real automation logic in the auto-login handlers.
+This guide provides comprehensive patterns and best practices for implementing auto-login handlers that integrate with the refactored AutoLoginTask/AutoLoginSubtask architecture.
 
-## 🎯 Core Principles
+## 🎯 Core Architecture Principles
 
-### 1. Always Use QueueExecutionState
-- **Never bypass the state machine** for decision making
-- Check `task.Status` before proceeding with operations
-- Respect pause states and wait appropriately
-- Use the established state transitions
+### 1. Handler Scope and Responsibility
+Handlers operate on **individual AutoLoginSubtask objects** within the context of an AutoLoginTask:
 
 ```csharp
-// ✅ CORRECT: Respect pause state
-while (task.Status == AutoLoginTaskStatus.Paused && !cancellationToken.IsCancellationRequested)
+// ✅ CORRECT: Handler signature for AutoLoginSubtask
+public async Task ExecuteAsync(
+    AutoLoginSubtask subtask,
+    AutoLoginQueueItem queueItem,
+    CancellationToken cancellationToken)
 {
-    await Task.Delay(100, cancellationToken);
+    // Handler implementation
 }
-cancellationToken.ThrowIfCancellationRequested();
-
-// ❌ INCORRECT: Ignoring state machine
-// Just proceeding without checking task status
 ```
 
-### 2. Respect Cancellation Tokens
+### 2. Subtask Lifecycle Management
+- **Always use subtask lifecycle methods** for proper state tracking
+- Leverage the built-in status management and event propagation
+- Use the established AutoLoginSubtaskStatus transitions
+
+```csharp
+// ✅ CORRECT: Proper subtask lifecycle
+subtask.Start(); // Sets status to InProgress, records StartTime
+try
+{
+    // Handler logic here
+    subtask.UpdateProgress(50, "Processing step...");
+    // More logic
+    subtask.Complete(); // Sets status to Completed, records EndTime
+}
+catch (Exception ex)
+{
+    subtask.Fail(ex.Message); // Sets status to Failed, records error
+    throw;
+}
+
+// ❌ INCORRECT: Manual status manipulation
+// subtask.Status = AutoLoginSubtaskStatus.InProgress; // Don't do this
+```
+
+### 3. Handle Optional and Skippable Steps
+Leverage subtask properties for intelligent execution flow:
+
+```csharp
+// ✅ CORRECT: Handle skippable subtasks
+public async Task ExecuteAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
+{
+    subtask.Start();
+
+    // Check if this step can be skipped based on conditions
+    if (subtask.IsSkippable && !IsStepRequired(queueItem))
+    {
+        subtask.Skip("Step not required for this account type");
+        return;
+    }
+
+    // Proceed with normal execution
+    await ExecuteStepLogic(subtask, queueItem, cancellationToken);
+}
+```
+
+### 4. Implement Robust Retry Logic
+Use the built-in retry capabilities of AutoLoginSubtask:
+
+```csharp
+// ✅ CORRECT: Leverage built-in retry mechanism
+public async Task ExecuteWithRetryAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
+{
+    while (true)
+    {
+        try
+        {
+            await ExecuteStepLogic(subtask, queueItem, cancellationToken);
+            break; // Success, exit retry loop
+        }
+        catch (Exception ex) when (subtask.CanRetry)
+        {
+            subtask.PrepareForRetry(); // Increments RetryAttempts, resets status
+            await Task.Delay(GetRetryDelay(subtask.RetryAttempts), cancellationToken);
+            continue;
+        }
+        catch (Exception ex)
+        {
+            subtask.Fail($"Failed after {subtask.RetryAttempts} attempts: {ex.Message}");
+            throw;
+        }
+    }
+}
+```
+
+### 5. Respect Cancellation Tokens
 - **Check `cancellationToken.IsCancellationRequested`** at every async boundary
 - Use `cancellationToken` in all async operations
 - Handle `OperationCanceledException` appropriately
@@ -37,20 +108,20 @@ for (int attempt = 1; attempt <= maxRetries; attempt++)
     var result = await SomeAsyncOperation(cancellationToken);
     if (result.Success) break;
 
-    await Task.Delay(retryDelay, cancellationToken);
+    await Task.Delay(GetRetryDelay(attempt), cancellationToken);
 }
 
 // ❌ INCORRECT: Not using cancellation token
 // await Task.Delay(retryDelay); // Missing cancellation token
 ```
 
-### 3. Fire Granular Events
-- **Each subtask state change** should trigger UI updates via events
-- Use `subtask.UpdateProgress()` frequently with meaningful messages
+### 6. Provide Granular Progress Updates
+- **Use `subtask.UpdateProgress()`** frequently with meaningful messages
+- Progress updates automatically trigger UI events through the task executor
 - Provide detailed progress for long-running operations
 
 ```csharp
-// ✅ CORRECT: Granular progress reporting
+// ✅ CORRECT: Granular progress reporting with automatic event propagation
 subtask.UpdateProgress(25, "Locating application window...");
 await Task.Delay(500, cancellationToken);
 
@@ -61,83 +132,119 @@ subtask.UpdateProgress(75, "Focusing window for interaction...");
 // Actual UI automation here
 
 subtask.UpdateProgress(100, "Window ready for automation");
+// Progress updates automatically flow through: Subtask → Task → TaskExecutor → Orchestrator → UI
 ```
 
-### 4. Keep Subtasks Focused
-- **Single responsibility per subtask** (launch app, enter password, etc.)
-- Don't mix concerns within a single subtask execution
-- If logic becomes complex, consider breaking into additional subtasks
+### 7. Keep Handlers Focused
+- **Single responsibility per handler** (one LoginTaskStep per handler)
+- Don't mix concerns within a single handler execution
+- Use dependency injection for service access
 
-### 5. Leverage Existing Patterns
-- Use the same event/progress reporting patterns established
-- Follow dependency injection patterns
-- Build on the solid state management foundation
-
-## 🏗️ Implementation Strategy
-
-### Strategy Pattern for Different Workflows
-
-Implement different strategies for various login scenarios:
+### 8. Leverage Service Architecture
+The refactored system provides these key services through dependency injection:
 
 ```csharp
-// Example: Strategy pattern for different login workflows
-public interface ILoginWorkflowStrategy
+// ✅ CORRECT: Handler with proper service dependencies
+public class WindowLaunchHandler : IAutoLoginStepHandler
 {
-    bool CanHandle(AutoLoginQueueItem queueItem);
-    List<AutoLoginSubtask> GetRequiredSubtasks(AutoLoginQueueItem queueItem);
-}
+    private readonly ILoggingService _loggingService;
+    private readonly IProcessUtilityService _processService;
+    private readonly ISettingsService _settingsService;
 
-public class POLOnlyWorkflowStrategy : ILoginWorkflowStrategy
-{
-    public bool CanHandle(AutoLoginQueueItem queueItem)
+    public WindowLaunchHandler(
+        ILoggingService loggingService,
+        IProcessUtilityService processService,
+        ISettingsService settingsService)
     {
-        // Logic to determine if this is POL-only workflow
-        return queueItem.Account?.RequiresPOLOnly ?? false;
+        _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+        _processService = processService ?? throw new ArgumentNullException(nameof(processService));
+        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
     }
 
-    public List<AutoLoginSubtask> GetRequiredSubtasks(AutoLoginQueueItem queueItem)
+    public LoginTaskStep HandledStep => LoginTaskStep.LaunchWindower;
+
+    public async Task ExecuteAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
     {
-        return new List<AutoLoginSubtask>
+        subtask.Start();
+
+        try
         {
-            new AutoLoginSubtask { TaskStep = LoginTaskStep.LaunchWindower },
-            new AutoLoginSubtask { TaskStep = LoginTaskStep.MemberSelection },
-            new AutoLoginSubtask { TaskStep = LoginTaskStep.PasswordEntry }
-            // Skip FFXI-specific steps
-        };
+            // Use estimated duration from subtask for timeout calculations
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(subtask.EstimatedDurationSeconds * 2));
+            using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+            await ExecuteStepLogic(subtask, queueItem, combinedCts.Token);
+            subtask.Complete();
+        }
+        catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
+        {
+            subtask.Fail($"Step timed out after {subtask.EstimatedDurationSeconds * 2} seconds");
+            throw new TimeoutException($"Handler {HandledStep} timed out");
+        }
+        catch (Exception ex)
+        {
+            subtask.Fail(ex.Message);
+            throw;
+        }
     }
 }
 ```
 
-### Independent Cancellable Subtasks
+## 🏗️ Service Integration Patterns
 
-Each subtask should be independently testable and cancellable:
+### Working with the Task Executor
+Handlers are invoked by the `IAutoLoginTaskExecutor` which manages the task/subtask lifecycle:
 
 ```csharp
-public async Task ExecuteSubtaskAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
-{
-    try
-    {
-        // Setup with timeout for this specific subtask
-        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(SubtaskTimeoutSeconds));
-        using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+// The TaskExecutor handles:
+// 1. Calling subtask.Start() before invoking handler
+// 2. Setting up cancellation tokens with timeouts
+// 3. Propagating events (SubtaskStarted, SubtaskProgressUpdated, SubtaskCompleted)
+// 4. Managing retry logic when handlers fail
+// 5. Calling subtask.Complete() or subtask.Fail() based on handler results
+```
 
-        // Execute with combined cancellation
-        await ExecuteSubtaskLogic(subtask, queueItem, combinedCts.Token);
-    }
-    catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
-    {
-        // Handle timeout specifically
-        throw new TimeoutException($"Subtask {subtask.TaskStep} timed out");
-    }
-}
+### Event Flow Architecture
+The refactored system uses a layered event propagation model:
+
+```
+AutoLoginSubtask (progress updates)
+    ↓ (PropertyChanged events)
+AutoLoginTask (aggregates subtask progress)
+    ↓ (TaskExecutor events)
+IAutoLoginTaskExecutor (SubtaskStarted, SubtaskProgressUpdated, etc.)
+    ↓ (Event forwarding)
+IQueueExecutionOrchestrator (ItemStarted, ItemProgressUpdated, etc.)
+    ↓ (Event forwarding)
+AutoLoginQueueService (Facade events for UI)
+    ↓ (Event binding)
+UI ViewModels (Data binding updates)
+```
+
+### Handler Registration Pattern
+Handlers should be registered in the DI container by LoginTaskStep:
+
+```csharp
+// In Infrastructure/DependencyInjection.cs
+services.AddTransient<IAutoLoginStepHandler, LaunchWindowerHandler>();
+services.AddTransient<IAutoLoginStepHandler, MemberSelectionHandler>();
+services.AddTransient<IAutoLoginStepHandler, PasswordEntryHandler>();
+// ... etc
+
+// Handler resolver service
+services.AddSingleton<IAutoLoginHandlerResolver, AutoLoginHandlerResolver>();
 ```
 
 ## 🛠️ Handler Implementation Patterns
 
 ### 1. Window Detection and Management
+Modern pattern with AutoLoginSubtask integration:
 
 ```csharp
-private async Task<IntPtr> FindApplicationWindowAsync(string windowTitle, CancellationToken cancellationToken)
+private async Task<IntPtr> FindApplicationWindowAsync(
+    AutoLoginSubtask subtask,
+    string windowTitle,
+    CancellationToken cancellationToken)
 {
     const int maxAttempts = 10;
     const int delayBetweenAttempts = 500;
@@ -146,10 +253,15 @@ private async Task<IntPtr> FindApplicationWindowAsync(string windowTitle, Cancel
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Update progress based on attempt
+        var progressPercent = (attempt * 100) / maxAttempts;
+        subtask.UpdateProgress(progressPercent, $"Searching for window '{windowTitle}' (attempt {attempt}/{maxAttempts})");
+
         var windowHandle = FindWindow(null, windowTitle);
         if (windowHandle != IntPtr.Zero)
         {
             await _loggingService.LogDebugAsync($"Found window '{windowTitle}' on attempt {attempt}");
+            subtask.UpdateProgress(100, $"Found window '{windowTitle}'");
             return windowHandle;
         }
 
@@ -159,136 +271,137 @@ private async Task<IntPtr> FindApplicationWindowAsync(string windowTitle, Cancel
         }
     }
 
-    throw new InvalidOperationException($"Could not find window '{windowTitle}' after {maxAttempts} attempts");
+    var errorMsg = $"Could not find window '{windowTitle}' after {maxAttempts} attempts";
+    subtask.Fail(errorMsg);
+    throw new InvalidOperationException(errorMsg);
 }
 ```
 
-### 2. UI Element Interaction
+## 🤖 Claude Code Development Guidelines
+
+### For Claude Code: Handler Creation Workflow
+
+When creating new auto-login handlers, follow this systematic approach:
+
+#### 1. **Analyze the LoginTaskStep**
+```csharp
+// First, understand what LoginTaskStep you're implementing
+// Check Models/LoginTaskStep.cs for the step definition
+// Example: LoginTaskStep.LaunchWindower, LoginTaskStep.MemberSelection, etc.
+```
+
+#### 2. **Handler Template Pattern**
+Use this template for new handlers:
 
 ```csharp
-private async Task ClickButtonAsync(IntPtr windowHandle, string buttonText, CancellationToken cancellationToken)
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using FFXIManager.Models;
+using FFXIManager.Services;
+
+namespace FFXIManager.Services.AutoLogin.Handlers
 {
-    subtask.UpdateProgress(20, $"Locating '{buttonText}' button...");
-
-    // Find the button element
-    var buttonElement = await FindUIElementAsync(windowHandle, buttonText, cancellationToken);
-
-    subtask.UpdateProgress(40, "Verifying button is clickable...");
-
-    // Verify button state
-    if (!IsElementEnabled(buttonElement))
+    /// <summary>
+    /// Handler for [LoginTaskStep] - [Brief description of what this handler does]
+    /// </summary>
+    public class [StepName]Handler : IAutoLoginStepHandler
     {
-        throw new InvalidOperationException($"Button '{buttonText}' is not enabled");
+        private readonly ILoggingService _loggingService;
+        // Add other required services
+
+        public [StepName]Handler(ILoggingService loggingService /* other services */)
+        {
+            _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            // Initialize other services with null checks
+        }
+
+        public LoginTaskStep HandledStep => LoginTaskStep.[YourStep];
+
+        public async Task ExecuteAsync(
+            AutoLoginSubtask subtask,
+            AutoLoginQueueItem queueItem,
+            CancellationToken cancellationToken)
+        {
+            subtask.Start();
+
+            try
+            {
+                // Check if step can be skipped
+                if (subtask.IsSkippable && ShouldSkipStep(queueItem))
+                {
+                    subtask.Skip("Reason for skipping");
+                    return;
+                }
+
+                // Set up timeout based on estimated duration
+                using var timeoutCts = new CancellationTokenSource(
+                    TimeSpan.FromSeconds(subtask.EstimatedDurationSeconds * 2));
+                using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken, timeoutCts.Token);
+
+                // Execute the main logic
+                await ExecuteStepLogicAsync(subtask, queueItem, combinedCts.Token);
+
+                subtask.Complete();
+            }
+            catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
+            {
+                subtask.Fail($"Handler timed out after {subtask.EstimatedDurationSeconds * 2} seconds");
+                throw new TimeoutException($"Handler {HandledStep} timed out");
+            }
+            catch (Exception ex)
+            {
+                subtask.Fail(ex.Message);
+                await _loggingService.LogErrorAsync($"Handler {HandledStep} failed", ex);
+                throw;
+            }
+        }
+
+        private async Task ExecuteStepLogicAsync(
+            AutoLoginSubtask subtask,
+            AutoLoginQueueItem queueItem,
+            CancellationToken cancellationToken)
+        {
+            // Implement your specific logic here
+            // Use subtask.UpdateProgress(percentage, message) frequently
+            // Access account info via queueItem.Account
+            // Use cancellationToken in all async operations
+        }
+
+        private bool ShouldSkipStep(AutoLoginQueueItem queueItem)
+        {
+            // Implement logic to determine if this step should be skipped
+            // based on account configuration or other factors
+            return false;
+        }
     }
-
-    subtask.UpdateProgress(60, "Clicking button...");
-
-    // Perform the click
-    await ClickElementAsync(buttonElement, cancellationToken);
-
-    subtask.UpdateProgress(80, "Waiting for button click response...");
-
-    // Wait for expected response/window change
-    await WaitForExpectedStateChange(cancellationToken);
-
-    subtask.UpdateProgress(100, $"'{buttonText}' button clicked successfully");
 }
 ```
 
-### 3. Text Input with Security
-
-```csharp
-private async Task EnterSecureTextAsync(IntPtr windowHandle, string fieldName, string text, CancellationToken cancellationToken)
-{
-    subtask.UpdateProgress(25, $"Locating {fieldName} field...");
-
-    var textField = await FindUIElementAsync(windowHandle, fieldName, cancellationToken);
-
-    subtask.UpdateProgress(50, "Focusing input field...");
-
-    // Focus the field
-    await FocusElementAsync(textField, cancellationToken);
-
-    subtask.UpdateProgress(75, "Entering text securely...");
-
-    // Clear existing content and enter new text
-    await ClearFieldAsync(textField, cancellationToken);
-    await SendKeysAsync(text, cancellationToken);
-
-    // Don't log the actual text for security
-    await _loggingService.LogDebugAsync($"{fieldName} field populated (content masked for security)");
-
-    subtask.UpdateProgress(100, $"{fieldName} entered successfully");
-}
-```
-
-### 4. Process Management
-
-```csharp
-private async Task LaunchApplicationAsync(string executablePath, string arguments, CancellationToken cancellationToken)
-{
-    subtask.UpdateProgress(10, "Validating executable path...");
-
-    if (!File.Exists(executablePath))
-    {
-        throw new FileNotFoundException($"Executable not found: {executablePath}");
-    }
-
-    subtask.UpdateProgress(30, "Starting application process...");
-
-    var processStartInfo = new ProcessStartInfo
-    {
-        FileName = executablePath,
-        Arguments = arguments,
-        UseShellExecute = false,
-        RedirectStandardOutput = true,
-        RedirectStandardError = true
-    };
-
-    var process = Process.Start(processStartInfo);
-    if (process == null)
-    {
-        throw new InvalidOperationException($"Failed to start process: {executablePath}");
-    }
-
-    subtask.UpdateProgress(60, $"Process started with PID: {process.Id}");
-
-    // Wait for process to initialize
-    await WaitForProcessInitialization(process, cancellationToken);
-
-    subtask.UpdateProgress(100, "Application launched successfully");
-
-    // Store process reference for monitoring
-    // _processTracker.TrackProcess(process);
-}
-```
-
-## 🧪 Testing Patterns
-
-### Unit Testing Individual Handlers
+#### 3. **Testing Pattern for Claude Code**
+Create corresponding tests using this pattern:
 
 ```csharp
 [TestClass]
-public class WindowerLaunchHandlerTests
+public class [StepName]HandlerTests
 {
     private Mock<ILoggingService> _mockLoggingService;
-    private Mock<IProcessUtilityService> _mockProcessService;
-    private WindowerLaunchHandler _handler;
+    private [StepName]Handler _handler;
 
     [TestInitialize]
     public void Setup()
     {
         _mockLoggingService = new Mock<ILoggingService>();
-        _mockProcessService = new Mock<IProcessUtilityService>();
-        _handler = new WindowerLaunchHandler(_mockLoggingService.Object, _mockProcessService.Object);
+        _handler = new [StepName]Handler(_mockLoggingService.Object);
     }
 
     [TestMethod]
-    public async Task ExecuteLaunchWindowerAsync_ValidAccount_LaunchesSuccessfully()
+    public async Task ExecuteAsync_ValidInput_CompletesSuccessfully()
     {
         // Arrange
+        var subtask = AutoLoginSubtask.FromLoginTaskStep(LoginTaskStep.[YourStep]);
         var queueItem = CreateTestQueueItem();
-        var subtask = new AutoLoginSubtask { TaskStep = LoginTaskStep.LaunchWindower };
         var cancellationToken = CancellationToken.None;
 
         // Act
@@ -298,185 +411,153 @@ public class WindowerLaunchHandlerTests
         Assert.AreEqual(AutoLoginSubtaskStatus.Completed, subtask.Status);
         Assert.AreEqual(100, subtask.Progress);
     }
-}
-```
 
-### Integration Testing with Real UI
-
-```csharp
-[TestClass]
-[TestCategory("Integration")]
-public class PlayOnlineAuthHandlerIntegrationTests
-{
-    [TestMethod]
-    [Ignore("Requires PlayOnline to be running")]
-    public async Task ExecuteMemberSelectionAsync_RealUI_SelectsMemberSuccessfully()
+    private AutoLoginQueueItem CreateTestQueueItem()
     {
-        // This test would interact with actual PlayOnline UI
-        // Run only in controlled test environments
+        // Create test data - use existing patterns from other test files
+        return new AutoLoginQueueItem(/* test parameters */);
     }
 }
 ```
 
-## 🔧 Configuration and Settings
-
-### Handler-Specific Settings
+#### 4. **Registration Pattern**
+Add your handler to the DI container in `Infrastructure/DependencyInjection.cs`:
 
 ```csharp
-public class AutoLoginHandlerSettings
+// In the AddAutoLoginServices method
+services.AddTransient<IAutoLoginStepHandler, [StepName]Handler>();
+```
+
+### Claude Code: Common Implementation Patterns
+
+#### UI Element Interaction with Subtask Integration
+```csharp
+private async Task ClickButtonAsync(
+    AutoLoginSubtask subtask,
+    IntPtr windowHandle,
+    string buttonText,
+    CancellationToken cancellationToken)
 {
-    public int DefaultTimeoutSeconds { get; set; } = 30;
-    public int RetryAttempts { get; set; } = 3;
-    public int DelayBetweenRetries { get; set; } = 1000;
-    public bool EnableDetailedLogging { get; set; } = true;
-    public string WindowerExecutablePath { get; set; } = "";
-    public Dictionary<string, object> HandlerSpecificSettings { get; set; } = new();
+    subtask.UpdateProgress(20, $"Locating '{buttonText}' button...");
+
+    var buttonElement = await FindUIElementAsync(windowHandle, buttonText, cancellationToken);
+
+    subtask.UpdateProgress(40, "Verifying button is clickable...");
+
+    if (!IsElementEnabled(buttonElement))
+    {
+        throw new InvalidOperationException($"Button '{buttonText}' is not enabled");
+    }
+
+    subtask.UpdateProgress(60, "Clicking button...");
+    await ClickElementAsync(buttonElement, cancellationToken);
+
+    subtask.UpdateProgress(80, "Waiting for button click response...");
+    await WaitForExpectedStateChange(cancellationToken);
+
+    subtask.UpdateProgress(100, $"'{buttonText}' button clicked successfully");
 }
 ```
 
-### Environment-Specific Behavior
-
+#### Secure Text Input with AutoLoginSubtask
 ```csharp
-public class HandlerEnvironmentAdapter
+private async Task EnterSecureTextAsync(
+    AutoLoginSubtask subtask,
+    IntPtr windowHandle,
+    string fieldName,
+    string text,
+    CancellationToken cancellationToken)
 {
-    public static bool IsRunningInTestMode =>
-        Environment.GetEnvironmentVariable("FFXI_HANDLER_TEST_MODE") == "true";
+    subtask.UpdateProgress(25, $"Locating {fieldName} field...");
 
-    public static bool ShouldUseSimulation =>
-        IsRunningInTestMode || !HasRequiredDependencies();
+    var textField = await FindUIElementAsync(windowHandle, fieldName, cancellationToken);
 
-    private static bool HasRequiredDependencies()
-    {
-        // Check if required applications/services are available
-        return File.Exists(GetWindowerPath()) && IsPlayOnlineInstalled();
-    }
+    subtask.UpdateProgress(50, "Focusing input field...");
+    await FocusElementAsync(textField, cancellationToken);
+
+    subtask.UpdateProgress(75, "Entering text securely...");
+    await ClearFieldAsync(textField, cancellationToken);
+    await SendKeysAsync(text, cancellationToken);
+
+    // SECURITY: Never log sensitive content
+    await _loggingService.LogDebugAsync($"{fieldName} field populated (content masked for security)");
+
+    subtask.UpdateProgress(100, $"{fieldName} entered successfully");
 }
 ```
 
-## 🚨 Error Handling and Recovery
+### Claude Code: Key Implementation Guidelines
 
-### Graceful Degradation
+#### ✅ **DO** - Best Practices
+- **Always call `subtask.Start()`** at the beginning of handler execution
+- **Use `subtask.UpdateProgress()`** frequently with meaningful messages (every 20-25% progress)
+- **Call `subtask.Complete()`** on successful completion or `subtask.Fail(message)` on error
+- **Leverage `subtask.IsSkippable`** to handle optional steps gracefully
+- **Use `subtask.EstimatedDurationSeconds`** for timeout calculations
+- **Pass `AutoLoginSubtask` to all helper methods** for progress tracking
+- **Check account properties via `queueItem.Account`** for step-specific logic
+- **Use dependency injection** for all services (ILoggingService, IProcessUtilityService, etc.)
+- **Follow the exact handler template** provided above for consistency
 
-```csharp
-public async Task ExecuteWithFallbackAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
-{
-    try
-    {
-        // Primary automation approach
-        await ExecutePrimaryAutomationAsync(subtask, queueItem, cancellationToken);
-    }
-    catch (AutomationException ex) when (ex.IsRecoverable)
-    {
-        await _loggingService.LogWarningAsync($"Primary automation failed, attempting fallback: {ex.Message}");
+#### ❌ **DON'T** - Anti-Patterns
+- **Don't manually set `subtask.Status`** - use lifecycle methods instead
+- **Don't bypass progress reporting** - UI depends on granular updates
+- **Don't forget cancellation token** in async operations
+- **Don't log sensitive information** (passwords, tokens, personal data)
+- **Don't create handlers for multiple LoginTaskSteps** - one handler per step
+- **Don't catch exceptions without calling `subtask.Fail()`** first
+- **Don't skip the DI registration** step in Infrastructure/DependencyInjection.cs
 
-        // Fallback approach
-        await ExecuteFallbackAutomationAsync(subtask, queueItem, cancellationToken);
-    }
-    catch (Exception ex)
-    {
-        await _loggingService.LogErrorAsync($"All automation approaches failed for {subtask.TaskStep}", ex);
-        throw;
-    }
-}
+#### 🧪 **Testing Requirements**
+- **Create MSTest test class** for each handler
+- **Test happy path** (successful execution)
+- **Test error scenarios** (timeouts, failures)
+- **Test skippable logic** if `IsSkippable = true`
+- **Test cancellation handling**
+- **Mock all external dependencies**
+
+### File Location Patterns for Claude Code
 ```
-
-### Retry Logic with Exponential Backoff
-
-```csharp
-private async Task<T> ExecuteWithRetryAsync<T>(
-    Func<CancellationToken, Task<T>> operation,
-    int maxRetries = 3,
-    CancellationToken cancellationToken = default)
-{
-    var delay = TimeSpan.FromMilliseconds(500);
-
-    for (int attempt = 1; attempt <= maxRetries; attempt++)
-    {
-        try
-        {
-            return await operation(cancellationToken);
-        }
-        catch (Exception ex) when (attempt < maxRetries && IsRetryableException(ex))
-        {
-            await _loggingService.LogWarningAsync($"Attempt {attempt} failed, retrying in {delay.TotalMilliseconds}ms: {ex.Message}");
-            await Task.Delay(delay, cancellationToken);
-            delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * 1.5); // Exponential backoff
-        }
-    }
-
-    // This will never be reached due to the exception handling above, but satisfies compiler
-    throw new InvalidOperationException("Retry logic failed unexpectedly");
-}
-```
-
-## 📋 Implementation Checklist
-
-When implementing a new handler or enhancing existing ones:
-
-### ✅ Before Writing Code
-- [ ] Review the existing handler pattern and interfaces
-- [ ] Understand the specific subtask responsibilities
-- [ ] Check what properties are available on `PlayOnlineMemberAccount`
-- [ ] Plan the UI automation approach (WinAPI, UI Automation, etc.)
-
-### ✅ During Implementation
-- [ ] Use `cancellationToken` in all async operations
-- [ ] Implement granular progress reporting with `subtask.UpdateProgress()`
-- [ ] Add comprehensive logging for debugging
-- [ ] Handle both success and failure scenarios
-- [ ] Respect pause state in long-running operations
-
-### ✅ After Implementation
-- [ ] Write unit tests for the handler logic
-- [ ] Test with actual UI if possible (integration tests)
-- [ ] Verify progress reporting works in the UI
-- [ ] Test pause/resume/skip functionality
-- [ ] Update handler documentation
-
-### ✅ Production Readiness
-- [ ] Add error handling and recovery mechanisms
-- [ ] Implement retry logic where appropriate
-- [ ] Add configuration options for timeouts and retries
-- [ ] Ensure security best practices (no logging of sensitive data)
-- [ ] Performance testing under various system conditions
-
-## 🔄 Continuous Improvement
-
-### Monitoring and Metrics
-
-Consider adding handler-specific metrics:
-
-```csharp
-public class HandlerMetrics
-{
-    public string HandlerName { get; set; }
-    public LoginTaskStep TaskStep { get; set; }
-    public TimeSpan ExecutionTime { get; set; }
-    public bool Successful { get; set; }
-    public int RetryCount { get; set; }
-    public string ErrorMessage { get; set; }
-}
-```
-
-### Feedback Loop
-
-Implement feedback mechanisms to improve automation reliability:
-
-```csharp
-public async Task ReportHandlerPerformanceAsync(HandlerMetrics metrics)
-{
-    // Log performance data for analysis
-    await _loggingService.LogInfoAsync($"Handler {metrics.HandlerName} executed in {metrics.ExecutionTime.TotalMilliseconds}ms, Success: {metrics.Successful}");
-
-    // Could send to analytics service for pattern analysis
-    // await _analyticsService.TrackHandlerPerformance(metrics);
-}
+Services/AutoLogin/Handlers/[StepName]Handler.cs          # Implementation
+Testing/Services/AutoLogin/Handlers/[StepName]HandlerTests.cs  # Tests
+Infrastructure/DependencyInjection.cs                     # Registration
 ```
 
 ---
 
-## 🎯 Remember
+## 🎯 Quick Reference for Claude Code
 
-The goal is to build reliable, maintainable automation that respects the existing architecture and provides a smooth user experience. Start with the most critical path (Windower launch) and gradually enhance each handler while maintaining the solid foundation we've established.
+**When asked to create an auto-login handler:**
 
-Each handler should be a focused, testable unit that can evolve independently while participating in the larger auto-login workflow orchestration.
+1. **Read** `Models/LoginTaskStep.cs` to understand the step
+2. **Use** the handler template provided above
+3. **Implement** `ExecuteStepLogicAsync` with proper progress tracking
+4. **Create** corresponding test file
+5. **Register** in DI container
+6. **Build** and test with `dotnet build` and `dotnet test`
+
+---
+
+## 📚 Additional Resources
+
+### Architecture Documentation
+- `Services/AutoLoginQueueService.cs` - Main facade service
+- `Models/AutoLoginTask.cs` - Task-level model
+- `Models/AutoLoginSubtask.cs` - Subtask-level model
+- `Models/LoginTaskStep.cs` - Available login steps
+
+### Related Services
+- `ILoggingService` - Comprehensive logging with Serilog
+- `IProcessUtilityService` - Process management utilities
+- `ISettingsService` - Application configuration
+- `IQueueStateMachine` - State management for queue execution
+- `IAutoLoginTaskExecutor` - Task/subtask execution coordinator
+
+### Testing Framework
+- MSTest for unit and integration tests
+- Moq for service mocking
+- Test project: `Testing/FFXIManager.Tests.csproj`
+
+---
+
+*This guide provides Claude Code with the patterns and templates needed to create consistent, maintainable auto-login handlers that integrate seamlessly with the refactored architecture.*
