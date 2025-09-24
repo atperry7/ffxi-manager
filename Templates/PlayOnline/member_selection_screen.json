@@ -1,0 +1,15 @@
+{
+  "name": "PlayOnline Member Selection Screen",
+  "templatePath": "PlayOnline/member_selection_screen",
+  "associatedStep": "MemberSelection",
+  "action": {
+    "type": "screen_detection",
+    "memberSlots": {
+      "slot1": { "x": 840, "y": 350 },
+      "slot2": { "x": 840, "y": 490 },
+      "slot3": { "x": 840, "y": 630 },
+      "slot4": { "x": 840, "y": 765 }
+    }
+  },
+  "confidenceThreshold": 0.80
+}

@@ -6,8 +6,8 @@
   "action": {
     "type": "click",
     "clickOffset": {
-      "x": 0,
-      "y": 0
+      "x": 544,
+      "y": 802
     }
   },
   "confidenceThreshold": 0.80,

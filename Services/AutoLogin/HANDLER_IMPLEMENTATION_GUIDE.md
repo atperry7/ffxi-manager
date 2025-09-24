@@ -589,7 +589,6 @@ public class ScreenDetectionHandler : IAutoLoginStepHandler
     private readonly IScreenshotCaptureService _screenshotService;
     private readonly ITemplateMatchingService _templateService;
     private readonly IUIAutomationService _automationService;
-    private readonly IScreenStateDetectionService _screenDetection;
     private readonly ILoggingService _loggingService;
 
     public LoginTaskStep HandledStep => LoginTaskStep.ClickLaunchButton;
@@ -603,45 +602,29 @@ public class ScreenDetectionHandler : IAutoLoginStepHandler
 
         try
         {
-            // Wait for the expected screen state
-            subtask.UpdateProgress(20, "Waiting for application screen...");
-            var screenState = await _screenDetection.WaitForStateAsync(
-                HandledStep,
+            // Use standardized detection pattern
+            var match = await WaitForScreenDetection(
+                "Application/element_name",
                 queueItem.WindowHandle,
-                TimeSpan.FromSeconds(subtask.EstimatedDurationSeconds * 2),
-                (progress, message) => subtask.UpdateProgress(progress, message),
-                cancellationToken);
+                "descriptive screen name",
+                cancellationToken,
+                timeoutSeconds: 30);
 
-            if (!screenState.IsValid || screenState.Confidence < 0.80f)
+            if (match.Confidence < 0.80f)
             {
-                subtask.Fail($"Could not detect expected screen state. Confidence: {screenState.Confidence:P}");
+                subtask.Fail($"Could not detect expected screen. Confidence: {match.Confidence:P}");
                 return;
             }
 
-            // Execute the default action for this state
-            subtask.UpdateProgress(60, "Performing action...");
-            await _screenDetection.ExecuteDefaultActionAsync(
-                queueItem.WindowHandle,
-                screenState,
-                cancellationToken);
+            // Perform action on detected element
+            subtask.UpdateProgress(60, "Clicking detected element...");
+            var screenshot = await _screenshotService.CaptureWindowAsync(queueItem.WindowHandle, cancellationToken);
+            var clickPoint = screenshot.ToScreenCoordinates(match.GetClickPoint());
+            await _automationService.ClickAsync(clickPoint, cancellationToken);
 
-            // Verify the action completed
+            // Verify action completed
             subtask.UpdateProgress(80, "Verifying action result...");
-            await Task.Delay(500, cancellationToken);
-
-            // Wait for transition to next state
-            var transitioned = await _screenDetection.WaitForTransitionAsync(
-                queueItem.WindowHandle,
-                HandledStep,
-                GetNextExpectedStep(),
-                TimeSpan.FromSeconds(5),
-                cancellationToken);
-
-            if (!transitioned)
-            {
-                subtask.Fail("Action did not result in expected screen transition");
-                return;
-            }
+            await Task.Delay(1000, cancellationToken);
 
             subtask.Complete();
         }
@@ -657,7 +640,112 @@ public class ScreenDetectionHandler : IAutoLoginStepHandler
             throw;
         }
     }
+
+    /// <summary>
+    /// STANDARDIZED SCREEN DETECTION PATTERN - Use this for ALL screen detection!
+    /// Checks every 1 second up to the specified timeout (default 30 seconds).
+    /// </summary>
+    private async Task<TemplateMatchResult> WaitForScreenDetection(
+        string templatePath,
+        IntPtr windowHandle,
+        string screenDescription,
+        CancellationToken cancellationToken,
+        int timeoutSeconds = 30,
+        float confidenceThreshold = 0.80f)
+    {
+        var attemptCount = 0;
+        var maxAttempts = timeoutSeconds;
+
+        await _loggingService.LogInfoAsync($"Waiting for {screenDescription} (max {timeoutSeconds}s, checking every 1s)");
+
+        while (attemptCount < maxAttempts)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            attemptCount++;
+
+            var screenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
+
+            if (screenshot != null && screenshot.IsValid)
+            {
+                var match = await _templateService.FindElementAsync(screenshot, templatePath, cancellationToken);
+
+                await _loggingService.LogDebugAsync($"{screenDescription} detection attempt {attemptCount}/{maxAttempts}: confidence {match.Confidence:P}");
+
+                // Success case
+                if (match.Confidence >= confidenceThreshold)
+                {
+                    await _loggingService.LogInfoAsync($"{screenDescription} detected successfully after {attemptCount} attempts (confidence: {match.Confidence:P})");
+                    return match;
+                }
+
+                // Progress indicator - show when we're getting close
+                if (match.Confidence >= 0.60f)
+                {
+                    await _loggingService.LogDebugAsync($"{screenDescription} partially detected (confidence: {match.Confidence:P}), continuing to wait...");
+                }
+            }
+            else
+            {
+                await _loggingService.LogDebugAsync($"Failed to capture window screenshot on attempt {attemptCount}/{maxAttempts}");
+            }
+
+            // Wait 1 second before next attempt (don't wait after last attempt)
+            if (attemptCount < maxAttempts)
+            {
+                await Task.Delay(1000, cancellationToken);
+            }
+        }
+
+        // Final attempt for diagnosis
+        var finalScreenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
+        if (finalScreenshot != null && finalScreenshot.IsValid)
+        {
+            var finalMatch = await _templateService.FindElementAsync(finalScreenshot, templatePath, cancellationToken);
+            await _loggingService.LogWarningAsync($"{screenDescription} detection timed out after {timeoutSeconds}s. Final confidence: {finalMatch.Confidence:P}");
+            return finalMatch;
+        }
+
+        throw new InvalidOperationException($"Failed to detect {screenDescription} after {timeoutSeconds} seconds");
+    }
 }
+```
+
+### 🎯 IMPORTANT: Standardized Screen Detection Pattern
+
+**ALL handlers MUST use the `WaitForScreenDetection` pattern shown above for consistency and reliability.**
+
+#### Key Benefits:
+- **Consistent Timing**: Always checks every 1 second (predictable for users)
+- **Robust Detection**: Default 30-second timeout accommodates slow systems
+- **Detailed Logging**: Debug logs show confidence progression
+- **Progress Tracking**: Shows partial matches (60%+ confidence)
+- **Final Diagnosis**: Always captures final confidence for troubleshooting
+
+#### Usage Examples:
+```csharp
+// Default usage - 30 seconds, 80% confidence
+var match = await WaitForScreenDetection(
+    "PlayOnline/member_selection_screen",
+    windowHandle,
+    "member selection screen",
+    cancellationToken);
+
+// Custom timeout for quick transitions
+var match = await WaitForScreenDetection(
+    "PlayOnline/login_button",
+    windowHandle,
+    "login button",
+    cancellationToken,
+    timeoutSeconds: 10);
+
+// Higher confidence for critical elements
+var match = await WaitForScreenDetection(
+    "PlayOnline/password_field",
+    windowHandle,
+    "password field",
+    cancellationToken,
+    timeoutSeconds: 20,
+    confidenceThreshold: 0.90f);
 ```
 
 ### Window-Relative Coordinate System

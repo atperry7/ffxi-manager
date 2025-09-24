@@ -1,0 +1,11 @@
+{
+  "name": "PlayOnline Play Screen",
+  "templatePath": "PlayOnline/play_screen",
+  "associatedStep": "CharacterSelection",
+  "action": {
+    "type": "click",
+    "clickOffset": { "x": 360, "y": 240 },
+    "description": "Play button"
+  },
+  "confidenceThreshold": 0.80
+}

@@ -126,11 +126,58 @@ Template JSON structure:
   "associatedStep": "LoginTaskStep",
   "action": {
     "type": "click",
-    "clickOffset": { "x": 0, "y": 0 }
+    "clickOffset": { "x": 30, "y": 15 }
   },
   "confidenceThreshold": 0.80
 }
 ```
+
+## Template Creation Strategy
+
+### Full-Context Screenshots (Recommended)
+
+**Use full application window screenshots** rather than small element crops for better accuracy and robustness.
+
+**Benefits:**
+- **Uniqueness**: Prevents matching similar elements in different contexts
+- **State Validation**: Ensures application is in the expected state before clicking
+- **Future-Proofing**: Handles complex UIs where similar elements exist
+- **Robustness**: Less sensitive to minor UI variations
+
+**Template Creation Process:**
+1. Take screenshot of the **entire application window** in the desired state
+2. Save as `Templates/[App]/[element_name].png`
+3. Identify the pixel coordinates of the clickable element within this image
+4. Set `clickOffset` to these absolute coordinates (relative to template top-left)
+
+**Coordinate System:**
+- `clickOffset` coordinates are **relative to template image top-left corner**
+- Template matching finds the window → adds offset to get click position
+- Example: If arrow button is at pixel (544, 802) in template image, use:
+  ```json
+  "clickOffset": { "x": 544, "y": 802 }
+  ```
+
+**Example - Windower Launch Arrow:**
+```json
+{
+  "name": "Windower Launch Arrow",
+  "templatePath": "Windower/launch_arrow",
+  "associatedStep": "ClickLaunchButton",
+  "action": {
+    "type": "click",
+    "clickOffset": { "x": 544, "y": 802 }  // Absolute position within template
+  },
+  "confidenceThreshold": 0.80
+}
+```
+
+### Small Element Crops (Alternative)
+
+Only use when full-context approach isn't suitable:
+- Template contains just the UI element to click
+- Use `clickOffset`: { "x": 0, "y": 0 } to click center
+- Or small relative offsets like { "x": 2, "y": -1 }
 
 ### 4. Register in DI Container
 Add to `Infrastructure/DependencyInjection.cs`:
@@ -140,6 +187,66 @@ services.AddTransient<IAutoLoginStepHandler, [StepName]Handler>();
 
 ### 5. Create Test File
 Location: `Testing/Services/AutoLogin/Handlers/[StepName]HandlerTests.cs`
+
+## Context Sharing Between Steps
+
+**CRITICAL**: Multi-step handlers must share context data between steps to pass information like ProcessId and WindowHandle.
+
+### Pattern: Persistent Context Storage
+```csharp
+public class MultiStepHandler : ILoginTaskHandler
+{
+    private readonly Dictionary<string, object> _contextStorage = new();
+
+    public async Task ExecuteAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
+    {
+        // Create or get execution context for shared data - use persistent context per queue item
+        var contextKey = $"ExecutionContext_{queueItem.Id}";
+        if (!_contextStorage.TryGetValue(contextKey, out var existingContext) || existingContext is not TaskExecutionContext context)
+        {
+            context = new TaskExecutionContext
+            {
+                QueueItem = queueItem,
+                Subtask = subtask,
+                CancellationToken = cancellationToken
+            };
+            _contextStorage[contextKey] = context;
+            await _loggingService.LogInfoAsync($"Created new execution context for queue item {queueItem.Id}");
+        }
+        else
+        {
+            // Update the subtask and cancellation token for the current step
+            context.Subtask = subtask;
+            context.CancellationToken = cancellationToken;
+            await _loggingService.LogInfoAsync($"Reusing existing execution context for queue item {queueItem.Id} (SharedData has {context.SharedData.Count} items)");
+        }
+
+        // Use context throughout the method...
+    }
+}
+```
+
+### Sharing Data Between Steps
+```csharp
+// Step 1: Store data
+context.SharedData["ProcessId"] = processId;
+context.SharedData["WindowHandle"] = windowHandle;
+
+// Step 2: Retrieve data
+if (!context.SharedData.TryGetValue("ProcessId", out var processIdObj) || processIdObj is not int processId)
+{
+    subtask.Fail("No process ID available from previous step");
+    return;
+}
+
+if (!context.SharedData.TryGetValue("WindowHandle", out var windowHandleObj) || windowHandleObj is not IntPtr windowHandle)
+{
+    subtask.Fail("No window handle available from previous step");
+    return;
+}
+```
+
+**Why This Matters**: Without context sharing, each step gets a fresh empty context, causing steps to fail silently when they can't find expected data from previous steps.
 
 ## Common Patterns
 
@@ -197,6 +304,9 @@ foreach (var template in templates)
 5. Call `subtask.Complete()` or `subtask.Fail()`
 6. Use window-relative coordinates
 7. Add null checks for screenshots
+8. **Use persistent context storage for multi-step handlers**
+9. **Validate context data at the start of each step**
+10. **Add logging for context creation/reuse for debugging**
 
 ### ❌ NEVER DO
 1. Don't manually set `subtask.Status`
@@ -205,6 +315,35 @@ foreach (var template in templates)
 4. Don't log sensitive data (passwords)
 5. Don't skip error handling
 6. Don't forget cancellationToken
+7. **Don't create new context for each step** - use persistent storage
+8. **Don't ignore context data validation** - always check for required data
+
+## Troubleshooting Common Issues
+
+### Silent Step Failures
+**Problem**: Handler steps complete in ~1 second without executing logic or producing expected results.
+
+**Cause**: Missing context data from previous steps causing early returns.
+
+**Solution**:
+1. Implement persistent context storage (see Context Sharing section above)
+2. Add validation logging for context data
+3. Check that `SharedData` contains expected keys from previous steps
+
+### Debug Logging Pattern
+```csharp
+// Add flow logging to track execution
+await _loggingService.LogInfoAsync($"[FLOW] Starting {subtask.TaskStep} for {queueItem.DisplayName}");
+await _loggingService.LogInfoAsync($"[FLOW] Context has {context.SharedData.Count} shared items");
+
+// Validate required context data
+if (!context.SharedData.TryGetValue("RequiredKey", out var data))
+{
+    await _loggingService.LogInfoAsync($"[FLOW] Missing required context data: RequiredKey");
+    subtask.Fail("Required data not available from previous step");
+    return;
+}
+```
 
 ## Quick Reference
 

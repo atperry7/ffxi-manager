@@ -1,0 +1,11 @@
+{
+  "name": "PlayOnline Main Screen",
+  "templatePath": "PlayOnline/main_screen",
+  "associatedStep": "CharacterSelection",
+  "action": {
+    "type": "click",
+    "clickOffset": { "x": 300, "y": 410 },
+    "description": "Final Fantasy XI button"
+  },
+  "confidenceThreshold": 0.80
+}

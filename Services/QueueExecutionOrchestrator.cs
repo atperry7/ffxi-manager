@@ -293,15 +293,38 @@ namespace FFXIManager.Services
                 // Execute login task using the task executor
                 await context.TaskExecutor.ExecuteAsync(item, combinedToken);
 
-                // Mark as completed if we got through all steps
+                // Check if task execution succeeded or failed
                 if (item.Status == AutoLoginQueueStatus.InProgress)
                 {
-                    item.Status = AutoLoginQueueStatus.Completed;
-                    item.EndTime = DateTime.Now;
-                    item.StatusMessage = "Login completed successfully";
+                    // Check the actual task status to determine if we succeeded
+                    if (item.Task?.Status == AutoLoginTaskStatus.Completed)
+                    {
+                        item.Status = AutoLoginQueueStatus.Completed;
+                        item.EndTime = DateTime.Now;
+                        item.StatusMessage = "Login completed successfully";
 
-                    await context.LoggingService.LogInfoAsync($"Completed login for {item.DisplayName}");
-                    ItemCompleted?.Invoke(this, new AutoLoginQueueItemEventArgs(item));
+                        await context.LoggingService.LogInfoAsync($"Completed login for {item.DisplayName}");
+                        ItemCompleted?.Invoke(this, new AutoLoginQueueItemEventArgs(item));
+                    }
+                    else if (item.Task?.Status == AutoLoginTaskStatus.Failed)
+                    {
+                        item.Status = AutoLoginQueueStatus.Failed;
+                        item.EndTime = DateTime.Now;
+                        item.StatusMessage = $"Login failed: {item.Task.ErrorMessage}";
+
+                        await context.LoggingService.LogInfoAsync($"Failed login for {item.DisplayName}: {item.Task.ErrorMessage}");
+                        ItemFailed?.Invoke(this, new AutoLoginQueueItemEventArgs(item));
+                    }
+                    else
+                    {
+                        // Unexpected state - mark as failed
+                        item.Status = AutoLoginQueueStatus.Failed;
+                        item.EndTime = DateTime.Now;
+                        item.StatusMessage = $"Login failed: Unexpected task status {item.Task?.Status}";
+
+                        await context.LoggingService.LogInfoAsync($"Failed login for {item.DisplayName}: Unexpected task status");
+                        ItemFailed?.Invoke(this, new AutoLoginQueueItemEventArgs(item));
+                    }
                 }
             }
             catch (OperationCanceledException)

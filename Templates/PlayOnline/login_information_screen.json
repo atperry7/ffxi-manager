@@ -1,0 +1,10 @@
+{
+  "name": "PlayOnline Login Information Screen",
+  "templatePath": "PlayOnline/login_information_screen",
+  "associatedStep": "PasswordEntry",
+  "action": {
+    "type": "click",
+    "clickOffset": { "x": 305, "y": 415 }
+  },
+  "confidenceThreshold": 0.80
+}

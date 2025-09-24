@@ -1,0 +1,15 @@
+{
+  "name": "PlayOnline Connect to PlayOnline Screen",
+  "templatePath": "PlayOnline/connect_to_playonline_screen",
+  "associatedStep": "PasswordEntry",
+  "action": {
+    "type": "click",
+    "clickOffset": { "x": 1034, "y": 520 },
+    "description": "Square Enix Password field"
+  },
+  "otpField": {
+    "x": 1034,
+    "y": 579
+  },
+  "confidenceThreshold": 0.80
+}

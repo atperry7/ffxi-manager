@@ -1,8 +1,10 @@
 using System;
+using System.Drawing;
 using System.Threading;
 using System.Threading.Tasks;
 using FFXIManager.Models;
 using FFXIManager.Services;
+using FFXIManager.Services.AutoLogin.ScreenDetection;
 
 namespace FFXIManager.Services.AutoLogin
 {
@@ -13,10 +15,17 @@ namespace FFXIManager.Services.AutoLogin
     public abstract class BaseLoginTaskHandler : ILoginTaskHandler
     {
         protected readonly ILoggingService _loggingService;
+        protected readonly IScreenshotCaptureService _screenshotService;
+        protected readonly ITemplateMatchingService _templateService;
 
-        protected BaseLoginTaskHandler(ILoggingService loggingService)
+        protected BaseLoginTaskHandler(
+            ILoggingService loggingService,
+            IScreenshotCaptureService screenshotService,
+            ITemplateMatchingService templateService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            _screenshotService = screenshotService ?? throw new ArgumentNullException(nameof(screenshotService));
+            _templateService = templateService ?? throw new ArgumentNullException(nameof(templateService));
         }
 
         public abstract LoginTaskStep TaskStep { get; }
@@ -210,6 +219,140 @@ namespace FFXIManager.Services.AutoLogin
         protected async Task LogSecureOperationAsync(string operation, string accountIdentifier)
         {
             await _loggingService.LogDebugAsync($"{operation} for account {accountIdentifier} (sensitive data masked)");
+        }
+
+        /// <summary>
+        /// Standardized screen detection method with consistent 1-second intervals and configurable timeout.
+        /// This should be the preferred method for all screen detection operations across all handlers.
+        /// </summary>
+        protected async Task<TemplateMatchResult> WaitForScreenDetection(
+            string templatePath,
+            IntPtr windowHandle,
+            string screenDescription,
+            CancellationToken cancellationToken,
+            int timeoutSeconds = 30,
+            float confidenceThreshold = 0.80f)
+        {
+            var attemptCount = 0;
+            var maxAttempts = timeoutSeconds;
+
+            await _loggingService.LogInfoAsync($"Waiting for {screenDescription} (max {timeoutSeconds}s, checking every 1s)");
+            await _loggingService.LogDebugAsync($"Window handle: 0x{windowHandle.ToInt64():X}, Template path: {templatePath}");
+
+            while (attemptCount < maxAttempts)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                attemptCount++;
+
+                try
+                {
+                    var screenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
+
+                    if (screenshot != null && screenshot.IsValid)
+                    {
+                        await _loggingService.LogDebugAsync($"Screenshot captured successfully: {screenshot.Width}x{screenshot.Height}, Window: '{screenshot.WindowTitle}'");
+
+                        var match = await _templateService.FindElementAsync(screenshot, templatePath, cancellationToken);
+
+                        await _loggingService.LogDebugAsync($"{screenDescription} detection attempt {attemptCount}/{maxAttempts}: confidence {match.Confidence:P}");
+
+                        // Success case
+                        if (match.Confidence >= confidenceThreshold)
+                        {
+                            await _loggingService.LogInfoAsync($"{screenDescription} detected successfully after {attemptCount} attempts (confidence: {match.Confidence:P})");
+                            return match;
+                        }
+
+                        // Progress indicator - show when we're getting close
+                        if (match.Confidence >= 0.60f)
+                        {
+                            await _loggingService.LogDebugAsync($"{screenDescription} partially detected (confidence: {match.Confidence:P}), continuing to wait...");
+                        }
+                    }
+                    else
+                    {
+                        var errorDetails = screenshot == null ? "Screenshot is null" : $"Screenshot invalid (IsValid: {screenshot.IsValid})";
+                        await _loggingService.LogWarningAsync($"Screenshot capture failed on attempt {attemptCount}/{maxAttempts}: {errorDetails}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await _loggingService.LogErrorAsync($"Exception during screenshot capture on attempt {attemptCount}/{maxAttempts}", ex);
+                }
+
+                // Wait 1 second before next attempt (don't wait after last attempt)
+                if (attemptCount < maxAttempts)
+                {
+                    await Task.Delay(1000, cancellationToken);
+                }
+            }
+
+            // Final attempt - capture what we have for final diagnosis
+            try
+            {
+                var finalScreenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
+                if (finalScreenshot != null && finalScreenshot.IsValid)
+                {
+                    var finalMatch = await _templateService.FindElementAsync(finalScreenshot, templatePath, cancellationToken);
+                    await _loggingService.LogWarningAsync($"{screenDescription} detection timed out after {timeoutSeconds}s. Final confidence: {finalMatch.Confidence:P}");
+                    return finalMatch;
+                }
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync($"Exception during final screenshot capture", ex);
+            }
+
+            // Complete failure case
+            await _loggingService.LogErrorAsync($"Failed to detect {screenDescription} after {timeoutSeconds} seconds - unable to capture final screenshot");
+            throw new InvalidOperationException($"Failed to detect {screenDescription} after {timeoutSeconds} seconds of waiting");
+        }
+
+        /// <summary>
+        /// Enhanced single-shot screenshot capture with detailed logging and retry capability.
+        /// Use this for immediate screenshot needs (before actions) rather than WaitForScreenDetection.
+        /// </summary>
+        protected async Task<WindowScreenshot> CaptureScreenshotWithLogging(
+            IntPtr windowHandle,
+            string purpose,
+            CancellationToken cancellationToken,
+            int retryCount = 2)
+        {
+            for (int attempt = 1; attempt <= retryCount + 1; attempt++)
+            {
+                try
+                {
+                    await _loggingService.LogDebugAsync($"Capturing screenshot for {purpose} (attempt {attempt}/{retryCount + 1})");
+
+                    var screenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
+
+                    if (screenshot != null && screenshot.IsValid)
+                    {
+                        await _loggingService.LogDebugAsync($"Screenshot captured successfully for {purpose}: {screenshot.Width}x{screenshot.Height}, Window: '{screenshot.WindowTitle}'");
+                        return screenshot;
+                    }
+
+                    var errorDetails = screenshot == null ? "Screenshot is null" : $"Screenshot invalid (IsValid: {screenshot.IsValid})";
+                    await _loggingService.LogWarningAsync($"Screenshot capture failed for {purpose} on attempt {attempt}: {errorDetails}");
+
+                    if (attempt <= retryCount)
+                    {
+                        await Task.Delay(500, cancellationToken); // Brief delay before retry
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await _loggingService.LogErrorAsync($"Exception during screenshot capture for {purpose} on attempt {attempt}", ex);
+
+                    if (attempt <= retryCount)
+                    {
+                        await Task.Delay(500, cancellationToken); // Brief delay before retry
+                    }
+                }
+            }
+
+            await _loggingService.LogErrorAsync($"Failed to capture screenshot for {purpose} after {retryCount + 1} attempts");
+            throw new InvalidOperationException($"Failed to capture screenshot for {purpose} after {retryCount + 1} attempts");
         }
     }
 }

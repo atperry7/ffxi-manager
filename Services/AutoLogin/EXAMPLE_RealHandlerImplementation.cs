@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FFXIManager.Models;
 using FFXIManager.Services;
+using FFXIManager.Services.AutoLogin.ScreenDetection;
 using FFXIManager.Infrastructure;
 
 namespace FFXIManager.Services.AutoLogin
@@ -34,8 +35,10 @@ namespace FFXIManager.Services.AutoLogin
 
         public ExampleWindowerLaunchHandler(
             ILoggingService loggingService,
+            IScreenshotCaptureService screenshotService,
+            ITemplateMatchingService templateService,
             IProcessUtilityService processUtilityService,
-            ISettingsService settingsService) : base(loggingService)
+            ISettingsService settingsService) : base(loggingService, screenshotService, templateService)
         {
             _processUtilityService = processUtilityService ?? throw new ArgumentNullException(nameof(processUtilityService));
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));

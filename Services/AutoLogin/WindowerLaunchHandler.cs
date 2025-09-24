@@ -16,34 +16,29 @@ namespace FFXIManager.Services.AutoLogin
     /// Handles Windower application launch and initial setup tasks.
     /// Responsible for: LaunchWindower, WaitForWindowerStart, VerifyWindowerLoaded, ClickLaunchButton
     /// </summary>
-    public class WindowerLaunchHandler : ILoginTaskHandler
+    public class WindowerLaunchHandler : BaseLoginTaskHandler
     {
-        private readonly ILoggingService _loggingService;
         private readonly IProcessUtilityService _processUtilityService;
         private readonly IExternalApplicationService _externalApplicationService;
-        private readonly IScreenshotCaptureService _screenshotService;
-        private readonly ITemplateMatchingService _templateService;
         private readonly IUIAutomationService _automationService;
 
         public WindowerLaunchHandler(
             ILoggingService loggingService,
-            IProcessUtilityService processUtilityService,
-            IExternalApplicationService externalApplicationService,
             IScreenshotCaptureService screenshotService,
             ITemplateMatchingService templateService,
+            IProcessUtilityService processUtilityService,
+            IExternalApplicationService externalApplicationService,
             IUIAutomationService automationService)
+            : base(loggingService, screenshotService, templateService)
         {
-            _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _processUtilityService = processUtilityService ?? throw new ArgumentNullException(nameof(processUtilityService));
             _externalApplicationService = externalApplicationService ?? throw new ArgumentNullException(nameof(externalApplicationService));
-            _screenshotService = screenshotService ?? throw new ArgumentNullException(nameof(screenshotService));
-            _templateService = templateService ?? throw new ArgumentNullException(nameof(templateService));
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
         }
 
-        public LoginTaskStep TaskStep => LoginTaskStep.LaunchWindower;
+        public override LoginTaskStep TaskStep => LoginTaskStep.LaunchWindower;
 
-        public bool CanHandle(AutoLoginSubtask subtask)
+        public override bool CanHandle(AutoLoginSubtask subtask)
         {
             return subtask.TaskStep switch
             {
@@ -55,44 +50,36 @@ namespace FFXIManager.Services.AutoLogin
             };
         }
 
-        public async Task ExecuteAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
+        protected override async Task ExecuteHandlerLogicAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
         {
-            await _loggingService.LogInfoAsync($"[FLOW] WindowerLaunchHandler.ExecuteAsync - Processing task step: {subtask.TaskStep} for {queueItem.DisplayName}");
+            await _loggingService.LogInfoAsync($"[FLOW] WindowerLaunchHandler.ExecuteHandlerLogicAsync - Processing task step: {subtask.TaskStep} for {queueItem.DisplayName}");
 
-            try
+            // Use the injected context directly - no need for internal context storage
+            await _loggingService.LogInfoAsync($"[FLOW] Using centralized context for queue item {queueItem.Id} (Data has {context.Data.Count} items)");
+
+            switch (subtask.TaskStep)
             {
-                // Use the injected context directly - no need for internal context storage
-                await _loggingService.LogInfoAsync($"[FLOW] Using centralized context for queue item {queueItem.Id} (Data has {context.Data.Count} items)");
+                case LoginTaskStep.LaunchWindower:
+                    await ExecuteLaunchWindowerAsync(subtask, queueItem, context, cancellationToken);
+                    break;
 
-                switch (subtask.TaskStep)
-                {
-                    case LoginTaskStep.LaunchWindower:
-                        await ExecuteLaunchWindowerAsync(subtask, queueItem, context, cancellationToken);
-                        break;
+                case LoginTaskStep.WaitForWindowerStart:
+                    await ExecuteWaitForWindowerStartAsync(subtask, queueItem, context, cancellationToken);
+                    break;
 
-                    case LoginTaskStep.WaitForWindowerStart:
-                        await ExecuteWaitForWindowerStartAsync(subtask, queueItem, context, cancellationToken);
-                        break;
+                case LoginTaskStep.VerifyWindowerLoaded:
+                    await ExecuteVerifyWindowerLoadedAsync(subtask, queueItem, context, cancellationToken);
+                    break;
 
-                    case LoginTaskStep.VerifyWindowerLoaded:
-                        await ExecuteVerifyWindowerLoadedAsync(subtask, queueItem, context, cancellationToken);
-                        break;
+                case LoginTaskStep.ClickLaunchButton:
+                    await ExecuteClickLaunchButtonAsync(subtask, queueItem, context, cancellationToken);
+                    break;
 
-                    case LoginTaskStep.ClickLaunchButton:
-                        await ExecuteClickLaunchButtonAsync(subtask, queueItem, context, cancellationToken);
-                        break;
-
-                    default:
-                        throw new NotSupportedException($"Task step {subtask.TaskStep} is not supported by WindowerLaunchHandler");
-                }
-
-                await _loggingService.LogDebugAsync($"Completed Windower task: {subtask.TaskStep} for {queueItem.DisplayName}");
+                default:
+                    throw new NotSupportedException($"Task step {subtask.TaskStep} is not supported by WindowerLaunchHandler");
             }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync($"Failed to execute Windower task {subtask.TaskStep} for {queueItem.DisplayName}", ex);
-                throw;
-            }
+
+            await _loggingService.LogDebugAsync($"Completed Windower task: {subtask.TaskStep} for {queueItem.DisplayName}");
         }
 
         private async Task ExecuteLaunchWindowerAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
@@ -342,17 +329,9 @@ namespace FFXIManager.Services.AutoLogin
                 await Task.Delay(2000, cancellationToken);
 
                 subtask.UpdateProgress(30, "Capturing window screenshot...");
-                await _loggingService.LogInfoAsync($"[FLOW] VerifyWindowerLoaded - Attempting to capture window screenshot for handle {windowHandle}...");
 
-                // Capture the window
-                var screenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
-                await _loggingService.LogInfoAsync($"[FLOW] VerifyWindowerLoaded - Screenshot capture result: {(screenshot?.IsValid == true ? "SUCCESS" : "FAILED")}");
-
-                if (screenshot == null || !screenshot.IsValid)
-                {
-                    subtask.Fail("Failed to capture Windower window screenshot");
-                    return;
-                }
+                // Capture the window using enhanced method
+                var screenshot = await CaptureScreenshotWithLogging(windowHandle, "Windower UI verification", cancellationToken);
 
                 subtask.UpdateProgress(50, "Scanning for UI elements...");
 
@@ -371,12 +350,7 @@ namespace FFXIManager.Services.AutoLogin
                     subtask.UpdateProgress(60, "UI still loading, retrying...");
                     await Task.Delay(3000, cancellationToken);
 
-                    screenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
-                    if (screenshot == null || !screenshot.IsValid)
-                    {
-                        subtask.Fail("Failed to recapture window screenshot");
-                        return;
-                    }
+                    screenshot = await CaptureScreenshotWithLogging(windowHandle, "Windower UI retry verification", cancellationToken);
 
                     launchArrowMatch = await _templateService.FindElementAsync(
                         screenshot,
@@ -435,16 +409,8 @@ namespace FFXIManager.Services.AutoLogin
 
                 subtask.UpdateProgress(30, "Capturing window screenshot...");
 
-                // Capture the window
-                var screenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
-
-                if (screenshot == null || !screenshot.IsValid)
-                {
-                    subtask.Fail("Failed to capture window screenshot for button click");
-                    return;
-                }
-
-                await _loggingService.LogDebugAsync($"Screenshot captured: {screenshot.Width}x{screenshot.Height}, Window bounds: {screenshot.WindowBounds}");
+                // Capture the window using enhanced method
+                var screenshot = await CaptureScreenshotWithLogging(windowHandle, "launch button click", cancellationToken);
 
                 subtask.UpdateProgress(45, "Locating launch button...");
 

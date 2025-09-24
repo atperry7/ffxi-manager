@@ -60,16 +60,16 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         }
 
         /// <summary>
-        /// Gets the click point based on template's click offset
+        /// Gets the click point based on template's click offset.
+        /// Click offset is relative to the top-left corner of the matched template area.
         /// </summary>
         public Point GetClickPoint()
         {
             if (Template == null) return Point.Empty;
 
-            var center = GetCenterPoint();
             return new Point(
-                center.X + (int)(Template.ClickOffset.X * Scale),
-                center.Y + (int)(Template.ClickOffset.Y * Scale)
+                WindowRelativePosition.X + Template.ClickOffset.X,
+                WindowRelativePosition.Y + Template.ClickOffset.Y
             );
         }
 
