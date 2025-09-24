@@ -22,7 +22,7 @@ namespace FFXIManager.Services.AutoLogin
         public abstract LoginTaskStep TaskStep { get; }
         public abstract bool CanHandle(AutoLoginSubtask subtask);
 
-        public async Task ExecuteAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
+        public async Task ExecuteAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
         {
             await _loggingService.LogDebugAsync($"Starting execution of {subtask.TaskStep} for {queueItem.DisplayName}");
 
@@ -32,7 +32,7 @@ namespace FFXIManager.Services.AutoLogin
                 ValidateInputs(subtask, queueItem);
 
                 // Execute the handler-specific logic with common patterns applied
-                await ExecuteHandlerLogicAsync(subtask, queueItem, cancellationToken);
+                await ExecuteHandlerLogicAsync(subtask, queueItem, context, cancellationToken);
 
                 await _loggingService.LogDebugAsync($"Successfully completed {subtask.TaskStep} for {queueItem.DisplayName}");
             }
@@ -52,7 +52,7 @@ namespace FFXIManager.Services.AutoLogin
         /// Implement the specific handler logic in derived classes.
         /// This method will be called with validated inputs and proper error handling in place.
         /// </summary>
-        protected abstract Task ExecuteHandlerLogicAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken);
+        protected abstract Task ExecuteHandlerLogicAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken);
 
         /// <summary>
         /// Validates common inputs. Override in derived classes for additional validation.

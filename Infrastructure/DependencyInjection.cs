@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Serilog;
 using FFXIManager.Services;
 using FFXIManager.Services.AutoLogin;
+using FFXIManager.Services.AutoLogin.ScreenDetection;
 using FFXIManager.Configuration;
 using FFXIManager.ViewModels;
 using FFXIManager;
@@ -52,6 +53,16 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<IHotkeyPerformanceMonitor, HotkeyPerformanceMonitor>();
             services.AddSingleton<IHotkeyActivationService, HotkeyActivationService>();
             services.AddSingleton<IPlayOnlineMemberAccountService, PlayOnlineMemberAccountService>();
+
+            // Screen detection services for AutoLogin
+            services.AddSingleton<IScreenshotCaptureService, ScreenshotCaptureService>();
+            services.AddSingleton<ITemplateMatchingService, TemplateMatchingService>();
+            services.AddSingleton<ITemplateManagementService, TemplateManagementService>();
+            services.AddSingleton<IUIAutomationService, UIAutomationService>();
+
+            // Context management service for AutoLogin
+            services.AddSingleton<IAutoLoginContextService, AutoLoginContextService>();
+
             // Auto-login handlers
             services.AddSingleton<ILoginTaskHandler, WindowerLaunchHandler>();
             services.AddSingleton<ILoginTaskHandler, PlayOnlineAuthHandler>();

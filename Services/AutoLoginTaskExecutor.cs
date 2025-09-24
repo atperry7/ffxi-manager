@@ -14,6 +14,7 @@ namespace FFXIManager.Services
     {
         private readonly ILoggingService _loggingService;
         private readonly ILoginTaskHandlerResolver _handlerResolver;
+        private readonly IAutoLoginContextService _contextService;
         private readonly object _lockObject = new();
         private CancellationTokenSource? _currentTaskCancellationTokenSource;
         private AutoLoginQueueItem? _currentQueueItem;
@@ -22,10 +23,12 @@ namespace FFXIManager.Services
 
         public AutoLoginTaskExecutor(
             ILoggingService loggingService,
-            ILoginTaskHandlerResolver handlerResolver)
+            ILoginTaskHandlerResolver handlerResolver,
+            IAutoLoginContextService contextService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _handlerResolver = handlerResolver ?? throw new ArgumentNullException(nameof(handlerResolver));
+            _contextService = contextService ?? throw new ArgumentNullException(nameof(contextService));
 
             // Default configuration
             SubtaskTimeoutSeconds = 30;
@@ -125,6 +128,9 @@ namespace FFXIManager.Services
                     {
                         task.Fail($"Subtask failed: {subtask.Name} - {subtask.ErrorMessage}");
                         OnTaskFailed(new AutoLoginTaskEventArgs(queueItem, task, task.ErrorMessage));
+
+                        // Clean up context when task fails due to subtask failure
+                        await _contextService.DisposeContextAsync(queueItem.Id.ToString());
                         return;
                     }
 
@@ -139,11 +145,17 @@ namespace FFXIManager.Services
                 task.Complete();
                 OnTaskCompleted(new AutoLoginTaskEventArgs(queueItem, task, "Task execution completed successfully"));
                 _loggingService.LogInfoAsync($"Auto-login task completed successfully for {queueItem.DisplayName}");
+
+                // Clean up context
+                await _contextService.DisposeContextAsync(queueItem.Id.ToString());
             }
             catch (OperationCanceledException)
             {
                 task.Cancel();
                 _loggingService.LogInfoAsync($"Auto-login task cancelled for {queueItem.DisplayName}");
+
+                // Clean up context
+                await _contextService.DisposeContextAsync(queueItem.Id.ToString());
                 throw;
             }
             catch (Exception ex)
@@ -152,6 +164,9 @@ namespace FFXIManager.Services
                 task.Fail(errorMessage);
                 OnTaskFailed(new AutoLoginTaskEventArgs(queueItem, task, errorMessage));
                 _loggingService.LogErrorAsync($"Auto-login task failed for {queueItem.DisplayName}", ex);
+
+                // Clean up context
+                await _contextService.DisposeContextAsync(queueItem.Id.ToString());
                 throw;
             }
         }
@@ -175,10 +190,19 @@ namespace FFXIManager.Services
                 // Execute subtask using appropriate handler
                 await ExecuteSubtaskWithHandlerAsync(queueItem, task, subtask, combinedCts.Token);
 
-                // Complete the subtask
-                subtask.Complete();
-                OnSubtaskCompleted(new AutoLoginSubtaskEventArgs(queueItem, task, subtask, "Subtask completed"));
-                _loggingService.LogDebugAsync($"Completed subtask: {subtask.Name} for {queueItem.DisplayName}");
+                // Complete the subtask only if it's not already in a terminal state
+                // Handlers may call subtask.Fail(), subtask.Skip(), etc. which should not be overridden
+                if (subtask.Status == AutoLoginSubtaskStatus.InProgress)
+                {
+                    subtask.Complete();
+                    OnSubtaskCompleted(new AutoLoginSubtaskEventArgs(queueItem, task, subtask, "Subtask completed"));
+                    _loggingService.LogDebugAsync($"Completed subtask: {subtask.Name} for {queueItem.DisplayName}");
+                }
+                else
+                {
+                    // Subtask was already completed by handler (failed, skipped, etc.)
+                    _loggingService.LogDebugAsync($"Subtask {subtask.Name} finished with status: {subtask.Status} for {queueItem.DisplayName}");
+                }
             }
             catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
             {
@@ -252,8 +276,9 @@ namespace FFXIManager.Services
 
                 try
                 {
-                    // Execute the actual handler logic
-                    await handler.ExecuteAsync(subtask, queueItem, cancellationToken);
+                    // Get context for this queue item and execute the actual handler logic
+                    var context = _contextService.GetContext(queueItem.Id.ToString());
+                    await handler.ExecuteAsync(subtask, queueItem, context, cancellationToken);
                     break; // Success, exit loop
                 }
                 catch (OperationCanceledException)

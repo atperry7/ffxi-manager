@@ -39,7 +39,7 @@ namespace FFXIManager.Services.AutoLogin
             };
         }
 
-        public async Task ExecuteAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
+        public async Task ExecuteAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
         {
             await _loggingService.LogDebugAsync($"Executing PlayOnline auth task: {subtask.TaskStep} for {queueItem.DisplayName}");
 

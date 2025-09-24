@@ -55,25 +55,25 @@ namespace FFXIManager.Services.AutoLogin
             };
         }
 
-        protected override async Task ExecuteHandlerLogicAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
+        protected override async Task ExecuteHandlerLogicAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
         {
             // Route to specific implementation based on task step
             switch (subtask.TaskStep)
             {
                 case LoginTaskStep.LaunchWindower:
-                    await ExecuteLaunchWindowerRealAsync(subtask, queueItem, cancellationToken);
+                    await ExecuteLaunchWindowerRealAsync(subtask, queueItem, context, cancellationToken);
                     break;
 
                 case LoginTaskStep.WaitForWindowerStart:
-                    await ExecuteWaitForWindowerStartRealAsync(subtask, queueItem, cancellationToken);
+                    await ExecuteWaitForWindowerStartRealAsync(subtask, queueItem, context, cancellationToken);
                     break;
 
                 case LoginTaskStep.VerifyWindowerLoaded:
-                    await ExecuteVerifyWindowerLoadedRealAsync(subtask, queueItem, cancellationToken);
+                    await ExecuteVerifyWindowerLoadedRealAsync(subtask, queueItem, context, cancellationToken);
                     break;
 
                 case LoginTaskStep.ClickLaunchButton:
-                    await ExecuteClickLaunchButtonRealAsync(subtask, queueItem, cancellationToken);
+                    await ExecuteClickLaunchButtonRealAsync(subtask, queueItem, context, cancellationToken);
                     break;
 
                 default:
@@ -83,7 +83,7 @@ namespace FFXIManager.Services.AutoLogin
 
         #region Real Implementation Examples
 
-        private async Task ExecuteLaunchWindowerRealAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
+        private async Task ExecuteLaunchWindowerRealAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
         {
             await UpdateProgressAsync(subtask, 10, "Checking Windower installation...");
 
@@ -123,7 +123,7 @@ namespace FFXIManager.Services.AutoLogin
             await UpdateProgressAsync(subtask, 100, "Windower launched successfully");
         }
 
-        private async Task ExecuteWaitForWindowerStartRealAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
+        private async Task ExecuteWaitForWindowerStartRealAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
         {
             await UpdateProgressAsync(subtask, 20, "Monitoring for Windower window...");
 
@@ -166,7 +166,7 @@ namespace FFXIManager.Services.AutoLogin
             }
         }
 
-        private async Task ExecuteVerifyWindowerLoadedRealAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
+        private async Task ExecuteVerifyWindowerLoadedRealAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
         {
             await UpdateProgressAsync(subtask, 15, "Waiting for Windower UI initialization...");
 
@@ -212,7 +212,7 @@ namespace FFXIManager.Services.AutoLogin
             await UpdateProgressAsync(subtask, 100, "Windower UI fully loaded and ready for interaction");
         }
 
-        private async Task ExecuteClickLaunchButtonRealAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
+        private async Task ExecuteClickLaunchButtonRealAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
         {
             await UpdateProgressAsync(subtask, 15, "Focusing Windower window...");
 

@@ -1,8 +1,13 @@
 using System;
+using System.Diagnostics;
+using System.Drawing;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using FFXIManager.Models;
 using FFXIManager.Services;
+using FFXIManager.Services.AutoLogin.ScreenDetection;
 using FFXIManager.Infrastructure;
 
 namespace FFXIManager.Services.AutoLogin
@@ -15,13 +20,25 @@ namespace FFXIManager.Services.AutoLogin
     {
         private readonly ILoggingService _loggingService;
         private readonly IProcessUtilityService _processUtilityService;
+        private readonly IExternalApplicationService _externalApplicationService;
+        private readonly IScreenshotCaptureService _screenshotService;
+        private readonly ITemplateMatchingService _templateService;
+        private readonly IUIAutomationService _automationService;
 
         public WindowerLaunchHandler(
             ILoggingService loggingService,
-            IProcessUtilityService processUtilityService)
+            IProcessUtilityService processUtilityService,
+            IExternalApplicationService externalApplicationService,
+            IScreenshotCaptureService screenshotService,
+            ITemplateMatchingService templateService,
+            IUIAutomationService automationService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _processUtilityService = processUtilityService ?? throw new ArgumentNullException(nameof(processUtilityService));
+            _externalApplicationService = externalApplicationService ?? throw new ArgumentNullException(nameof(externalApplicationService));
+            _screenshotService = screenshotService ?? throw new ArgumentNullException(nameof(screenshotService));
+            _templateService = templateService ?? throw new ArgumentNullException(nameof(templateService));
+            _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
         }
 
         public LoginTaskStep TaskStep => LoginTaskStep.LaunchWindower;
@@ -38,28 +55,31 @@ namespace FFXIManager.Services.AutoLogin
             };
         }
 
-        public async Task ExecuteAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
+        public async Task ExecuteAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
         {
-            await _loggingService.LogDebugAsync($"Executing Windower task: {subtask.TaskStep} for {queueItem.DisplayName}");
+            await _loggingService.LogInfoAsync($"[FLOW] WindowerLaunchHandler.ExecuteAsync - Processing task step: {subtask.TaskStep} for {queueItem.DisplayName}");
 
             try
             {
+                // Use the injected context directly - no need for internal context storage
+                await _loggingService.LogInfoAsync($"[FLOW] Using centralized context for queue item {queueItem.Id} (Data has {context.Data.Count} items)");
+
                 switch (subtask.TaskStep)
                 {
                     case LoginTaskStep.LaunchWindower:
-                        await ExecuteLaunchWindowerAsync(subtask, queueItem, cancellationToken);
+                        await ExecuteLaunchWindowerAsync(subtask, queueItem, context, cancellationToken);
                         break;
 
                     case LoginTaskStep.WaitForWindowerStart:
-                        await ExecuteWaitForWindowerStartAsync(subtask, queueItem, cancellationToken);
+                        await ExecuteWaitForWindowerStartAsync(subtask, queueItem, context, cancellationToken);
                         break;
 
                     case LoginTaskStep.VerifyWindowerLoaded:
-                        await ExecuteVerifyWindowerLoadedAsync(subtask, queueItem, cancellationToken);
+                        await ExecuteVerifyWindowerLoadedAsync(subtask, queueItem, context, cancellationToken);
                         break;
 
                     case LoginTaskStep.ClickLaunchButton:
-                        await ExecuteClickLaunchButtonAsync(subtask, queueItem, cancellationToken);
+                        await ExecuteClickLaunchButtonAsync(subtask, queueItem, context, cancellationToken);
                         break;
 
                     default:
@@ -75,123 +95,452 @@ namespace FFXIManager.Services.AutoLogin
             }
         }
 
-        private async Task ExecuteLaunchWindowerAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
+        private async Task ExecuteLaunchWindowerAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
         {
-            // Enhanced simulation with realistic timing and behaviors
-            subtask.UpdateProgress(10, "Checking Windower installation...");
-            await Task.Delay(300, cancellationToken);
 
-            // Simulate validation of Windower path
-            subtask.UpdateProgress(25, "Locating Windower executable...");
-            await Task.Delay(600, cancellationToken);
+            await _loggingService.LogInfoAsync($"[FLOW] Starting ExecuteLaunchWindowerAsync for {queueItem.DisplayName}");
+            subtask.Start();
 
-            if (string.IsNullOrEmpty(queueItem.Account?.AccountName))
+            try
             {
-                throw new InvalidOperationException("Account name is required for Windower launch");
+                if (string.IsNullOrEmpty(queueItem.Account?.AccountName))
+                {
+                    subtask.Fail("Account name is required for Windower launch");
+                    return;
+                }
+
+                subtask.UpdateProgress(10, "Locating Windower application...");
+
+                // Get all external applications and find Windower
+                var applications = await _externalApplicationService.GetApplicationsAsync();
+                var windowerApp = applications.FirstOrDefault(app =>
+                    app.Name.Contains("Windower", StringComparison.OrdinalIgnoreCase) ||
+                    app.ExecutablePath.Contains("windower", StringComparison.OrdinalIgnoreCase));
+
+                if (windowerApp == null)
+                {
+                    subtask.Fail("Windower application not configured. Please add Windower to External Applications.");
+                    return;
+                }
+
+                subtask.UpdateProgress(30, "Validating Windower configuration...");
+
+                // Check if Windower is already running
+                var existingProcesses = await _processUtilityService.GetProcessesByNamesAsync(new[] { "windower" });
+                if (existingProcesses.Any())
+                {
+                    var processId = existingProcesses.First().ProcessId;
+                    subtask.UpdateProgress(100, $"Windower already running (PID: {processId})");
+                    context.SetData("ProcessId", processId);
+                    await GetWindowHandleForProcess(context, processId);
+                    subtask.Complete();
+                    return;
+                }
+
+                subtask.UpdateProgress(50, $"Starting Windower for {queueItem.Account.AccountName}...");
+
+                // Launch Windower
+                bool launchSuccess = await _externalApplicationService.LaunchApplicationAsync(windowerApp);
+                if (!launchSuccess)
+                {
+                    subtask.Fail("Failed to launch Windower application");
+                    return;
+                }
+
+                subtask.UpdateProgress(70, "Waiting for process startup...");
+
+                // Wait for process to start and get the PID
+                var timeout = DateTime.Now.AddSeconds(10);
+                int newProcessId = 0;
+
+                while (DateTime.Now < timeout && !cancellationToken.IsCancellationRequested)
+                {
+                    var processes = await _processUtilityService.GetProcessesByNamesAsync(new[] { "windower" });
+                    if (processes.Any())
+                    {
+                        newProcessId = processes.First().ProcessId;
+                        break;
+                    }
+                    await Task.Delay(500, cancellationToken);
+                }
+
+                if (newProcessId == 0)
+                {
+                    subtask.Fail("Windower process did not start within timeout period");
+                    return;
+                }
+
+                context.SetData("ProcessId", newProcessId);
+                subtask.UpdateProgress(90, $"Windower started (PID: {newProcessId})");
+
+                // Get window handle for the process
+                await GetWindowHandleForProcess(context, newProcessId);
+
+                subtask.UpdateProgress(100, "Windower launch completed successfully");
+                await _loggingService.LogInfoAsync($"[FLOW] ExecuteLaunchWindowerAsync completed successfully");
+                subtask.Complete();
             }
-
-            subtask.UpdateProgress(40, $"Building launch parameters for {queueItem.Account.AccountName}...");
-            await Task.Delay(400, cancellationToken);
-
-            subtask.UpdateProgress(60, "Validating profile configuration...");
-            await Task.Delay(500, cancellationToken);
-
-            subtask.UpdateProgress(80, "Starting Windower process...");
-            await Task.Delay(800, cancellationToken);
-
-            subtask.UpdateProgress(100, "Windower launched successfully - PID simulated: 12345");
-
-            // TODO: Replace with actual Windower launch logic
-            // - Get Windower executable path from settings
-            // - Build command line arguments for the specific profile/character
-            // - Launch process using ProcessUtilityService
-            // - Store process reference for monitoring
-        }
-
-        private async Task ExecuteWaitForWindowerStartAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
-        {
-            // Enhanced simulation with process monitoring behaviors
-            subtask.UpdateProgress(20, "Monitoring for Windower process startup...");
-            await Task.Delay(800, cancellationToken);
-
-            // Simulate multiple checks for process startup
-            for (int attempt = 1; attempt <= 3; attempt++)
+            catch (OperationCanceledException)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var progress = 20 + (attempt * 20);
-                subtask.UpdateProgress(progress, $"Process check attempt {attempt}/3...");
-                await Task.Delay(600, cancellationToken);
+                subtask.Cancel();
+                throw;
             }
-
-            subtask.UpdateProgress(85, "Windower process detected - verifying response...");
-            await Task.Delay(700, cancellationToken);
-
-            subtask.UpdateProgress(100, "Windower startup confirmed and responsive");
-
-            // TODO: Replace with actual Windower process detection
-            // - Monitor for Windower window creation
-            // - Verify process is responding
-            // - Wait for UI elements to become available
+            catch (Exception ex)
+            {
+                subtask.Fail($"Failed to launch Windower: {ex.Message}");
+                await _loggingService.LogErrorAsync($"WindowerLaunchHandler.ExecuteLaunchWindowerAsync failed for {queueItem.Account?.AccountName}", ex);
+                throw;
+            }
         }
 
-        private async Task ExecuteVerifyWindowerLoadedAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
+        private async Task GetWindowHandleForProcess(IAutoLoginContext context, int processId)
         {
-            // Enhanced simulation with detailed UI verification steps
-            subtask.UpdateProgress(15, "Waiting for Windower UI initialization...");
-            await Task.Delay(900, cancellationToken);
+            // Try to get the main window handle
+            var windows = await _processUtilityService.GetProcessWindowsAsync(processId);
+            var mainWindow = windows.FirstOrDefault(w => !string.IsNullOrEmpty(w.Title));
 
-            subtask.UpdateProgress(30, "Scanning for main window elements...");
-            await Task.Delay(600, cancellationToken);
-
-            subtask.UpdateProgress(45, "Verifying Launch button availability...");
-            await Task.Delay(500, cancellationToken);
-
-            subtask.UpdateProgress(60, "Checking profile dropdown state...");
-            await Task.Delay(400, cancellationToken);
-
-            subtask.UpdateProgress(75, $"Validating profile: {queueItem.Account?.AccountName ?? "Unknown"}...");
-            await Task.Delay(500, cancellationToken);
-
-            subtask.UpdateProgress(90, "Verifying all UI elements are interactive...");
-            await Task.Delay(400, cancellationToken);
-
-            subtask.UpdateProgress(100, "Windower UI fully loaded and ready for interaction");
-
-            // TODO: Replace with actual Windower UI verification
-            // - Check for specific UI elements (Launch button, profile dropdown, etc.)
-            // - Verify Windower is in expected state
-            // - Handle potential loading screens or splash screens
+            if (mainWindow != null)
+            {
+                context.SetData("WindowHandle", mainWindow.Handle);
+                await _loggingService.LogDebugAsync($"Found Windower window: {mainWindow.Title}");
+            }
         }
 
-        private async Task ExecuteClickLaunchButtonAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
+        private async Task ExecuteWaitForWindowerStartAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
         {
-            // Enhanced simulation with realistic UI interaction timing
-            subtask.UpdateProgress(15, "Focusing Windower window...");
-            await Task.Delay(300, cancellationToken);
 
-            subtask.UpdateProgress(30, "Locating Launch button coordinates...");
-            await Task.Delay(400, cancellationToken);
+            await _loggingService.LogInfoAsync($"[FLOW] Starting ExecuteWaitForWindowerStartAsync");
+            subtask.Start();
+            await _loggingService.LogInfoAsync($"[FLOW] ExecuteWaitForWindowerStartAsync - subtask.Start() completed");
 
-            subtask.UpdateProgress(45, "Verifying button is enabled and clickable...");
-            await Task.Delay(350, cancellationToken);
+            try
+            {
+                var processId = context.GetValueData<int>("ProcessId");
+                if (processId == 0)
+                {
+                    subtask.Fail("No Windower process ID available from previous step");
+                    return;
+                }
 
-            subtask.UpdateProgress(60, "Executing button click action...");
-            await Task.Delay(200, cancellationToken);
+                subtask.UpdateProgress(20, "Monitoring Windower process startup...");
 
-            subtask.UpdateProgress(75, "Monitoring for PlayOnline process launch...");
-            await Task.Delay(600, cancellationToken);
+                // Wait for process to become responsive
+                var timeout = DateTime.Now.AddSeconds(15);
+                bool isResponsive = false;
 
-            subtask.UpdateProgress(90, "Confirming PlayOnline startup initiated...");
-            await Task.Delay(500, cancellationToken);
+                while (DateTime.Now < timeout && !cancellationToken.IsCancellationRequested)
+                {
+                    await _loggingService.LogInfoAsync($"[FLOW] WaitForWindowerStart - Checking process {processId} responsiveness...");
 
-            subtask.UpdateProgress(100, "Launch successful - PlayOnline starting (simulated PID: 67890)");
+                    // Check if process is still running
+                    if (!_processUtilityService.IsProcessRunning(processId))
+                    {
+                        subtask.Fail("Windower process terminated unexpectedly");
+                        return;
+                    }
 
-            // TODO: Replace with actual UI automation
-            // - Locate Launch button using UI automation or screen coordinates
-            // - Ensure button is clickable and not disabled
-            // - Perform click action
-            // - Wait for PlayOnline to begin launching
+                    // Get process info to check responsiveness
+                    await _loggingService.LogInfoAsync($"[FLOW] WaitForWindowerStart - Getting process info for PID {processId}...");
+
+                    try
+                    {
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                        var combinedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token).Token;
+                        var processInfo = await _processUtilityService.GetProcessInfoAsync(processId).WaitAsync(combinedToken);
+                        await _loggingService.LogInfoAsync($"[FLOW] WaitForWindowerStart - Process info received, IsResponding: {processInfo?.IsResponding}");
+
+                        if (processInfo?.IsResponding == true)
+                        {
+                            isResponsive = true;
+                            break;
+                        }
+                    }
+                    catch (TimeoutException)
+                    {
+                        await _loggingService.LogInfoAsync($"[FLOW] WaitForWindowerStart - GetProcessInfoAsync timed out after 5 seconds");
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        await _loggingService.LogInfoAsync($"[FLOW] WaitForWindowerStart - GetProcessInfoAsync was cancelled");
+                        break;
+                    }
+
+                    subtask.UpdateProgress(20 + (int)((DateTime.Now - timeout.AddSeconds(-15)).TotalSeconds * 4),
+                        "Waiting for process to become responsive...");
+                    await Task.Delay(500, cancellationToken);
+                }
+
+                if (!isResponsive)
+                {
+                    subtask.Fail("Windower process did not become responsive within timeout");
+                    return;
+                }
+
+                subtask.UpdateProgress(60, "Process responsive, waiting for main window...");
+
+                // Wait for main window to appear
+                timeout = DateTime.Now.AddSeconds(10);
+                while (DateTime.Now < timeout && !cancellationToken.IsCancellationRequested)
+                {
+                    await _loggingService.LogInfoAsync($"[FLOW] WaitForWindowerStart - Looking for main window for PID {processId}...");
+                    var windows = await _processUtilityService.GetProcessWindowsAsync(processId);
+                    await _loggingService.LogInfoAsync($"[FLOW] WaitForWindowerStart - Found {windows?.Count() ?? 0} windows");
+                    var mainWindow = windows.FirstOrDefault(w => !string.IsNullOrEmpty(w.Title) && w.IsVisible);
+
+                    if (mainWindow != null)
+                    {
+                        context.SetData("WindowHandle", mainWindow.Handle);
+                        subtask.UpdateProgress(80, $"Main window detected: {mainWindow.Title}");
+                        break;
+                    }
+
+                    await Task.Delay(500, cancellationToken);
+                }
+
+                if (!context.HasData("WindowHandle"))
+                {
+                    subtask.Fail("Windower main window not found within timeout");
+                    return;
+                }
+
+                subtask.UpdateProgress(100, "Windower startup completed and window available");
+                await _loggingService.LogInfoAsync($"[FLOW] ExecuteWaitForWindowerStartAsync completed successfully");
+                subtask.Complete();
+            }
+            catch (OperationCanceledException)
+            {
+                subtask.Cancel();
+                throw;
+            }
+            catch (Exception ex)
+            {
+                subtask.Fail($"Error waiting for Windower startup: {ex.Message}");
+                await _loggingService.LogErrorAsync($"WindowerLaunchHandler.ExecuteWaitForWindowerStartAsync failed", ex);
+                throw;
+            }
+        }
+
+        private async Task ExecuteVerifyWindowerLoadedAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
+        {
+
+            await _loggingService.LogInfoAsync($"[FLOW] Starting ExecuteVerifyWindowerLoadedAsync");
+            subtask.Start();
+            await _loggingService.LogInfoAsync($"[FLOW] ExecuteVerifyWindowerLoadedAsync - subtask.Start() completed");
+
+            try
+            {
+                var windowHandle = context.GetValueData<IntPtr>("WindowHandle");
+                if (windowHandle == IntPtr.Zero)
+                {
+                    subtask.Fail("No Windower window handle available from previous step");
+                    return;
+                }
+
+                subtask.UpdateProgress(15, "Waiting for Windower UI initialization...");
+
+                // Wait a moment for UI to stabilize
+                await Task.Delay(2000, cancellationToken);
+
+                subtask.UpdateProgress(30, "Capturing window screenshot...");
+                await _loggingService.LogInfoAsync($"[FLOW] VerifyWindowerLoaded - Attempting to capture window screenshot for handle {windowHandle}...");
+
+                // Capture the window
+                var screenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
+                await _loggingService.LogInfoAsync($"[FLOW] VerifyWindowerLoaded - Screenshot capture result: {(screenshot?.IsValid == true ? "SUCCESS" : "FAILED")}");
+
+                if (screenshot == null || !screenshot.IsValid)
+                {
+                    subtask.Fail("Failed to capture Windower window screenshot");
+                    return;
+                }
+
+                subtask.UpdateProgress(50, "Scanning for UI elements...");
+
+                // Try to find the launch arrow to verify UI is loaded
+                await _loggingService.LogInfoAsync($"[FLOW] VerifyWindowerLoaded - Starting template matching for launch arrow...");
+                var launchArrowMatch = await _templateService.FindElementAsync(
+                    screenshot,
+                    "Windower/launch_arrow",
+                    cancellationToken);
+                await _loggingService.LogInfoAsync($"[FLOW] VerifyWindowerLoaded - Template matching completed, confidence: {launchArrowMatch.Confidence:F3}");
+                await _loggingService.LogInfoAsync($"[DEBUG] Screenshot size: {screenshot.Width}x{screenshot.Height}, Template threshold: 0.80");
+
+                if (launchArrowMatch.Confidence < 0.70f)
+                {
+                    // UI might still be loading, wait a bit more and try again
+                    subtask.UpdateProgress(60, "UI still loading, retrying...");
+                    await Task.Delay(3000, cancellationToken);
+
+                    screenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
+                    if (screenshot == null || !screenshot.IsValid)
+                    {
+                        subtask.Fail("Failed to recapture window screenshot");
+                        return;
+                    }
+
+                    launchArrowMatch = await _templateService.FindElementAsync(
+                        screenshot,
+                        "Windower/launch_arrow",
+                        cancellationToken);
+                }
+
+                subtask.UpdateProgress(80, "Verifying UI element visibility...");
+
+                if (launchArrowMatch.Confidence >= 0.70f)
+                {
+                    subtask.UpdateProgress(100, $"Windower UI loaded and ready (confidence: {launchArrowMatch.Confidence:P})");
+                    await _loggingService.LogInfoAsync($"[FLOW] ExecuteVerifyWindowerLoadedAsync completed successfully - UI ready with confidence {launchArrowMatch.Confidence:P}");
+                    subtask.Complete();
+                }
+                else
+                {
+                    subtask.Fail($"Launch button not found or not ready (confidence: {launchArrowMatch.Confidence:P})");
+                    return;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                subtask.Cancel();
+                throw;
+            }
+            catch (Exception ex)
+            {
+                subtask.Fail($"Error verifying Windower UI: {ex.Message}");
+                await _loggingService.LogErrorAsync($"WindowerLaunchHandler.ExecuteVerifyWindowerLoadedAsync failed", ex);
+                throw;
+            }
+        }
+
+        private async Task ExecuteClickLaunchButtonAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
+        {
+
+            await _loggingService.LogInfoAsync($"[FLOW] Starting ExecuteClickLaunchButtonAsync");
+            subtask.Start();
+            await _loggingService.LogInfoAsync($"[FLOW] ExecuteClickLaunchButtonAsync - subtask.Start() completed");
+
+            try
+            {
+                var windowHandle = context.GetValueData<IntPtr>("WindowHandle");
+                if (windowHandle == IntPtr.Zero)
+                {
+                    subtask.Fail("No Windower window handle available from previous step");
+                    return;
+                }
+
+                subtask.UpdateProgress(15, "Focusing Windower window...");
+
+                // Ensure window focus with additional validation
+                await _automationService.EnsureWindowFocusAsync(windowHandle, cancellationToken);
+                await Task.Delay(500, cancellationToken); // Allow window to fully focus
+
+                subtask.UpdateProgress(30, "Capturing window screenshot...");
+
+                // Capture the window
+                var screenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
+
+                if (screenshot == null || !screenshot.IsValid)
+                {
+                    subtask.Fail("Failed to capture window screenshot for button click");
+                    return;
+                }
+
+                await _loggingService.LogDebugAsync($"Screenshot captured: {screenshot.Width}x{screenshot.Height}, Window bounds: {screenshot.WindowBounds}");
+
+                subtask.UpdateProgress(45, "Locating launch button...");
+
+                // Find the launch arrow button
+                var launchArrowMatch = await _templateService.FindElementAsync(
+                    screenshot,
+                    "Windower/launch_arrow",
+                    cancellationToken);
+
+                await _loggingService.LogDebugAsync($"Template match result: Position={launchArrowMatch.WindowRelativePosition}, Size={launchArrowMatch.MatchSize}, Confidence={launchArrowMatch.Confidence:F3}");
+
+                if (launchArrowMatch.Confidence < 0.80f)
+                {
+                    subtask.Fail($"Launch button not found or not clearly visible (confidence: {launchArrowMatch.Confidence:P})");
+                    return;
+                }
+
+                subtask.UpdateProgress(60, "Executing button click...");
+
+                // Calculate click coordinates with enhanced logging
+                var windowRelativeClickPoint = launchArrowMatch.GetClickPoint();
+                var clickPoint = screenshot.ToScreenCoordinates(windowRelativeClickPoint);
+
+                await _loggingService.LogDebugAsync($"Click coordinates: Window-relative={windowRelativeClickPoint}, Screen={clickPoint}");
+
+                // Validate click coordinates are within reasonable bounds
+                if (clickPoint.X < 0 || clickPoint.Y < 0 || clickPoint.X > 3840 || clickPoint.Y > 2160)
+                {
+                    subtask.Fail($"Calculated click coordinates are invalid: {clickPoint}");
+                    return;
+                }
+
+                // Move mouse to position first for visual confirmation
+                await _automationService.MoveMouseAsync(clickPoint, cancellationToken);
+                await Task.Delay(200, cancellationToken);
+
+                // Perform the click with additional error handling
+                try
+                {
+                    await _automationService.ClickAsync(clickPoint, cancellationToken);
+                    await _loggingService.LogDebugAsync($"Click executed successfully at {clickPoint}");
+                }
+                catch (Exception clickEx)
+                {
+                    subtask.Fail($"Click execution failed: {clickEx.Message}");
+                    await _loggingService.LogErrorAsync($"Click failed at coordinates {clickPoint}", clickEx);
+                    return;
+                }
+
+                subtask.UpdateProgress(75, "Waiting for PlayOnline to start...");
+
+                // Wait a moment for PlayOnline to begin launching
+                await Task.Delay(2000, cancellationToken);
+
+                // Monitor for PlayOnline process
+                var timeout = DateTime.Now.AddSeconds(10);
+                bool polFound = false;
+
+                while (DateTime.Now < timeout && !cancellationToken.IsCancellationRequested)
+                {
+                    var polProcesses = await _processUtilityService.GetProcessesByNamesAsync(new[] { "pol" });
+                    if (polProcesses.Any())
+                    {
+                        polFound = true;
+                        var polProcess = polProcesses.First();
+                        subtask.UpdateProgress(90, $"PlayOnline started (PID: {polProcess.ProcessId})");
+                        await _loggingService.LogDebugAsync($"PlayOnline process detected: PID {polProcess.ProcessId}");
+                        break;
+                    }
+
+                    await Task.Delay(500, cancellationToken);
+                }
+
+                if (polFound)
+                {
+                    subtask.UpdateProgress(100, "Launch button clicked successfully - PlayOnline starting");
+                    subtask.Complete();
+                }
+                else
+                {
+                    // Even if we don't detect POL immediately, the click was successful
+                    subtask.UpdateProgress(100, "Launch button clicked - PlayOnline may be starting");
+                    subtask.Complete();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                subtask.Cancel();
+                throw;
+            }
+            catch (Exception ex)
+            {
+                subtask.Fail($"Error clicking launch button: {ex.Message}");
+                await _loggingService.LogErrorAsync($"WindowerLaunchHandler.ExecuteClickLaunchButtonAsync failed", ex);
+                throw;
+            }
         }
     }
 }
