@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
@@ -496,94 +496,6 @@ namespace FFXIManager.Services.AutoLogin
 
             await UpdateProgressWithPhaseAsync(subtask, "authentication", 100, $"{description} clicked successfully");
             await _loggingService.LogDebugAsync($"{description} clicked at {screenPoint}");
-        }
-
-        /// <summary>
-        /// Legacy method - DEPRECATED: Use WaitForScreenDetectionAsync with ScreenDetectionOptions instead.
-        /// This method will be removed in a future version.
-        /// </summary>
-        [Obsolete("Use WaitForScreenDetectionAsync with ScreenDetectionOptions instead")]
-        protected async Task<TemplateMatchResult> WaitForScreenDetection(
-            string templatePath,
-            IntPtr windowHandle,
-            string screenDescription,
-            CancellationToken cancellationToken,
-            int timeoutSeconds = 30,
-            float confidenceThreshold = 0.80f)
-        {
-            var attemptCount = 0;
-            var maxAttempts = timeoutSeconds;
-
-            await _loggingService.LogInfoAsync($"Waiting for {screenDescription} (max {timeoutSeconds}s, checking every 1s)");
-            await _loggingService.LogDebugAsync($"Window handle: 0x{windowHandle.ToInt64():X}, Template path: {templatePath}");
-
-            while (attemptCount < maxAttempts)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                attemptCount++;
-
-                try
-                {
-                    var screenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
-
-                    if (screenshot != null && screenshot.IsValid)
-                    {
-                        await _loggingService.LogDebugAsync($"Screenshot captured successfully: {screenshot.Width}x{screenshot.Height}, Window: '{screenshot.WindowTitle}'");
-
-                        var match = await _templateService.FindElementAsync(screenshot, templatePath, cancellationToken);
-
-                        await _loggingService.LogDebugAsync($"{screenDescription} detection attempt {attemptCount}/{maxAttempts}: confidence {match.Confidence:P}");
-
-                        // Success case
-                        if (match.Confidence >= confidenceThreshold)
-                        {
-                            await _loggingService.LogInfoAsync($"{screenDescription} detected successfully after {attemptCount} attempts (confidence: {match.Confidence:P})");
-                            return match;
-                        }
-
-                        // Progress indicator - show when we're getting close
-                        if (match.Confidence >= 0.60f)
-                        {
-                            await _loggingService.LogDebugAsync($"{screenDescription} partially detected (confidence: {match.Confidence:P}), continuing to wait...");
-                        }
-                    }
-                    else
-                    {
-                        var errorDetails = screenshot == null ? "Screenshot is null" : $"Screenshot invalid (IsValid: {screenshot.IsValid})";
-                        await _loggingService.LogWarningAsync($"Screenshot capture failed on attempt {attemptCount}/{maxAttempts}: {errorDetails}");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    await _loggingService.LogErrorAsync($"Exception during screenshot capture on attempt {attemptCount}/{maxAttempts}", ex);
-                }
-
-                // Wait 1 second before next attempt (don't wait after last attempt)
-                if (attemptCount < maxAttempts)
-                {
-                    await Task.Delay(1000, cancellationToken);
-                }
-            }
-
-            // Final attempt - capture what we have for final diagnosis
-            try
-            {
-                var finalScreenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
-                if (finalScreenshot != null && finalScreenshot.IsValid)
-                {
-                    var finalMatch = await _templateService.FindElementAsync(finalScreenshot, templatePath, cancellationToken);
-                    await _loggingService.LogWarningAsync($"{screenDescription} detection timed out after {timeoutSeconds}s. Final confidence: {finalMatch.Confidence:P}");
-                    return finalMatch;
-                }
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync($"Exception during final screenshot capture", ex);
-            }
-
-            // Complete failure case
-            await _loggingService.LogErrorAsync($"Failed to detect {screenDescription} after {timeoutSeconds} seconds - unable to capture final screenshot");
-            throw new InvalidOperationException($"Failed to detect {screenDescription} after {timeoutSeconds} seconds of waiting");
         }
 
         /// <summary>

@@ -251,14 +251,6 @@
                                TextAlignment="Center"/>
                 </Border>
 
-                <!-- Enhanced Step Status Messages -->
-                <TextBlock Grid.Row="2"
-                           Text="{Binding CurrentItem.StatusMessage}"
-                           Foreground="{DynamicResource SecondaryTextBrush}"
-                           FontSize="13"
-                           Margin="0,0,0,8"
-                           TextAlignment="Center"
-                           Visibility="{Binding CurrentItem, Converter={StaticResource NullToVisibilityConverter}}"/>
 
                 <!-- Enhanced Idle Step Status -->
                 <TextBlock Grid.Row="2"

@@ -1,207 +1,199 @@
-# FFXI Manager - Profile & Application Management Suite
+# ⚔️ FFXI Manager - The Ultimate Linkshell Leader's Arsenal
 
-FFXI Manager is a Windows application that simplifies managing multiple Final Fantasy XI accounts and launching related applications. Switch between different account configurations instantly and manage your FFXI tools from a single interface.
+*"Because managing 18 mules shouldn't be harder than beating Absolute Virtue pre-nerf"*
+
+Welcome, Adventurer! Are you tired of manually logging in your army of characters like some Level 1 noob? Does switching between your main, crafting mules, and storage characters feel like grinding merit points in 2004? **FFXI Manager** is here to turn you into the most efficient Taru overlord Vana'diel has ever seen!
 
 <img width="1058" height="605" alt="ffxi-manager-track-characters" src="https://github.com/user-attachments/assets/cbe3b8f7-065f-4569-807d-9fed1af62787" />
 
-## Features
+## 🎯 What This Bad Boy Does
 
-- **Profile Management**: Create unlimited account profile configurations
-- **Instant Switching**: Swap between different account sets with one click
-- **Global Hotkeys**: Switch between FFXI character windows using customizable keyboard shortcuts
-- **Character Monitor**: Floating window to track and switch between active characters
-- **Application Launcher**: Launch and monitor FFXI tools (Windower, etc.)
-- **Real-time Monitoring**: Track running applications and character instances
-- **Automatic Backups**: Protect your configurations with automatic backup creation
-- **Clean Interface**: Modern WPF interface with dark/light theme support
+### 🚀 **Auto-Login System** *(The Crown Jewel)*
+### 🏠 **Profile Management** *(login_w.bin Swapping Made Easy)*
+### 🎮 **Controller Support** *(Now We're Talking)*
+### 👑 **Character Hotkeys** *(Win+F1 to Win+F9, Baby!)*
+### 📱 **Character Monitor Window** *(The Command Center)*
+### 🛠️ **Application Management** *(Who has time to find those?)*
 
-## System Requirements
+## 🎮 System Requirements
 
-### Essential Requirements
-- Windows 10 or Windows 11
-- .NET 9 Runtime
-- PlayOnline/FFXI installation
-- Minimum 100MB free disk space
+### Essential (The Bare Minimum)
+- **Windows 10/11** (because let's be real, it's 2024)
+- **.NET 9 Runtime** (the latest and greatest)
+- **PlayOnline/FFXI Installation** (obviously)
+- **100MB disk space** (less than a single Dynamis run's screenshots)
 
-### Optional (Recommended)
-- Windower for enhanced FFXI experience
-- Text editor for configuration tweaking (VSCode, Notepad++, etc.)
-- Multiple FFXI accounts for multi-boxing
+### Recommended (For the Full Experience)
+- **Windower** (for the enhanced FFXI experience we all know and love)
+- **Multiple FFXI accounts** (for maximum efficiency and/or addiction)
+- **Controller** (Xbox or PlayStation - your choice, champion)
+- **Multiple monitors** (because who plays FFXI on just one screen anymore?)
 
-## Installation
+## 🚀 Quick Start Guide
 
-1. **Download** the latest FFXIManager.exe from the repository releases
-2. **Extract** the application to your preferred location
-3. **Run** FFXIManager.exe to launch the application
-4. **Configure** your PlayOnline directory (see Configuration section)
+### Installation (Easier than learning to play BRD)
+1. **Download** the latest `FFXIManager-vX.X.X.zip` from [Releases](../../releases)
+2. **Extract** to your preferred location (Desktop works fine)
+3. **Run** `FFXIManager.exe` (no installation required - portable like a good old-school app)
+4. **Configure** your PlayOnline directory (usually somewhere deep in Program Files)
 
-## Configuration
+### First-Time Setup
+1. **Point to PlayOnline**: Browse to your PlayOnline directory
+   - Usually: `C:\Program Files (x86)\PlayOnline\SquareEnix\PlayOnlineViewer\usr\all`
+   - Look for the sacred `login_w.bin` file
+2. **Create Your First Profile**: Save your current account setup as "Main Party" or "Mule Brigade"
+3. **Test the Magic**: Try switching to another profile and back
+4. **Setup Auto-Login**: Add your characters to the queue and watch the automation magic happen
 
-### Initial Setup
+## 🎯 Features Deep Dive
 
-1. **Set PlayOnline Directory**:
-   - Click the "Browse" button for the PlayOnline Directory
-   - Navigate to your PlayOnline installation
-   - Typical location: `C:\Program Files (x86)\PlayOnline\SquareEnix\PlayOnlineViewer\usr\all`
-   - Verify the directory contains `login_w.bin`
+### 🤖 Auto-Login Queue System
+The crown jewel of FFXI Manager - because manually logging in 6+ characters is content nobody asked for.
 
-2. **Verify Installation**:
-   - The status bar should show successful directory detection
-   - Existing account configurations will be automatically detected
+**How It Works:**
+- Add characters to the queue with their profile settings
+- Hit "Start" and watch the magic unfold
+- The system uses advanced screen recognition to navigate PlayOnline
+- Automatically handles POL Proxy launching, login screens, and character selection
+- Integrates with Windower to launch your characters directly into the game
 
-### Hotkey Configuration
+**Queue Management:**
+- **Pause/Resume**: Need to take a break? Pause the queue anytime
+- **Skip Items**: That one mule can wait - skip and keep going
+- **Batch Operations**: Add multiple characters at once, modify queue order, queue state preserved between sessions
 
-1. **Access Settings**:
-   - Click the Settings (⚙️) button in the header
-   - Navigate to "Advanced Settings"
+### 📊 Profile System (login_w.bin Management)
+The backbone of multi-account management - handles the tedious file swapping so you don't have to.
 
-2. **Configure Hotkeys**:
-   - Enable "Enable global keyboard shortcuts"
-   - Each character slot (1-9) has a configurable hotkey
-   - Default shortcuts: Win+F1, Win+F2, Win+F3, etc.
-   - Click "Edit" to customize individual hotkeys
-   - Toggle "Enabled" checkbox to activate/deactivate specific shortcuts
+**Profile Features:**
+- **Unlimited Profiles**: Create as many setups as you need
+- **Automatic Backups**: Your current setup is always preserved before switching
+- **Descriptive Names**: "Crafting Mules", "Endgame Linkshell", "Storage Army" - name them whatever makes sense
+- **Quick Switching**: Double-click or right-click context menu for instant swapping
+- **Safety Checks**: Validates profiles before switching to prevent disasters
 
-3. **Hotkey Usage**:
-   - Hotkeys work globally (even when other applications have focus)
-   - Press the configured key combination to switch to that character slot
-   - Only works when FFXI characters are running and detected
+### 🎮 Controller & Hotkey Mastery
+Turn your gamepad into the ultimate character-switching tool.
 
-## Usage
+**Controller Support:**
+- **Xbox Controllers**: Native XInput support for Xbox 360, Xbox One, Xbox Series controllers
+- **PlayStation Controllers**: Full DirectInput support for DualShock 3, DualShock 4, DualSense
+- **Button Mapping**: Assign any controller button to switch to specific characters
+- **Trigger Support**: Even analog triggers work as digital buttons
 
-### Profile Management
+**Hotkey Options:**
+- **Individual Character Hotkeys**: Win+F1 through Win+F9 for specific characters
+- **Character Cycle**: One button to cycle through all active characters
+- **Controller + Keyboard**: Mix and match input methods however you want
 
-#### Creating a New Profile
-1. Configure your accounts in PlayOnline as desired
-2. Click "Add Profile" button in FFXI Manager
-3. Enter a descriptive name (e.g., "Main Party", "Crafting Mules", "Storage Characters")
-4. The current account configuration will be saved as a new profile
+### 🎛️ Character Monitor
+Your mission control for keeping track of all active characters.
 
-#### Switching Between Profiles
-1. Select the desired profile from the list
-2. Double-click the profile or right-click and select "Swap to Profile"
-3. The application will backup your current configuration and load the selected profile
-4. Status messages will confirm the operation
+**Main Window Monitor:**
+- Real-time character list with status indicators
+- Quick-switch buttons for each character
+- Refresh functionality to detect newly launched characters
+- Integration with profile system
 
-#### Managing Profiles
-- **Rename**: Right-click a profile and select "Rename"
-- **Delete**: Right-click a profile and select "Delete" (confirmation required)
-- **Backup**: The current active configuration is automatically backed up before each swap
+**Floating Monitor Window:**
+- Always-on-top overlay for continuous monitoring
+- Adjustable transparency (30-100%) to suit your preference
+- Fully draggable and resizable
+- Minimal resource usage - won't impact game performance
 
-### Character Monitoring
+## ⚙️ Configuration & Advanced Settings
 
-#### Main Window Character List
-- View all running FFXI characters in the Character Monitor section
-- See character status (Active/Inactive/Not Responding)
-- Click the target (🎯) button to switch to a specific character
-- Use the refresh (🔄) button to update the character list
+### Hotkey Customization
+1. **Access Settings**: Click the ⚙️ button → Advanced Settings
+2. **Enable Global Shortcuts**: Toggle the master switch
+3. **Customize Individual Hotkeys**: Click "Edit" on any character slot
+4. **Record New Combinations**: Use Ctrl, Alt, Shift, Win + any key
+5. **Controller Mapping**: Assign controller buttons to any character slot
 
-#### Character Monitor Window
-1. **Opening the Monitor**:
-   - Click the "📱" button in the Character Monitor section
-   - A compact floating window will open
+### Auto-Login Configuration
+1. **Template Management**: Customize screen recognition templates for different resolutions
+2. **Timing Settings**: Adjust delays between actions for optimal reliability
+3. **Error Handling**: Configure retry attempts and failure recovery behavior
+4. **POL Proxy**: Launch POL Proxy automatically if needed
 
-2. **Window Features**:
-   - **Always on Top**: Pin the window above other applications
-   - **Draggable**: Click and drag the title bar to move
-   - **Resizable**: Adjust window size as needed
-   - **Opacity Control**: Use the slider at the bottom to adjust transparency (30%-100%)
-   - **Character Switching**: Click "Switch" button to activate each character
+## 🐛 Troubleshooting
 
-3. **Window Controls**:
-   - **📌**: Toggle always-on-top mode
-   - **🔄**: Refresh character list
-   - **—**: Minimize window
-   - **✕**: Close window
-   - **👁 Slider**: Adjust window opacity
+### Common Issues & Solutions
 
-### Global Hotkeys
+**"Auto-Login isn't working"**
+- Check that templates match your screen resolution
+- Verify PlayOnline directory is correctly configured
+- Try adjusting timing settings for slower systems
+- Make sure POL Proxy is properly configured if using
 
-#### Default Shortcuts
-- **Win+F1**: Switch to character slot 1
-- **Win+F2**: Switch to character slot 2
-- **Win+F3**: Switch to character slot 3
-- **Win+F4**: Switch to character slot 4
-- **Win+F5**: Switch to character slot 5
-- **Win+F6**: Switch to character slot 6
-- **Win+F7**: Switch to character slot 7
-- **Win+F8**: Switch to character slot 8
-- **Win+F9**: Switch to character slot 9
+**"Controller not detected"**
+- Check Windows Gaming Services are running (Win11)
+- Try unplugging and reconnecting the controller
+- Check Windows Device Manager for driver issues
+- Both wired and wireless controllers are supported
 
-#### Customizing Hotkeys
-1. Open Advanced Settings
-2. Select a character slot and click "Edit"
-3. Record a new key combination using Ctrl, Alt, Shift, or Win modifiers
-4. Avoid conflicts with FFXI's built-in shortcuts
-5. Save changes and test the new hotkey
+**"Hotkeys not working"**
+- Verify global shortcuts are enabled in Advanced Settings
+- Check for conflicts with other applications
+- Make sure FFXI Manager is running as Administrator if needed
+- Test individual hotkeys to isolate the issue
 
-### Application Management
+**"Profile switching failed"**
+- Check file permissions on PlayOnline directory
+- Ensure no FFXI instances are currently running
+- Verify the profile backup completed successfully
+- Try manually browsing to a working profile
 
-#### Adding Applications
-1. Click the "+" button in the Application Management panel
-2. Configure your application:
-   - **Name**: Display name (e.g., "Windower")
-   - **Path**: Browse to the executable (e.g., windower.exe)
-   - **Arguments**: Command line arguments (optional)
-3. Save the configuration
+### Getting Help
+- **Status Messages**: Check the status bar for detailed error information
+- **Log Files**: Application logs are saved for debugging complex issues
+- **GitHub Issues**: Report bugs or request features via GitHub Issues
+- **Documentation**: Check the Documentation folder for detailed guides
 
-#### Launching Applications
-1. Select an application from the list
-2. Click the "▶" (Play) button to launch
-3. Monitor running status in the application list
-4. Use "Stop" button to terminate applications if needed
+## 🛡️ Security & Safety
 
-### Monitoring
+FFXI Manager only swaps configuration files. It:
+- ✅ **Never modifies game files or memory**
+- ✅ **Only swaps PlayOnline configurations**
+- ✅ **Uses standard Windows APIs for input handling**
+- ✅ **Operates entirely outside the game process**
+- ✅ **Creates automatic backups before any changes**
 
-The application provides real-time monitoring of:
-- Running external applications
-- Active FFXI character instances
-- Current active profile
-- System status and operations
-- Character window focus and responsiveness
+*This tool is designed to enhance your multi-boxing experience within FFXI's Terms of Service.*
 
-## Tips and Best Practices
+## 🤝 Contributing
 
-- **Use descriptive profile names** - Avoid generic names like "Test123"
-- **Monitor the status bar** - It provides real-time feedback for all operations
-- **Create a backup profile** - Save your current setup before experimenting
-- **Launch timing** - Switch profiles before launching Windower or other tools
-- **Regular backups** - The application creates automatic backups, but consider manual backups for important configurations
-- **Hotkey conflicts** - Use Win key combinations to avoid conflicts with FFXI macros
-- **Character monitor placement** - Position the floating window where it won't interfere with gameplay
-- **Opacity settings** - Adjust transparency so you can see through the monitor window when needed
+Want to help make FFXI Manager even more awesome? We'd love your help!
 
-## Troubleshooting
+- **Bug Reports**: Found something broken? Let us know via [GitHub Issues](../../issues)
+- **Feature Requests**: Have an idea for improvement? Share it!
+- **Code Contributions**: Check [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines
+- **Documentation**: Help improve guides and documentation
+- **Testing**: Try new features and provide feedback
 
-If you encounter issues:
+## 🏆 Credits & Thanks
 
-1. **Check status messages** - Error details appear in the status bar
-2. **Verify paths** - Ensure PlayOnline directory is correctly configured
-3. **Review active profile** - Check which profile is currently active
-4. **Restart application** - Close and restart FFXI Manager if needed
-5. **Check file permissions** - Ensure the application has write access to the PlayOnline directory
-6. **Hotkey issues** - Verify hotkeys are enabled and not conflicting with other applications
-7. **Character detection** - Ensure FFXI is running and characters are logged in for monitoring to work
-For additional help, consult the Documentation folder or open an issue in the repository.
+- **FFXI Community**: For feedback and feature requests
+- **Multi-boxing Pioneers**: Who showed us the way to efficiency
+- **Beta Testers**: Who suffered through early versions so you don't have to
 
+## 📄 License
 
-## Contributing
-
-We welcome contributions to improve FFXI Manager! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for workflow and releases, and [AGENTS.md](./AGENTS.md) for coding standards and tests. Please feel free to:
-- Report bugs and request features via GitHub Issues
-- Submit pull requests for bug fixes and enhancements
-- Share feedback and suggestions for improvements
-- Help improve documentation and guides
-
-## License
-
-This project is open source. See the repository for license details.
+This project is open source under the terms specified in the repository. Use responsibly and in accordance with FFXI's Terms of Service.
 
 ---
 
-**FFXI Manager** - Command your army like a true Linkshell leader, because /logout and /login is NOT endgame content.
+## 🌟 Final Words
 
-*Made with ❤️ for the FFXI community*
+**FFXI Manager** isn't just another tool - it's your ticket to playing FFXI the way it was meant to be played in 2025: efficiently, comfortably, and without repetitive strain injury from constant character switching.
+
+Whether you're managing a small family of characters or commanding an empire that would make even Shantotto jealous, FFXI Manager has your back.
+
+*Now get out there and show Vana'diel what peak efficiency looks like!*
+
+---
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/L4L21JMRTW)
 
+**Made with ❤️ for the FFXI community**
+*"Because the real endgame is optimizing your workflow"*
