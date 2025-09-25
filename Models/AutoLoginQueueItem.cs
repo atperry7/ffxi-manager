@@ -212,12 +212,18 @@ namespace FFXIManager.Models
                 if (_task != null)
                 {
                     _task.PropertyChanged += OnTaskPropertyChanged;
+
+                    // Immediately synchronize timing with the task
+                    _startTime = _task.StartTime;
+                    _endTime = _task.EndTime;
                 }
 
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(TaskProgress));
                 OnPropertyChanged(nameof(CurrentTaskDisplay));
                 OnPropertyChanged(nameof(CurrentSubtaskDisplay));
+                OnPropertyChanged(nameof(Duration));
+                OnPropertyChanged(nameof(DurationDisplay));
             }
         }
 
@@ -268,6 +274,9 @@ namespace FFXIManager.Models
         public string CurrentStepDisplay => CurrentStep switch
         {
             LoginTaskStep.None => "Waiting",
+            LoginTaskStep.LaunchPOLProxy => "Launching POL Proxy",
+            LoginTaskStep.CheckPOLProxyStatus => "Checking POL Proxy",
+            LoginTaskStep.WaitForPOLProxyStart => "Starting POL Proxy",
             LoginTaskStep.LaunchWindower => "Launching Windower",
             LoginTaskStep.WaitForWindowerStart => "Waiting for Windower",
             LoginTaskStep.VerifyWindowerLoaded => "Verifying Windower",
@@ -323,7 +332,7 @@ namespace FFXIManager.Models
         public string CurrentSubtaskDisplay => Task?.CurrentSubtask?.Name ?? "Waiting";
 
         /// <summary>
-        /// Duration of login process
+        /// Duration of login process - synchronized with task timing
         /// </summary>
         public TimeSpan? Duration
         {
@@ -448,6 +457,22 @@ namespace FFXIManager.Models
                 OnPropertyChanged(nameof(OverallProgress));
                 OnPropertyChanged(nameof(CurrentTaskDisplay));
                 OnPropertyChanged(nameof(CurrentSubtaskDisplay));
+            }
+
+            // Handle duration and timing property changes
+            if (e.PropertyName == nameof(AutoLoginTask.Duration) ||
+                e.PropertyName == nameof(AutoLoginTask.StartTime) ||
+                e.PropertyName == nameof(AutoLoginTask.EndTime))
+            {
+                // Synchronize timing with the task to ensure they share the same timing
+                if (Task != null)
+                {
+                    _startTime = Task.StartTime;
+                    _endTime = Task.EndTime;
+                }
+
+                OnPropertyChanged(nameof(Duration));
+                OnPropertyChanged(nameof(DurationDisplay));
             }
         }
 
