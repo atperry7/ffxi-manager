@@ -252,7 +252,8 @@ namespace FFXIManager.Services.AutoLogin
         {
             // FFXI-Specific: Process may launch as 'pol' initially, then transition to 'ffximain'
             // This discovery handles both direct FFXI launch and PlayOnline→FFXI transitions
-            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.TermsProcessWait, "Waiting for Final Fantasy XI to launch...");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", FFXIGameConfiguration.ProgressMilestones.TermsProcessWait,
+                                                "Starting FINAL FANTASY XI");
             var ffxiWindowHandle = await WaitForFFXIProcessAsync(subtask, context, cancellationToken);
 
             // Store FFXI window handle for subsequent steps - critical for cross-task communication
@@ -263,7 +264,8 @@ namespace FFXIManager.Services.AutoLogin
             // Multiple screenshot attempts ensure window is stable before UI interaction
             await WaitForFFXIStartup(ffxiWindowHandle, subtask, cancellationToken);
 
-            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.TermsScreenDetection, "Waiting for FFXI Terms of Service screen...");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", FFXIGameConfiguration.ProgressMilestones.TermsScreenDetection,
+                                                "Loading game interface");
 
             // Wait for FFXI accept terms screen using standardized detection with fallback
             var termsMatch = await WaitForScreenWithRedetectionFallbackAsync(
@@ -280,7 +282,8 @@ namespace FFXIManager.Services.AutoLogin
             // This ensures we have the actual FFXI Terms screen, not a false positive
             await _loggingService.LogInfoAsync($"FFXI Terms screen detected with confidence: {termsMatch.Confidence:P}");
 
-            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.TermsScreenDetected, "Terms of Service screen detected");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", FFXIGameConfiguration.ProgressMilestones.TermsScreenDetected,
+                                                "Game interface ready");
 
             // FFXI-Specific: Window handle may change during screen transitions
             // Redetection logic in screen detection may have updated the context
@@ -300,7 +303,8 @@ namespace FFXIManager.Services.AutoLogin
 
             await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.TermsAccepting, "Accepting terms (pressing Enter)...");
 
-            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.TermsComplete, "Terms accepted successfully - transitioning to main menu");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", FFXIGameConfiguration.ProgressMilestones.TermsComplete,
+                                                "Accessing main menu");
         }
 
         /// <summary>
@@ -378,7 +382,8 @@ namespace FFXIManager.Services.AutoLogin
             // Get FFXI window handle from context
             var ffxiWindowHandle = await GetFFXIWindowHandleAsync(subtask, context, cancellationToken);
 
-            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.MenuWait, "Waiting for FFXI main menu...");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", FFXIGameConfiguration.ProgressMilestones.MenuWait,
+                                                "Loading character menu");
 
             // Wait for main menu screen using standardized detection with fallback
             var mainMenuMatch = await WaitForScreenWithRedetectionFallbackAsync(
@@ -395,7 +400,8 @@ namespace FFXIManager.Services.AutoLogin
             // from the JSON configuration, so if we get here, detection was successful
             await _loggingService.LogInfoAsync($"FFXI main menu detected with confidence: {mainMenuMatch.Confidence:P}");
 
-            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.MenuDetected, "Main menu detected");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", FFXIGameConfiguration.ProgressMilestones.MenuDetected,
+                                                "Character menu ready");
 
             // Get updated window handle from context
             ffxiWindowHandle = ValidateWindowContextAsync(context, ffxiWindowHandle);
@@ -412,7 +418,8 @@ namespace FFXIManager.Services.AutoLogin
                 FFXIGameConfiguration.Delays.Transition,
                 cancellationToken);
 
-            subtask.UpdateProgress(100, "Main menu navigation completed - transitioning to character slots");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", 100,
+                                                "Accessing character selection");
         }
 
         /// <summary>
@@ -975,7 +982,8 @@ namespace FFXIManager.Services.AutoLogin
             var accountName = queueItem.Account?.AccountName ?? "Character";
             var characterSlot = queueItem.Account?.FFXICharacterSlot ?? 1;
 
-            subtask.UpdateProgress(10, "Waiting for character confirmation screen...");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", 10,
+                                                "Preparing character login");
 
             // Wait for character confirmation screen with window handle re-detection on failure
             var confirmMatch = await WaitForScreenDetectionWithRedetectionAsync(
@@ -996,7 +1004,8 @@ namespace FFXIManager.Services.AutoLogin
             // from the JSON configuration, so if we get here, detection was successful
             await _loggingService.LogInfoAsync($"Character confirmation screen detected with confidence: {confirmMatch.Confidence:P}");
 
-            subtask.UpdateProgress(40, "Character confirmation screen detected");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", 40,
+                                                "Character selected");
 
             // Get updated window handle from context
             ffxiWindowHandle = context.GetValueData<IntPtr>("FFXIWindowHandle");
@@ -1004,7 +1013,8 @@ namespace FFXIManager.Services.AutoLogin
             // Allow screen to stabilize
             await Task.Delay(FFXIGameConfiguration.Delays.ScreenStabilization, cancellationToken);
 
-            subtask.UpdateProgress(60, "Confirming character login (pressing Enter)...");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", 60,
+                                                "Confirming character login");
 
             // Ensure window has focus
             await _automationService.EnsureWindowFocusAsync(ffxiWindowHandle, cancellationToken);
@@ -1013,17 +1023,20 @@ namespace FFXIManager.Services.AutoLogin
             // Press Enter to confirm and enter the game world - using DirectX-compatible method
             await _automationService.SendKeyAsync(ConsoleKey.Enter, ffxiWindowHandle, cancellationToken);
 
-            subtask.UpdateProgress(80, "Login confirmation sent, entering game world...");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", 80,
+                                                "Entering game world");
 
             // Allow significant time for the game world to load
             await Task.Delay(FFXIGameConfiguration.Delays.GameWorldLoading, cancellationToken);
 
-            subtask.UpdateProgress(95, "Verifying successful game entry...");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", 95,
+                                                "Finalizing connection");
 
             // Additional wait to ensure character is fully loaded into the game world
             await Task.Delay(FFXIGameConfiguration.Delays.CharacterLoading, cancellationToken);
 
-            subtask.UpdateProgress(100, $"Success! {accountName} (slot {characterSlot}) has entered the game world");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", 100,
+                                                $"🎉 Welcome to Vana'diel! {accountName} is now online");
 
             // Clear the stored window handle as login is complete
             context.Data.TryRemove("FFXIWindowHandle", out _);
@@ -1156,9 +1169,11 @@ namespace FFXIManager.Services.AutoLogin
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // Update progress
-                var progress = Math.Min(FFXIGameConfiguration.ProgressMilestones.DetectionAttempting, (attempt * 100) / maxAttempts);
-                subtask.UpdateProgress(progress, $"Detecting {screenDescription} ({attempt}/{maxAttempts})...");
+                // Update progress - use monotonic progress within the detection range (20-80%)
+                var baseProgress = 20; // Start of detection range
+                var rangeSize = 60; // Detection range size (80% - 20%)
+                var progress = baseProgress + ((attempt - 1) * rangeSize / maxAttempts);
+                await UpdateProgressWithPhaseAsync(subtask, "gameconnection", Math.Min(80, progress), $"Detecting {screenDescription}");
 
                 try
                 {
@@ -1192,7 +1207,7 @@ namespace FFXIManager.Services.AutoLogin
 
                         if (await ValidateDetectionResultAsync(match, confidenceThreshold, screenDescription, cancellationToken))
                         {
-                            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.DetectionSuccessful, $"{screenDescription} detected successfully");
+                            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", 85, $"{screenDescription} detected successfully");
                             context.SetData("FFXIWindowHandle", currentWindowHandle);
                             return match;
                         }
@@ -1392,8 +1407,11 @@ namespace FFXIManager.Services.AutoLogin
                 cancellationToken.ThrowIfCancellationRequested();
                 attempt++;
 
-                var progress = Math.Min(FFXIGameConfiguration.ProgressMilestones.ProcessSearching, (attempt * FFXIGameConfiguration.ProgressMilestones.ProcessFound / maxAttempts));
-                subtask.UpdateProgress(progress, $"Monitoring transition ({attempt}/{maxAttempts})...");
+                // Use monotonic progress within transition monitoring range (10-40%)
+                var baseProgress = 10;
+                var rangeSize = 30;
+                var progress = baseProgress + ((attempt - 1) * rangeSize / maxAttempts);
+                await UpdateProgressWithPhaseAsync(subtask, "gameconnection", Math.Min(40, progress), "Monitoring game transition");
                 
                 await _loggingService.LogInfoAsync($"[PID_TRACKING] Attempt {attempt}/{maxAttempts} - Checking PID {playOnlinePid} for new windows...");
 
@@ -1426,7 +1444,7 @@ namespace FFXIManager.Services.AutoLogin
                         if (isFFXITitle)
                         {
                             await _loggingService.LogInfoAsync($"[PID_TRACKING] ✅ SUCCESS - FFXI transition detected! PID {playOnlinePid}, Handle: 0x{playOnlineHandle.ToInt64():X} → 0x{window.Handle.ToInt64():X}");
-                            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.ProcessFound, "FFXI window transition detected");
+                            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", 45, "FFXI window transition detected");
                             return window.Handle;
                         }
                         else
@@ -1549,7 +1567,11 @@ namespace FFXIManager.Services.AutoLogin
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                subtask.UpdateProgress(12 + (attempt * 3 / maxAttempts), $"FFXI responsiveness check ({attempt + 1}/{maxAttempts})...");
+                // Use monotonic progress within responsiveness range (50-65%)
+                var baseProgress = 50;
+                var rangeSize = 15;
+                var progress = baseProgress + (attempt * rangeSize / maxAttempts);
+                await UpdateProgressWithPhaseAsync(subtask, "gameconnection", Math.Min(65, progress), "Checking FFXI responsiveness");
 
                 try
                 {

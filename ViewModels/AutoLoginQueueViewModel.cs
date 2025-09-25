@@ -255,17 +255,30 @@ namespace FFXIManager.ViewModels
         public double ProcessedPercentage => TotalQueueItems > 0 ? (double)ProcessedItems / TotalQueueItems * 100 : 0;
 
         /// <summary>
-        /// Gets the correct processing status text to avoid double-counting items
+        /// Gets user-friendly processing status text with context and timing
         /// </summary>
         private string GetProcessingStatusText()
         {
-            if (TotalQueueItems == 0) return "Running";
+            if (TotalQueueItems == 0) return "Processing...";
 
             // Calculate current position: processed items + 1 for active item
             // But only if there's actually an active item (not all items are already processed)
             var currentPosition = ProcessedItems < TotalQueueItems ? ProcessedItems + 1 : ProcessedItems;
 
-            return $"Running ({currentPosition}/{TotalQueueItems})";
+            // Add contextual information based on current activity
+            var baseStatus = $"Logging In Account {currentPosition}/{TotalQueueItems}";
+
+            // Add timing context for longer operations
+            if (CurrentItem != null && CurrentItem.StartTime.HasValue)
+            {
+                var duration = DateTime.Now - CurrentItem.StartTime.Value;
+                if (duration.TotalSeconds > 30)
+                {
+                    return $"{baseStatus} (This may take 1-2 minutes)";
+                }
+            }
+
+            return baseStatus;
         }
 
         /// <summary>
@@ -284,7 +297,7 @@ namespace FFXIManager.ViewModels
         public string TransitioningMessage => _queueService.TransitioningMessage;
 
         /// <summary>
-        /// Queue execution status display
+        /// Queue execution status display with user-friendly messaging
         /// </summary>
         public string QueueStatusDisplay
         {
@@ -292,27 +305,43 @@ namespace FFXIManager.ViewModels
             {
                 return ExecutionState switch
                 {
-                    QueueExecutionState.Idle => "Ready",
-                    QueueExecutionState.Starting => "Starting",
+                    QueueExecutionState.Idle => "Ready to Start",
+                    QueueExecutionState.Starting => "Initializing Auto-Login...",
                     QueueExecutionState.Processing => GetProcessingStatusText(),
-                    QueueExecutionState.Transitioning => "Transitioning",
+                    QueueExecutionState.Transitioning => "Switching Profiles...",
                     QueueExecutionState.Paused => "Paused",
-                    QueueExecutionState.Stopping => "Stopping",
-                    QueueExecutionState.Completed => "Completed",
+                    QueueExecutionState.Stopping => "Stopping Operations...",
+                    QueueExecutionState.Completed => "All Accounts Processed",
                     _ => "Unknown"
                 };
             }
         }
 
         /// <summary>
-        /// Queue progress display text
+        /// Queue progress display text with enhanced user-friendly messaging
         /// </summary>
         public string QueueProgressDisplay
         {
             get
             {
-                if (TotalQueueItems == 0) return "No items in queue";
-                return $"{ProcessedItems}/{TotalQueueItems} items processed ({OverallProgress}%)";
+                if (TotalQueueItems == 0) return "Add accounts to begin auto-login";
+
+                // Show detailed breakdown during and after execution
+                if (ProcessedItems > 0)
+                {
+                    var parts = new List<string>();
+
+                    if (CompletedItems > 0) parts.Add($"{CompletedItems} completed");
+                    if (FailedItems > 0) parts.Add($"{FailedItems} failed");
+                    if (CancelledItems > 0) parts.Add($"{CancelledItems} skipped");
+
+                    var breakdown = parts.Count > 0 ? $" ({string.Join(", ", parts)})" : "";
+
+                    return $"{ProcessedItems}/{TotalQueueItems} accounts processed{breakdown}";
+                }
+
+                // Pre-execution state
+                return $"{TotalQueueItems} account{(TotalQueueItems == 1 ? "" : "s")} ready for auto-login";
             }
         }
 
@@ -356,7 +385,7 @@ namespace FFXIManager.ViewModels
         public bool ShowProfileTransition => !string.IsNullOrEmpty(ProfileTransitionMessage) && IsProfileSwitching;
 
         /// <summary>
-        /// Message to display when queue is idle (no current item)
+        /// User-friendly message to display when queue is idle (no current item)
         /// </summary>
         public string IdleStateMessage
         {
@@ -364,43 +393,46 @@ namespace FFXIManager.ViewModels
             {
                 // If queue is transitioning, show the transition message
                 if (ExecutionState == QueueExecutionState.Transitioning)
-                    return TransitioningMessage;
+                    return "Preparing next account...";
 
                 // If queue is starting, show starting message
                 if (ExecutionState == QueueExecutionState.Starting)
-                    return "Starting queue...";
+                    return "Initializing auto-login system...";
 
                 // If queue is stopping, show stopping message
                 if (ExecutionState == QueueExecutionState.Stopping)
-                    return "Stopping queue...";
+                    return "Finishing current operations and stopping...";
 
                 if (TotalQueueItems == 0)
-                    return "Ready to start - Add accounts to the queue";
+                    return "Welcome to Auto-Login! Add accounts to get started";
 
                 if (ProcessedItems == TotalQueueItems)
                 {
                     if (FailedItems == 0 && CancelledItems == 0)
-                        return $"Queue completed - {CompletedItems} accounts processed successfully";
+                        return $"🎉 Success! All {CompletedItems} accounts logged in successfully";
                     else
-                        return $"Queue finished - {CompletedItems} completed, {FailedItems} failed, {CancelledItems} skipped";
+                    {
+                        var successRate = CompletedItems > 0 ? $" ({(CompletedItems * 100 / TotalQueueItems)}% success rate)" : "";
+                        return $"✅ Auto-login completed{successRate}";
+                    }
                 }
 
                 if (ProcessedItems > 0)
-                    return $"Queue paused - {ProcessedItems}/{TotalQueueItems} items processed";
+                    return $"⏸️ Auto-login paused - {ProcessedItems} of {TotalQueueItems} accounts processed";
 
-                return "Queue ready - Click Start to begin auto-login";
+                return "🚀 Ready to start - Click the play button to begin auto-login";
             }
         }
 
         /// <summary>
-        /// Step message to display when queue is idle
+        /// Helpful step message to display when queue is idle with contextual guidance
         /// </summary>
         public string IdleStepMessage
         {
             get
             {
                 if (TotalQueueItems == 0)
-                    return "Use the PlayOnline Member Accounts section to add accounts to the queue";
+                    return "💡 Tip: Use the PlayOnline Member Accounts section above to add accounts to the queue";
 
                 var lastCompletedItem = QueueItems
                     .Where(x => x.Status == AutoLoginQueueStatus.Completed)
@@ -423,12 +455,20 @@ namespace FFXIManager.ViewModels
 
                 if (lastProcessedItem != null)
                 {
+                    var icon = lastProcessedItem.Status == AutoLoginQueueStatus.Completed ? "✅" : "❌";
                     var status = lastProcessedItem.Status == AutoLoginQueueStatus.Completed ? "completed" : "failed";
                     var duration = lastProcessedItem.DurationDisplay;
-                    return $"Last {status}: {lastProcessedItem.DisplayName} ({duration})";
+                    return $"{icon} Last {status}: {lastProcessedItem.DisplayName} (took {duration})";
                 }
 
-                return "Ready to process queue items";
+                // Check if there are failed items that could be retried
+                var failedCount = QueueItems.Count(x => x.Status == AutoLoginQueueStatus.Failed);
+                if (failedCount > 0)
+                {
+                    return $"💡 Tip: {failedCount} failed account{(failedCount == 1 ? "" : "s")} can be retried - right-click to retry individual accounts";
+                }
+
+                return "All accounts are ready for auto-login";
             }
         }
 

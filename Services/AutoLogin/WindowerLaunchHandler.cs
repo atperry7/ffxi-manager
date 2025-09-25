@@ -155,7 +155,8 @@ namespace FFXIManager.Services.AutoLogin
                     return;
                 }
 
-                subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.ApplicationDiscovery, "Locating Windower application...");
+                await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.ApplicationDiscovery,
+                                                     "Finding Windower installation");
 
                 // Step 2: Application Discovery
                 // Use the enhanced pattern-matching service to find Windower in configured external applications
@@ -170,7 +171,8 @@ namespace FFXIManager.Services.AutoLogin
                     return;
                 }
 
-                subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.ConfigurationValidation, "Validating Windower configuration...");
+                await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.ConfigurationValidation,
+                                                     "Preparing Windower setup");
 
                 // Step 3: Existing Process Detection
                 // Check all known Windower process variations to avoid duplicate launches
@@ -180,7 +182,8 @@ namespace FFXIManager.Services.AutoLogin
                 {
                     // Reuse existing process - more efficient than launching new instance
                     var processId = existingProcesses.First().ProcessId;
-                    subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.OperationComplete, $"Windower already running (PID: {processId})");
+                    await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.OperationComplete,
+                                                         "Windower is already active");
                     context.SetData("ProcessId", processId);
                     
                     // Attempt to get window handle immediately, but don't fail if not available
@@ -190,7 +193,8 @@ namespace FFXIManager.Services.AutoLogin
                     return;
                 }
 
-                subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.ProcessLaunch, $"Starting Windower for {queueItem.Account.AccountName}...");
+                await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.ProcessLaunch,
+                                                     "Launching Windower");
 
                 // Launch Windower
                 bool launchSuccess = await _externalApplicationService.LaunchApplicationAsync(windowerApp);
@@ -200,7 +204,8 @@ namespace FFXIManager.Services.AutoLogin
                     return;
                 }
 
-                subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.ProcessStartupWait, "Waiting for process startup...");
+                await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.ProcessStartupWait,
+                                                     "Windower is starting up");
 
                 // Step 5: Process Detection using ExternalApplicationService Integration
                 // The LaunchApplicationAsync method already added the PID, so get it from the application
@@ -214,12 +219,14 @@ namespace FFXIManager.Services.AutoLogin
                 }
 
                 context.SetData("ProcessId", newProcessId);
-                subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.WindowDetection, $"Windower started (PID: {newProcessId})");
+                await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.WindowDetection,
+                                                     "Windower application ready");
 
                 // Get window handle for the process using base class method with retry logic
                 await GetWindowHandleForProcessWithRetry(context, newProcessId, subtask, cancellationToken);
 
-                subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.OperationComplete, "Windower launch completed successfully");
+                await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.OperationComplete,
+                                                     "Windower launched successfully");
                 await _loggingService.LogInfoAsync($"[FLOW] ExecuteLaunchWindowerAsync completed successfully");
                 subtask.Complete();
             }
@@ -251,7 +258,8 @@ namespace FFXIManager.Services.AutoLogin
                 await WaitForProcessResponsiveness(processId, subtask, cancellationToken);
                 await WaitForMainWindow(processId, context, subtask, cancellationToken);
 
-                subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.StartupComplete, "Windower startup completed and window available");
+                await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.StartupComplete,
+                                                     "Windower interface ready");
                 await _loggingService.LogInfoAsync($"[FLOW] ExecuteWaitForWindowerStartAsync completed successfully");
                 subtask.Complete();
             }
@@ -295,7 +303,8 @@ namespace FFXIManager.Services.AutoLogin
         /// <param name="cancellationToken">Cancellation token for operation cancellation</param>
         private async Task WaitForProcessResponsiveness(int processId, AutoLoginSubtask subtask, CancellationToken cancellationToken)
         {
-            subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.ResponsivenessCheck, "Monitoring Windower process startup...");
+            await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.ResponsivenessCheck,
+                                                "Loading Windower components");
 
             // Use base class retry mechanism for consistent error handling
             await ExecuteWithRetryAsync(
@@ -338,7 +347,8 @@ namespace FFXIManager.Services.AutoLogin
         /// <param name="cancellationToken">Cancellation token</param>
         private async Task WaitForMainWindow(int processId, IAutoLoginContext context, AutoLoginSubtask subtask, CancellationToken cancellationToken)
         {
-            subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.WindowAvailability, "Process responsive, waiting for main window...");
+            await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.WindowAvailability,
+                                                "Windower interface loading");
 
             try
             {
@@ -405,7 +415,8 @@ namespace FFXIManager.Services.AutoLogin
                     return;
                 }
 
-                subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.UIInitialization, "Waiting for Windower UI initialization...");
+                await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.UIInitialization,
+                                                     "Preparing Windower interface");
 
                 // Wait for UI to stabilize before detection
                 await Task.Delay(WindowerLaunchConfiguration.Timeouts.UIStabilization, cancellationToken);
@@ -454,13 +465,15 @@ namespace FFXIManager.Services.AutoLogin
                     return;
                 }
 
-                subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.WindowFocus, "Focusing Windower window...");
+                await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.WindowFocus,
+                                                     "Activating Windower window");
 
                 // Ensure window focus
                 await _automationService.EnsureWindowFocusAsync(windowHandle, cancellationToken);
                 await Task.Delay(WindowerLaunchConfiguration.Timeouts.WindowFocusDelay, cancellationToken);
 
-                subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.ButtonDetection, "Locating launch button...");
+                await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.ButtonDetection,
+                                                     "Finding launch controls");
 
                 // Find the launch arrow using standardized detection
                 var launchArrowMatch = await WaitForScreenDetectionAsync(
@@ -486,7 +499,8 @@ namespace FFXIManager.Services.AutoLogin
                     cancellationToken,
                     _automationService);
 
-                subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.ButtonClick, "Waiting for PlayOnline to start...");
+                await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.ButtonClick,
+                                                     "Starting PlayOnline launcher");
 
                 // Wait for PlayOnline process to start
                 await Task.Delay(WindowerLaunchConfiguration.Timeouts.PostLaunchDelay, cancellationToken);
@@ -517,7 +531,8 @@ namespace FFXIManager.Services.AutoLogin
                 if (polProcesses.Any())
                 {
                     var polProcess = polProcesses.First();
-                    subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.PostLaunchWait, $"PlayOnline started (PID: {polProcess.ProcessId})");
+                    await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.PostLaunchWait,
+                                                         "PlayOnline is starting up");
                     await _loggingService.LogDebugAsync($"PlayOnline process detected: PID {polProcess.ProcessId}");
                     return;
                 }
@@ -526,7 +541,8 @@ namespace FFXIManager.Services.AutoLogin
             }
 
             // Even if we don't detect POL immediately, the click was successful
-            subtask.UpdateProgress(WindowerLaunchConfiguration.ProgressMilestones.OperationComplete, "Launch button clicked - PlayOnline may be starting");
+            await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.OperationComplete,
+                                                "Transitioning to PlayOnline");
         }
 
         /// <summary>
@@ -587,13 +603,12 @@ namespace FFXIManager.Services.AutoLogin
                     }
                 }
                 
-                // Update progress
+                // Update progress - use time-based monotonic progress within verification range (60-85%)
                 var elapsed = DateTime.UtcNow - (timeout - WindowerLaunchConfiguration.Timeouts.ProcessStartup);
-                var progressPercent = WindowerLaunchConfiguration.ProgressMilestones.ProcessStartupWait + 
-                    (int)((elapsed.TotalSeconds / WindowerLaunchConfiguration.Timeouts.ProcessStartup.TotalSeconds) * 
-                    (WindowerLaunchConfiguration.ProgressMilestones.WindowDetection - WindowerLaunchConfiguration.ProgressMilestones.ProcessStartupWait));
-                subtask.UpdateProgress(Math.Min(progressPercent, WindowerLaunchConfiguration.ProgressMilestones.WindowDetection - 1),
-                    "Verifying launched process...");
+                var baseProgress = 60;
+                var rangeSize = 25;
+                var progressPercent = baseProgress + (int)((elapsed.TotalSeconds / WindowerLaunchConfiguration.Timeouts.ProcessStartup.TotalSeconds) * rangeSize);
+                await UpdateProgressWithPhaseAsync(subtask, "startup", Math.Min(85, progressPercent), "Verifying launched process");
                 
                 await Task.Delay(WindowerLaunchConfiguration.PollingIntervals.ProcessStartupCheck, cancellationToken);
             }

@@ -212,9 +212,74 @@ namespace FFXIManager.Models
         }
 
         /// <summary>
-        /// Progress display text with percentage
+        /// Progress display text with percentage and estimated time remaining
         /// </summary>
-        public string ProgressDisplay => $"{Progress}%";
+        public string ProgressDisplay
+        {
+            get
+            {
+                var baseProgress = $"{Progress}%";
+
+                // Add estimated time remaining for active tasks
+                if (IsActive && StartTime.HasValue && Progress > 10 && Progress < 95)
+                {
+                    var estimatedTimeRemaining = GetEstimatedTimeRemaining();
+                    if (estimatedTimeRemaining.HasValue && estimatedTimeRemaining.Value.TotalSeconds > 3)
+                    {
+                        var timeText = estimatedTimeRemaining.Value.TotalMinutes >= 1
+                            ? $"{estimatedTimeRemaining.Value.Minutes:D1}m {estimatedTimeRemaining.Value.Seconds:D2}s"
+                            : $"{estimatedTimeRemaining.Value.Seconds}s";
+                        return $"{baseProgress} (~{timeText} remaining)";
+                    }
+                }
+
+                return baseProgress;
+            }
+        }
+
+        /// <summary>
+        /// Gets estimated time remaining based on current progress and elapsed time
+        /// </summary>
+        private TimeSpan? GetEstimatedTimeRemaining()
+        {
+            if (!IsActive || !StartTime.HasValue || Progress <= 0 || Progress >= 100)
+                return null;
+
+            var elapsed = DateTime.Now - StartTime.Value;
+            if (elapsed.TotalSeconds < 2) return null; // Need some time to calculate
+
+            // Calculate estimated total duration based on current progress rate
+            var estimatedTotalDuration = TimeSpan.FromSeconds((elapsed.TotalSeconds * 100) / Progress);
+
+            // Use the estimated duration from the subtask definition as a sanity check
+            var maxEstimatedDuration = TimeSpan.FromSeconds(EstimatedDurationSeconds * 2); // Allow up to 2x longer than estimated
+            if (estimatedTotalDuration > maxEstimatedDuration)
+            {
+                estimatedTotalDuration = maxEstimatedDuration;
+            }
+
+            var timeRemaining = estimatedTotalDuration - elapsed;
+            return timeRemaining.TotalSeconds > 0 ? timeRemaining : null;
+        }
+
+        /// <summary>
+        /// Gets smooth progress value that interpolates between updates for fluid animation
+        /// </summary>
+        public int SmoothProgress
+        {
+            get
+            {
+                if (!IsActive || !StartTime.HasValue)
+                    return Progress;
+
+                // If we have a good estimated duration, calculate smooth progress based on time
+                var elapsed = DateTime.Now - StartTime.Value;
+                var expectedProgress = Math.Min(95, (int)((elapsed.TotalSeconds / EstimatedDurationSeconds) * 100));
+
+                // Use the higher of actual progress or time-based progress for smooth experience
+                return Math.Max(Progress, expectedProgress);
+            }
+        }
 
         #endregion
 
@@ -232,17 +297,83 @@ namespace FFXIManager.Models
         }
 
         /// <summary>
-        /// Updates the progress of the subtask
+        /// Updates the progress of the subtask with optional user-friendly message override
         /// </summary>
         /// <param name="progress">Progress percentage (0-100)</param>
         /// <param name="message">Optional status message</param>
+        [System.Obsolete("Use UpdateProgressWithPhase instead for consistent phase-based progress reporting", false)]
         public void UpdateProgress(int progress, string? message = null)
         {
             Progress = progress;
             if (!string.IsNullOrEmpty(message))
             {
-                StatusMessage = message;
+                // Convert technical messages to user-friendly ones
+                StatusMessage = ConvertToUserFriendlyMessage(message);
             }
+        }
+
+        /// <summary>
+        /// Updates progress with phase-based context for better user understanding
+        /// </summary>
+        /// <param name="phase">Current operation phase</param>
+        /// <param name="progress">Progress within the phase (0-100)</param>
+        /// <param name="message">Optional detailed message</param>
+        public void UpdateProgressWithPhase(string phase, int progress, string? message = null)
+        {
+            Progress = progress;
+
+            // Create user-friendly phase-based message
+            var phaseMessage = GetPhaseBasedMessage(phase, progress);
+            StatusMessage = !string.IsNullOrEmpty(message) ? $"{phaseMessage} - {message}" : phaseMessage;
+        }
+
+        /// <summary>
+        /// Converts technical messages to user-friendly alternatives
+        /// </summary>
+        private string ConvertToUserFriendlyMessage(string technicalMessage)
+        {
+            // Common technical message patterns and their user-friendly alternatives
+            var messagePatterns = new Dictionary<string, string>
+            {
+                { "Detecting.*screen.*\\((\\d+)/(\\d+)\\)", "Waiting for game to respond..." },
+                { "Template matching.*", "Connecting to game servers..." },
+                { "Window handle.*", "Finding game window..." },
+                { "Screenshot.*failed.*", "Waiting for game interface..." },
+                { "Confidence.*threshold.*", "Verifying connection..." },
+                { "Clicking.*coordinates.*", "Interacting with game..." },
+                { "Sending.*key.*", "Entering information..." },
+                { "Process.*not found.*", "Starting game application..." },
+                { "Authentication.*", "Logging into account..." },
+                { "Member.*selection.*", "Selecting character slot..." }
+            };
+
+            foreach (var pattern in messagePatterns)
+            {
+                if (System.Text.RegularExpressions.Regex.IsMatch(technicalMessage, pattern.Key, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                {
+                    return pattern.Value;
+                }
+            }
+
+            // If no pattern matches, return the original message
+            return technicalMessage;
+        }
+
+        /// <summary>
+        /// Gets user-friendly phase-based progress message
+        /// </summary>
+        private string GetPhaseBasedMessage(string phase, int progress)
+        {
+            return phase.ToLowerInvariant() switch
+            {
+                "startup" or "launch" => progress < 50 ? "Starting PlayOnline..." : "PlayOnline loading...",
+                "authentication" or "auth" => progress < 30 ? "Connecting to servers..." :
+                                             progress < 70 ? "Verifying account..." : "Logging in...",
+                "memberselection" or "member" => "Selecting character slot...",
+                "gameconnection" or "game" => progress < 50 ? "Connecting to game world..." : "Finalizing connection...",
+                "windower" => progress < 50 ? "Starting Windower..." : "Loading game enhancements...",
+                _ => $"Processing {phase}..."
+            };
         }
 
         /// <summary>

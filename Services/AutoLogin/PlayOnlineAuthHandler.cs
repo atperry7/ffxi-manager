@@ -176,8 +176,8 @@ namespace FFXIManager.Services.AutoLogin
             // Phase 5: Store context for subsequent steps
             await StoreMemberSelectionContextAsync(context, memberSlot, windowHandle);
 
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.Complete, 
-                                   $"Member slot {memberSlot} selected successfully for {accountName}");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.Complete,
+                                                "Character slot selected successfully");
         }
 
         /// <summary>
@@ -212,8 +212,8 @@ namespace FFXIManager.Services.AutoLogin
         private async Task<IntPtr> EstablishPlayOnlineConnectionAsync(AutoLoginSubtask subtask, CancellationToken cancellationToken)
         {
             // Find PlayOnline window using base infrastructure
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.WindowDetection, 
-                                   "Finding active PlayOnline window...");
+            await UpdateProgressWithPhaseAsync(subtask, "startup", PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.WindowDetection,
+                                                "Connecting to PlayOnline");
             
             var windowHandle = await FindWindowHandleAsync(
                 subtask,
@@ -222,8 +222,8 @@ namespace FFXIManager.Services.AutoLogin
                 cancellationToken);
 
             // Wait for PlayOnline startup completion with progress tracking
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.StartupCompletion, 
-                                   "Detecting PlayOnline startup completion...");
+            await UpdateProgressWithPhaseAsync(subtask, "startup", PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.StartupCompletion,
+                                                "PlayOnline is starting up");
             
             await WaitForPlayOnlineStartupAsync(windowHandle, cancellationToken);
 
@@ -243,8 +243,8 @@ namespace FFXIManager.Services.AutoLogin
         /// </remarks>
         private async Task DetectMemberSelectionScreenAsync(AutoLoginSubtask subtask, IntPtr windowHandle, CancellationToken cancellationToken)
         {
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.ScreenDetection, 
-                                   "Waiting for member selection interface to load...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.ScreenDetection,
+                                                "Loading character selection");
 
             // Use configuration-driven screen detection with extended timeout
             var detectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.MemberSelectionDetection.TotalSeconds);
@@ -265,8 +265,8 @@ namespace FFXIManager.Services.AutoLogin
             }
 
             // Allow screen stabilization before interaction
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.ScreenStabilization, 
-                                   "Verifying member selection screen stability...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.ScreenStabilization,
+                                                "Preparing character selection");
             
             await Task.Delay(PlayOnlineAuthConfiguration.Delays.UIStabilization, cancellationToken);
         }
@@ -286,14 +286,14 @@ namespace FFXIManager.Services.AutoLogin
         private async Task SelectMemberSlotAsync(AutoLoginSubtask subtask, int memberSlot, IntPtr windowHandle, string accountName, CancellationToken cancellationToken)
         {
             // Get fresh screenshot for interaction
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.PreparingSelection, 
-                                   $"Preparing to select member slot {memberSlot}...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.PreparingSelection,
+                                                "Selecting character slot");
             
             var finalScreenshot = await CaptureScreenshotWithLogging(windowHandle, "member slot selection", cancellationToken);
 
             // Perform member slot click using configuration coordinates
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.ClickingMember, 
-                                   $"Clicking member slot {memberSlot} for {accountName}...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.ClickingMember,
+                                                "Confirming character selection");
             
             var memberCoordinates = PlayOnlineAuthConfiguration.Coordinates.MemberSlots.GetSlotCoordinate(memberSlot);
             
@@ -306,8 +306,8 @@ namespace FFXIManager.Services.AutoLogin
                 _automationService);
 
             // Wait for PlayOnline response using configured delay
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.ConfirmingSelection, 
-                                   "Confirming member selection and waiting for response...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.ConfirmingSelection,
+                                                "Processing selection");
             
             await Task.Delay(PlayOnlineAuthConfiguration.Delays.PlayOnlineResponse, cancellationToken);
         }
@@ -377,12 +377,12 @@ namespace FFXIManager.Services.AutoLogin
                 "PlayOnline",
                 cancellationToken);
 
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.WindowDetection, 
-                                   "Waiting for login information screen...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.WindowDetection,
+                                                "Loading login screen");
 
             // Detect login information screen with configuration-driven timeout
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.LoginScreenDetection, 
-                                   "Detecting login information screen...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.LoginScreenDetection,
+                                                "Preparing login interface");
             
             var detectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.LoginScreenDetection.TotalSeconds);
             var loginScreenMatch = await WaitForScreenDetectionAsync(
@@ -401,8 +401,8 @@ namespace FFXIManager.Services.AutoLogin
             }
 
             // Click "Log In" button using configuration coordinates
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.LoginButtonClick, 
-                                   "Clicking Log In button...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.LoginButtonClick,
+                                                "Accessing login form");
             
             await ClickAtCoordinatesAsync(
                 subtask,
@@ -428,8 +428,8 @@ namespace FFXIManager.Services.AutoLogin
         private async Task NavigateToConnectionScreenAsync(AutoLoginSubtask subtask, IntPtr windowHandle, CancellationToken cancellationToken)
         {
             // Wait for connect to PlayOnline screen
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.ConnectionScreenDetection, 
-                                   "Waiting for connection screen...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.ConnectionScreenDetection,
+                                                "Connecting to servers");
             
             var detectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.LoginScreenDetection.TotalSeconds);
             var connectScreenMatch = await WaitForScreenDetectionAsync(
@@ -462,8 +462,8 @@ namespace FFXIManager.Services.AutoLogin
         private async Task ActivatePasswordEntryInterfaceAsync(AutoLoginSubtask subtask, IntPtr windowHandle, CancellationToken cancellationToken)
         {
             // Click password field using configuration coordinates
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.PasswordFieldClick, 
-                                   "Selecting password field...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.PasswordFieldClick,
+                                                "Preparing password entry");
             
             await ClickAtCoordinatesAsync(
                 subtask,
@@ -476,8 +476,8 @@ namespace FFXIManager.Services.AutoLogin
             await Task.Delay(PlayOnlineAuthConfiguration.Delays.InteractionCompletion, cancellationToken);
 
             // Wait for virtual keyboard appearance
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.VirtualKeyboardDetection, 
-                                   "Waiting for virtual keyboard...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.VirtualKeyboardDetection,
+                                                "Loading secure keyboard");
             
             var detectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.VirtualKeyboardDetection.TotalSeconds);
             var keyboardMatch = await WaitForScreenDetectionAsync(
@@ -495,8 +495,8 @@ namespace FFXIManager.Services.AutoLogin
             }
 
             // Click virtual keyboard password field using configuration coordinates
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.KeyboardFieldClick, 
-                                   "Selecting virtual keyboard password field...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.KeyboardFieldClick,
+                                                "Accessing secure input");
             
             await ClickAtCoordinatesAsync(
                 subtask,
@@ -528,8 +528,8 @@ namespace FFXIManager.Services.AutoLogin
         private async Task PerformSecurePasswordEntryAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IntPtr windowHandle, string accountName, CancellationToken cancellationToken)
         {
             // Retrieve password from Windows Credential Manager
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.PasswordRetrieval, 
-                                   "Retrieving stored password...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.PasswordRetrieval,
+                                                "Retrieving credentials");
             
             var credentialTarget = _credentialsService.GenerateCredentialTarget(queueItem.Profile?.FilePath ?? string.Empty, queueItem.Account.Id);
             var password = await _credentialsService.RetrievePasswordAsync(credentialTarget, accountName);
@@ -551,8 +551,8 @@ namespace FFXIManager.Services.AutoLogin
             }
 
             // Perform secure password entry
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.PasswordInput, 
-                                   "Entering password securely...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.PasswordInput,
+                                                "Verifying account credentials");
             
             await _automationService.TypeSecureTextAsync(password, 50, cancellationToken);
             
@@ -577,8 +577,8 @@ namespace FFXIManager.Services.AutoLogin
         private async Task ConfirmPasswordAndConnectAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IntPtr windowHandle, CancellationToken cancellationToken)
         {
             // Click CircleConfirmation button to confirm password entry
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.Confirmation, 
-                                   "Confirming password entry...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.Confirmation,
+                                                "Confirming login details");
             
             await ClickAtTemplateCoordinatesAsync(
                 subtask,
@@ -595,7 +595,7 @@ namespace FFXIManager.Services.AutoLogin
             {
                 await _loggingService.LogInfoAsync("OTP not required - proceeding with direct connection");
                 
-                subtask.UpdateProgress(95, "Clicking Connect button (no OTP required)...");
+                await UpdateProgressWithPhaseAsync(subtask, "authentication", 95, "Connecting to game servers");
                 
                 await ClickAtTemplateCoordinatesAsync(
                     subtask,
@@ -659,8 +659,8 @@ namespace FFXIManager.Services.AutoLogin
             // Phase 6: Confirm password and conditionally connect
             await ConfirmPasswordAndConnectAsync(subtask, queueItem, windowHandle, cancellationToken);
 
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.Complete, 
-                                   "Password entry and confirmation completed successfully");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.Complete,
+                                                "Account verification completed");
         }
 
         /// <summary>
@@ -709,8 +709,8 @@ namespace FFXIManager.Services.AutoLogin
             // Phase 6: Determine navigation flow based on POL Proxy configuration
             await DetermineNavigationFlowAsync(subtask, queueItem, windowHandle, context, cancellationToken);
 
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.Complete, 
-                                   "OTP entry, connection, and game launch completed successfully");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.Complete,
+                                                "Two-factor authentication completed");
         }
 
         /// <summary>
@@ -746,8 +746,8 @@ namespace FFXIManager.Services.AutoLogin
         /// </remarks>
         private async Task<string> GenerateSecureOTPCodeAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, string accountName, CancellationToken cancellationToken)
         {
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.OTPGeneration, 
-                                   "Generating OTP code...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.OTPGeneration,
+                                                "Generating security code");
             
             var otpCode = await _otpService.GenerateOTPCodeAsync(queueItem.Profile?.FilePath ?? string.Empty, queueItem.Account.Id);
             
@@ -794,8 +794,8 @@ namespace FFXIManager.Services.AutoLogin
         private async Task PerformSecureOTPEntryAsync(AutoLoginSubtask subtask, IntPtr windowHandle, string otpCode, CancellationToken cancellationToken)
         {
             // Locate and activate OTP input field
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.FieldLocation, 
-                                   "Locating OTP input field...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.FieldLocation,
+                                                "Preparing security verification");
             
             var otpScreenshot = await CaptureScreenshotWithLogging(windowHandle, "OTP field selection", cancellationToken);
 
@@ -807,8 +807,8 @@ namespace FFXIManager.Services.AutoLogin
             await Task.Delay(PlayOnlineAuthConfiguration.Delays.KeyboardInput, cancellationToken);
 
             // Enter OTP code securely
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.OTPInput, 
-                                   $"Entering OTP code: {otpCode.Substring(0, 2)}****");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.OTPInput,
+                                                "Entering security code");
             
             await _automationService.TypeTextAsync(otpCode, 100, cancellationToken);
             
@@ -827,8 +827,8 @@ namespace FFXIManager.Services.AutoLogin
         private async Task InitiateOTPConnectionAsync(AutoLoginSubtask subtask, IntPtr windowHandle, CancellationToken cancellationToken)
         {
             // Click Connect button after OTP entry using configuration
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.Connection, 
-                                   "Clicking Connect button after OTP entry...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.Connection,
+                                                "Connecting with verified credentials");
             
             await ClickAtTemplateCoordinatesAsync(
                 subtask,
@@ -856,8 +856,8 @@ namespace FFXIManager.Services.AutoLogin
         /// </remarks>
         private async Task DetermineNavigationFlowAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IntPtr windowHandle, IAutoLoginContext context, CancellationToken cancellationToken)
         {
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.PostProcessing, 
-                                   "Determining navigation flow...");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.PostProcessing,
+                                                "Preparing game launch");
 
             // Use IExternalApplicationService pattern-based detection for POL Proxy
             var polProxyApp = await _externalApplicationService.FindApplicationByPatternAsync(
@@ -869,7 +869,7 @@ namespace FFXIManager.Services.AutoLogin
                 // POL Proxy detected - streamlined flow
                 await _loggingService.LogInfoAsync($"POL Proxy detected ({polProxyApp.Name}) - skipping PlayOnline navigation screens");
                 
-                subtask.UpdateProgress(90, "POL Proxy detected - bypassing PlayOnline screens, transitioning to FFXI...");
+                await UpdateProgressWithPhaseAsync(subtask, "gameconnection", 90, "Fast-tracking to game launch");
 
                 // Store context for FFXI handler
                 context.SetData("WindowHandle", windowHandle);
@@ -968,8 +968,8 @@ namespace FFXIManager.Services.AutoLogin
         /// <returns>Updated window handle after detection</returns>
         private async Task<IntPtr> WaitForPlayOnlineMainScreenAsync(AutoLoginSubtask subtask, IntPtr windowHandle, IAutoLoginContext context, CancellationToken cancellationToken)
         {
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.MainScreenWait, 
-                                   "Waiting for PlayOnline main screen...");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.MainScreenWait,
+                                                "Loading game menu");
 
             var detectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.MainScreenDetection.TotalSeconds);
             var mainScreenMatch = await WaitForScreenDetectionAsync(
@@ -996,8 +996,8 @@ namespace FFXIManager.Services.AutoLogin
         /// <param name="cancellationToken">Cancellation token</param>
         private async Task SelectFinalFantasyXIAsync(AutoLoginSubtask subtask, IntPtr windowHandle, CancellationToken cancellationToken)
         {
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.GameSelection, 
-                                   "Selecting Final Fantasy XI...");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.GameSelection,
+                                                "Selecting FINAL FANTASY XI");
 
             await ClickAtCoordinatesAsync(
                 subtask,
@@ -1022,8 +1022,8 @@ namespace FFXIManager.Services.AutoLogin
         private async Task<IntPtr> NavigatePlayScreensAsync(AutoLoginSubtask subtask, IntPtr windowHandle, IAutoLoginContext context, CancellationToken cancellationToken)
         {
             // Wait for play screen
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.PlayScreenWait, 
-                                   "Waiting for play screen...");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.PlayScreenWait,
+                                                "Loading game launcher");
 
             var playDetectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.PlayScreenDetection.TotalSeconds);
             var playScreenMatch = await WaitForScreenDetectionAsync(
@@ -1064,8 +1064,8 @@ namespace FFXIManager.Services.AutoLogin
         /// <returns>Updated window handle after confirmation</returns>
         private async Task<IntPtr> HandleFinalConfirmationAsync(AutoLoginSubtask subtask, IntPtr windowHandle, IAutoLoginContext context, CancellationToken cancellationToken)
         {
-            subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.FinalConfirmation, 
-                                   "Waiting for play confirmation...");
+            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.FinalConfirmation,
+                                                "Preparing to launch game");
 
             var confirmDetectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.PlayScreenDetection.TotalSeconds);
             var confirmScreenMatch = await WaitForScreenDetectionAsync(
@@ -1079,8 +1079,8 @@ namespace FFXIManager.Services.AutoLogin
             if (confirmScreenMatch.Confidence >= PlayOnlineAuthConfiguration.ConfidenceThresholds.ScreenDetection)
             {
                 // Click final Play button
-                subtask.UpdateProgress(PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.Complete, 
-                                       "Confirming game launch...");
+                await UpdateProgressWithPhaseAsync(subtask, "gameconnection", PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.Complete,
+                                                    "Launching FINAL FANTASY XI");
 
                 await ClickAtCoordinatesAsync(
                     subtask,

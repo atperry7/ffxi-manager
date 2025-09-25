@@ -189,12 +189,104 @@ namespace FFXIManager.Services.AutoLogin
         }
 
         /// <summary>
-        /// Updates progress with consistent logging.
+        /// Updates progress with consistent logging and smart message prioritization.
         /// </summary>
         protected async Task UpdateProgressAsync(AutoLoginSubtask subtask, int progress, string message)
         {
             subtask?.UpdateProgress(progress, message);
+
+            // Log technical details at debug level, user-friendly summary at info level
             await _loggingService.LogDebugAsync($"Progress {progress}%: {message}");
+
+            // Only log significant progress milestones at info level to reduce noise
+            if (IsSignificantProgressUpdate(progress))
+            {
+                await _loggingService.LogInfoAsync($"Task progress: {subtask?.Name} - {progress}%");
+            }
+        }
+
+        /// <summary>
+        /// Updates progress with phase-based context for better user understanding.
+        /// </summary>
+        protected async Task UpdateProgressWithPhaseAsync(AutoLoginSubtask subtask, string phase, int progress, string? detailMessage = null)
+        {
+            subtask?.UpdateProgressWithPhase(phase, progress, detailMessage);
+
+            // Always log phase changes at info level as they are significant
+            await _loggingService.LogInfoAsync($"Phase: {phase} - {progress}%");
+
+            if (!string.IsNullOrEmpty(detailMessage))
+            {
+                await _loggingService.LogDebugAsync($"Phase details: {detailMessage}");
+            }
+        }
+
+        /// <summary>
+        /// Determines if a progress update is significant enough for info-level logging.
+        /// </summary>
+        private bool IsSignificantProgressUpdate(int progress)
+        {
+            // Log at 25%, 50%, 75%, and 100% completion
+            return progress >= 100 || progress % 25 == 0;
+        }
+
+        /// <summary>
+        /// Creates user-friendly progress messages with context and timing information.
+        /// </summary>
+        protected string CreateContextualProgressMessage(string operation, int attempt, int maxAttempts, TimeSpan elapsed)
+        {
+            var baseMessage = $"{operation}...";
+
+            // Add timing context for operations taking longer than expected
+            if (elapsed.TotalSeconds > 15)
+            {
+                baseMessage += " (This may take a moment)";
+            }
+            else if (elapsed.TotalSeconds > 30)
+            {
+                baseMessage += " (Please wait, this can take up to 2 minutes)";
+            }
+
+            // Only show attempt details if there are multiple attempts and it's not the first
+            if (maxAttempts > 1 && attempt > 1)
+            {
+                baseMessage += $" [Attempt {attempt}]";
+            }
+
+            return baseMessage;
+        }
+
+        /// <summary>
+        /// Gets the appropriate detection phase based on screen description.
+        /// </summary>
+        private string GetDetectionPhase(string screenDescription)
+        {
+            return screenDescription.ToLowerInvariant() switch
+            {
+                var desc when desc.Contains("member") || desc.Contains("selection") => "authentication",
+                var desc when desc.Contains("login") || desc.Contains("password") => "authentication",
+                var desc when desc.Contains("game") || desc.Contains("world") => "gameconnection",
+                var desc when desc.Contains("windower") => "windower",
+                var desc when desc.Contains("pol") || desc.Contains("playonline") => "startup",
+                _ => "startup"
+            };
+        }
+
+        /// <summary>
+        /// Converts technical screen descriptions to user-friendly names.
+        /// </summary>
+        private string GetUserFriendlyScreenName(string screenDescription)
+        {
+            return screenDescription.ToLowerInvariant() switch
+            {
+                var desc when desc.Contains("member selection") => "PlayOnline to load",
+                var desc when desc.Contains("login screen") => "login screen",
+                var desc when desc.Contains("password") => "password prompt",
+                var desc when desc.Contains("game world") => "game world",
+                var desc when desc.Contains("character") => "character selection",
+                var desc when desc.Contains("windower") => "Windower to start",
+                _ => "game interface"
+            };
         }
 
         /// <summary>
@@ -252,16 +344,25 @@ namespace FFXIManager.Services.AutoLogin
             await _loggingService.LogInfoAsync($"Using template confidence threshold: {confidenceThreshold:P} for {screenDescription}");
 
             var maxAttempts = (int)(options.Timeout.TotalSeconds / options.CheckInterval.TotalSeconds);
+            var startTime = DateTime.UtcNow;
 
-            await _loggingService.LogInfoAsync($"Waiting for {screenDescription} (max {options.Timeout.TotalSeconds}s, checking every {options.CheckInterval.TotalSeconds}s, confidence={confidenceThreshold:P})");
+            await _loggingService.LogInfoAsync($"Starting {screenDescription} detection (timeout: {options.Timeout.TotalSeconds}s)");
+
+            // Determine phase based on screen description for better user messaging
+            var phase = GetDetectionPhase(screenDescription);
 
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // Update progress based on attempt
+                // Update progress with smart messaging
                 var progress = Math.Min(95, (attempt * 100) / maxAttempts);
-                subtask.UpdateProgress(progress, $"Detecting {screenDescription} ({attempt}/{maxAttempts})...");
+                var elapsed = DateTime.UtcNow - startTime;
+
+                // Use phase-based messaging for better user experience
+                var userFriendlyMessage = CreateContextualProgressMessage($"Waiting for {GetUserFriendlyScreenName(screenDescription)}", attempt, maxAttempts, elapsed);
+
+                subtask.UpdateProgressWithPhase(phase, progress, userFriendlyMessage);
 
                 var screenshot = await CaptureScreenshotWithLogging(windowHandle, screenDescription, cancellationToken);
                 var match = await _templateService.FindElementAsync(screenshot, templatePath, cancellationToken);
@@ -270,7 +371,7 @@ namespace FFXIManager.Services.AutoLogin
 
                 if (match.Confidence >= confidenceThreshold)
                 {
-                    subtask.UpdateProgress(100, $"{screenDescription} detected successfully");
+                    subtask.UpdateProgressWithPhase(phase, 100, "Connection established");
                     await _loggingService.LogInfoAsync($"{screenDescription} detected after {attempt} attempts (confidence: {match.Confidence:P})");
                     return match;
                 }
@@ -318,8 +419,11 @@ namespace FFXIManager.Services.AutoLogin
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var progress = Math.Min(90, (attempt * 100) / maxAttempts);
-                subtask.UpdateProgress(progress, $"Finding {processName} window ({attempt}/{maxAttempts})...");
+                // Use monotonic progress within window finding range (10-85%)
+                var baseProgress = 10;
+                var rangeSize = 75;
+                var progress = baseProgress + ((attempt - 1) * rangeSize / maxAttempts);
+                await UpdateProgressWithPhaseAsync(subtask, "startup", Math.Min(85, progress), $"Finding {processName} window");
 
                 var processes = Process.GetProcessesByName(processName);
 
@@ -334,7 +438,7 @@ namespace FFXIManager.Services.AutoLogin
                         if (string.IsNullOrEmpty(windowTitleFilter) ||
                             windowTitle.Contains(windowTitleFilter, StringComparison.OrdinalIgnoreCase))
                         {
-                            subtask.UpdateProgress(100, $"Found {processName} window: {windowTitle}");
+                            await UpdateProgressWithPhaseAsync(subtask, "startup", 90, $"Found {processName} window: {windowTitle}");
                             await _loggingService.LogInfoAsync($"Found {processName} window after {attempt} attempts - Handle: 0x{process.MainWindowHandle.ToInt64():X}, Title: '{windowTitle}', PID: {process.Id}");
                             return process.MainWindowHandle;
                         }
@@ -368,7 +472,7 @@ namespace FFXIManager.Services.AutoLogin
             if (automationService == null)
                 throw new ArgumentNullException(nameof(automationService), "IUIAutomationService must be provided for coordinate clicking");
 
-            subtask.UpdateProgress(50, $"Preparing to click {description}...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", 50, $"Preparing to click {description}");
 
             var screenshot = await CaptureScreenshotWithLogging(windowHandle, description, cancellationToken);
             var screenPoint = screenshot.ToScreenCoordinates(windowRelativePoint);
@@ -381,7 +485,7 @@ namespace FFXIManager.Services.AutoLogin
 
             await _loggingService.LogDebugAsync($"Clicking {description} at window-relative {windowRelativePoint}, screen coordinates {screenPoint}");
 
-            subtask.UpdateProgress(75, $"Clicking {description}...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", 75, $"Clicking {description}");
 
             // Move mouse first for visual feedback
             await automationService.MoveMouseAsync(screenPoint, cancellationToken);
@@ -390,7 +494,7 @@ namespace FFXIManager.Services.AutoLogin
             // Perform click
             await automationService.ClickAsync(screenPoint, cancellationToken);
 
-            subtask.UpdateProgress(100, $"{description} clicked successfully");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", 100, $"{description} clicked successfully");
             await _loggingService.LogDebugAsync($"{description} clicked at {screenPoint}");
         }
 
@@ -542,7 +646,7 @@ namespace FFXIManager.Services.AutoLogin
             if (automationService == null)
                 throw new ArgumentNullException(nameof(automationService), "IUIAutomationService must be provided for template-based clicking");
 
-            subtask.UpdateProgress(10, $"Loading template metadata for {templatePath}...");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", 10, "Loading template metadata");
 
             // Load template metadata to get click coordinates
             var metadata = await _templateManagementService.GetTemplateMetadataAsync(templatePath);
@@ -554,7 +658,7 @@ namespace FFXIManager.Services.AutoLogin
             var clickPoint = new Point(metadata.Action.ClickOffset.X, metadata.Action.ClickOffset.Y);
             var description = metadata.Action.Parameters.TryGetValue("description", out var desc) ? desc.ToString() : metadata.Name;
 
-            subtask.UpdateProgress(30, $"Using template coordinates: {clickPoint}");
+            await UpdateProgressWithPhaseAsync(subtask, "authentication", 30, "Using template coordinates");
 
             // Use the standard coordinate-based click method
             await ClickAtCoordinatesAsync(

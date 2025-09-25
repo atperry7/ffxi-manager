@@ -118,27 +118,32 @@
                             Margin="0,0,5,0"/>
                 </StackPanel>
 
-                <!-- Stacked Color-Coded Progress Bar -->
-                <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                      Height="8" Margin="0,10,0,0"
-                      Visibility="{Binding ShowProgressBars, Converter={StaticResource BoolToVisConverter}}">
+                <!-- Enhanced Stacked Color-Coded Progress Bar -->
+                <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                        Height="10" Margin="0,10,0,0"
+                        CornerRadius="5"
+                        Background="{DynamicResource SurfaceBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        Visibility="{Binding ShowProgressBars, Converter={StaticResource BoolToVisConverter}}">
+                    <Grid>
+                        <!-- Layer 1: Background/Pending (bottom layer) -->
+                        <ProgressBar Value="100" Maximum="100"
+                                     Style="{StaticResource PendingProgressBarStyle}"/>
 
-                    <!-- Layer 1: Background/Pending (bottom layer) -->
-                    <ProgressBar Value="100" Maximum="100"
-                                 Style="{StaticResource PendingProgressBarStyle}"/>
+                        <!-- Layer 2: All processed items (total progress) -->
+                        <ProgressBar Value="{Binding ProcessedPercentage, Mode=OneWay}" Maximum="100"
+                                     Style="{StaticResource FailedProgressBarStyle}"/>
 
-                    <!-- Layer 2: All processed items (total progress) -->
-                    <ProgressBar Value="{Binding ProcessedPercentage, Mode=OneWay}" Maximum="100"
-                                 Style="{StaticResource FailedProgressBarStyle}"/>
+                        <!-- Layer 3: Completed + Cancelled items (non-failed) -->
+                        <ProgressBar Value="{Binding CompletedAndCancelledPercentage, Mode=OneWay}" Maximum="100"
+                                     Style="{StaticResource CancelledProgressBarStyle}"/>
 
-                    <!-- Layer 3: Completed + Cancelled items (non-failed) -->
-                    <ProgressBar Value="{Binding CompletedAndCancelledPercentage, Mode=OneWay}" Maximum="100"
-                                 Style="{StaticResource CancelledProgressBarStyle}"/>
-
-                    <!-- Layer 4: Only completed items (green on top) -->
-                    <ProgressBar Value="{Binding CompletedPercentage, Mode=OneWay}" Maximum="100"
-                                 Style="{StaticResource CompletedProgressBarStyle}"/>
-                </Grid>
+                        <!-- Layer 4: Only completed items (green on top) -->
+                        <ProgressBar Value="{Binding CompletedPercentage, Mode=OneWay}" Maximum="100"
+                                     Style="{StaticResource CompletedProgressBarStyle}"/>
+                    </Grid>
+                </Border>
             </Grid>
         </GroupBox>
 
@@ -155,62 +160,130 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- Profile Transition Indicator -->
+                <!-- Enhanced Profile Transition Indicator -->
                 <Border Grid.Row="0"
                         Background="{DynamicResource InfoBrush}"
-                        CornerRadius="5"
-                        Padding="10,5"
+                        CornerRadius="8"
+                        Padding="12,8"
                         Margin="0,0,0,8"
-                        Visibility="{Binding ShowProfileTransition, Converter={StaticResource BoolToVisConverter}}">
+                        Visibility="{Binding ShowProfileTransition, Converter={StaticResource BoolToVisConverter}}"
+                        BorderBrush="{DynamicResource InfoBrush}"
+                        BorderThickness="1">
+                    <Border.Effect>
+                        <DropShadowEffect Color="Black" Direction="270" ShadowDepth="2"
+                                          Opacity="0.2" BlurRadius="4"/>
+                    </Border.Effect>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🔄" FontSize="14" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                        <TextBlock Text="🔄" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0">
+                            <TextBlock.RenderTransform>
+                                <RotateTransform/>
+                            </TextBlock.RenderTransform>
+                            <TextBlock.Triggers>
+                                <EventTrigger RoutedEvent="TextBlock.Loaded">
+                                    <BeginStoryboard>
+                                        <Storyboard RepeatBehavior="Forever">
+                                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.Angle"
+                                                           From="0" To="360" Duration="0:0:2"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </EventTrigger>
+                            </TextBlock.Triggers>
+                        </TextBlock>
                         <TextBlock Text="{Binding ProfileTransitionMessage}"
                                    Foreground="White"
-                                   FontWeight="Bold"
+                                   FontWeight="SemiBold"
+                                   FontSize="13"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
                 </Border>
 
-                <!-- Active Queue Item Info -->
-                <TextBlock Grid.Row="1" FontWeight="Bold" Margin="0,0,0,5"
-                           Visibility="{Binding CurrentItem, Converter={StaticResource NullToVisibilityConverter}}">
-                    <Run Text="Logging in:"/>
-                    <Run Text="{Binding CurrentItem.DisplayName, Mode=OneWay}" Foreground="{DynamicResource InfoBrush}"/>
-                    <Run Text="from profile"/>
-                    <Run Text="{Binding CurrentItem.ProfileName, Mode=OneWay}" Foreground="{DynamicResource InfoBrush}"/>
-                </TextBlock>
+                <!-- Enhanced Active Queue Item Info -->
+                <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}"
+                        CornerRadius="6" Padding="12,8" Margin="0,0,0,8"
+                        BorderBrush="{DynamicResource InfoBrush}" BorderThickness="1"
+                        Visibility="{Binding CurrentItem, Converter={StaticResource NullToVisibilityConverter}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-                <!-- Idle State Info -->
-                <TextBlock Grid.Row="1" FontWeight="Bold" Margin="0,0,0,5"
-                           Visibility="{Binding CurrentItem, Converter={StaticResource NullToInverseVisibilityConverter}}"
-                           Text="{Binding IdleStateMessage}"/>
+                        <!-- Account and Profile Info -->
+                        <StackPanel Grid.Column="0">
+                            <TextBlock FontWeight="SemiBold" FontSize="14" Margin="0,0,0,2">
+                                <Run Text="🎮" FontSize="16"/>
+                                <Run Text="Logging in:"/>
+                                <Run Text="{Binding CurrentItem.DisplayName, Mode=OneWay}"
+                                     Foreground="{DynamicResource InfoBrush}" FontWeight="Bold"/>
+                            </TextBlock>
+                            <TextBlock FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}">
+                                <Run Text="Profile:"/>
+                                <Run Text="{Binding CurrentItem.ProfileName, Mode=OneWay}"
+                                     Foreground="{DynamicResource InfoBrush}"/>
+                            </TextBlock>
+                        </StackPanel>
 
-                <!-- Active Step Status -->
+                        <!-- Duration Display -->
+                        <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                            <TextBlock Text="{Binding CurrentItem.DurationDisplay, Mode=OneWay}"
+                                       FontFamily="Consolas"
+                                       FontSize="13"
+                                       FontWeight="Bold"
+                                       Foreground="{DynamicResource AccentBrush}"
+                                       HorizontalAlignment="Right"/>
+                            <TextBlock Text="{Binding CurrentItem.CurrentStepDisplay, Mode=OneWay}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       HorizontalAlignment="Right"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Enhanced Idle State Info -->
+                <Border Grid.Row="1" Background="{DynamicResource CardBackgroundBrush}"
+                        CornerRadius="6" Padding="16,12" Margin="0,0,0,8"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                        Visibility="{Binding CurrentItem, Converter={StaticResource NullToInverseVisibilityConverter}}">
+                    <TextBlock Text="{Binding IdleStateMessage}"
+                               FontWeight="SemiBold"
+                               FontSize="14"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"/>
+                </Border>
+
+                <!-- Enhanced Step Status Messages -->
                 <TextBlock Grid.Row="2"
                            Text="{Binding CurrentItem.StatusMessage}"
                            Foreground="{DynamicResource SecondaryTextBrush}"
-                           Margin="0,0,0,5"
+                           FontSize="13"
+                           Margin="0,0,0,8"
+                           TextAlignment="Center"
                            Visibility="{Binding CurrentItem, Converter={StaticResource NullToVisibilityConverter}}"/>
 
-                <!-- Idle Step Status -->
+                <!-- Enhanced Idle Step Status -->
                 <TextBlock Grid.Row="2"
                            Text="{Binding IdleStepMessage}"
                            Foreground="{DynamicResource SecondaryTextBrush}"
-                           Margin="0,0,0,5"
+                           FontSize="13"
+                           FontStyle="Italic"
+                           Margin="0,0,0,8"
+                           TextAlignment="Center"
                            Visibility="{Binding CurrentItem, Converter={StaticResource NullToInverseVisibilityConverter}}"/>
 
                 <!-- Active Step Progress -->
                 <ProgressBar Grid.Row="3"
                              Value="{Binding CurrentItem.CurrentStepProgress, Mode=OneWay}"
                              Maximum="100"
-                             Height="10"
+                             Height="12"
+                             Style="{StaticResource ActiveProgressBarStyle}"
                              Visibility="{Binding CurrentItem, Converter={StaticResource NullToVisibilityConverter}}"/>
 
                 <!-- Idle Progress Bar -->
                 <ProgressBar Grid.Row="3"
                              Value="{Binding IdleProgressValue, Mode=OneWay}"
                              Maximum="100"
-                             Height="10"
+                             Height="12"
+                             Style="{StaticResource SmoothProgressBarStyle}"
                              Visibility="{Binding CurrentItem, Converter={StaticResource NullToInverseVisibilityConverter}}"/>
             </Grid>
         </GroupBox>

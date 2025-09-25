@@ -138,7 +138,8 @@ namespace FFXIManager.Services.AutoLogin
                 // Step 1: Configuration Detection
                 // Check if POL Proxy is configured using the same patterns as PlayOnlineAuthHandler
                 // If user has configured it in External Applications, they want us to manage it
-                subtask.UpdateProgress(POLProxyLaunchConfiguration.ProgressMilestones.ConfigurationDetection, "Detecting POL Proxy configuration...");
+                await UpdateProgressWithPhaseAsync(subtask, "startup", POLProxyLaunchConfiguration.ProgressMilestones.ConfigurationDetection,
+                                                     "Checking POL Proxy setup");
                 
                 var polProxyApp = await _externalApplicationService.FindApplicationByPatternAsync(
                     PlayOnlineAuthConfiguration.ApplicationPatterns.POLProxyNamePatterns,
@@ -148,7 +149,7 @@ namespace FFXIManager.Services.AutoLogin
                 {
                     // POL Proxy not configured - this is normal and expected for many users
                     await _loggingService.LogInfoAsync("POL Proxy not configured - skipping auto-launch (this is normal if you don't use POL Proxy)");
-                    subtask.Skip("POL Proxy not configured");
+                    subtask.Skip("POL Proxy setup not found - continuing");
                     context.SetData("POLProxyConfigured", false);
                     return;
                 }
@@ -158,7 +159,8 @@ namespace FFXIManager.Services.AutoLogin
                 context.SetData("POLProxyApplication", polProxyApp);
 
                 // Step 2: Process Status Check  
-                subtask.UpdateProgress(POLProxyLaunchConfiguration.ProgressMilestones.ProcessStatusCheck, "Checking POL Proxy running status...");
+                await UpdateProgressWithPhaseAsync(subtask, "startup", POLProxyLaunchConfiguration.ProgressMilestones.ProcessStatusCheck,
+                                                     "Verifying POL Proxy status");
                 
                 var existingProcesses = await _processUtilityService.GetProcessesByNamesAsync(POLProxyLaunchConfiguration.ProcessNames.POLProxyVariations);
                 if (existingProcesses.Any())
@@ -166,14 +168,15 @@ namespace FFXIManager.Services.AutoLogin
                     // POL Proxy already running - skip launch
                     var processId = existingProcesses.First().ProcessId;
                     await _loggingService.LogInfoAsync($"POL Proxy already running (PID: {processId}) - skipping launch");
-                    subtask.Skip($"POL Proxy already running (PID: {processId})");
+                    subtask.Skip("POL Proxy already running - continuing");
                     context.SetData("POLProxyProcessId", processId);
                     context.SetData("POLProxyLaunchResult", "AlreadyRunning");
                     return;
                 }
 
                 // Step 3: Application Launch
-                subtask.UpdateProgress(POLProxyLaunchConfiguration.ProgressMilestones.ApplicationLaunch, $"Launching POL Proxy: {polProxyApp.Name}...");
+                await UpdateProgressWithPhaseAsync(subtask, "startup", POLProxyLaunchConfiguration.ProgressMilestones.ApplicationLaunch,
+                                                     "Starting POL Proxy");
                 
                 bool launchSuccess = await _externalApplicationService.LaunchApplicationAsync(polProxyApp);
                 if (!launchSuccess)
@@ -181,7 +184,7 @@ namespace FFXIManager.Services.AutoLogin
                     // Launch failed - log error but continue (non-blocking)
                     var errorMessage = "Failed to launch POL Proxy application";
                     await _loggingService.LogWarningAsync(errorMessage);
-                    subtask.Skip($"{errorMessage} - continuing without POL Proxy");
+                    subtask.Skip("POL Proxy launch failed - continuing");
                     context.SetData("POLProxyLaunchResult", "LaunchFailed");
                     return;
                 }
@@ -189,7 +192,8 @@ namespace FFXIManager.Services.AutoLogin
                 await _loggingService.LogInfoAsync("POL Proxy launch initiated successfully");
 
                 // Step 4: Process Startup Verification
-                subtask.UpdateProgress(POLProxyLaunchConfiguration.ProgressMilestones.ProcessStartupVerification, "Verifying POL Proxy startup...");
+                await UpdateProgressWithPhaseAsync(subtask, "startup", POLProxyLaunchConfiguration.ProgressMilestones.ProcessStartupVerification,
+                                                     "POL Proxy is starting up");
                 
                 int newProcessId = await GetLaunchedPOLProxyProcessId(polProxyApp, subtask, cancellationToken);
                 
@@ -198,7 +202,7 @@ namespace FFXIManager.Services.AutoLogin
                     // Startup verification failed - log warning but continue
                     var errorMessage = "POL Proxy process did not start within timeout period";
                     await _loggingService.LogWarningAsync(errorMessage);
-                    subtask.Skip($"{errorMessage} - continuing without verification");
+                    subtask.Skip("POL Proxy startup timeout - continuing");
                     context.SetData("POLProxyLaunchResult", "StartupTimeout");
                     return;
                 }
@@ -207,12 +211,14 @@ namespace FFXIManager.Services.AutoLogin
                 context.SetData("POLProxyProcessId", newProcessId);
                 context.SetData("POLProxyLaunchResult", "Success");
                 
-                subtask.UpdateProgress(POLProxyLaunchConfiguration.ProgressMilestones.PostLaunchStabilization, "POL Proxy startup verified, allowing stabilization...");
+                await UpdateProgressWithPhaseAsync(subtask, "startup", POLProxyLaunchConfiguration.ProgressMilestones.PostLaunchStabilization,
+                                                     "POL Proxy is stabilizing");
                 
                 // Allow POL Proxy to stabilize
                 await Task.Delay(POLProxyLaunchConfiguration.Timeouts.PostLaunchDelay, cancellationToken);
 
-                subtask.UpdateProgress(POLProxyLaunchConfiguration.ProgressMilestones.OperationComplete, $"POL Proxy launched successfully (PID: {newProcessId})");
+                await UpdateProgressWithPhaseAsync(subtask, "startup", POLProxyLaunchConfiguration.ProgressMilestones.OperationComplete,
+                                                     "POL Proxy ready");
                 await _loggingService.LogInfoAsync($"[FLOW] ExecuteLaunchPOLProxyAsync completed successfully - POL Proxy PID: {newProcessId}");
                 subtask.Complete();
             }
@@ -226,7 +232,7 @@ namespace FFXIManager.Services.AutoLogin
                 // Log error but don't fail - POL Proxy launch is non-critical
                 var errorMessage = $"Error during POL Proxy launch: {ex.Message}";
                 await _loggingService.LogWarningAsync(errorMessage, ex);
-                subtask.Skip($"{errorMessage} - continuing auto-login without POL Proxy");
+                subtask.Skip("POL Proxy error occurred - continuing auto-login");
                 context.SetData("POLProxyLaunchResult", "Exception");
             }
         }
@@ -251,7 +257,7 @@ namespace FFXIManager.Services.AutoLogin
                 
                 if (!polProxyConfigured)
                 {
-                    subtask.Skip("POL Proxy not configured - no status to check");
+                    subtask.Skip("POL Proxy not configured - status check skipped");
                     return;
                 }
 
@@ -259,33 +265,33 @@ namespace FFXIManager.Services.AutoLogin
                 var launchResult = context.GetData<string>("POLProxyLaunchResult") ?? "Unknown";
                 var processId = context.GetValueData<int>("POLProxyProcessId");
 
-                subtask.UpdateProgress(50, $"Checking POL Proxy status - Launch result: {launchResult}");
+                await UpdateProgressWithPhaseAsync(subtask, "startup", 50, $"Checking POL Proxy status - Launch result: {launchResult}");
 
                 switch (launchResult)
                 {
                     case "Success":
                         if (processId > 0 && _processUtilityService.IsProcessRunning(processId))
                         {
-                            subtask.UpdateProgress(100, $"POL Proxy running successfully (PID: {processId})");
+                            await UpdateProgressWithPhaseAsync(subtask, "startup", 100, $"POL Proxy running successfully (PID: {processId})");
                         }
                         else
                         {
-                            subtask.UpdateProgress(100, "POL Proxy launch reported success but process not detected");
+                            await UpdateProgressWithPhaseAsync(subtask, "startup", 100, "POL Proxy launch reported success but process not detected");
                         }
                         break;
 
                     case "AlreadyRunning":
-                        subtask.UpdateProgress(100, $"POL Proxy was already running (PID: {processId})");
+                        await UpdateProgressWithPhaseAsync(subtask, "startup", 100, $"POL Proxy was already running (PID: {processId})");
                         break;
 
                     case "LaunchFailed":
                     case "StartupTimeout":
                     case "Exception":
-                        subtask.UpdateProgress(100, $"POL Proxy launch encountered issues: {launchResult}");
+                        await UpdateProgressWithPhaseAsync(subtask, "startup", 100, $"POL Proxy launch encountered issues: {launchResult}");
                         break;
 
                     default:
-                        subtask.UpdateProgress(100, $"POL Proxy status unknown: {launchResult}");
+                        await UpdateProgressWithPhaseAsync(subtask, "startup", 100, $"POL Proxy status unknown: {launchResult}");
                         break;
                 }
 
@@ -326,29 +332,29 @@ namespace FFXIManager.Services.AutoLogin
                 
                 if (!polProxyConfigured)
                 {
-                    subtask.Skip("POL Proxy not configured - no startup to wait for");
+                    subtask.Skip("POL Proxy not configured - startup wait skipped");
                     return;
                 }
 
                 if (launchResult != "Success")
                 {
-                    subtask.Skip($"POL Proxy launch was not successful ({launchResult}) - skipping startup wait");
+                    subtask.Skip("POL Proxy launch unsuccessful - startup wait skipped");
                     return;
                 }
 
                 var processId = context.GetValueData<int>("POLProxyProcessId");
                 if (processId == 0)
                 {
-                    subtask.Skip("No POL Proxy process ID available from previous step");
+                    subtask.Skip("POL Proxy process ID unavailable - startup wait skipped");
                     return;
                 }
 
-                subtask.UpdateProgress(25, $"Monitoring POL Proxy startup (PID: {processId})...");
+                await UpdateProgressWithPhaseAsync(subtask, "startup", 25, "Monitoring POL Proxy startup");
 
                 // Verify process is still running and responsive
                 await WaitForPOLProxyResponsiveness(processId, subtask, cancellationToken);
 
-                subtask.UpdateProgress(100, $"POL Proxy startup completed successfully (PID: {processId})");
+                await UpdateProgressWithPhaseAsync(subtask, "startup", 100, "POL Proxy startup completed successfully");
                 await _loggingService.LogInfoAsync($"[FLOW] ExecuteWaitForPOLProxyStartAsync completed successfully");
                 subtask.Complete();
             }
@@ -362,7 +368,7 @@ namespace FFXIManager.Services.AutoLogin
                 // Don't fail hard - POL Proxy startup issues shouldn't block auto-login
                 var errorMessage = $"Error waiting for POL Proxy startup: {ex.Message}";
                 await _loggingService.LogWarningAsync(errorMessage, ex);
-                subtask.Skip($"{errorMessage} - continuing auto-login");
+                subtask.Skip("POL Proxy startup error - continuing auto-login");
             }
         }
 
@@ -375,7 +381,7 @@ namespace FFXIManager.Services.AutoLogin
         /// <param name="cancellationToken">Cancellation token for operation cancellation</param>
         private async Task WaitForPOLProxyResponsiveness(int processId, AutoLoginSubtask subtask, CancellationToken cancellationToken)
         {
-            subtask.UpdateProgress(40, "Verifying POL Proxy process responsiveness...");
+            await UpdateProgressWithPhaseAsync(subtask, "startup", 40, "Verifying POL Proxy responsiveness");
 
             // Use base class retry mechanism for consistent error handling
             await ExecuteWithRetryAsync(
@@ -405,7 +411,7 @@ namespace FFXIManager.Services.AutoLogin
                 baseDelayMs: (int)POLProxyLaunchConfiguration.PollingIntervals.ResponsivenessCheck.TotalMilliseconds,
                 cancellationToken);
 
-            subtask.UpdateProgress(75, "POL Proxy process is responsive and ready");
+            await UpdateProgressWithPhaseAsync(subtask, "startup", 75, "POL Proxy is responsive and ready");
         }
 
         /// <summary>
@@ -471,8 +477,8 @@ namespace FFXIManager.Services.AutoLogin
                 var progressPercent = POLProxyLaunchConfiguration.ProgressMilestones.ProcessStartupVerification + 
                     (int)((elapsed.TotalSeconds / POLProxyLaunchConfiguration.Timeouts.ProcessStartup.TotalSeconds) * 
                     (POLProxyLaunchConfiguration.ProgressMilestones.PostLaunchStabilization - POLProxyLaunchConfiguration.ProgressMilestones.ProcessStartupVerification));
-                subtask.UpdateProgress(Math.Min(progressPercent, POLProxyLaunchConfiguration.ProgressMilestones.PostLaunchStabilization - 1),
-                    "Verifying launched POL Proxy process...");
+                await UpdateProgressWithPhaseAsync(subtask, "startup", Math.Min(progressPercent, POLProxyLaunchConfiguration.ProgressMilestones.PostLaunchStabilization - 1),
+                    "Verifying POL Proxy startup");
                 
                 await Task.Delay(POLProxyLaunchConfiguration.PollingIntervals.ProcessStartupCheck, cancellationToken);
             }
