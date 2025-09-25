@@ -250,6 +250,9 @@ namespace FFXIManager.Services
             });
 
             await _loggingService.LogInfoAsync($"Reset {QueueItems.Count} queue items to pending state");
+
+            // Trigger collection changed event to ensure UI updates
+            QueueReordered?.Invoke(this, EventArgs.Empty);
         }
 
         public async Task RetryItemAsync(AutoLoginQueueItem item)

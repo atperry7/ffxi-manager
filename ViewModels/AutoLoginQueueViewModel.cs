@@ -787,6 +787,7 @@ namespace FFXIManager.ViewModels
                     await _queueService.ResetQueueAsync();
                     _statusService.SetTemporaryMessage("Queue reset successfully", TimeSpan.FromSeconds(3));
                     UpdateCommandStates();
+                    UpdateQueueProperties(); // Ensure all progress properties are updated
                 }
             }
             catch (Exception ex)
