@@ -227,6 +227,29 @@ namespace FFXIManager.Services
 
             try
             {
+                // Update previous profile with any user changes before swapping
+                if (File.Exists(activeLoginPath))
+                {
+                    var settings = SettingsService?.LoadSettings();
+                    var previousProfileName = settings?.LastActiveProfileName;
+
+                    if (!string.IsNullOrEmpty(previousProfileName) &&
+                        !previousProfileName.StartsWith(config.AutoBackupPrefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var previousProfilePath = Path.Combine(PlayOnlineDirectory, $"{previousProfileName}{config.BackupFileExtension}");
+
+                        try
+                        {
+                            await _loggingService.LogDebugAsync("Updating previous profile with user changes: {PreviousProfile}", "ProfileService", previousProfileName);
+                            await RetryIOAsync(() => { File.Copy(activeLoginPath, previousProfilePath, true); return Task.CompletedTask; });
+                        }
+                        catch (Exception ex)
+                        {
+                            await _loggingService.LogWarningAsync("Failed to update previous profile '{PreviousProfile}' with user changes: {ErrorMessage}", "ProfileService", previousProfileName, ex.Message);
+                        }
+                    }
+                }
+
                 // Create auto-backup of current file
                 if (File.Exists(activeLoginPath) && _configService.BackupConfig.CreateAutoBackupsOnSwap)
                 {

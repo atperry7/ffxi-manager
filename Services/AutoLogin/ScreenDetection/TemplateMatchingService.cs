@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,86 +16,99 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
     {
         private readonly ILoggingService _loggingService;
         private readonly ITemplateManagementService _templateManagementService;
+        private readonly IImageProcessor _imageProcessor;
         private float _defaultConfidenceThreshold = 0.80f;
 
         public TemplateMatchingService(
             ILoggingService loggingService,
-            ITemplateManagementService templateManagementService)
+            ITemplateManagementService templateManagementService,
+            IImageProcessor imageProcessor)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _templateManagementService = templateManagementService ?? throw new ArgumentNullException(nameof(templateManagementService));
+            _imageProcessor = imageProcessor ?? throw new ArgumentNullException(nameof(imageProcessor));
         }
 
         public async Task<TemplateMatchResult> FindElementAsync(WindowScreenshot screenshot, UIElementTemplate template, CancellationToken cancellationToken = default)
         {
-            return await Task.Run(() =>
+            try
             {
-                try
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (screenshot?.ImageData == null || !screenshot.IsValid)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    if (screenshot?.ImageData == null || !screenshot.IsValid)
-                    {
-                        return TemplateMatchResult.Failed(template);
-                    }
-
-                    if (template?.ImageData == null || !template.IsValid())
-                    {
-                        return TemplateMatchResult.Failed(template);
-                    }
-
-                    var startTime = DateTime.Now;
-
-                    // Convert screenshot to OpenCV Mat
-                    using var screenshotMat = ConvertToMat(screenshot);
-                    using var templateMat = ConvertToMat(template);
-
-                    if (screenshotMat.Empty() || templateMat.Empty())
-                    {
-                        _loggingService.LogWarningAsync($"[DEBUG] Mat conversion failed - Screenshot empty: {screenshotMat.Empty()}, Template empty: {templateMat.Empty()}");
-                        return TemplateMatchResult.Failed(template);
-                    }
-
-                    _loggingService.LogInfoAsync($"[DEBUG] Template matching: Screenshot {screenshotMat.Width}x{screenshotMat.Height}, Template {templateMat.Width}x{templateMat.Height}");
-
-                    // Perform template matching
-                    using var result = new Mat();
-                    Cv2.MatchTemplate(screenshotMat, templateMat, result, TemplateMatchModes.CCoeffNormed);
-
-                    // Find the best match
-                    Cv2.MinMaxLoc(result, out _, out double maxVal, out _, out OpenCvSharp.Point maxLoc);
-
-                    var confidence = (float)maxVal;
-                    var matchTime = (DateTime.Now - startTime).TotalMilliseconds;
-
-                    if (confidence >= template.ConfidenceThreshold)
-                    {
-                        var matchResult = TemplateMatchResult.Success(
-                            template,
-                            new System.Drawing.Point(maxLoc.X, maxLoc.Y),
-                            new System.Drawing.Size(templateMat.Width, templateMat.Height),
-                            confidence
-                        );
-
-                        matchResult.MatchTimeMs = matchTime;
-                        return matchResult;
-                    }
-
-                    var failedResult = TemplateMatchResult.Failed(template);
-                    failedResult.Confidence = confidence;
-                    failedResult.MatchTimeMs = matchTime;
-                    return failedResult;
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _loggingService.LogErrorAsync($"Template matching failed: {ex.Message}", ex);
                     return TemplateMatchResult.Failed(template);
                 }
-            }, cancellationToken);
+
+                if (template?.ImageData == null || !template.IsValid())
+                {
+                    return TemplateMatchResult.Failed(template);
+                }
+
+                // Create Mats using standardized image processor
+                using var screenshotMat = await _imageProcessor.CreateMatFromImageDataAsync(
+                    screenshot.ImageData, screenshot.Width, screenshot.Height, screenshot.Channels, "screenshot");
+
+                using var templateMat = await CreateTemplateMat(template);
+
+                if (screenshotMat.Empty() || templateMat.Empty())
+                {
+                    return TemplateMatchResult.Failed(template);
+                }
+
+                // Perform template matching using standardized processor
+                var matchResult = await _imageProcessor.PerformTemplateMatchingAsync(
+                    screenshotMat, templateMat, template.ConfidenceThreshold,
+                    $"template '{template.TemplatePath ?? template.Name}'", cancellationToken);
+
+                // Convert ImageMatchResult to TemplateMatchResult
+                if (matchResult.IsSuccess)
+                {
+                    var result = TemplateMatchResult.Success(
+                        template,
+                        new System.Drawing.Point(matchResult.Location.X, matchResult.Location.Y),
+                        new System.Drawing.Size(matchResult.TemplateSize.Width, matchResult.TemplateSize.Height),
+                        matchResult.Confidence);
+
+                    result.MatchTimeMs = matchResult.MatchTimeMs;
+                    return result;
+                }
+
+                var failedResult = TemplateMatchResult.Failed(template);
+                failedResult.Confidence = matchResult.Confidence;
+                failedResult.MatchTimeMs = matchResult.MatchTimeMs;
+                return failedResult;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync($"Template matching failed: {ex.Message}", ex);
+                return TemplateMatchResult.Failed(template);
+            }
+        }
+
+        /// <summary>
+        /// Creates a template Mat with proper BGRA to BGR conversion if needed
+        /// </summary>
+        private async Task<Mat> CreateTemplateMat(UIElementTemplate template)
+        {
+            var templateMat = await _imageProcessor.CreateMatFromImageDataAsync(
+                template.ImageData!, template.Width, template.Height, template.Channels,
+                $"template '{template.TemplatePath ?? template.Name}'");
+
+            // Convert BGRA to BGR if needed
+            if (template.Channels == 4 && !templateMat.Empty())
+            {
+                var bgrMat = await _imageProcessor.ConvertBgraToBlrAsync(templateMat,
+                    $"template '{template.TemplatePath ?? template.Name}'");
+                templateMat.Dispose();
+                return bgrMat;
+            }
+
+            return templateMat;
         }
 
         public async Task<TemplateMatchResult> FindElementAsync(WindowScreenshot screenshot, string templatePath, CancellationToken cancellationToken = default)
@@ -138,77 +150,77 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
         public async Task<IList<TemplateMatchResult>> FindAllInstancesAsync(WindowScreenshot screenshot, UIElementTemplate template, int maxMatches = 10, CancellationToken cancellationToken = default)
         {
-            return await Task.Run(() =>
+            var results = new List<TemplateMatchResult>();
+
+            try
             {
-                var results = new List<TemplateMatchResult>();
+                cancellationToken.ThrowIfCancellationRequested();
 
-                try
+                if (screenshot?.ImageData == null || !screenshot.IsValid)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
+                    return results;
+                }
 
-                    if (screenshot?.ImageData == null || !screenshot.IsValid)
+                if (template?.ImageData == null || !template.IsValid())
+                {
+                    return results;
+                }
+
+                // Create Mats using standardized image processor
+                using var screenshotMat = await _imageProcessor.CreateMatFromImageDataAsync(
+                    screenshot.ImageData, screenshot.Width, screenshot.Height, screenshot.Channels, "screenshot");
+
+                using var templateMat = await CreateTemplateMat(template);
+
+                if (screenshotMat.Empty() || templateMat.Empty())
+                {
+                    return results;
+                }
+
+                using var result = new Mat();
+                Cv2.MatchTemplate(screenshotMat, templateMat, result, TemplateMatchModes.CCoeffNormed);
+
+                // Find all matches above threshold
+                var threshold = template.ConfidenceThreshold;
+                var matches = new List<(OpenCvSharp.Point location, float confidence)>();
+
+                // Scan for matches
+                for (int y = 0; y < result.Rows; y++)
+                {
+                    for (int x = 0; x < result.Cols; x++)
                     {
-                        return results;
-                    }
-
-                    if (template?.ImageData == null || !template.IsValid())
-                    {
-                        return results;
-                    }
-
-                    using var screenshotMat = ConvertToMat(screenshot);
-                    using var templateMat = ConvertToMat(template);
-
-                    if (screenshotMat.Empty() || templateMat.Empty())
-                    {
-                        return results;
-                    }
-
-                    using var result = new Mat();
-                    Cv2.MatchTemplate(screenshotMat, templateMat, result, TemplateMatchModes.CCoeffNormed);
-
-                    // Find all matches above threshold
-                    var threshold = template.ConfidenceThreshold;
-                    var matches = new List<(OpenCvSharp.Point location, float confidence)>();
-
-                    // Scan for matches
-                    for (int y = 0; y < result.Rows; y++)
-                    {
-                        for (int x = 0; x < result.Cols; x++)
+                        var confidence = result.At<float>(y, x);
+                        if (confidence >= threshold)
                         {
-                            var confidence = result.At<float>(y, x);
-                            if (confidence >= threshold)
-                            {
-                                matches.Add((new OpenCvSharp.Point(x, y), confidence));
-                            }
+                            matches.Add((new OpenCvSharp.Point(x, y), confidence));
                         }
                     }
-
-                    // Sort by confidence and take top matches
-                    matches = matches.OrderByDescending(m => m.confidence).Take(maxMatches).ToList();
-
-                    foreach (var (location, confidence) in matches)
-                    {
-                        var matchResult = TemplateMatchResult.Success(
-                            template,
-                            new System.Drawing.Point(location.X, location.Y),
-                            new System.Drawing.Size(templateMat.Width, templateMat.Height),
-                            confidence
-                        );
-                        results.Add(matchResult);
-                    }
                 }
-                catch (OperationCanceledException)
+
+                // Sort by confidence and take top matches
+                matches = matches.OrderByDescending(m => m.confidence).Take(maxMatches).ToList();
+
+                foreach (var (location, confidence) in matches)
                 {
-                    throw;
+                    var matchResult = TemplateMatchResult.Success(
+                        template,
+                        new System.Drawing.Point(location.X, location.Y),
+                        new System.Drawing.Size(templateMat.Width, templateMat.Height),
+                        confidence
+                    );
+                    results.Add(matchResult);
                 }
-                catch (Exception ex)
-                {
-                    _loggingService.LogErrorAsync($"Finding all instances failed: {ex.Message}", ex);
-                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync($"Finding all instances failed: {ex.Message}", ex);
+            }
 
-                return results;
-            }, cancellationToken);
+            return results;
         }
 
         public async Task<bool> ValidateMatchAsync(WindowScreenshot screenshot, TemplateMatchResult previousMatch, CancellationToken cancellationToken = default)
@@ -239,50 +251,5 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             return _defaultConfidenceThreshold;
         }
 
-        private Mat ConvertToMat(WindowScreenshot screenshot)
-        {
-            try
-            {
-                // Create Mat from byte array (assuming BGR format)
-                using var mat = Mat.FromArray<byte>(screenshot.ImageData);
-                var resizedMat = mat.Reshape(3, screenshot.Height);
-                _loggingService.LogInfoAsync($"[DEBUG] Screenshot Mat: {resizedMat.Width}x{resizedMat.Height}, Channels: 3");
-                return resizedMat.Clone(); // Clone to ensure data ownership
-            }
-            catch (Exception ex)
-            {
-                _loggingService.LogWarningAsync($"[DEBUG] Screenshot Mat conversion failed: {ex.Message}");
-                return new Mat();
-            }
-        }
-
-        private Mat ConvertToMat(UIElementTemplate template)
-        {
-            try
-            {
-                _loggingService.LogInfoAsync($"[DEBUG] Template conversion: {template.Width}x{template.Height}, Channels: {template.Channels}, Data length: {template.ImageData?.Length ?? 0}");
-
-                // Create Mat from byte array
-                using var mat = Mat.FromArray<byte>(template.ImageData);
-                var resizedMat = mat.Reshape(template.Channels, template.Height);
-
-                // Convert to BGR if necessary
-                if (template.Channels == 4)
-                {
-                    var bgrMat = new Mat();
-                    Cv2.CvtColor(resizedMat, bgrMat, ColorConversionCodes.BGRA2BGR);
-                    _loggingService.LogInfoAsync($"[DEBUG] Template Mat final: {bgrMat.Width}x{bgrMat.Height}, BGR converted");
-                    return bgrMat;
-                }
-
-                _loggingService.LogInfoAsync($"[DEBUG] Template Mat final: {resizedMat.Width}x{resizedMat.Height}");
-                return resizedMat.Clone();
-            }
-            catch (Exception ex)
-            {
-                _loggingService.LogWarningAsync($"[DEBUG] Template Mat conversion failed: {ex.Message}");
-                return new Mat();
-            }
-        }
     }
 }

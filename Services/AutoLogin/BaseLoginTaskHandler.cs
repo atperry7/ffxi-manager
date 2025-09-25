@@ -1,5 +1,7 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FFXIManager.Models;
@@ -17,15 +19,18 @@ namespace FFXIManager.Services.AutoLogin
         protected readonly ILoggingService _loggingService;
         protected readonly IScreenshotCaptureService _screenshotService;
         protected readonly ITemplateMatchingService _templateService;
+        protected readonly ITemplateManagementService _templateManagementService;
 
         protected BaseLoginTaskHandler(
             ILoggingService loggingService,
             IScreenshotCaptureService screenshotService,
-            ITemplateMatchingService templateService)
+            ITemplateMatchingService templateService,
+            ITemplateManagementService templateManagementService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _screenshotService = screenshotService ?? throw new ArgumentNullException(nameof(screenshotService));
             _templateService = templateService ?? throw new ArgumentNullException(nameof(templateService));
+            _templateManagementService = templateManagementService ?? throw new ArgumentNullException(nameof(templateManagementService));
         }
 
         public abstract LoginTaskStep TaskStep { get; }
@@ -222,9 +227,167 @@ namespace FFXIManager.Services.AutoLogin
         }
 
         /// <summary>
-        /// Standardized screen detection method with consistent 1-second intervals and configurable timeout.
-        /// This should be the preferred method for all screen detection operations across all handlers.
+        /// Standardized screen detection method using ScreenDetectionOptions configuration.
+        /// This is the PREFERRED method for all screen detection operations across all handlers.
         /// </summary>
+        protected async Task<TemplateMatchResult> WaitForScreenDetectionAsync(
+            AutoLoginSubtask subtask,
+            string templatePath,
+            IntPtr windowHandle,
+            string screenDescription,
+            CancellationToken cancellationToken,
+            ScreenDetectionOptions options = null)
+        {
+            options ??= ScreenDetectionOptions.Default;
+
+            var maxAttempts = (int)(options.Timeout.TotalSeconds / options.CheckInterval.TotalSeconds);
+
+            await _loggingService.LogInfoAsync($"Waiting for {screenDescription} (max {options.Timeout.TotalSeconds}s, checking every {options.CheckInterval.TotalSeconds}s)");
+
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Update progress based on attempt
+                var progress = Math.Min(95, (attempt * 100) / maxAttempts);
+                subtask.UpdateProgress(progress, $"Detecting {screenDescription} ({attempt}/{maxAttempts})...");
+
+                var screenshot = await CaptureScreenshotWithLogging(windowHandle, screenDescription, cancellationToken);
+                var match = await _templateService.FindElementAsync(screenshot, templatePath, cancellationToken);
+
+                await _loggingService.LogDebugAsync($"{screenDescription} detection attempt {attempt}/{maxAttempts}: confidence {match.Confidence:P}");
+
+                if (match.Confidence >= options.ConfidenceThreshold)
+                {
+                    subtask.UpdateProgress(100, $"{screenDescription} detected successfully");
+                    await _loggingService.LogInfoAsync($"{screenDescription} detected after {attempt} attempts (confidence: {match.Confidence:P})");
+                    return match;
+                }
+
+                // Enhanced diagnostic logging for low confidence
+                if (match.Confidence < 0.10f)
+                {
+                    await _loggingService.LogWarningAsync($"{screenDescription} very low confidence ({match.Confidence:P}) - possible template mismatch or screen state issue");
+                }
+                else if (match.Confidence >= 0.60f)
+                {
+                    await _loggingService.LogDebugAsync($"{screenDescription} partially detected (confidence: {match.Confidence:P}) - getting close");
+                }
+                else if (match.Confidence >= 0.30f)
+                {
+                    await _loggingService.LogDebugAsync($"{screenDescription} moderate confidence ({match.Confidence:P}) - template may be partially visible");
+                }
+
+                if (attempt < maxAttempts)
+                {
+                    await Task.Delay(options.CheckInterval, cancellationToken);
+                }
+            }
+
+            // Final attempt for diagnosis
+            var finalScreenshot = await CaptureScreenshotWithLogging(windowHandle, $"final {screenDescription}", cancellationToken);
+            var finalMatch = await _templateService.FindElementAsync(finalScreenshot, templatePath, cancellationToken);
+
+            await _loggingService.LogWarningAsync($"{screenDescription} detection timed out after {options.Timeout.TotalSeconds}s. Final confidence: {finalMatch.Confidence:P}");
+
+            throw new TimeoutException($"Failed to detect {screenDescription} after {options.Timeout.TotalSeconds}s (final confidence: {finalMatch.Confidence:P})");
+        }
+
+        /// <summary>
+        /// Finds window handle for a process with standardized retry logic and progress reporting.
+        /// </summary>
+        protected async Task<IntPtr> FindWindowHandleAsync(
+            AutoLoginSubtask subtask,
+            string processName,
+            string windowTitleFilter,
+            CancellationToken cancellationToken,
+            int maxAttempts = 15)
+        {
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var progress = Math.Min(90, (attempt * 100) / maxAttempts);
+                subtask.UpdateProgress(progress, $"Finding {processName} window ({attempt}/{maxAttempts})...");
+
+                var processes = Process.GetProcessesByName(processName);
+
+                foreach (var process in processes)
+                {
+                    try
+                    {
+                        if (process.HasExited || process.MainWindowHandle == IntPtr.Zero)
+                            continue;
+
+                        var windowTitle = process.MainWindowTitle;
+                        if (string.IsNullOrEmpty(windowTitleFilter) ||
+                            windowTitle.Contains(windowTitleFilter, StringComparison.OrdinalIgnoreCase))
+                        {
+                            subtask.UpdateProgress(100, $"Found {processName} window: {windowTitle}");
+                            await _loggingService.LogInfoAsync($"Found {processName} window after {attempt} attempts - Handle: 0x{process.MainWindowHandle.ToInt64():X}, Title: '{windowTitle}', PID: {process.Id}");
+                            return process.MainWindowHandle;
+                        }
+                    }
+                    finally
+                    {
+                        process?.Dispose();
+                    }
+                }
+
+                if (attempt < maxAttempts)
+                {
+                    await Task.Delay(1000, cancellationToken);
+                }
+            }
+
+            throw new InvalidOperationException($"No {processName} window found after {maxAttempts} attempts");
+        }
+
+        /// <summary>
+        /// Safely clicks at window-relative coordinates with validation and error handling.
+        /// </summary>
+        protected async Task ClickAtCoordinatesAsync(
+            AutoLoginSubtask subtask,
+            Point windowRelativePoint,
+            IntPtr windowHandle,
+            string description,
+            CancellationToken cancellationToken,
+            IUIAutomationService automationService = null)
+        {
+            if (automationService == null)
+                throw new ArgumentNullException(nameof(automationService), "IUIAutomationService must be provided for coordinate clicking");
+
+            subtask.UpdateProgress(50, $"Preparing to click {description}...");
+
+            var screenshot = await CaptureScreenshotWithLogging(windowHandle, description, cancellationToken);
+            var screenPoint = screenshot.ToScreenCoordinates(windowRelativePoint);
+
+            // Validate coordinates are within reasonable screen bounds
+            if (screenPoint.X < 0 || screenPoint.Y < 0 || screenPoint.X > 3840 || screenPoint.Y > 2160)
+            {
+                throw new InvalidOperationException($"Invalid click coordinates for {description}: {screenPoint}");
+            }
+
+            await _loggingService.LogDebugAsync($"Clicking {description} at window-relative {windowRelativePoint}, screen coordinates {screenPoint}");
+
+            subtask.UpdateProgress(75, $"Clicking {description}...");
+
+            // Move mouse first for visual feedback
+            await automationService.MoveMouseAsync(screenPoint, cancellationToken);
+            await Task.Delay(200, cancellationToken);
+
+            // Perform click
+            await automationService.ClickAsync(screenPoint, cancellationToken);
+
+            subtask.UpdateProgress(100, $"{description} clicked successfully");
+            await _loggingService.LogDebugAsync($"{description} clicked at {screenPoint}");
+        }
+
+        /// <summary>
+        /// Legacy method - DEPRECATED: Use WaitForScreenDetectionAsync with ScreenDetectionOptions instead.
+        /// This method will be removed in a future version.
+        /// </summary>
+        [Obsolete("Use WaitForScreenDetectionAsync with ScreenDetectionOptions instead")]
         protected async Task<TemplateMatchResult> WaitForScreenDetection(
             string templatePath,
             IntPtr windowHandle,
@@ -328,7 +491,7 @@ namespace FFXIManager.Services.AutoLogin
 
                     if (screenshot != null && screenshot.IsValid)
                     {
-                        await _loggingService.LogDebugAsync($"Screenshot captured successfully for {purpose}: {screenshot.Width}x{screenshot.Height}, Window: '{screenshot.WindowTitle}'");
+                        await _loggingService.LogDebugAsync($"Screenshot captured successfully for {purpose}: {screenshot.Width}x{screenshot.Height}, Window: '{screenshot.WindowTitle}', WindowPos: ({screenshot.WindowBounds.X},{screenshot.WindowBounds.Y})");
                         return screenshot;
                     }
 
@@ -353,6 +516,43 @@ namespace FFXIManager.Services.AutoLogin
 
             await _loggingService.LogErrorAsync($"Failed to capture screenshot for {purpose} after {retryCount + 1} attempts");
             throw new InvalidOperationException($"Failed to capture screenshot for {purpose} after {retryCount + 1} attempts");
+        }
+
+        /// <summary>
+        /// Clicks at coordinates defined in a template's JSON metadata.
+        /// </summary>
+        protected async Task ClickAtTemplateCoordinatesAsync(
+            AutoLoginSubtask subtask,
+            string templatePath,
+            IntPtr windowHandle,
+            CancellationToken cancellationToken,
+            IUIAutomationService automationService = null)
+        {
+            if (automationService == null)
+                throw new ArgumentNullException(nameof(automationService), "IUIAutomationService must be provided for template-based clicking");
+
+            subtask.UpdateProgress(10, $"Loading template metadata for {templatePath}...");
+
+            // Load template metadata to get click coordinates
+            var metadata = await _templateManagementService.GetTemplateMetadataAsync(templatePath);
+            if (metadata == null)
+            {
+                throw new InvalidOperationException($"Template metadata not found: {templatePath}");
+            }
+
+            var clickPoint = new Point(metadata.Action.ClickOffset.X, metadata.Action.ClickOffset.Y);
+            var description = metadata.Action.Parameters.TryGetValue("description", out var desc) ? desc.ToString() : metadata.Name;
+
+            subtask.UpdateProgress(30, $"Using template coordinates: {clickPoint}");
+
+            // Use the standard coordinate-based click method
+            await ClickAtCoordinatesAsync(
+                subtask,
+                clickPoint,
+                windowHandle,
+                description ?? "template-based button",
+                cancellationToken,
+                automationService);
         }
     }
 }

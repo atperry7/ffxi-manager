@@ -30,8 +30,8 @@ namespace FFXIManager.Services
             _handlerResolver = handlerResolver ?? throw new ArgumentNullException(nameof(handlerResolver));
             _contextService = contextService ?? throw new ArgumentNullException(nameof(contextService));
 
-            // Default configuration
-            SubtaskTimeoutSeconds = 30;
+            // Default configuration - increased to accommodate extended detection operations
+            SubtaskTimeoutSeconds = 90; // Increased from 30s to allow for Extended (60s) + buffer
             DelayBetweenSubtasks = 1000;
             ContinueOnSubtaskFailure = false;
         }

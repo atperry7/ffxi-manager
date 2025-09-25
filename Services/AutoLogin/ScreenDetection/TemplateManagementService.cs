@@ -31,6 +31,10 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             // Set templates base path relative to application directory
             var appDir = AppDomain.CurrentDomain.BaseDirectory;
             _templatesBasePath = Path.Combine(appDir, "Resources", "Templates");
+
+            // Clear cache on startup to force fresh template loading with fixes
+            _templateCache.Clear();
+            _loggingService.LogInfoAsync("[DEBUG] Template cache cleared on startup - will force fresh loading");
         }
 
         public async Task<UIElementTemplate?> LoadTemplateAsync(string templatePath, CancellationToken cancellationToken = default)
@@ -40,8 +44,11 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 // Check cache first
                 if (_templateCache.TryGetValue(templatePath, out var cachedTemplate))
                 {
+                    await _loggingService.LogInfoAsync($"[DEBUG] Template loaded from cache: {templatePath}");
                     return cachedTemplate;
                 }
+
+                await _loggingService.LogInfoAsync($"[DEBUG] Template not in cache, loading from disk: {templatePath}");
 
                 // Load from disk
                 var template = await LoadTemplateFromDiskAsync(templatePath, cancellationToken);
@@ -386,10 +393,20 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
         private async Task<(byte[] data, int width, int height, int channels)?> LoadTemplateImageAsync(string pngPath, CancellationToken cancellationToken)
         {
+            await _loggingService.LogInfoAsync($"[DEBUG] LoadTemplateImageAsync called for: {pngPath}");
+
             try
             {
                 using var bitmap = new Bitmap(pngPath);
-                var imageData = ConvertBitmapToByteArray(bitmap);
+
+                // Log bitmap properties before conversion
+                await _loggingService.LogInfoAsync($"[ImageProcessor] Loading PNG: {Path.GetFileName(pngPath)} - Dimensions: {bitmap.Width}x{bitmap.Height}, PixelFormat: {bitmap.PixelFormat}");
+
+                var imageData = await ConvertBitmapToByteArrayAsync(bitmap);
+                var expectedSize = bitmap.Width * bitmap.Height * 3;
+
+                await _loggingService.LogInfoAsync($"[ImageProcessor] PNG conversion: Expected {expectedSize} bytes, Got {imageData.Length} bytes, Difference: {imageData.Length - expectedSize}");
+
                 return (imageData, bitmap.Width, bitmap.Height, 3); // Assuming BGR
             }
             catch (Exception ex)
@@ -499,7 +516,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             };
         }
 
-        private static byte[] ConvertBitmapToByteArray(Bitmap bitmap)
+        private async Task<byte[]> ConvertBitmapToByteArrayAsync(Bitmap bitmap)
         {
             var bmpData = bitmap.LockBits(
                 new Rectangle(0, 0, bitmap.Width, bitmap.Height),
@@ -511,19 +528,23 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 var stride = Math.Abs(bmpData.Stride);
                 var bytesPerPixel = 3; // For 24bppRgb
                 var expectedSize = bitmap.Width * bitmap.Height * bytesPerPixel;
+                var rowBytes = bitmap.Width * bytesPerPixel;
+
+                await _loggingService.LogInfoAsync($"[ImageProcessor] Bitmap conversion: {bitmap.Width}x{bitmap.Height}, Stride: {stride}, Expected row bytes: {rowBytes}, Total expected: {expectedSize}");
 
                 // If stride equals width * bytesPerPixel, no padding - copy directly
                 if (stride == bitmap.Width * bytesPerPixel)
                 {
+                    await _loggingService.LogInfoAsync($"[ImageProcessor] No stride padding detected - direct copy");
                     var resultDirect = new byte[expectedSize];
                     Marshal.Copy(bmpData.Scan0, resultDirect, 0, expectedSize);
                     return resultDirect;
                 }
 
                 // Handle stride padding by copying row by row without padding
+                await _loggingService.LogInfoAsync($"[ImageProcessor] Stride padding detected ({stride - rowBytes} bytes per row) - copying row by row");
                 var result = new byte[expectedSize];
                 var srcPtr = bmpData.Scan0;
-                var rowBytes = bitmap.Width * bytesPerPixel;
 
                 for (int y = 0; y < bitmap.Height; y++)
                 {

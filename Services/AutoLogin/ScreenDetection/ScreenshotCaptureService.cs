@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,6 +17,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
     public class ScreenshotCaptureService : IScreenshotCaptureService
     {
         private readonly ILoggingService _loggingService;
+        private readonly ISettingsService _settingsService;
 
         // Win32 API imports
         [DllImport("user32.dll")]
@@ -51,6 +55,25 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         private static extern bool IsWindowVisibleWin32(IntPtr hWnd);
 
         [DllImport("user32.dll")]
+        private static extern bool InvalidateRect(IntPtr hWnd, IntPtr lpRect, bool bErase);
+
+        [DllImport("user32.dll")]
+        private static extern bool UpdateWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetDC(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint nFlags);
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out bool pvAttribute, int cbAttribute);
+
+        private const uint PW_CLIENTONLY = 0x1;
+        private const uint PW_RENDERFULLCONTENT = 0x2;
+        private const int DWMWA_CLOAKED = 14;
+
+        [DllImport("user32.dll")]
         private static extern int GetWindowTextLength(IntPtr hWnd);
 
         [DllImport("user32.dll")]
@@ -73,14 +96,15 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
         private const int SRCCOPY = 0x00CC0020;
 
-        public ScreenshotCaptureService(ILoggingService loggingService)
+        public ScreenshotCaptureService(ILoggingService loggingService, ISettingsService settingsService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         }
 
         public async Task<WindowScreenshot?> CaptureWindowAsync(IntPtr windowHandle, CancellationToken cancellationToken = default)
         {
-            return await Task.Run(() =>
+            return await Task.Run(async () =>
             {
                 try
                 {
@@ -121,7 +145,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                     GetWindowThreadProcessId(windowHandle, out int processId);
                     var dpiScale = GetWindowDpiScale(windowHandle);
 
-                    return new WindowScreenshot
+                    var screenshot = new WindowScreenshot
                     {
                         WindowHandle = windowHandle,
                         WindowBounds = bounds,
@@ -134,6 +158,11 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                         WindowTitle = windowTitle,
                         ProcessId = processId
                     };
+
+                    // Save diagnostic screenshot if diagnostics are enabled
+                    await SaveDiagnosticScreenshotAsync(bitmap, windowTitle, processId);
+
+                    return screenshot;
                 }
                 catch (OperationCanceledException)
                 {
@@ -214,8 +243,20 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             {
                 _loggingService.LogDebugAsync($"Starting bitmap capture - Handle: 0x{windowHandle.ToInt64():X}, Bounds: {bounds.Width}x{bounds.Height}").Wait();
 
-                // Get window device context
-                windowDC = GetWindowDC(windowHandle);
+                // Force window refresh to ensure we capture current content
+                InvalidateRect(windowHandle, IntPtr.Zero, false);
+                UpdateWindow(windowHandle);
+
+                // Small delay to allow refresh to complete
+                System.Threading.Thread.Sleep(50);
+
+                // Get window device context (try GetDC first for client area)
+                windowDC = GetDC(windowHandle);
+                if (windowDC == IntPtr.Zero)
+                {
+                    _loggingService.LogDebugAsync($"GetDC failed, falling back to GetWindowDC").Wait();
+                    windowDC = GetWindowDC(windowHandle);
+                }
                 if (windowDC == IntPtr.Zero)
                 {
                     _loggingService.LogWarningAsync($"GetWindowDC failed for window 0x{windowHandle.ToInt64():X} - returned null DC").Wait();
@@ -245,15 +286,26 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 oldBitmap = SelectObject(memoryDC, bitmap);
                 _loggingService.LogDebugAsync($"SelectObject completed - Old bitmap: 0x{oldBitmap.ToInt64():X}").Wait();
 
-                // Copy window content to memory DC
-                var bitBltResult = BitBlt(memoryDC, 0, 0, bounds.Width, bounds.Height, windowDC, 0, 0, SRCCOPY);
-                if (!bitBltResult)
+                // Try PrintWindow first (works better with DirectX applications like FFXI/PlayOnline)
+                var printWindowResult = PrintWindow(windowHandle, memoryDC, PW_RENDERFULLCONTENT);
+                if (printWindowResult)
                 {
-                    var lastError = Marshal.GetLastWin32Error();
-                    _loggingService.LogWarningAsync($"BitBlt failed - LastError: {lastError}, Size: {bounds.Width}x{bounds.Height}").Wait();
-                    return null;
+                    _loggingService.LogDebugAsync($"PrintWindow succeeded - Captured DirectX content {bounds.Width}x{bounds.Height}").Wait();
                 }
-                _loggingService.LogDebugAsync($"BitBlt succeeded - Copied {bounds.Width}x{bounds.Height} pixels").Wait();
+                else
+                {
+                    _loggingService.LogDebugAsync($"PrintWindow failed, falling back to BitBlt").Wait();
+
+                    // Fall back to BitBlt for non-DirectX windows
+                    var bitBltResult = BitBlt(memoryDC, 0, 0, bounds.Width, bounds.Height, windowDC, 0, 0, SRCCOPY);
+                    if (!bitBltResult)
+                    {
+                        var lastError = Marshal.GetLastWin32Error();
+                        _loggingService.LogWarningAsync($"Both PrintWindow and BitBlt failed - LastError: {lastError}, Size: {bounds.Width}x{bounds.Height}").Wait();
+                        return null;
+                    }
+                    _loggingService.LogDebugAsync($"BitBlt succeeded as fallback - Copied {bounds.Width}x{bounds.Height} pixels").Wait();
+                }
 
                 // Create managed bitmap from handle
                 var managedBitmap = Image.FromHbitmap(bitmap);
@@ -284,19 +336,149 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
             try
             {
-                // Calculate the number of bytes
-                var stride = bmpData.Stride;
-                var bytes = Math.Abs(stride) * bitmap.Height;
-                var result = new byte[bytes];
+                var stride = Math.Abs(bmpData.Stride);
+                var bytesPerPixel = 3; // For 24bppRgb
+                var expectedSize = bitmap.Width * bitmap.Height * bytesPerPixel;
+                var rowBytes = bitmap.Width * bytesPerPixel;
 
-                // Copy data from bitmap
-                Marshal.Copy(bmpData.Scan0, result, 0, bytes);
+                // If stride equals width * bytesPerPixel, no padding - copy directly
+                if (stride == bitmap.Width * bytesPerPixel)
+                {
+                    var resultDirect = new byte[expectedSize];
+                    Marshal.Copy(bmpData.Scan0, resultDirect, 0, expectedSize);
+                    return resultDirect;
+                }
+
+                // Handle stride padding by copying row by row without padding
+                var result = new byte[expectedSize];
+                var srcPtr = bmpData.Scan0;
+
+                for (int y = 0; y < bitmap.Height; y++)
+                {
+                    Marshal.Copy(
+                        srcPtr + (y * stride),
+                        result,
+                        y * rowBytes,
+                        rowBytes
+                    );
+                }
 
                 return result;
             }
             finally
             {
                 bitmap.UnlockBits(bmpData);
+            }
+        }
+
+        /// <summary>
+        /// Saves diagnostic screenshot if diagnostics are enabled with automatic cleanup
+        /// </summary>
+        private async Task SaveDiagnosticScreenshotAsync(Bitmap bitmap, string windowTitle, int processId)
+        {
+            try
+            {
+                var settings = _settingsService.LoadSettings();
+                if (settings?.Diagnostics?.EnableDiagnostics != true)
+                {
+                    return;
+                }
+
+                // Create diagnostic screenshots directory
+                var diagnosticDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "FFXIManager", "Diagnostics", "Screenshots");
+
+                Directory.CreateDirectory(diagnosticDir);
+
+                // Clean up old screenshots before saving new one
+                await CleanupOldDiagnosticScreenshotsAsync(diagnosticDir);
+
+                // Generate filename with timestamp and process info
+                var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
+                var safeWindowTitle = string.Join("_", windowTitle.Split(Path.GetInvalidFileNameChars()));
+                var filename = $"screenshot_{timestamp}_{processId}_{safeWindowTitle}.png";
+                var filePath = Path.Combine(diagnosticDir, filename);
+
+                // Save screenshot as PNG
+                bitmap.Save(filePath, ImageFormat.Png);
+
+                await _loggingService.LogInfoAsync($"[DIAGNOSTIC] Screenshot saved: {filename} ({bitmap.Width}x{bitmap.Height})");
+            }
+            catch (Exception ex)
+            {
+                // Don't fail the main capture operation due to diagnostic logging issues
+                await _loggingService.LogWarningAsync($"Failed to save diagnostic screenshot: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Cleans up old diagnostic screenshots to prevent disk space issues
+        /// Keeps only the last 50 screenshots and removes files older than 7 days
+        /// </summary>
+        private async Task CleanupOldDiagnosticScreenshotsAsync(string diagnosticDir)
+        {
+            try
+            {
+                if (!Directory.Exists(diagnosticDir))
+                {
+                    return;
+                }
+
+                var screenshotFiles = Directory.GetFiles(diagnosticDir, "screenshot_*.png")
+                    .Select(f => new FileInfo(f))
+                    .OrderByDescending(f => f.CreationTime)
+                    .ToArray();
+
+                var cleanupTasks = new List<Task>();
+
+                // Remove files older than 7 days
+                var cutoffDate = DateTime.Now.AddDays(-7);
+                var oldFiles = screenshotFiles.Where(f => f.CreationTime < cutoffDate).ToArray();
+
+                foreach (var oldFile in oldFiles)
+                {
+                    cleanupTasks.Add(Task.Run(() =>
+                    {
+                        try
+                        {
+                            oldFile.Delete();
+                        }
+                        catch (Exception ex)
+                        {
+                            _loggingService.LogDebugAsync($"Failed to delete old diagnostic screenshot {oldFile.Name}: {ex.Message}");
+                        }
+                    }));
+                }
+
+                // Keep only the latest 50 screenshots
+                var filesToRemove = screenshotFiles.Skip(50).ToArray();
+                foreach (var fileToRemove in filesToRemove)
+                {
+                    cleanupTasks.Add(Task.Run(() =>
+                    {
+                        try
+                        {
+                            fileToRemove.Delete();
+                        }
+                        catch (Exception ex)
+                        {
+                            _loggingService.LogDebugAsync($"Failed to delete excess diagnostic screenshot {fileToRemove.Name}: {ex.Message}");
+                        }
+                    }));
+                }
+
+                await Task.WhenAll(cleanupTasks);
+
+                var deletedCount = oldFiles.Length + filesToRemove.Length;
+                if (deletedCount > 0)
+                {
+                    await _loggingService.LogDebugAsync($"[DIAGNOSTIC] Cleaned up {deletedCount} old diagnostic screenshots");
+                }
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogWarningAsync($"Failed to cleanup diagnostic screenshots: {ex.Message}");
             }
         }
     }

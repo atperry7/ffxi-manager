@@ -1,0 +1,11 @@
+{
+  "name": "PlayOnline Connect Button",
+  "templatePath": "PlayOnline/connect_button",
+  "associatedStep": "PasswordEntry",
+  "action": {
+    "type": "click",
+    "clickOffset": { "x": 445, "y": 705 },
+    "description": "Connect button to proceed after password/OTP entry"
+  },
+  "confidenceThreshold": 0.80
+}

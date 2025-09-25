@@ -1,865 +1,332 @@
-# Handler Implementation Guide
-## Developer Guidelines for Auto-Login Handler Development
+# Auto-Login Handler Implementation Guide
 
-> **📝 Claude Code Users**: See [`CLAUDE_HANDLER_GUIDE.md`](./CLAUDE_HANDLER_GUIDE.md) for a streamlined, quick-reference version optimized for AI-assisted development.
+## DirectX Application Support (Critical!)
 
-This guide provides comprehensive patterns and best practices for implementing auto-login handlers that integrate with the refactored AutoLoginTask/AutoLoginSubtask architecture.
+**IMPORTANT**: PlayOnline and FFXI use DirectX rendering. Standard Win32 `BitBlt` captures return black screens. Our `ScreenshotCaptureService` now handles this automatically using `PrintWindow` API.
 
-## 🎯 Core Architecture Principles
+### Screenshot Capture Flow
+```
+1. Try PrintWindow() with PW_RENDERFULLCONTENT (for DirectX apps like PlayOnline/FFXI)
+2. Fall back to BitBlt() for standard Windows applications
+3. Diagnostic screenshots save automatically when diagnostics are enabled
+```
 
-### 1. Handler Scope and Responsibility
-Handlers operate on **individual AutoLoginSubtask objects** within the context of an AutoLoginTask:
+## Quick Start: Creating a Handler
 
+### 1. Handler Template
 ```csharp
-// ✅ CORRECT: Handler signature for AutoLoginSubtask
-public async Task ExecuteAsync(
-    AutoLoginSubtask subtask,
-    AutoLoginQueueItem queueItem,
-    CancellationToken cancellationToken)
+public class YourStepHandler : BaseLoginTaskHandler
 {
-    // Handler implementation
-}
-```
-
-### 2. Subtask Lifecycle Management
-- **Always use subtask lifecycle methods** for proper state tracking
-- Leverage the built-in status management and event propagation
-- Use the established AutoLoginSubtaskStatus transitions
-
-```csharp
-// ✅ CORRECT: Proper subtask lifecycle
-subtask.Start(); // Sets status to InProgress, records StartTime
-try
-{
-    // Handler logic here
-    subtask.UpdateProgress(50, "Processing step...");
-    // More logic
-    subtask.Complete(); // Sets status to Completed, records EndTime
-}
-catch (Exception ex)
-{
-    subtask.Fail(ex.Message); // Sets status to Failed, records error
-    throw;
-}
-
-// ❌ INCORRECT: Manual status manipulation
-// subtask.Status = AutoLoginSubtaskStatus.InProgress; // Don't do this
-```
-
-### 3. Handle Optional and Skippable Steps
-Leverage subtask properties for intelligent execution flow:
-
-```csharp
-// ✅ CORRECT: Handle skippable subtasks
-public async Task ExecuteAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
-{
-    subtask.Start();
-
-    // Check if this step can be skipped based on conditions
-    if (subtask.IsSkippable && !IsStepRequired(queueItem))
-    {
-        subtask.Skip("Step not required for this account type");
-        return;
-    }
-
-    // Proceed with normal execution
-    await ExecuteStepLogic(subtask, queueItem, cancellationToken);
-}
-```
-
-### 4. Implement Robust Retry Logic
-Use the built-in retry capabilities of AutoLoginSubtask:
-
-```csharp
-// ✅ CORRECT: Leverage built-in retry mechanism
-public async Task ExecuteWithRetryAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
-{
-    while (true)
-    {
-        try
-        {
-            await ExecuteStepLogic(subtask, queueItem, cancellationToken);
-            break; // Success, exit retry loop
-        }
-        catch (Exception ex) when (subtask.CanRetry)
-        {
-            subtask.PrepareForRetry(); // Increments RetryAttempts, resets status
-            await Task.Delay(GetRetryDelay(subtask.RetryAttempts), cancellationToken);
-            continue;
-        }
-        catch (Exception ex)
-        {
-            subtask.Fail($"Failed after {subtask.RetryAttempts} attempts: {ex.Message}");
-            throw;
-        }
-    }
-}
-```
-
-### 5. Respect Cancellation Tokens
-- **Check `cancellationToken.IsCancellationRequested`** at every async boundary
-- Use `cancellationToken` in all async operations
-- Handle `OperationCanceledException` appropriately
-
-```csharp
-// ✅ CORRECT: Proper cancellation handling
-for (int attempt = 1; attempt <= maxRetries; attempt++)
-{
-    cancellationToken.ThrowIfCancellationRequested();
-
-    var result = await SomeAsyncOperation(cancellationToken);
-    if (result.Success) break;
-
-    await Task.Delay(GetRetryDelay(attempt), cancellationToken);
-}
-
-// ❌ INCORRECT: Not using cancellation token
-// await Task.Delay(retryDelay); // Missing cancellation token
-```
-
-### 6. Provide Granular Progress Updates
-- **Use `subtask.UpdateProgress()`** frequently with meaningful messages
-- Progress updates automatically trigger UI events through the task executor
-- Provide detailed progress for long-running operations
-
-```csharp
-// ✅ CORRECT: Granular progress reporting with automatic event propagation
-subtask.UpdateProgress(25, "Locating application window...");
-await Task.Delay(500, cancellationToken);
-
-subtask.UpdateProgress(50, "Verifying window is responsive...");
-await Task.Delay(300, cancellationToken);
-
-subtask.UpdateProgress(75, "Focusing window for interaction...");
-// Actual UI automation here
-
-subtask.UpdateProgress(100, "Window ready for automation");
-// Progress updates automatically flow through: Subtask → Task → TaskExecutor → Orchestrator → UI
-```
-
-### 7. Keep Handlers Focused
-- **Single responsibility per handler** (one LoginTaskStep per handler)
-- Don't mix concerns within a single handler execution
-- Use dependency injection for service access
-
-### 8. Leverage Service Architecture
-The refactored system provides these key services through dependency injection:
-
-```csharp
-// ✅ CORRECT: Handler with proper service dependencies
-public class WindowLaunchHandler : IAutoLoginStepHandler
-{
-    private readonly ILoggingService _loggingService;
-    private readonly IProcessUtilityService _processService;
-    private readonly ISettingsService _settingsService;
-
-    public WindowLaunchHandler(
-        ILoggingService loggingService,
-        IProcessUtilityService processService,
-        ISettingsService settingsService)
-    {
-        _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
-        _processService = processService ?? throw new ArgumentNullException(nameof(processService));
-        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-    }
-
-    public LoginTaskStep HandledStep => LoginTaskStep.LaunchWindower;
-
-    public async Task ExecuteAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
-    {
-        subtask.Start();
-
-        try
-        {
-            // Use estimated duration from subtask for timeout calculations
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(subtask.EstimatedDurationSeconds * 2));
-            using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
-
-            await ExecuteStepLogic(subtask, queueItem, combinedCts.Token);
-            subtask.Complete();
-        }
-        catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
-        {
-            subtask.Fail($"Step timed out after {subtask.EstimatedDurationSeconds * 2} seconds");
-            throw new TimeoutException($"Handler {HandledStep} timed out");
-        }
-        catch (Exception ex)
-        {
-            subtask.Fail(ex.Message);
-            throw;
-        }
-    }
-}
-```
-
-## 🏗️ Service Integration Patterns
-
-### Working with the Task Executor
-Handlers are invoked by the `IAutoLoginTaskExecutor` which manages the task/subtask lifecycle:
-
-```csharp
-// The TaskExecutor handles:
-// 1. Calling subtask.Start() before invoking handler
-// 2. Setting up cancellation tokens with timeouts
-// 3. Propagating events (SubtaskStarted, SubtaskProgressUpdated, SubtaskCompleted)
-// 4. Managing retry logic when handlers fail
-// 5. Calling subtask.Complete() or subtask.Fail() based on handler results
-```
-
-### Event Flow Architecture
-The refactored system uses a layered event propagation model:
-
-```
-AutoLoginSubtask (progress updates)
-    ↓ (PropertyChanged events)
-AutoLoginTask (aggregates subtask progress)
-    ↓ (TaskExecutor events)
-IAutoLoginTaskExecutor (SubtaskStarted, SubtaskProgressUpdated, etc.)
-    ↓ (Event forwarding)
-IQueueExecutionOrchestrator (ItemStarted, ItemProgressUpdated, etc.)
-    ↓ (Event forwarding)
-AutoLoginQueueService (Facade events for UI)
-    ↓ (Event binding)
-UI ViewModels (Data binding updates)
-```
-
-### Handler Registration Pattern
-Handlers should be registered in the DI container by LoginTaskStep:
-
-```csharp
-// In Infrastructure/DependencyInjection.cs
-services.AddTransient<IAutoLoginStepHandler, LaunchWindowerHandler>();
-services.AddTransient<IAutoLoginStepHandler, MemberSelectionHandler>();
-services.AddTransient<IAutoLoginStepHandler, PasswordEntryHandler>();
-// ... etc
-
-// Handler resolver service
-services.AddSingleton<IAutoLoginHandlerResolver, AutoLoginHandlerResolver>();
-```
-
-## 🛠️ Handler Implementation Patterns
-
-### 1. Window Detection and Management
-Modern pattern with AutoLoginSubtask integration:
-
-```csharp
-private async Task<IntPtr> FindApplicationWindowAsync(
-    AutoLoginSubtask subtask,
-    string windowTitle,
-    CancellationToken cancellationToken)
-{
-    const int maxAttempts = 10;
-    const int delayBetweenAttempts = 500;
-
-    for (int attempt = 1; attempt <= maxAttempts; attempt++)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        // Update progress based on attempt
-        var progressPercent = (attempt * 100) / maxAttempts;
-        subtask.UpdateProgress(progressPercent, $"Searching for window '{windowTitle}' (attempt {attempt}/{maxAttempts})");
-
-        var windowHandle = FindWindow(null, windowTitle);
-        if (windowHandle != IntPtr.Zero)
-        {
-            await _loggingService.LogDebugAsync($"Found window '{windowTitle}' on attempt {attempt}");
-            subtask.UpdateProgress(100, $"Found window '{windowTitle}'");
-            return windowHandle;
-        }
-
-        if (attempt < maxAttempts)
-        {
-            await Task.Delay(delayBetweenAttempts, cancellationToken);
-        }
-    }
-
-    var errorMsg = $"Could not find window '{windowTitle}' after {maxAttempts} attempts";
-    subtask.Fail(errorMsg);
-    throw new InvalidOperationException(errorMsg);
-}
-```
-
-## 🤖 Claude Code Development Guidelines
-
-### For Claude Code: Handler Creation Workflow
-
-When creating new auto-login handlers, follow this systematic approach:
-
-#### 1. **Analyze the LoginTaskStep**
-```csharp
-// First, understand what LoginTaskStep you're implementing
-// Check Models/LoginTaskStep.cs for the step definition
-// Example: LoginTaskStep.LaunchWindower, LoginTaskStep.MemberSelection, etc.
-```
-
-#### 2. **Handler Template Pattern**
-Use this template for new handlers:
-
-```csharp
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Models;
-using FFXIManager.Services;
-
-namespace FFXIManager.Services.AutoLogin.Handlers
-{
-    /// <summary>
-    /// Handler for [LoginTaskStep] - [Brief description of what this handler does]
-    /// </summary>
-    public class [StepName]Handler : IAutoLoginStepHandler
-    {
-        private readonly ILoggingService _loggingService;
-        // Add other required services
-
-        public [StepName]Handler(ILoggingService loggingService /* other services */)
-        {
-            _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
-            // Initialize other services with null checks
-        }
-
-        public LoginTaskStep HandledStep => LoginTaskStep.[YourStep];
-
-        public async Task ExecuteAsync(
-            AutoLoginSubtask subtask,
-            AutoLoginQueueItem queueItem,
-            CancellationToken cancellationToken)
-        {
-            subtask.Start();
-
-            try
-            {
-                // Check if step can be skipped
-                if (subtask.IsSkippable && ShouldSkipStep(queueItem))
-                {
-                    subtask.Skip("Reason for skipping");
-                    return;
-                }
-
-                // Set up timeout based on estimated duration
-                using var timeoutCts = new CancellationTokenSource(
-                    TimeSpan.FromSeconds(subtask.EstimatedDurationSeconds * 2));
-                using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                    cancellationToken, timeoutCts.Token);
-
-                // Execute the main logic
-                await ExecuteStepLogicAsync(subtask, queueItem, combinedCts.Token);
-
-                subtask.Complete();
-            }
-            catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
-            {
-                subtask.Fail($"Handler timed out after {subtask.EstimatedDurationSeconds * 2} seconds");
-                throw new TimeoutException($"Handler {HandledStep} timed out");
-            }
-            catch (Exception ex)
-            {
-                subtask.Fail(ex.Message);
-                await _loggingService.LogErrorAsync($"Handler {HandledStep} failed", ex);
-                throw;
-            }
-        }
-
-        private async Task ExecuteStepLogicAsync(
-            AutoLoginSubtask subtask,
-            AutoLoginQueueItem queueItem,
-            CancellationToken cancellationToken)
-        {
-            // Implement your specific logic here
-            // Use subtask.UpdateProgress(percentage, message) frequently
-            // Access account info via queueItem.Account
-            // Use cancellationToken in all async operations
-        }
-
-        private bool ShouldSkipStep(AutoLoginQueueItem queueItem)
-        {
-            // Implement logic to determine if this step should be skipped
-            // based on account configuration or other factors
-            return false;
-        }
-    }
-}
-```
-
-#### 3. **Testing Pattern for Claude Code**
-Create corresponding tests using this pattern:
-
-```csharp
-[TestClass]
-public class [StepName]HandlerTests
-{
-    private Mock<ILoggingService> _mockLoggingService;
-    private [StepName]Handler _handler;
-
-    [TestInitialize]
-    public void Setup()
-    {
-        _mockLoggingService = new Mock<ILoggingService>();
-        _handler = new [StepName]Handler(_mockLoggingService.Object);
-    }
-
-    [TestMethod]
-    public async Task ExecuteAsync_ValidInput_CompletesSuccessfully()
-    {
-        // Arrange
-        var subtask = AutoLoginSubtask.FromLoginTaskStep(LoginTaskStep.[YourStep]);
-        var queueItem = CreateTestQueueItem();
-        var cancellationToken = CancellationToken.None;
-
-        // Act
-        await _handler.ExecuteAsync(subtask, queueItem, cancellationToken);
-
-        // Assert
-        Assert.AreEqual(AutoLoginSubtaskStatus.Completed, subtask.Status);
-        Assert.AreEqual(100, subtask.Progress);
-    }
-
-    private AutoLoginQueueItem CreateTestQueueItem()
-    {
-        // Create test data - use existing patterns from other test files
-        return new AutoLoginQueueItem(/* test parameters */);
-    }
-}
-```
-
-#### 4. **Registration Pattern**
-Add your handler to the DI container in `Infrastructure/DependencyInjection.cs`:
-
-```csharp
-// In the AddAutoLoginServices method
-services.AddTransient<IAutoLoginStepHandler, [StepName]Handler>();
-```
-
-### Claude Code: Common Implementation Patterns
-
-#### UI Element Interaction with Subtask Integration
-```csharp
-private async Task ClickButtonAsync(
-    AutoLoginSubtask subtask,
-    IntPtr windowHandle,
-    string buttonText,
-    CancellationToken cancellationToken)
-{
-    subtask.UpdateProgress(20, $"Locating '{buttonText}' button...");
-
-    var buttonElement = await FindUIElementAsync(windowHandle, buttonText, cancellationToken);
-
-    subtask.UpdateProgress(40, "Verifying button is clickable...");
-
-    if (!IsElementEnabled(buttonElement))
-    {
-        throw new InvalidOperationException($"Button '{buttonText}' is not enabled");
-    }
-
-    subtask.UpdateProgress(60, "Clicking button...");
-    await ClickElementAsync(buttonElement, cancellationToken);
-
-    subtask.UpdateProgress(80, "Waiting for button click response...");
-    await WaitForExpectedStateChange(cancellationToken);
-
-    subtask.UpdateProgress(100, $"'{buttonText}' button clicked successfully");
-}
-```
-
-#### Secure Text Input with AutoLoginSubtask
-```csharp
-private async Task EnterSecureTextAsync(
-    AutoLoginSubtask subtask,
-    IntPtr windowHandle,
-    string fieldName,
-    string text,
-    CancellationToken cancellationToken)
-{
-    subtask.UpdateProgress(25, $"Locating {fieldName} field...");
-
-    var textField = await FindUIElementAsync(windowHandle, fieldName, cancellationToken);
-
-    subtask.UpdateProgress(50, "Focusing input field...");
-    await FocusElementAsync(textField, cancellationToken);
-
-    subtask.UpdateProgress(75, "Entering text securely...");
-    await ClearFieldAsync(textField, cancellationToken);
-    await SendKeysAsync(text, cancellationToken);
-
-    // SECURITY: Never log sensitive content
-    await _loggingService.LogDebugAsync($"{fieldName} field populated (content masked for security)");
-
-    subtask.UpdateProgress(100, $"{fieldName} entered successfully");
-}
-```
-
-### Claude Code: Key Implementation Guidelines
-
-#### ✅ **DO** - Best Practices
-- **Always call `subtask.Start()`** at the beginning of handler execution
-- **Use `subtask.UpdateProgress()`** frequently with meaningful messages (every 20-25% progress)
-- **Call `subtask.Complete()`** on successful completion or `subtask.Fail(message)` on error
-- **Leverage `subtask.IsSkippable`** to handle optional steps gracefully
-- **Use `subtask.EstimatedDurationSeconds`** for timeout calculations
-- **Pass `AutoLoginSubtask` to all helper methods** for progress tracking
-- **Check account properties via `queueItem.Account`** for step-specific logic
-- **Use dependency injection** for all services (ILoggingService, IProcessUtilityService, etc.)
-- **Follow the exact handler template** provided above for consistency
-
-#### ❌ **DON'T** - Anti-Patterns
-- **Don't manually set `subtask.Status`** - use lifecycle methods instead
-- **Don't bypass progress reporting** - UI depends on granular updates
-- **Don't forget cancellation token** in async operations
-- **Don't log sensitive information** (passwords, tokens, personal data)
-- **Don't create handlers for multiple LoginTaskSteps** - one handler per step
-- **Don't catch exceptions without calling `subtask.Fail()`** first
-- **Don't skip the DI registration** step in Infrastructure/DependencyInjection.cs
-
-#### 🧪 **Testing Requirements**
-- **Create MSTest test class** for each handler
-- **Test happy path** (successful execution)
-- **Test error scenarios** (timeouts, failures)
-- **Test skippable logic** if `IsSkippable = true`
-- **Test cancellation handling**
-- **Mock all external dependencies**
-
-### File Location Patterns for Claude Code
-```
-Services/AutoLogin/Handlers/[StepName]Handler.cs          # Implementation
-Testing/Services/AutoLogin/Handlers/[StepName]HandlerTests.cs  # Tests
-Infrastructure/DependencyInjection.cs                     # Registration
-```
-
----
-
-## 🎯 Quick Reference for Claude Code
-
-**When asked to create an auto-login handler:**
-
-1. **Read** `Models/LoginTaskStep.cs` to understand the step
-2. **Use** the handler template provided above
-3. **Implement** `ExecuteStepLogicAsync` with proper progress tracking
-4. **Create** corresponding test file
-5. **Register** in DI container
-6. **Build** and test with `dotnet build` and `dotnet test`
-
----
-
-## 🖼️ Screenshot Detection Integration
-
-### Overview
-Handlers can now use screenshot-based detection to identify application states and perform UI automation. This approach is more reliable than window title matching and works across different application versions.
-
-### Core Services for Screenshot Detection
-
-#### 1. IScreenshotCaptureService
-Captures screenshots of application windows:
-```csharp
-var screenshot = await _screenshotService.CaptureWindowAsync(windowHandle);
-```
-
-#### 2. ITemplateMatchingService
-Finds UI elements within screenshots:
-```csharp
-var match = await _templateService.FindElementAsync(screenshot, "Windower/launch_arrow");
-if (match.Confidence >= 0.80f)
-{
-    // Element found with high confidence
-}
-```
-
-#### 3. IUIAutomationService
-Performs clicks and keyboard input:
-```csharp
-var clickPoint = screenshot.ToScreenCoordinates(match.GetClickPoint());
-await _automationService.ClickAsync(clickPoint);
-```
-
-#### 4. IScreenStateDetectionService
-High-level state detection and waiting:
-```csharp
-var state = await _screenDetection.WaitForStateAsync(
-    LoginTaskStep.ClickLaunchButton,
-    windowHandle,
-    TimeSpan.FromSeconds(10),
-    (progress, msg) => subtask.UpdateProgress(progress, msg)
-);
-```
-
-### Enhanced Handler Pattern with Screenshot Detection
-
-```csharp
-public class ScreenDetectionHandler : IAutoLoginStepHandler
-{
-    private readonly IScreenshotCaptureService _screenshotService;
-    private readonly ITemplateMatchingService _templateService;
     private readonly IUIAutomationService _automationService;
-    private readonly ILoggingService _loggingService;
 
-    public LoginTaskStep HandledStep => LoginTaskStep.ClickLaunchButton;
+    public YourStepHandler(
+        ILoggingService loggingService,
+        IScreenshotCaptureService screenshotService,
+        ITemplateMatchingService templateService,
+        IUIAutomationService automationService)
+        : base(loggingService, screenshotService, templateService)
+    {
+        _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
+    }
 
-    public async Task ExecuteAsync(
+    public override LoginTaskStep TaskStep => LoginTaskStep.YourStep;
+
+    public override bool CanHandle(AutoLoginSubtask subtask) => subtask.TaskStep == TaskStep;
+
+    protected override async Task ExecuteHandlerLogicAsync(
         AutoLoginSubtask subtask,
         AutoLoginQueueItem queueItem,
+        IAutoLoginContext context,
         CancellationToken cancellationToken)
     {
         subtask.Start();
 
-        try
+        var accountName = queueItem.Account?.AccountName ?? "Unknown";
+        await _loggingService.LogInfoAsync($"[FLOW] Starting {TaskStep} for {accountName}");
+
+        // Get window handle
+        var windowHandle = await FindWindowHandleAsync(
+            subtask,
+            "processName",
+            "Application Name",
+            cancellationToken);
+
+        // Use standardized detection
+        var screenMatch = await WaitForScreenDetectionAsync(
+            subtask,
+            "Templates/your_template",
+            windowHandle,
+            "screen description",
+            cancellationToken,
+            ScreenDetectionOptions.Extended); // Use Extended for complex screens
+
+        if (screenMatch.Confidence < 0.80f)
         {
-            // Use standardized detection pattern
-            var match = await WaitForScreenDetection(
-                "Application/element_name",
-                queueItem.WindowHandle,
-                "descriptive screen name",
-                cancellationToken,
-                timeoutSeconds: 30);
-
-            if (match.Confidence < 0.80f)
-            {
-                subtask.Fail($"Could not detect expected screen. Confidence: {match.Confidence:P}");
-                return;
-            }
-
-            // Perform action on detected element
-            subtask.UpdateProgress(60, "Clicking detected element...");
-            var screenshot = await _screenshotService.CaptureWindowAsync(queueItem.WindowHandle, cancellationToken);
-            var clickPoint = screenshot.ToScreenCoordinates(match.GetClickPoint());
-            await _automationService.ClickAsync(clickPoint, cancellationToken);
-
-            // Verify action completed
-            subtask.UpdateProgress(80, "Verifying action result...");
-            await Task.Delay(1000, cancellationToken);
-
-            subtask.Complete();
-        }
-        catch (OperationCanceledException)
-        {
-            subtask.Cancel();
-            throw;
-        }
-        catch (Exception ex)
-        {
-            subtask.Fail(ex.Message);
-            await _loggingService.LogErrorAsync($"Screenshot detection handler failed", ex);
-            throw;
-        }
-    }
-
-    /// <summary>
-    /// STANDARDIZED SCREEN DETECTION PATTERN - Use this for ALL screen detection!
-    /// Checks every 1 second up to the specified timeout (default 30 seconds).
-    /// </summary>
-    private async Task<TemplateMatchResult> WaitForScreenDetection(
-        string templatePath,
-        IntPtr windowHandle,
-        string screenDescription,
-        CancellationToken cancellationToken,
-        int timeoutSeconds = 30,
-        float confidenceThreshold = 0.80f)
-    {
-        var attemptCount = 0;
-        var maxAttempts = timeoutSeconds;
-
-        await _loggingService.LogInfoAsync($"Waiting for {screenDescription} (max {timeoutSeconds}s, checking every 1s)");
-
-        while (attemptCount < maxAttempts)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            attemptCount++;
-
-            var screenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
-
-            if (screenshot != null && screenshot.IsValid)
-            {
-                var match = await _templateService.FindElementAsync(screenshot, templatePath, cancellationToken);
-
-                await _loggingService.LogDebugAsync($"{screenDescription} detection attempt {attemptCount}/{maxAttempts}: confidence {match.Confidence:P}");
-
-                // Success case
-                if (match.Confidence >= confidenceThreshold)
-                {
-                    await _loggingService.LogInfoAsync($"{screenDescription} detected successfully after {attemptCount} attempts (confidence: {match.Confidence:P})");
-                    return match;
-                }
-
-                // Progress indicator - show when we're getting close
-                if (match.Confidence >= 0.60f)
-                {
-                    await _loggingService.LogDebugAsync($"{screenDescription} partially detected (confidence: {match.Confidence:P}), continuing to wait...");
-                }
-            }
-            else
-            {
-                await _loggingService.LogDebugAsync($"Failed to capture window screenshot on attempt {attemptCount}/{maxAttempts}");
-            }
-
-            // Wait 1 second before next attempt (don't wait after last attempt)
-            if (attemptCount < maxAttempts)
-            {
-                await Task.Delay(1000, cancellationToken);
-            }
+            throw new InvalidOperationException($"Could not detect screen (confidence: {screenMatch.Confidence:P})");
         }
 
-        // Final attempt for diagnosis
-        var finalScreenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
-        if (finalScreenshot != null && finalScreenshot.IsValid)
-        {
-            var finalMatch = await _templateService.FindElementAsync(finalScreenshot, templatePath, cancellationToken);
-            await _loggingService.LogWarningAsync($"{screenDescription} detection timed out after {timeoutSeconds}s. Final confidence: {finalMatch.Confidence:P}");
-            return finalMatch;
-        }
+        // Perform actions
+        await ClickAtCoordinatesAsync(
+            subtask,
+            new Point(290, 390),
+            windowHandle,
+            "button description",
+            cancellationToken,
+            _automationService);
 
-        throw new InvalidOperationException($"Failed to detect {screenDescription} after {timeoutSeconds} seconds");
+        subtask.Complete();
+        await _loggingService.LogInfoAsync($"[FLOW] Completed {TaskStep} for {accountName}");
     }
 }
 ```
 
-### 🎯 IMPORTANT: Standardized Screen Detection Pattern
+## Proven Patterns from PlayOnline Implementation
 
-**ALL handlers MUST use the `WaitForScreenDetection` pattern shown above for consistency and reliability.**
-
-#### Key Benefits:
-- **Consistent Timing**: Always checks every 1 second (predictable for users)
-- **Robust Detection**: Default 30-second timeout accommodates slow systems
-- **Detailed Logging**: Debug logs show confidence progression
-- **Progress Tracking**: Shows partial matches (60%+ confidence)
-- **Final Diagnosis**: Always captures final confidence for troubleshooting
-
-#### Usage Examples:
+### Window Finding (Standardized)
 ```csharp
-// Default usage - 30 seconds, 80% confidence
-var match = await WaitForScreenDetection(
+// This pattern works for all applications
+var windowHandle = await FindWindowHandleAsync(
+    subtask,
+    "pol",           // Process name
+    "PlayOnline",    // Display name
+    cancellationToken);
+```
+
+### Screen Detection (Extended Timeout for Complex Screens)
+```csharp
+// Use Extended timeout for loading screens, member selection, etc.
+var memberScreenMatch = await WaitForScreenDetectionAsync(
+    subtask,
     "PlayOnline/member_selection_screen",
     windowHandle,
     "member selection screen",
-    cancellationToken);
-
-// Custom timeout for quick transitions
-var match = await WaitForScreenDetection(
-    "PlayOnline/login_button",
-    windowHandle,
-    "login button",
     cancellationToken,
-    timeoutSeconds: 10);
-
-// Higher confidence for critical elements
-var match = await WaitForScreenDetection(
-    "PlayOnline/password_field",
-    windowHandle,
-    "password field",
-    cancellationToken,
-    timeoutSeconds: 20,
-    confidenceThreshold: 0.90f);
+    ScreenDetectionOptions.Extended); // 60-second timeout
 ```
 
-### Window-Relative Coordinate System
-
-All screenshot detection uses **window-relative coordinates**:
-
-1. **Capture** - Screenshot of application window only
-2. **Match** - Find UI elements within window bounds
-3. **Convert** - Transform to screen coordinates for clicking
-
+### Coordinate Clicking (Proven Pattern)
 ```csharp
-// Example coordinate conversion
-var windowScreenshot = await _screenshotService.CaptureWindowAsync(windowHandle);
-var match = await _templateService.FindElementAsync(windowScreenshot, templatePath);
-
-// match.GetClickPoint() returns window-relative coordinates
-var windowRelativePoint = match.GetClickPoint();
-
-// Convert to screen coordinates for clicking
-var screenPoint = windowScreenshot.ToScreenCoordinates(windowRelativePoint);
-await _automationService.ClickAsync(screenPoint);
+// Always use this exact pattern for clicking
+await ClickAtCoordinatesAsync(
+    subtask,
+    new Point(290, 390),
+    windowHandle,
+    "CircleConfirmation button",
+    cancellationToken,
+    _automationService);
 ```
 
-### Template Management
+### Secure Text Entry
+```csharp
+// For password entry
+await _automationService.TypeSecureTextAsync(password, 50, cancellationToken);
+await Task.Delay(500, cancellationToken); // Allow typing to complete
+```
 
-Templates are embedded resources organized by application:
+### Multi-Step Flow Pattern
+```csharp
+protected override async Task ExecuteHandlerLogicAsync(...)
+{
+    subtask.Start();
+    var accountName = queueItem.Account?.AccountName ?? "Unknown";
 
+    // Phase 1: Find window
+    subtask.UpdateProgress(5, "Finding active window...");
+    var windowHandle = await FindWindowHandleAsync(/*...*/);
+
+    // Phase 2: Wait for screen
+    subtask.UpdateProgress(30, "Waiting for interface to load...");
+    var screenMatch = await WaitForScreenDetectionAsync(/*...*/);
+
+    // Phase 3: Validate detection
+    if (screenMatch.Confidence < 0.80f)
+    {
+        throw new InvalidOperationException($"Detection failed (confidence: {screenMatch.Confidence:P})");
+    }
+
+    // Phase 4: Perform action
+    subtask.UpdateProgress(70, "Performing action...");
+    await ClickAtCoordinatesAsync(/*...*/);
+
+    // Phase 5: Confirm completion
+    subtask.UpdateProgress(95, "Confirming action...");
+    await Task.Delay(1000, cancellationToken);
+
+    subtask.Complete();
+}
+```
+
+## Screen Detection Options (Proven Settings)
+
+### Recommended Configurations
+```csharp
+public class ScreenDetectionOptions
+{
+    public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(30);
+    public TimeSpan CheckInterval { get; set; } = TimeSpan.FromSeconds(1);
+    public float ConfidenceThreshold { get; set; } = 0.80f;
+
+    // Standard detection (30s timeout, 80% confidence)
+    public static ScreenDetectionOptions Default => new();
+
+    // For fast detections (UI elements that appear quickly)
+    public static ScreenDetectionOptions Quick => new() { Timeout = TimeSpan.FromSeconds(10) };
+
+    // For complex screens, loading screens, member selection (RECOMMENDED)
+    public static ScreenDetectionOptions Extended => new() { Timeout = TimeSpan.FromSeconds(60) };
+
+    // For critical elements that must be precise
+    public static ScreenDetectionOptions HighConfidence => new() { ConfidenceThreshold = 0.90f };
+}
+```
+
+## Template Management Best Practices
+
+### Template File Organization
 ```
 Templates/
-├── Windower/
-│   ├── launch_arrow.png
-│   └── launch_arrow.json
 ├── PlayOnline/
-│   ├── member_dropdown.png
-│   └── member_dropdown.json
-└── FFXI/
-    ├── accept_button.png
-    └── accept_button.json
+│   ├── member_selection_screen.png
+│   ├── virtual_keyboard_password_input_screen.png
+│   ├── connect_to_playonline_screen.png
+│   └── main_screen.png
+├── FFXI/
+│   ├── character_select_screen.png
+│   └── world_select_screen.png
+└── Windower/
+    └── launch_arrow.png
 ```
 
-### Creating Templates for Your Handler
+### Critical Template Requirements
+1. **Take templates from the SAME application** (PlayOnline templates from PlayOnline, not screenshots)
+2. **Use diagnostic screenshots** to verify what the system actually sees
+3. **Templates must be 24-bit RGB** (not RGBA) for consistent matching
+4. **Crop tightly** to the essential UI elements
+5. **Test confidence thresholds** - 80% works for most cases
 
-1. **Capture UI Element**
-   - Use screenshot tool to capture ONLY the UI element
-   - Save as PNG in appropriate Templates folder
-   - Keep small (50-200px typically)
+## Diagnostic Features
 
-2. **Create Metadata JSON**
-   ```json
-   {
-     "name": "Element Name",
-     "templatePath": "Application/element_name",
-     "associatedStep": "LoginTaskStep",
-     "action": {
-       "type": "click",
-       "clickOffset": { "x": 0, "y": 0 }
-     },
-     "confidenceThreshold": 0.80
-   }
-   ```
-
-3. **Test Template Matching**
-   ```csharp
-   var template = await _templateManagement.LoadTemplateAsync("Application/element_name");
-   var match = await _templateService.FindElementAsync(screenshot, template);
-   Assert.IsTrue(match.Confidence >= 0.80f);
-   ```
-
-### Performance Considerations
-
-1. **Cache Screenshots** - Don't recapture unnecessarily
-2. **Use Regions** - Capture only relevant window areas
-3. **Preload Templates** - Load at startup, not during execution
-4. **Confidence Thresholds** - Balance accuracy vs. flexibility
-
-### Debugging Screenshot Detection
-
+### Screenshot Logging (Built-in)
 ```csharp
-// Log match details for debugging
-await _loggingService.LogDebugAsync(
-    $"Template match: {match.Template.Name} at ({match.WindowRelativePosition.X}, {match.WindowRelativePosition.Y}) " +
-    $"with confidence {match.Confidence:P}");
-
-// Save screenshot for analysis (debug builds only)
-#if DEBUG
-if (match.Confidence < expectedConfidence)
-{
-    SaveScreenshotForDebug(windowScreenshot, $"low_confidence_{match.Template.Name}");
-}
-#endif
+// Enable in Settings > Diagnostics > Enable Diagnostics
+// Screenshots automatically saved to:
+// %APPDATA%\FFXIManager\Diagnostics\Screenshots\
+//
+// Files are auto-cleaned:
+// - Removes files older than 7 days
+// - Keeps only latest 50 screenshots
 ```
 
+### Progress Reporting Pattern
+```csharp
+subtask.UpdateProgress(5, "Finding window...");           // 5%
+subtask.UpdateProgress(30, "Waiting for screen...");     // 30%
+subtask.UpdateProgress(70, "Performing action...");      // 70%
+subtask.UpdateProgress(95, "Confirming...");             // 95%
+subtask.Complete();                                       // 100%
+```
+
+## Real-World Examples
+
+### PlayOnline Member Selection (Working Implementation)
+```csharp
+// Phase 3: Wait for member selection screen with extended detection
+subtask.UpdateProgress(30, "Waiting for member selection interface to load...");
+var memberScreenMatch = await WaitForScreenDetectionAsync(
+    subtask,
+    "PlayOnline/member_selection_screen",
+    windowHandle,
+    "member selection screen",
+    cancellationToken,
+    ScreenDetectionOptions.Extended); // 60-second timeout for member selection
+
+if (memberScreenMatch.Confidence < 0.80f)
+{
+    throw new InvalidOperationException($"Could not detect member selection screen after extended wait (confidence: {memberScreenMatch.Confidence:P})");
+}
+```
+
+### Password Entry with Confirmation (Working Implementation)
+```csharp
+subtask.UpdateProgress(85, "Entering password securely...");
+await _automationService.TypeSecureTextAsync(password, 50, cancellationToken);
+await Task.Delay(500, cancellationToken);
+
+// Click CircleConfirmation button to confirm password entry
+subtask.UpdateProgress(95, "Confirming password entry...");
+await ClickAtCoordinatesAsync(
+    subtask,
+    new Point(290, 390),
+    windowHandle,
+    "CircleConfirmation button",
+    cancellationToken,
+    _automationService);
+await Task.Delay(1000, cancellationToken); // Allow confirmation to process
+
+subtask.UpdateProgress(100, "Password entry and confirmation completed successfully");
+```
+
+## Critical Success Factors
+
+### ✅ DO (Proven to Work)
+- **Use `ScreenDetectionOptions.Extended`** for complex screens (60s timeout)
+- **Always validate confidence >= 0.80f** before proceeding
+- **Use diagnostic screenshots** to debug detection issues
+- **Add confirmation clicks** after major actions (like password entry)
+- **Handle DirectX applications** (automatic with our ScreenshotCaptureService)
+- **Use window-relative coordinates** for clicking
+- **Add delays after typing/clicking** for UI processing
+
+### ❌ DON'T (Causes Failures)
+- **Don't use Default timeouts** for complex screens (30s often insufficient)
+- **Don't assume screenshots work** without testing DirectX capture
+- **Don't skip confirmation steps** (like CircleConfirmation after password)
+- **Don't use absolute screen coordinates** (use window-relative)
+- **Don't ignore confidence scores** below 0.80f
+- **Don't forget Task.Delay** after UI interactions
+
+## Testing DirectX Applications
+
+### Validation Checklist
+1. **Enable Diagnostic Screenshots** in Settings
+2. **Run auto-login process** and let it fail
+3. **Check diagnostic screenshots** at `%APPDATA%\FFXIManager\Diagnostics\Screenshots\`
+4. **Verify screenshots show actual content** (not black screens)
+5. **If black screens**: DirectX capture issue (should be automatic now)
+6. **If wrong content**: Window handle or timing issue
+7. **If right content but 0% confidence**: Template mismatch issue
+
+### Common DirectX Applications
+- **PlayOnline Viewer** ✅ Supported (PrintWindow works)
+- **Final Fantasy XI** ✅ Supported (PrintWindow works)
+- **Windower** ✅ Supported (standard BitBlt works)
+- **Other games** ✅ Should work (PrintWindow first, BitBlt fallback)
+
+## Performance Considerations
+
+### Timeout Strategy
+```csharp
+// Loading screens, complex interfaces
+ScreenDetectionOptions.Extended;    // 60s timeout
+
+// Simple UI elements, confirmations
+ScreenDetectionOptions.Default;     // 30s timeout
+
+// Quick validations, retries
+ScreenDetectionOptions.Quick;       // 10s timeout
+```
+
+### Memory Management
+- Screenshots are not cached (fresh capture each time)
+- Templates are cached by TemplateManagementService
+- Diagnostic screenshots auto-cleanup (50 files max, 7 days max)
+
 ---
 
-## 📚 Additional Resources
+## Registration Pattern
+```csharp
+// In Infrastructure/DependencyInjection.cs
+services.AddSingleton<ILoginTaskHandler, YourStepHandler>();
+```
 
-### Architecture Documentation
-- `Services/AutoLoginQueueService.cs` - Main facade service
-- `Models/AutoLoginTask.cs` - Task-level model
-- `Models/AutoLoginSubtask.cs` - Subtask-level model
-- `Models/LoginTaskStep.cs` - Available login steps
-
-### Related Services
-- `ILoggingService` - Comprehensive logging with Serilog
-- `IProcessUtilityService` - Process management utilities
-- `ISettingsService` - Application configuration
-- `IQueueStateMachine` - State management for queue execution
-- `IAutoLoginTaskExecutor` - Task/subtask execution coordinator
-
-### Testing Framework
-- MSTest for unit and integration tests
-- Moq for service mocking
-- Test project: `Testing/FFXIManager.Tests.csproj`
-
----
-
-*This guide provides Claude Code with the patterns and templates needed to create consistent, maintainable auto-login handlers that integrate seamlessly with the refactored architecture.*
+**Remember: This guide is based on proven, working implementations. The DirectX screenshot capture and extended timeout patterns are critical for success with PlayOnline and FFXI applications.**

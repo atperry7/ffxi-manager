@@ -83,6 +83,9 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
+    <None Remove="nul" />
+  </ItemGroup>
+  <ItemGroup>
     <Folder Include="Templates\PlayOnline\" />
   </ItemGroup>
 

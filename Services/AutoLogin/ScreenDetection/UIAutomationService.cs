@@ -176,14 +176,36 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                     {
                         cancellationToken.ThrowIfCancellationRequested();
 
-                        // Send key down and up for each character
+                        // Send key down and up for each character with proper modifier handling
                         var vkCode = VkKeyScan(c);
                         if (vkCode != -1)
                         {
                             byte virtualKey = (byte)(vkCode & 0xFF);
+                            byte shiftState = (byte)((vkCode >> 8) & 0xFF);
+
+                            // Handle modifier keys (Shift, Ctrl, Alt)
+                            bool needsShift = (shiftState & 1) != 0;
+                            bool needsCtrl = (shiftState & 2) != 0;
+                            bool needsAlt = (shiftState & 4) != 0;
+
+                            // Press modifier keys down
+                            if (needsShift) keybd_event(0x10, 0, KEYEVENTF_KEYDOWN, 0); // VK_SHIFT
+                            if (needsCtrl) keybd_event(0x11, 0, KEYEVENTF_KEYDOWN, 0);  // VK_CONTROL
+                            if (needsAlt) keybd_event(0x12, 0, KEYEVENTF_KEYDOWN, 0);   // VK_MENU (Alt)
+
+                            Thread.Sleep(10); // Brief pause for modifier keys to register
+
+                            // Press the main key
                             keybd_event(virtualKey, 0, KEYEVENTF_KEYDOWN, 0);
                             Thread.Sleep(25);
                             keybd_event(virtualKey, 0, KEYEVENTF_KEYUP, 0);
+
+                            Thread.Sleep(10); // Brief pause before releasing modifiers
+
+                            // Release modifier keys (in reverse order)
+                            if (needsAlt) keybd_event(0x12, 0, KEYEVENTF_KEYUP, 0);   // VK_MENU (Alt)
+                            if (needsCtrl) keybd_event(0x11, 0, KEYEVENTF_KEYUP, 0);  // VK_CONTROL
+                            if (needsShift) keybd_event(0x10, 0, KEYEVENTF_KEYUP, 0); // VK_SHIFT
 
                             if (delayBetweenKeys > 0)
                             {
@@ -209,10 +231,16 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             // Same as TypeTextAsync but with logging that doesn't expose the text
             if (string.IsNullOrEmpty(secureText)) return;
 
+            // DIAGNOSTIC: Log typing details without exposing password
+            await _loggingService.LogDebugAsync($"[DIAGNOSTIC] TypeSecureTextAsync starting: {secureText.Length} characters to type");
+
             await Task.Run(() =>
             {
                 try
                 {
+                    int charCount = 0;
+                    int failedChars = 0;
+
                     foreach (char c in secureText)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
@@ -221,17 +249,47 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                         if (vkCode != -1)
                         {
                             byte virtualKey = (byte)(vkCode & 0xFF);
+                            byte shiftState = (byte)((vkCode >> 8) & 0xFF);
+
+                            // Handle modifier keys (Shift, Ctrl, Alt)
+                            bool needsShift = (shiftState & 1) != 0;
+                            bool needsCtrl = (shiftState & 2) != 0;
+                            bool needsAlt = (shiftState & 4) != 0;
+
+                            // Press modifier keys down
+                            if (needsShift) keybd_event(0x10, 0, KEYEVENTF_KEYDOWN, 0); // VK_SHIFT
+                            if (needsCtrl) keybd_event(0x11, 0, KEYEVENTF_KEYDOWN, 0);  // VK_CONTROL
+                            if (needsAlt) keybd_event(0x12, 0, KEYEVENTF_KEYDOWN, 0);   // VK_MENU (Alt)
+
+                            Thread.Sleep(10); // Brief pause for modifier keys to register
+
+                            // Press the main key
                             keybd_event(virtualKey, 0, KEYEVENTF_KEYDOWN, 0);
                             Thread.Sleep(25);
                             keybd_event(virtualKey, 0, KEYEVENTF_KEYUP, 0);
+
+                            Thread.Sleep(10); // Brief pause before releasing modifiers
+
+                            // Release modifier keys (in reverse order)
+                            if (needsAlt) keybd_event(0x12, 0, KEYEVENTF_KEYUP, 0);   // VK_MENU (Alt)
+                            if (needsCtrl) keybd_event(0x11, 0, KEYEVENTF_KEYUP, 0);  // VK_CONTROL
+                            if (needsShift) keybd_event(0x10, 0, KEYEVENTF_KEYUP, 0); // VK_SHIFT
 
                             if (delayBetweenKeys > 0)
                             {
                                 Thread.Sleep(delayBetweenKeys);
                             }
+                            charCount++;
+                        }
+                        else
+                        {
+                            // DIAGNOSTIC: Track characters that couldn't be typed
+                            failedChars++;
                         }
                     }
 
+                    // DIAGNOSTIC: Log typing completion stats
+                    _loggingService.LogDebugAsync($"[DIAGNOSTIC] Secure text typing completed: {charCount} characters typed successfully, {failedChars} characters failed to type");
                     _loggingService.LogDebugAsync("Secure text typed successfully");
                 }
                 catch (OperationCanceledException)

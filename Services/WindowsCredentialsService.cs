@@ -121,6 +121,17 @@ namespace FFXIManager.Services
                         Marshal.Copy(credential.CredentialBlob, passwordBytes, 0, (int)credential.CredentialBlobSize);
                         string password = Encoding.UTF8.GetString(passwordBytes);
 
+                        // DIAGNOSTIC: Log credential retrieval details (without exposing password)
+                        await _loggingService.LogDebugAsync($"[DIAGNOSTIC] Credential retrieved for {target}: BlobSize={credential.CredentialBlobSize} bytes, Password Length={password.Length} characters");
+
+                        // DIAGNOSTIC: Check if password contains null terminators or unexpected characters
+                        if (password.Contains('\0'))
+                        {
+                            var nullIndex = password.IndexOf('\0');
+                            await _loggingService.LogWarningAsync($"[DIAGNOSTIC] Password contains null terminator at position {nullIndex}, truncating");
+                            password = password.Substring(0, nullIndex);
+                        }
+
                         await _loggingService.LogDebugAsync($"Successfully retrieved credential for {target}");
                         return password;
                     }

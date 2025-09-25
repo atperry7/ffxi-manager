@@ -37,8 +37,9 @@ namespace FFXIManager.Services.AutoLogin
             ILoggingService loggingService,
             IScreenshotCaptureService screenshotService,
             ITemplateMatchingService templateService,
+            ITemplateManagementService templateManagementService,
             IProcessUtilityService processUtilityService,
-            ISettingsService settingsService) : base(loggingService, screenshotService, templateService)
+            ISettingsService settingsService) : base(loggingService, screenshotService, templateService, templateManagementService)
         {
             _processUtilityService = processUtilityService ?? throw new ArgumentNullException(nameof(processUtilityService));
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
