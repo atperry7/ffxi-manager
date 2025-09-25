@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -37,6 +38,43 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         [DllImport("user32.dll")]
         private static extern bool GetCursorPos(out POINT lpPoint);
 
+        // DirectX-compatible input APIs
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+        [DllImport("user32.dll")]
+        private static extern uint MapVirtualKey(uint uCode, uint uMapType);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct INPUT
+        {
+            public uint type;
+            public INPUTUNION union;
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        private struct INPUTUNION
+        {
+            [FieldOffset(0)]
+            public KEYBDINPUT ki;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct KEYBDINPUT
+        {
+            public ushort wVk;
+            public ushort wScan;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
         [StructLayout(LayoutKind.Sequential)]
         private struct RECT
         {
@@ -62,9 +100,17 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         // Keyboard event constants
         private const int KEYEVENTF_KEYDOWN = 0x0000;
         private const int KEYEVENTF_KEYUP = 0x0002;
+        private const uint KEYEVENTF_SCANCODE = 0x0008;
 
         // Show window constants
         private const int SW_RESTORE = 9;
+
+        // DirectX-compatible input constants
+        private const uint WM_KEYDOWN = 0x0100;
+        private const uint WM_KEYUP = 0x0101;
+        private const uint WM_CHAR = 0x0102;
+        private const uint INPUT_KEYBOARD = 1;
+        private const uint MAPVK_VK_TO_VSC = 0;
 
         public UIAutomationService(ILoggingService loggingService)
         {
@@ -306,6 +352,20 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
         public async Task SendKeyAsync(ConsoleKey key, CancellationToken cancellationToken = default)
         {
+            await SendKeyToDirectXAsync(key, IntPtr.Zero, cancellationToken);
+        }
+
+        public async Task SendKeyAsync(ConsoleKey key, IntPtr targetWindow, CancellationToken cancellationToken = default)
+        {
+            await SendKeyToDirectXAsync(key, targetWindow, cancellationToken);
+        }
+
+        /// <summary>
+        /// DirectX-compatible key sending optimized for FFXI and similar DirectX applications
+        /// Uses keybd_event with scan codes and proper extended key flags
+        /// </summary>
+        private async Task SendKeyToDirectXAsync(ConsoleKey key, IntPtr targetWindow, CancellationToken cancellationToken = default)
+        {
             await Task.Run(() =>
             {
                 try
@@ -313,14 +373,67 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                     cancellationToken.ThrowIfCancellationRequested();
 
                     var vkCode = ConsoleKeyToVirtualKey(key);
-                    if (vkCode != 0)
+                    if (vkCode == 0)
                     {
-                        keybd_event(vkCode, 0, KEYEVENTF_KEYDOWN, 0);
-                        Thread.Sleep(50);
-                        keybd_event(vkCode, 0, KEYEVENTF_KEYUP, 0);
+                        _loggingService.LogWarningAsync($"Unknown virtual key code for ConsoleKey: {key}");
+                        return;
                     }
 
-                    _loggingService.LogDebugAsync($"Key sent: {key}");
+                    // Arrow keys need special handling for DirectX games like FFXI
+                    bool isArrowKey = key == ConsoleKey.LeftArrow || key == ConsoleKey.RightArrow ||
+                                     key == ConsoleKey.UpArrow || key == ConsoleKey.DownArrow;
+
+                    // Ensure window has focus first
+                    if (targetWindow != IntPtr.Zero)
+                    {
+                        SetForegroundWindow(targetWindow);
+                        Thread.Sleep(50); // Brief pause to ensure focus
+                    }
+
+                    _loggingService.LogDebugAsync($"[DirectX Input] Sending {(isArrowKey ? "arrow " : "")}key {key} (VK: 0x{vkCode:X2}) using keybd_event");
+
+                    // Get scan code for the key
+                    var scanCode = (byte)MapVirtualKey(vkCode, MAPVK_VK_TO_VSC);
+
+                    if (isArrowKey)
+                    {
+                        // Arrow keys are extended keys - use KEYEVENTF_EXTENDEDKEY flag (0x0001)
+                        const int KEYEVENTF_EXTENDEDKEY = 0x0001;
+
+                        _loggingService.LogDebugAsync($"[DirectX Input] Sending arrow key with extended flag - VK: 0x{vkCode:X2}, Scan: 0x{scanCode:X2}");
+
+                        // Send key down with extended key flag
+                        keybd_event(vkCode, scanCode, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYDOWN, 0);
+                        Thread.Sleep(100); // Hold arrow key longer for FFXI to register movement
+
+                        // Send key up with extended key flag
+                        keybd_event(vkCode, scanCode, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+
+                        _loggingService.LogDebugAsync($"[DirectX Input] Arrow key {key} sent with extended flag");
+                    }
+                    else
+                    {
+                        // Non-arrow keys use scan code method which was working for Enter
+                        if (scanCode == 0)
+                        {
+                            _loggingService.LogWarningAsync($"Could not map virtual key {vkCode:X2} to scan code, using virtual key only");
+                            // Fallback to virtual key method
+                            keybd_event(vkCode, 0, KEYEVENTF_KEYDOWN, 0);
+                            Thread.Sleep(75); // Hold key longer for DirectX recognition
+                            keybd_event(vkCode, 0, KEYEVENTF_KEYUP, 0);
+                        }
+                        else
+                        {
+                            _loggingService.LogDebugAsync($"[DirectX Input] Sending key with scan code - VK: 0x{vkCode:X2}, Scan: 0x{scanCode:X2}");
+
+                            // Use scan code method (best for DirectX) - this was working for Enter
+                            keybd_event(0, scanCode, (int)(KEYEVENTF_SCANCODE | KEYEVENTF_KEYDOWN), 0);
+                            Thread.Sleep(75); // Hold key longer for DirectX recognition
+                            keybd_event(0, scanCode, (int)(KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP), 0);
+                        }
+
+                        _loggingService.LogDebugAsync($"[DirectX Input] Key {key} sent successfully using scan code 0x{scanCode:X2}");
+                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -328,10 +441,24 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 }
                 catch (Exception ex)
                 {
-                    _loggingService.LogErrorAsync($"Send key failed ({key}): {ex.Message}", ex);
+                    _loggingService.LogErrorAsync($"Send DirectX key failed ({key}): {ex.Message}", ex);
                     throw;
                 }
             }, cancellationToken);
+        }
+
+        /// <summary>
+        /// Creates lParam for WM_KEYDOWN and WM_KEYUP messages
+        /// </summary>
+        private static int CreateKeyLParam(int repeatCount, byte scanCode, bool extended, bool previousKeyState, bool transitionState)
+        {
+            int lParam = 0;
+            lParam |= repeatCount & 0x0000FFFF;                    // Repeat count (bits 0-15)
+            lParam |= (scanCode & 0xFF) << 16;                     // Scan code (bits 16-23)
+            lParam |= (extended ? 1 : 0) << 24;                    // Extended key flag (bit 24)
+            lParam |= (previousKeyState ? 1 : 0) << 30;            // Previous key state (bit 30)
+            lParam |= (transitionState ? 1 : 0) << 31;             // Transition state (bit 31)
+            return lParam;
         }
 
         public async Task SendKeyComboAsync(ConsoleModifiers modifiers, ConsoleKey key, CancellationToken cancellationToken = default)
@@ -500,7 +627,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
         private static byte ConsoleKeyToVirtualKey(ConsoleKey key)
         {
-            // Map common console keys to virtual key codes
+            // Map common console keys to virtual key codes - including arrow keys for FFXI navigation
             return key switch
             {
                 ConsoleKey.A => 0x41, // VK_A
@@ -510,6 +637,14 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 ConsoleKey.Spacebar => 0x20, // VK_SPACE
                 ConsoleKey.Delete => 0x2E, // VK_DELETE
                 ConsoleKey.Backspace => 0x08, // VK_BACK
+
+                // Arrow keys - crucial for FFXI navigation
+                ConsoleKey.LeftArrow => 0x25, // VK_LEFT
+                ConsoleKey.UpArrow => 0x26, // VK_UP
+                ConsoleKey.RightArrow => 0x27, // VK_RIGHT
+                ConsoleKey.DownArrow => 0x28, // VK_DOWN
+
+                // Function keys
                 ConsoleKey.F1 => 0x70, // VK_F1
                 ConsoleKey.F2 => 0x71, // VK_F2
                 ConsoleKey.F3 => 0x72, // VK_F3
@@ -522,6 +657,13 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 ConsoleKey.F10 => 0x79, // VK_F10
                 ConsoleKey.F11 => 0x7A, // VK_F11
                 ConsoleKey.F12 => 0x7B, // VK_F12
+
+                // Additional useful keys
+                ConsoleKey.Home => 0x24, // VK_HOME
+                ConsoleKey.End => 0x23, // VK_END
+                ConsoleKey.PageUp => 0x21, // VK_PRIOR
+                ConsoleKey.PageDown => 0x22, // VK_NEXT
+
                 _ => 0
             };
         }

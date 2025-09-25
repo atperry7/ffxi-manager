@@ -1,0 +1,21 @@
+{
+  "name": "FFXI Character Slot Selection",
+  "templatePath": "FFXI/ffxi_character_slot_select_screen",
+  "associatedStep": "CharacterSlotPick",
+  "description": "FFXI character slot selection screen with list of available characters",
+  "action": {
+    "type": "keyboard",
+    "key": "Enter",
+    "clickOffset": { "x": 0, "y": 0 },
+    "parameters": {
+      "description": "Character slot selection (navigate with arrow keys, confirm with Enter)",
+      "navigationKey": "DownArrow"
+    }
+  },
+  "confidenceThreshold": 0.50,
+  "detectionOptions": {
+    "timeout": 30,
+    "checkInterval": 1
+  },
+  "notes": "Lower confidence threshold used due to variable character displays"
+}

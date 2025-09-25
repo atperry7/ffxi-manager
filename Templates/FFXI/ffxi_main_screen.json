@@ -1,0 +1,19 @@
+{
+  "name": "FFXI Main Menu",
+  "templatePath": "FFXI/ffxi_main_screen",
+  "associatedStep": "CharacterSelection",
+  "description": "FFXI main menu screen with Select Character option",
+  "action": {
+    "type": "keyboard",
+    "key": "Enter",
+    "clickOffset": { "x": 0, "y": 0 },
+    "parameters": {
+      "description": "Select Character menu option (defaults to Enter key)"
+    }
+  },
+  "confidenceThreshold": 0.80,
+  "detectionOptions": {
+    "timeout": 30,
+    "checkInterval": 1
+  }
+}

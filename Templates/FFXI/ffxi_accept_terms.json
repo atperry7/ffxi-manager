@@ -1,0 +1,19 @@
+{
+  "name": "FFXI Accept Terms",
+  "templatePath": "FFXI/ffxi_accept_terms",
+  "associatedStep": "TermsAcceptance",
+  "description": "FFXI Terms of Service acceptance screen",
+  "action": {
+    "type": "keyboard",
+    "key": "Enter",
+    "clickOffset": { "x": 0, "y": 0 },
+    "parameters": {
+      "description": "Accept Terms button (defaults to Enter key)"
+    }
+  },
+  "confidenceThreshold": 0.80,
+  "detectionOptions": {
+    "timeout": 60,
+    "checkInterval": 1
+  }
+}

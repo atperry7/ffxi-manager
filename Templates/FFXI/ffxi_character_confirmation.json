@@ -1,0 +1,19 @@
+{
+  "name": "FFXI Character Confirmation",
+  "templatePath": "FFXI/ffxi_character_confirmation",
+  "associatedStep": "ConfirmLogin",
+  "description": "FFXI character confirmation screen before entering game world",
+  "action": {
+    "type": "keyboard",
+    "key": "Enter",
+    "clickOffset": { "x": 0, "y": 0 },
+    "parameters": {
+      "description": "Confirm and enter game world (Enter key)"
+    }
+  },
+  "confidenceThreshold": 0.80,
+  "detectionOptions": {
+    "timeout": 30,
+    "checkInterval": 1
+  }
+}
