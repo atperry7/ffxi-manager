@@ -110,7 +110,7 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="OTP" Width="110">
+                    <DataGridTemplateColumn Header="OTP" Width="125">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -157,13 +157,13 @@
                                             CommandParameter="{Binding}"
                                             ToolTip="Show/Hide OTP Code"
                                             AutomationProperties.Name="Show/Hide OTP Code"
-                                            Margin="4,0,0,0"
+                                            Margin="2,0,0,0"
                                             Visibility="{Binding IsOTPEnabled, Converter={StaticResource BoolToVisConverter}}"/>
                                 </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Actions" Width="180">
+                    <DataGridTemplateColumn Header="Actions" Width="150">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">

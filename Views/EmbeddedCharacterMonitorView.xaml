@@ -57,9 +57,43 @@
                             AutomationProperties.Name="Open Character Monitor Window"/>
                 </StackPanel>
             </Grid>
-
+            <!-- No Characters Message -->
+            <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" 
+                    BorderThickness="1" 
+                    CornerRadius="8" 
+                    Padding="24" 
+                    Background="{DynamicResource SurfaceBrush}">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding CharacterCount}" Value="0">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <TextBlock Text="No PlayOnline characters detected. Launch FFXI to see character instances here."
+                           HorizontalAlignment="Center"
+                           FontStyle="Italic"
+                           FontFamily="Segoe UI"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           Style="{StaticResource SecondaryTextBlock}"/>
+            </Border>
             <!-- Character List -->
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ScrollViewer.Style>
+                    <Style TargetType="ScrollViewer">
+                        <Setter Property="Visibility" Value="Visible"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding CharacterCount}" Value="0">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ScrollViewer.Style>
                 <ItemsControl ItemsSource="{Binding Characters}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:CharacterItemViewModel}">
@@ -81,12 +115,12 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    
+
                                     <!-- Status Indicator -->
                                     <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,12,0"
                                              VerticalAlignment="Center"
                                              Fill="{Binding StatusBrush}"/>
-                                    
+
                                     <!-- Character Info -->
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding DisplayName}" 
@@ -99,7 +133,7 @@
                                                        FontSize="11" FontFamily="Segoe UI" Style="{StaticResource SecondaryTextBlock}"/>
                                         </StackPanel>
                                     </StackPanel>
-                                    
+
                                     <!-- Controls: Activate + Reorder -->
                                     <StackPanel Grid.Column="2" Orientation="Horizontal">
                                         <Button Content="🎯"
@@ -135,31 +169,6 @@
                 </ItemsControl>
             </ScrollViewer>
 
-            <!-- No Characters Message -->
-            <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}" 
-                    BorderThickness="1" 
-                    CornerRadius="8" 
-                    Padding="24" 
-                    Background="{DynamicResource SurfaceBrush}">
-                <Border.Style>
-                    <Style TargetType="Border">
-                        <Setter Property="Visibility" Value="Collapsed"/>
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding CharacterCount}" Value="0">
-                                <Setter Property="Visibility" Value="Visible"/>
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
-                <TextBlock Text="No PlayOnline characters detected. Launch FFXI to see character instances here."
-                           HorizontalAlignment="Center"
-                           FontStyle="Italic"
-                           FontFamily="Segoe UI"
-                           FontSize="12"
-                           TextWrapping="Wrap"
-                           TextAlignment="Center"
-                           Style="{StaticResource SecondaryTextBlock}"/>
-            </Border>
         </Grid>
     </GroupBox>
 </UserControl>

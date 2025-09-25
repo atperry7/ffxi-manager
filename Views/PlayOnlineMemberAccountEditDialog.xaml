@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="{Binding DialogTitle}"
-        Height="650"
+        Height="580"
         Width="450"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
@@ -91,35 +91,6 @@
                                Margin="0,5,0,0"
                                Visibility="{Binding Account.OTPConfiguration.HasStoredSecret, Converter={StaticResource BoolToVisConverter}}"/>
                 </StackPanel>
-
-                <!-- Information Panel -->
-                <Border Background="{DynamicResource InfoBackgroundBrush}"
-                        BorderBrush="{DynamicResource InfoBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="4"
-                        Margin="0,20,0,0"
-                        Padding="10">
-                    <StackPanel>
-                        <TextBlock Text="💡 About PlayOnline Member Accounts"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource InfoTextBrush}"
-                                   Margin="0,0,0,5"/>
-                        <TextBlock TextWrapping="Wrap"
-                                   Foreground="{DynamicResource InfoTextBrush}"
-                                   FontSize="11">
-                            <Run Text="These settings will be used for future auto-login functionality. Each profile can have up to 4 accounts (one per POL Member Slot)."/>
-                            <LineBreak/>
-                            <LineBreak/>
-                            <Run Text="• POL Member Slot: The slot number in PlayOnline Viewer"/>
-                            <LineBreak/>
-                            <Run Text="• FFXI Character Slot: The character position in FFXI"/>
-                            <LineBreak/>
-                            <Run Text="• Password: Your Square Enix account password (securely encrypted)"/>
-                            <LineBreak/>
-                            <Run Text="• OTP: Enable if you use Security Token authentication"/>
-                        </TextBlock>
-                    </StackPanel>
-                </Border>
             </StackPanel>
         </ScrollViewer>
 
