@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Drawing;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -26,6 +27,12 @@ namespace FFXIManager.Infrastructure
         bool IsWindowValid(IntPtr windowHandle);
         Task<ProcessBasicInfo?> GetProcessInfoAsync(int processId);
         Task<List<ProcessBasicInfo>> GetProcessesByNamesAsync(IEnumerable<string> processNames);
+
+        // Monitor detection and window positioning methods
+        Rectangle GetPrimaryMonitorBounds();
+        Rectangle GetWindowMonitorBounds(IntPtr windowHandle);
+        bool IsWindowOnPrimaryMonitor(IntPtr windowHandle);
+        Task<bool> MoveWindowToPrimaryMonitorAsync(IntPtr windowHandle);
     }
 
     /// <summary>
@@ -119,6 +126,23 @@ namespace FFXIManager.Infrastructure
         [DllImport("user32.dll")]
         private static extern int GetLastError();
 
+        // Monitor detection APIs
+        [DllImport("user32.dll")]
+        private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, MonitorEnumProc lpfnEnum, IntPtr dwData);
+
+        [DllImport("user32.dll")]
+        private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MonitorInfo lpmi);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
+
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hWnd, out Rect lpRect);
+
+        private delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdcMonitor, ref Rect lprcMonitor, IntPtr dwData);
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
         
         private const uint GW_HWNDNEXT = 2;
@@ -126,6 +150,33 @@ namespace FFXIManager.Infrastructure
 
         private const int SW_RESTORE = 9;
         private const int SW_SHOW = 5;
+
+        // Monitor constants
+        private const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
+        private const uint MONITOR_DEFAULTTOPRIMARY = 0x00000001;
+        private const uint SWP_NOZORDER = 0x0004;
+        private const uint SWP_NOSIZE = 0x0001;
+
+        // Monitor structures
+        [StructLayout(LayoutKind.Sequential)]
+        private struct Rect
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private struct MonitorInfo
+        {
+            public uint cbSize;
+            public Rect rcMonitor;
+            public Rect rcWork;
+            public uint dwFlags;
+        }
+
+        private const uint MONITORINFOF_PRIMARY = 0x00000001;
 
         #endregion
 
@@ -878,7 +929,148 @@ namespace FFXIManager.Infrastructure
             System.Diagnostics.Debug.WriteLine($"[ACTIVATION FAILURE] Unknown reason for window 0x{hWnd.ToInt64():X}");
             return WindowActivationFailureReason.Unknown;
         }
-        
+
+        #endregion
+
+        #region Monitor Detection and Window Positioning
+
+        /// <summary>
+        /// Gets the bounds of the primary monitor
+        /// </summary>
+        public Rectangle GetPrimaryMonitorBounds()
+        {
+            var primaryMonitor = IntPtr.Zero;
+            var bounds = Rectangle.Empty;
+
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr hMonitor, IntPtr hdcMonitor, ref Rect lprcMonitor, IntPtr dwData) =>
+            {
+                var monitorInfo = new MonitorInfo { cbSize = (uint)Marshal.SizeOf<MonitorInfo>() };
+                if (GetMonitorInfo(hMonitor, ref monitorInfo))
+                {
+                    if ((monitorInfo.dwFlags & MONITORINFOF_PRIMARY) != 0)
+                    {
+                        bounds = new Rectangle(
+                            monitorInfo.rcMonitor.Left,
+                            monitorInfo.rcMonitor.Top,
+                            monitorInfo.rcMonitor.Right - monitorInfo.rcMonitor.Left,
+                            monitorInfo.rcMonitor.Bottom - monitorInfo.rcMonitor.Top
+                        );
+                        return false; // Stop enumeration
+                    }
+                }
+                return true; // Continue enumeration
+            }, IntPtr.Zero);
+
+            return bounds;
+        }
+
+        /// <summary>
+        /// Gets the bounds of the monitor containing the specified window
+        /// </summary>
+        public Rectangle GetWindowMonitorBounds(IntPtr windowHandle)
+        {
+            if (windowHandle == IntPtr.Zero)
+                return Rectangle.Empty;
+
+            var hMonitor = MonitorFromWindow(windowHandle, MONITOR_DEFAULTTONEAREST);
+            if (hMonitor == IntPtr.Zero)
+                return Rectangle.Empty;
+
+            var monitorInfo = new MonitorInfo { cbSize = (uint)Marshal.SizeOf<MonitorInfo>() };
+            if (!GetMonitorInfo(hMonitor, ref monitorInfo))
+                return Rectangle.Empty;
+
+            return new Rectangle(
+                monitorInfo.rcMonitor.Left,
+                monitorInfo.rcMonitor.Top,
+                monitorInfo.rcMonitor.Right - monitorInfo.rcMonitor.Left,
+                monitorInfo.rcMonitor.Bottom - monitorInfo.rcMonitor.Top
+            );
+        }
+
+        /// <summary>
+        /// Checks if the window is currently on the primary monitor
+        /// </summary>
+        public bool IsWindowOnPrimaryMonitor(IntPtr windowHandle)
+        {
+            if (windowHandle == IntPtr.Zero)
+                return false;
+
+            var windowMonitor = GetWindowMonitorBounds(windowHandle);
+            var primaryMonitor = GetPrimaryMonitorBounds();
+
+            return windowMonitor.Equals(primaryMonitor);
+        }
+
+        /// <summary>
+        /// Moves a window to the primary monitor while preserving its relative position
+        /// </summary>
+        public async Task<bool> MoveWindowToPrimaryMonitorAsync(IntPtr windowHandle)
+        {
+            try
+            {
+                if (windowHandle == IntPtr.Zero || !IsWindow(windowHandle))
+                {
+                    await _logging.LogWarningAsync("Cannot move window - invalid handle", "ProcessUtilityService");
+                    return false;
+                }
+
+                // Check if window is already on primary monitor
+                if (IsWindowOnPrimaryMonitor(windowHandle))
+                {
+                    await _logging.LogDebugAsync($"Window 0x{windowHandle.ToInt64():X} is already on primary monitor", "ProcessUtilityService");
+                    return true;
+                }
+
+                var primaryBounds = GetPrimaryMonitorBounds();
+                var currentMonitorBounds = GetWindowMonitorBounds(windowHandle);
+
+                if (primaryBounds.IsEmpty || currentMonitorBounds.IsEmpty)
+                {
+                    await _logging.LogWarningAsync("Failed to get monitor bounds for window positioning", "ProcessUtilityService");
+                    return false;
+                }
+
+                // Get current window position
+                if (!GetWindowRect(windowHandle, out Rect currentRect))
+                {
+                    await _logging.LogWarningAsync("Failed to get window rectangle", "ProcessUtilityService");
+                    return false;
+                }
+
+                // Calculate relative position within current monitor
+                var relativeX = currentRect.Left - currentMonitorBounds.Left;
+                var relativeY = currentRect.Top - currentMonitorBounds.Top;
+
+                // Calculate new position on primary monitor
+                var newX = primaryBounds.Left + relativeX;
+                var newY = primaryBounds.Top + relativeY;
+
+                // Ensure window stays within primary monitor bounds
+                newX = Math.Max(primaryBounds.Left, Math.Min(newX, primaryBounds.Right - (currentRect.Right - currentRect.Left)));
+                newY = Math.Max(primaryBounds.Top, Math.Min(newY, primaryBounds.Bottom - (currentRect.Bottom - currentRect.Top)));
+
+                // Move the window
+                bool success = SetWindowPos(windowHandle, IntPtr.Zero, newX, newY, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+
+                if (success)
+                {
+                    await _logging.LogInfoAsync($"Successfully moved window 0x{windowHandle.ToInt64():X} to primary monitor at ({newX}, {newY})", "ProcessUtilityService");
+                }
+                else
+                {
+                    await _logging.LogWarningAsync($"Failed to move window 0x{windowHandle.ToInt64():X} to primary monitor", "ProcessUtilityService");
+                }
+
+                return success;
+            }
+            catch (Exception ex)
+            {
+                await _logging.LogErrorAsync($"Error moving window to primary monitor", ex, "ProcessUtilityService");
+                return false;
+            }
+        }
+
         #endregion
     }
 }

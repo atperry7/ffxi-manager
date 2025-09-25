@@ -222,6 +222,9 @@ namespace FFXIManager.Services.AutoLogin
                 await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.WindowDetection,
                                                      "Windower application ready");
 
+                // Verify monitor positioning - ExternalApplicationService should have already positioned Windower on primary monitor
+                await VerifyWindowerMonitorPositionAsync(newProcessId, subtask);
+
                 // Get window handle for the process using base class method with retry logic
                 await GetWindowHandleForProcessWithRetry(context, newProcessId, subtask, cancellationToken);
 
@@ -615,6 +618,83 @@ namespace FFXIManager.Services.AutoLogin
             
             await _loggingService.LogWarningAsync($"[FLOW] Could not verify Windower process startup within {WindowerLaunchConfiguration.Timeouts.ProcessStartup.TotalSeconds}s");
             return 0; // Verification failed
+        }
+
+        /// <summary>
+        /// Verifies that Windower is positioned on the primary monitor and provides detailed logging
+        /// </summary>
+        /// <param name="processId">The Windower process ID to verify</param>
+        /// <param name="subtask">The subtask for progress reporting</param>
+        private async Task VerifyWindowerMonitorPositionAsync(int processId, AutoLoginSubtask subtask)
+        {
+            try
+            {
+                await _loggingService.LogInfoAsync($"[MONITOR] Verifying Windower (PID: {processId}) is positioned on primary monitor");
+
+                // Wait briefly for window creation since process may have just started
+                await Task.Delay(1000);
+
+                var windows = await _processUtilityService.GetProcessWindowsAsync(processId);
+                if (windows.Count == 0)
+                {
+                    await _loggingService.LogWarningAsync($"[MONITOR] No windows found for Windower process {processId} - window may not be created yet");
+                    return;
+                }
+
+                // Find the main Windower window
+                var mainWindow = windows.FirstOrDefault(w => w.IsVisible && w.IsMainWindow) ?? windows.FirstOrDefault(w => w.IsVisible);
+                if (mainWindow == null)
+                {
+                    await _loggingService.LogWarningAsync($"[MONITOR] No visible Windower window found for process {processId}");
+                    return;
+                }
+
+                await _loggingService.LogInfoAsync($"[MONITOR] Found Windower window: '{mainWindow.Title}' (Handle: 0x{mainWindow.Handle.ToInt64():X})");
+
+                // Check monitor positioning
+                bool isOnPrimaryMonitor = _processUtilityService.IsWindowOnPrimaryMonitor(mainWindow.Handle);
+
+                if (isOnPrimaryMonitor)
+                {
+                    await _loggingService.LogInfoAsync($"[MONITOR] ✅ Windower window is correctly positioned on primary monitor");
+
+                    // Get additional monitor information for debugging
+                    var primaryBounds = _processUtilityService.GetPrimaryMonitorBounds();
+                    var windowBounds = _processUtilityService.GetWindowMonitorBounds(mainWindow.Handle);
+
+                    await _loggingService.LogDebugAsync($"[MONITOR] Primary monitor bounds: {primaryBounds}");
+                    await _loggingService.LogDebugAsync($"[MONITOR] Window monitor bounds: {windowBounds}");
+                }
+                else
+                {
+                    await _loggingService.LogWarningAsync($"[MONITOR] ⚠️ Windower window is NOT on primary monitor - this may cause click coordinate issues");
+
+                    // Get detailed positioning information for troubleshooting
+                    var primaryBounds = _processUtilityService.GetPrimaryMonitorBounds();
+                    var windowBounds = _processUtilityService.GetWindowMonitorBounds(mainWindow.Handle);
+
+                    await _loggingService.LogWarningAsync($"[MONITOR] Primary monitor bounds: {primaryBounds}");
+                    await _loggingService.LogWarningAsync($"[MONITOR] Window is on monitor with bounds: {windowBounds}");
+                    await _loggingService.LogWarningAsync($"[MONITOR] Auto-login clicks may fail - consider manually moving Windower to primary monitor");
+
+                    // Attempt to reposition the window
+                    await _loggingService.LogInfoAsync($"[MONITOR] Attempting to reposition Windower window to primary monitor");
+                    bool repositionSuccess = await _processUtilityService.MoveWindowToPrimaryMonitorAsync(mainWindow.Handle);
+
+                    if (repositionSuccess)
+                    {
+                        await _loggingService.LogInfoAsync($"[MONITOR] ✅ Successfully repositioned Windower to primary monitor");
+                    }
+                    else
+                    {
+                        await _loggingService.LogWarningAsync($"[MONITOR] ❌ Failed to reposition Windower - manual positioning may be required");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync($"[MONITOR] Error verifying Windower monitor position", ex);
+            }
         }
     }
 }

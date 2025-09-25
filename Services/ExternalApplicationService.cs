@@ -19,6 +19,7 @@ namespace FFXIManager.Services
         private readonly ILoggingService _logging;
         private readonly IProcessManagementService _processManagement;
         private readonly ISettingsService _settings;
+        private readonly IProcessUtilityService _processUtility;
 
         private readonly List<ExternalApplication> _applications = new();
         private readonly Dictionary<Guid, ExternalApplication> _monitorToAppMap = new();
@@ -33,12 +34,14 @@ namespace FFXIManager.Services
             IUnifiedMonitoringService unifiedMonitoring,
             ILoggingService logging,
             ISettingsService settings,
-            IProcessManagementService processManagement)
+            IProcessManagementService processManagement,
+            IProcessUtilityService processUtility)
         {
             _unifiedMonitoring = unifiedMonitoring ?? throw new ArgumentNullException(nameof(unifiedMonitoring));
             _logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _processManagement = processManagement ?? throw new ArgumentNullException(nameof(processManagement));
+            _processUtility = processUtility ?? throw new ArgumentNullException(nameof(processUtility));
 
             // Load applications from settings
             LoadApplicationsFromSettings();
@@ -168,6 +171,12 @@ namespace FFXIManager.Services
 
                     await _logging.LogInfoAsync("Successfully launched {ApplicationName} (PID: {ProcessId})",
                         "ExternalApplicationService", application.Name, process.Id);
+
+                    // Add monitor positioning for Windower to ensure it launches on primary monitor
+                    if (application.Name?.ToLowerInvariant().Contains("windower") == true)
+                    {
+                        await EnsureApplicationOnPrimaryMonitorAsync(application, process.Id);
+                    }
 
                     ApplicationStatusChanged?.Invoke(this, application);
                     return true;
@@ -643,6 +652,80 @@ namespace FFXIManager.Services
             _unifiedMonitoring.ProcessRemoved -= OnProcessRemoved;
 
             GC.SuppressFinalize(this);
+        }
+
+        /// <summary>
+        /// Ensures the launched application appears on the primary monitor by waiting for its window and positioning it if needed
+        /// </summary>
+        /// <param name="application">The application that was just launched</param>
+        /// <param name="processId">The process ID of the launched application</param>
+        private async Task EnsureApplicationOnPrimaryMonitorAsync(ExternalApplication application, int processId)
+        {
+            try
+            {
+                await _logging.LogInfoAsync("Attempting to position {ApplicationName} window on primary monitor",
+                    "ExternalApplicationService", application.Name);
+
+                // Wait a brief moment for the window to appear
+                await Task.Delay(500);
+
+                // Try to get the process windows with retry logic since window creation takes time
+                var timeout = DateTime.UtcNow.AddSeconds(10);
+                var windows = new List<WindowInfo>();
+
+                while (DateTime.UtcNow < timeout && windows.Count == 0)
+                {
+                    windows = await _processUtility.GetProcessWindowsAsync(processId);
+                    if (windows.Count == 0)
+                    {
+                        await Task.Delay(250); // Wait a bit longer for window creation
+                    }
+                }
+
+                if (windows.Count == 0)
+                {
+                    await _logging.LogWarningAsync("No windows found for {ApplicationName} (PID: {ProcessId}) - cannot position on primary monitor",
+                        "ExternalApplicationService", application.Name, processId);
+                    return;
+                }
+
+                // Find the main window (usually the first visible one)
+                var mainWindow = windows.FirstOrDefault(w => w.IsVisible && w.IsMainWindow) ?? windows.FirstOrDefault(w => w.IsVisible);
+
+                if (mainWindow == null)
+                {
+                    await _logging.LogWarningAsync("No visible main window found for {ApplicationName} (PID: {ProcessId})",
+                        "ExternalApplicationService", application.Name, processId);
+                    return;
+                }
+
+                // Check if window is already on primary monitor
+                if (_processUtility.IsWindowOnPrimaryMonitor(mainWindow.Handle))
+                {
+                    await _logging.LogDebugAsync("{ApplicationName} window is already on primary monitor",
+                        "ExternalApplicationService", application.Name);
+                    return;
+                }
+
+                // Move window to primary monitor
+                var success = await _processUtility.MoveWindowToPrimaryMonitorAsync(mainWindow.Handle);
+
+                if (success)
+                {
+                    await _logging.LogInfoAsync("Successfully positioned {ApplicationName} on primary monitor",
+                        "ExternalApplicationService", application.Name);
+                }
+                else
+                {
+                    await _logging.LogWarningAsync("Failed to position {ApplicationName} on primary monitor",
+                        "ExternalApplicationService", application.Name);
+                }
+            }
+            catch (Exception ex)
+            {
+                await _logging.LogErrorAsync("Error positioning {ApplicationName} on primary monitor", ex,
+                    "ExternalApplicationService", application.Name);
+            }
         }
     }
 }
