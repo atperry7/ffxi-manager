@@ -564,17 +564,19 @@ namespace FFXIManager.Services.AutoLogin
 
         /// <summary>
         /// Confirms password entry and conditionally initiates connection if OTP is not required.
+        /// When OTP is disabled, this method also determines the navigation flow (POL Proxy vs standard navigation).
         /// </summary>
         /// <param name="subtask">Current subtask for progress reporting</param>
         /// <param name="queueItem">Queue item containing account configuration</param>
         /// <param name="windowHandle">PlayOnline window handle</param>
+        /// <param name="context">AutoLogin context for storing navigation flow decisions</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <remarks>
         /// This method handles two scenarios:
         /// 1. OTP Required: Confirms password only, leaves connection for OTP step
-        /// 2. No OTP: Confirms password and initiates connection immediately
+        /// 2. No OTP: Confirms password, initiates connection, and determines navigation flow
         /// </remarks>
-        private async Task ConfirmPasswordAndConnectAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IntPtr windowHandle, CancellationToken cancellationToken)
+        private async Task ConfirmPasswordAndConnectAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IntPtr windowHandle, IAutoLoginContext context, CancellationToken cancellationToken)
         {
             // Click CircleConfirmation button to confirm password entry
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.Confirmation,
@@ -590,26 +592,30 @@ namespace FFXIManager.Services.AutoLogin
             // Allow confirmation to process
             await Task.Delay(PlayOnlineAuthConfiguration.Delays.InteractionCompletion, cancellationToken);
 
-            // Check if OTP is required - if not, click Connect now
+            // Check if OTP is required - if not, click Connect now and determine navigation flow
             if (!queueItem.Account?.IsOTPEnabled ?? true)
             {
-                await _loggingService.LogInfoAsync("OTP not required - proceeding with direct connection");
-                
-                await UpdateProgressWithPhaseAsync(subtask, "authentication", 95, "Connecting to game servers");
-                
+                await _loggingService.LogInfoAsync("[FLOW] OTP not required - proceeding with direct connection and navigation flow determination");
+
+                await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.Confirmation, "Connecting to game servers");
+
                 await ClickAtTemplateCoordinatesAsync(
                     subtask,
                     PlayOnlineAuthConfiguration.TemplatePaths.ConnectButton,
                     windowHandle,
                     cancellationToken,
                     _automationService);
-                
+
                 // Allow connection to process
                 await Task.Delay(PlayOnlineAuthConfiguration.Delays.ConnectionProcessing, cancellationToken);
+
+                // Since OTP is not required, determine navigation flow now (POL Proxy vs standard navigation)
+                await _loggingService.LogInfoAsync("[FLOW] Determining navigation flow after password-only authentication");
+                await DetermineNavigationFlowAsync(subtask, queueItem, windowHandle, context, cancellationToken, fromPasswordEntry: true);
             }
             else
             {
-                await _loggingService.LogInfoAsync("OTP required - password confirmed, awaiting OTP entry step");
+                await _loggingService.LogInfoAsync("[FLOW] OTP required - password confirmed, awaiting OTP entry step (navigation flow will be determined after OTP)");
             }
         }
 
@@ -656,8 +662,8 @@ namespace FFXIManager.Services.AutoLogin
             // Phase 5: Perform secure password entry
             await PerformSecurePasswordEntryAsync(subtask, queueItem, windowHandle, accountName, cancellationToken);
 
-            // Phase 6: Confirm password and conditionally connect
-            await ConfirmPasswordAndConnectAsync(subtask, queueItem, windowHandle, cancellationToken);
+            // Phase 6: Confirm password and conditionally connect (includes navigation flow for non-OTP accounts)
+            await ConfirmPasswordAndConnectAsync(subtask, queueItem, windowHandle, context, cancellationToken);
 
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.Complete,
                                                 "Account verification completed");
@@ -706,8 +712,8 @@ namespace FFXIManager.Services.AutoLogin
             // Phase 5: Initiate connection
             await InitiateOTPConnectionAsync(subtask, windowHandle, cancellationToken);
 
-            // Phase 6: Determine navigation flow based on POL Proxy configuration
-            await DetermineNavigationFlowAsync(subtask, queueItem, windowHandle, context, cancellationToken);
+            // Phase 6: Determine navigation flow based on POL Proxy configuration (from OTP entry path)
+            await DetermineNavigationFlowAsync(subtask, queueItem, windowHandle, context, cancellationToken, fromPasswordEntry: false);
 
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.Complete,
                                                 "Two-factor authentication completed");
@@ -844,22 +850,30 @@ namespace FFXIManager.Services.AutoLogin
         /// <summary>
         /// Determines the navigation flow based on POL Proxy configuration.
         /// Either bypasses PlayOnline screens (POL Proxy) or proceeds with standard navigation.
+        /// This method is shared between OTP and non-OTP authentication paths.
         /// </summary>
         /// <param name="subtask">Current subtask for progress reporting</param>
         /// <param name="queueItem">Queue item for context</param>
         /// <param name="windowHandle">Current PlayOnline window handle</param>
         /// <param name="context">AutoLogin context for data storage</param>
         /// <param name="cancellationToken">Cancellation token</param>
+        /// <param name="fromPasswordEntry">True if called from password entry path, false if from OTP entry path</param>
         /// <remarks>
         /// POL Proxy detection uses IExternalApplicationService patterns for consistency
         /// with established application discovery mechanisms throughout the codebase.
+        /// This method is now called from both OTP and non-OTP authentication flows to ensure
+        /// consistent navigation behavior regardless of OTP configuration.
         /// </remarks>
-        private async Task DetermineNavigationFlowAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IntPtr windowHandle, IAutoLoginContext context, CancellationToken cancellationToken)
+        private async Task DetermineNavigationFlowAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IntPtr windowHandle, IAutoLoginContext context, CancellationToken cancellationToken, bool fromPasswordEntry = false)
         {
-            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.PostProcessing,
-                                                "Preparing game launch");
+            var progressPhase = fromPasswordEntry ? "authentication" : "gameconnection";
+            var progressMilestone = fromPasswordEntry ? 98 : PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.PostProcessing;
+
+            await UpdateProgressWithPhaseAsync(subtask, progressPhase, progressMilestone, "Preparing game launch");
 
             // Use IExternalApplicationService pattern-based detection for POL Proxy
+            await _loggingService.LogInfoAsync($"[FLOW] Determining navigation flow - Called from: {(fromPasswordEntry ? "Password Entry" : "OTP Entry")}");
+
             var polProxyApp = await _externalApplicationService.FindApplicationByPatternAsync(
                 PlayOnlineAuthConfiguration.ApplicationPatterns.POLProxyNamePatterns,
                 PlayOnlineAuthConfiguration.ApplicationPatterns.POLProxyPathPatterns);
@@ -867,9 +881,9 @@ namespace FFXIManager.Services.AutoLogin
             if (polProxyApp != null)
             {
                 // POL Proxy detected - streamlined flow
-                await _loggingService.LogInfoAsync($"POL Proxy detected ({polProxyApp.Name}) - skipping PlayOnline navigation screens");
+                await _loggingService.LogInfoAsync($"[FLOW] POL Proxy detected ({polProxyApp.Name}) - skipping PlayOnline navigation screens. Called from: {(fromPasswordEntry ? "Password Entry" : "OTP Entry")}");
                 
-                await UpdateProgressWithPhaseAsync(subtask, "gameconnection", 90, "Fast-tracking to game launch");
+                await UpdateProgressWithPhaseAsync(subtask, "gameconnection", PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.FinalConfirmation, "Fast-tracking to game launch");
 
                 // Store context for FFXI handler
                 context.SetData("WindowHandle", windowHandle);
@@ -897,7 +911,7 @@ namespace FFXIManager.Services.AutoLogin
             else
             {
                 // Standard PlayOnline navigation flow
-                await _loggingService.LogInfoAsync("No POL Proxy configured - proceeding with standard PlayOnline navigation");
+                await _loggingService.LogInfoAsync($"[FLOW] No POL Proxy configured - proceeding with standard PlayOnline navigation. Called from: {(fromPasswordEntry ? "Password Entry" : "OTP Entry")}");
                 
                 context.SetData("POLProxyDetected", false);
                 await NavigateToFinalFantasyXI(subtask, windowHandle, context, cancellationToken);
