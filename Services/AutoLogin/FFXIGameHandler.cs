@@ -1,23 +1,56 @@
 using System;
 using System.Diagnostics;
-using System.Drawing;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FFXIManager.Models;
 using FFXIManager.Services;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
+using FFXIManager.Services.AutoLogin.Configuration;
+using FFXIManager.Infrastructure;
 
 namespace FFXIManager.Services.AutoLogin
 {
     /// <summary>
     /// Handles Final Fantasy XI game-specific tasks including character selection and login finalization.
-    /// Responsible for: TermsAcceptance, CharacterSelection, CharacterSlotPick, ConfirmLogin
-    /// Uses screenshot detection and keyboard automation for DirectX game interaction.
+    /// Orchestrates the entire FFXI login flow through multiple distinct phases.
     /// </summary>
+    /// <remarks>
+    /// <para><strong>Supported Task Steps:</strong></para>
+    /// <list type="bullet">
+    ///   <item><description>TermsAcceptance - Handles FFXI Terms of Service screen interaction</description></item>
+    ///   <item><description>CharacterSelection - Navigates the main menu to character selection</description></item>
+    ///   <item><description>CharacterSlotPick - Selects the configured character slot using arrow navigation</description></item>
+    ///   <item><description>ConfirmLogin - Confirms final login and enters the game world</description></item>
+    /// </list>
+    /// 
+    /// <para><strong>Configuration Dependencies:</strong></para>
+    /// <list type="bullet">
+    ///   <item><description>FFXIGameConfiguration - Centralized configuration for all timeouts, delays, and process discovery</description></item>
+    ///   <item><description>Template metadata JSON files for screen detection confidence thresholds</description></item>
+    /// </list>
+    /// 
+    /// <para><strong>Service Dependencies:</strong></para>
+    /// <list type="bullet">
+    ///   <item><description>IUIAutomationService - Window focus management and DirectX-compatible keyboard input</description></item>
+    ///   <item><description>IAutoLoginContextService - Cross-handler state management (window handles, account data)</description></item>
+    ///   <item><description>Base class services - Screenshot capture, template matching, logging</description></item>
+    /// </list>
+    /// 
+    /// <para><strong>FFXI-Specific Handling:</strong></para>
+    /// <list type="bullet">
+    ///   <item><description>DirectX window interaction requiring focus-based automation</description></item>
+    ///   <item><description>Dynamic window handle management for FFXI process transitions</description></item>
+    ///   <item><description>Template-based screen detection with confidence validation</description></item>
+    ///   <item><description>Character slot navigation using arrow key automation</description></item>
+    ///   <item><description>Configurable delays for FFXI UI timing requirements</description></item>
+    /// </list>
+    /// </remarks>
     public class FFXIGameHandler : BaseLoginTaskHandler
     {
         private readonly IUIAutomationService _automationService;
         private readonly IAutoLoginContextService _contextService;
+        private readonly IProcessUtilityService _processUtilityService;
 
         public FFXIGameHandler(
             ILoggingService loggingService,
@@ -25,11 +58,13 @@ namespace FFXIManager.Services.AutoLogin
             ITemplateMatchingService templateService,
             ITemplateManagementService templateManagementService,
             IUIAutomationService automationService,
-            IAutoLoginContextService contextService)
+            IAutoLoginContextService contextService,
+            IProcessUtilityService processUtilityService)
             : base(loggingService, screenshotService, templateService, templateManagementService)
         {
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
             _contextService = contextService ?? throw new ArgumentNullException(nameof(contextService));
+            _processUtilityService = processUtilityService ?? throw new ArgumentNullException(nameof(processUtilityService));
         }
 
         public override LoginTaskStep TaskStep => LoginTaskStep.TermsAcceptance;
@@ -46,6 +81,51 @@ namespace FFXIManager.Services.AutoLogin
             };
         }
 
+        /// <summary>
+        /// Executes the primary FFXI handler logic by dispatching to appropriate task-specific methods.
+        /// Provides comprehensive error handling and progress tracking for all FFXI login phases.
+        /// </summary>
+        /// <param name="subtask">The specific subtask containing task step and progress tracking</param>
+        /// <param name="queueItem">Queue item containing account configuration and character slot information</param>
+        /// <param name="context">Context for cross-handler communication and window handle management</param>
+        /// <param name="cancellationToken">Cancellation token for operation cancellation</param>
+        /// <remarks>
+        /// <para><strong>Configuration Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>FFXIGameConfiguration.* - All timing, process discovery, and UI navigation settings</description></item>
+        ///   <item><description>Account.FFXICharacterSlot - Target character slot for selection (defaults to slot 1)</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Service Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>All injected services through constructor (automation, context, base services)</description></item>
+        ///   <item><description>BaseLoginTaskHandler infrastructure for retry logic and progress reporting</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Error Scenarios:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>Unsupported task steps: NotSupportedException with clear error message</description></item>
+        ///   <item><description>Process/window failures: Handled by individual task methods with retries</description></item>
+        ///   <item><description>Screen detection timeouts: Enhanced with fallback redetection strategies</description></item>
+        ///   <item><description>Cancellation: Properly propagated with subtask status updates</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Progress Reporting:</strong></para>
+        /// Progress values are managed by individual task methods using standardized milestones from
+        /// FFXIGameConfiguration.ProgressMilestones. Each task method handles its own 0-100% range.
+        /// 
+        /// <para><strong>Example Flow:</strong></para>
+        /// <code>
+        /// // TermsAcceptance: Process detection → Screen detection → Enter key → Complete
+        /// // CharacterSelection: Screen detection → Menu navigation → Transition
+        /// // CharacterSlotPick: Screen detection → Arrow navigation → Enter selection
+        /// // ConfirmLogin: Screen detection → Final confirmation → Game world entry
+        /// </code>
+        /// </remarks>
+        /// <exception cref="NotSupportedException">Thrown when an unsupported TaskStep is encountered</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        /// <exception cref="InvalidOperationException">Thrown for FFXI-specific failures (process not found, etc.)</exception>
+        /// <exception cref="TimeoutException">Thrown when screen detection or other timed operations exceed configured limits</exception>
         protected override async Task ExecuteHandlerLogicAsync(
             AutoLoginSubtask subtask,
             AutoLoginQueueItem queueItem,
@@ -96,65 +176,199 @@ namespace FFXIManager.Services.AutoLogin
             }
         }
 
+        /// <summary>
+        /// Executes the FFXI Terms of Service acceptance phase.
+        /// Waits for FFXI process launch, detects the terms screen, and accepts terms to proceed to main menu.
+        /// </summary>
+        /// <param name="subtask">Subtask for progress reporting (0-100%)</param>
+        /// <param name="queueItem">Queue item containing account information (used for display purposes)</param>
+        /// <param name="context">Context for storing the FFXI window handle for subsequent tasks</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <remarks>
+        /// <para><strong>Configuration Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>FFXIGameConfiguration.Timeouts.TermsAcceptance - Screen detection timeout</description></item>
+        ///   <item><description>FFXIGameConfiguration.PollingIntervals.ScreenCheck - Detection polling frequency</description></item>
+        ///   <item><description>FFXIGameConfiguration.Delays.ScreenStabilization - UI stabilization wait</description></item>
+        ///   <item><description>FFXIGameConfiguration.Delays.WindowFocus/Transition - Navigation timing</description></item>
+        ///   <item><description>FFXIGameConfiguration.TemplatePaths.TermsAcceptance - Template for screen detection</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Service Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>WaitForFFXIProcessAsync - Process discovery and window handle retrieval</description></item>
+        ///   <item><description>WaitForFFXIStartup - Window responsiveness validation</description></item>
+        ///   <item><description>WaitForScreenWithRedetectionFallbackAsync - Screen detection with failover</description></item>
+        ///   <item><description>ExecuteNavigationStepAsync - Keyboard automation for Enter key</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Error Scenarios:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>FFXI process doesn't launch: InvalidOperationException after timeout</description></item>
+        ///   <item><description>Terms screen not detected: TimeoutException with fallback redetection attempt</description></item>
+        ///   <item><description>Window becomes unresponsive: Automatic window handle redetection</description></item>
+        ///   <item><description>Navigation input fails: Logged but operation continues</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Progress Milestones:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>5% - Starting FFXI process detection</description></item>
+        ///   <item><description>15% - Waiting for Terms screen</description></item>
+        ///   <item><description>60% - Terms screen detected</description></item>
+        ///   <item><description>70% - Accepting terms (sending Enter)</description></item>
+        ///   <item><description>100% - Terms accepted, transitioning to main menu</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>FFXI-Specific Behavior:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>Process may launch as 'pol' initially, then transition to 'ffximain'</description></item>
+        ///   <item><description>Window handle stored in context for use by subsequent task phases</description></item>
+        ///   <item><description>DirectX rendering requires focus + delay before input for reliability</description></item>
+        ///   <item><description>Terms screen uses template matching with confidence threshold from JSON metadata</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Example Usage:</strong></para>
+        /// <code>
+        /// // This method is called automatically by ExecuteHandlerLogicAsync when
+        /// // subtask.TaskStep == LoginTaskStep.TermsAcceptance
+        /// // 
+        /// // Typical flow:
+        /// // 1. WaitForFFXIProcessAsync() finds process window handle
+        /// // 2. Handle stored in context as "FFXIWindowHandle"
+        /// // 3. WaitForFFXIStartup() ensures window responsiveness
+        /// // 4. WaitForScreenWithRedetectionFallbackAsync() detects terms screen
+        /// // 5. ExecuteNavigationStepAsync() sends Enter to accept terms
+        /// // 6. Transition delay allows menu loading for next phase
+        /// </code>
+        /// </remarks>
+        /// <exception cref="InvalidOperationException">FFXI process fails to launch within configured timeout</exception>
+        /// <exception cref="TimeoutException">Terms screen detection fails even with redetection fallback</exception>
+        /// <exception cref="OperationCanceledException">Operation cancelled via cancellation token</exception>
         private async Task ExecuteTermsAcceptanceAsync(
             AutoLoginSubtask subtask,
             AutoLoginQueueItem queueItem,
             IAutoLoginContext context,
             CancellationToken cancellationToken)
         {
-            // First, wait for FFXI process to launch and window to be responsive
-            subtask.UpdateProgress(5, "Waiting for Final Fantasy XI to launch...");
+            // FFXI-Specific: Process may launch as 'pol' initially, then transition to 'ffximain'
+            // This discovery handles both direct FFXI launch and PlayOnline→FFXI transitions
+            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.TermsProcessWait, "Waiting for Final Fantasy XI to launch...");
             var ffxiWindowHandle = await WaitForFFXIProcessAsync(subtask, context, cancellationToken);
 
-            // Store FFXI window handle for subsequent steps
+            // Store FFXI window handle for subsequent steps - critical for cross-task communication
+            // Other handlers (CharacterSelection, etc.) will retrieve this handle from context
             context.SetData("FFXIWindowHandle", ffxiWindowHandle);
 
-            // Wait for FFXI to fully initialize (window responsiveness check)
+            // FFXI-Specific: DirectX window requires time to become responsive for automation
+            // Multiple screenshot attempts ensure window is stable before UI interaction
             await WaitForFFXIStartup(ffxiWindowHandle, subtask, cancellationToken);
 
-            subtask.UpdateProgress(15, "Waiting for FFXI Terms of Service screen...");
+            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.TermsScreenDetection, "Waiting for FFXI Terms of Service screen...");
 
-            // Wait for FFXI accept terms screen with window handle re-detection on failure
-            var termsMatch = await WaitForScreenDetectionWithRedetectionAsync(
+            // Wait for FFXI accept terms screen using standardized detection with fallback
+            var termsMatch = await WaitForScreenWithRedetectionFallbackAsync(
                 subtask,
-                "FFXI/ffxi_accept_terms",
+                FFXIGameConfiguration.TemplatePaths.TermsAcceptance,
                 ffxiWindowHandle,
                 context,
                 "FFXI Terms of Service",
-                cancellationToken,
-                new ScreenDetectionOptions
-                {
-                    Timeout = TimeSpan.FromSeconds(90), // Extended timeout for FFXI loading
-                    CheckInterval = TimeSpan.FromSeconds(2) // Check every 2 seconds
-                    // ConfidenceThreshold will be loaded from template JSON (0.80)
-                });
+                FFXIGameConfiguration.Timeouts.TermsAcceptance,
+                FFXIGameConfiguration.PollingIntervals.ScreenCheck,
+                cancellationToken);
 
-            // The WaitForScreenDetectionWithRedetectionAsync method already validates against the template threshold
-            // from the JSON configuration, so if we get here, detection was successful
+            // Template matching success confirmed - confidence threshold from JSON metadata was met
+            // This ensures we have the actual FFXI Terms screen, not a false positive
             await _loggingService.LogInfoAsync($"FFXI Terms screen detected with confidence: {termsMatch.Confidence:P}");
 
-            subtask.UpdateProgress(60, "Terms of Service screen detected");
+            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.TermsScreenDetected, "Terms of Service screen detected");
 
-            // Get updated window handle from context
-            ffxiWindowHandle = context.GetValueData<IntPtr>("FFXIWindowHandle");
+            // FFXI-Specific: Window handle may change during screen transitions
+            // Redetection logic in screen detection may have updated the context
+            ffxiWindowHandle = ValidateWindowContextAsync(context, ffxiWindowHandle);
 
-            // Allow screen to stabilize after detection
-            await Task.Delay(1000, cancellationToken);
+            // FFXI-Specific: DirectX UI requires stabilization time after screen detection
+            // Prevents input timing issues with FFXI's rendering pipeline
+            await WaitForScreenTransitionAsync(subtask, FFXIGameConfiguration.Delays.ScreenStabilization, cancellationToken: cancellationToken);
 
-            subtask.UpdateProgress(70, "Accepting terms (pressing Enter)...");
+            // Execute terms acceptance with standardized navigation
+            await ExecuteNavigationStepAsync(
+                ffxiWindowHandle,
+                ConsoleKey.Enter,
+                FFXIGameConfiguration.Delays.WindowFocus,
+                FFXIGameConfiguration.Delays.Transition,
+                cancellationToken);
 
-            // Ensure window has focus before sending keys
-            await _automationService.EnsureWindowFocusAsync(ffxiWindowHandle, cancellationToken);
-            await Task.Delay(500, cancellationToken);
+            await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.TermsAccepting, "Accepting terms (pressing Enter)...");
 
-            // Press Enter to accept terms (defaults to Accept button) - using DirectX-compatible method
-            await _automationService.SendKeyAsync(ConsoleKey.Enter, ffxiWindowHandle, cancellationToken);
-
-            await Task.Delay(2000, cancellationToken); // Allow transition time
-
-            subtask.UpdateProgress(100, "Terms accepted successfully - transitioning to main menu");
+            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.TermsComplete, "Terms accepted successfully - transitioning to main menu");
         }
 
+        /// <summary>
+        /// Executes the FFXI main menu navigation to reach character selection.
+        /// Detects the main menu screen and presses Enter to access character slot selection.
+        /// </summary>
+        /// <param name="subtask">Subtask for progress reporting (0-100%)</param>
+        /// <param name="queueItem">Queue item containing account information (used for logging)</param>
+        /// <param name="context">Context for retrieving FFXI window handle from previous task</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <remarks>
+        /// <para><strong>Configuration Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>FFXIGameConfiguration.Timeouts.MainMenu - Screen detection timeout</description></item>
+        ///   <item><description>FFXIGameConfiguration.PollingIntervals.MenuCheck - Detection polling frequency</description></item>
+        ///   <item><description>FFXIGameConfiguration.Delays.ScreenStabilization - Menu stabilization wait</description></item>
+        ///   <item><description>FFXIGameConfiguration.Delays.WindowFocus/Transition - Navigation timing</description></item>
+        ///   <item><description>FFXIGameConfiguration.TemplatePaths.MainMenu - Template for main menu detection</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Service Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>GetFFXIWindowHandleAsync - Window handle retrieval and validation</description></item>
+        ///   <item><description>WaitForScreenWithRedetectionFallbackAsync - Main menu screen detection</description></item>
+        ///   <item><description>ExecuteNavigationStepAsync - Enter key automation for menu selection</description></item>
+        ///   <item><description>ValidateWindowContextAsync - Window handle validation and updates</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Error Scenarios:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>Window handle not found/invalid: GetFFXIWindowHandleAsync handles redetection</description></item>
+        ///   <item><description>Main menu not detected: TimeoutException with fallback redetection attempt</description></item>
+        ///   <item><description>Menu animations interfere: Stabilization delay addresses timing issues</description></item>
+        ///   <item><description>Navigation input fails: Logged but operation continues</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Progress Milestones:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>10% - Starting main menu detection</description></item>
+        ///   <item><description>50% - Main menu detected successfully</description></item>
+        ///   <item><description>70% - Menu selection in progress (Enter being sent)</description></item>
+        ///   <item><description>100% - Menu navigation completed, transitioning to character slots</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>FFXI-Specific Behavior:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>Main menu may have animation delays requiring stabilization wait</description></item>
+        ///   <item><description>DirectX menu requires precise focus management for input reliability</description></item>
+        ///   <item><description>Template detection uses confidence threshold from JSON metadata</description></item>
+        ///   <item><description>Window handle validated and updated in context if changed</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Example Usage:</strong></para>
+        /// <code>
+        /// // Called automatically by ExecuteHandlerLogicAsync when
+        /// // subtask.TaskStep == LoginTaskStep.CharacterSelection
+        /// //
+        /// // Typical flow:
+        /// // 1. GetFFXIWindowHandleAsync() retrieves handle from context or rediscovers
+        /// // 2. WaitForScreenWithRedetectionFallbackAsync() detects main menu screen
+        /// // 3. WaitForScreenTransitionAsync() allows menu animations to complete
+        /// // 4. ExecuteNavigationStepAsync() sends Enter to select character option
+        /// // 5. Transition preparation for character slot selection phase
+        /// </code>
+        /// </remarks>
+        /// <exception cref="InvalidOperationException">FFXI window handle cannot be found or validated</exception>
+        /// <exception cref="TimeoutException">Main menu screen detection fails even with redetection</exception>
+        /// <exception cref="OperationCanceledException">Operation cancelled via cancellation token</exception>
         private async Task ExecuteCharacterSelectionAsync(
             AutoLoginSubtask subtask,
             AutoLoginQueueItem queueItem,
@@ -164,149 +378,591 @@ namespace FFXIManager.Services.AutoLogin
             // Get FFXI window handle from context
             var ffxiWindowHandle = await GetFFXIWindowHandleAsync(subtask, context, cancellationToken);
 
-            subtask.UpdateProgress(10, "Waiting for FFXI main menu...");
+            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.MenuWait, "Waiting for FFXI main menu...");
 
-            // Wait for main menu screen with window handle re-detection on failure
-            var mainMenuMatch = await WaitForScreenDetectionWithRedetectionAsync(
+            // Wait for main menu screen using standardized detection with fallback
+            var mainMenuMatch = await WaitForScreenWithRedetectionFallbackAsync(
                 subtask,
-                "FFXI/ffxi_main_screen",
+                FFXIGameConfiguration.TemplatePaths.MainMenu,
                 ffxiWindowHandle,
                 context,
                 "FFXI main menu",
-                cancellationToken,
-                new ScreenDetectionOptions
-                {
-                    Timeout = TimeSpan.FromSeconds(60), // Extended timeout for menu loading
-                    CheckInterval = TimeSpan.FromSeconds(1.5)
-                    // ConfidenceThreshold will be loaded from template JSON (0.80)
-                });
+                FFXIGameConfiguration.Timeouts.MainMenu,
+                FFXIGameConfiguration.PollingIntervals.MenuCheck,
+                cancellationToken);
 
             // The WaitForScreenDetectionWithRedetectionAsync method already validates against the template threshold
             // from the JSON configuration, so if we get here, detection was successful
             await _loggingService.LogInfoAsync($"FFXI main menu detected with confidence: {mainMenuMatch.Confidence:P}");
 
-            subtask.UpdateProgress(50, "Main menu detected");
+            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.MenuDetected, "Main menu detected");
 
             // Get updated window handle from context
-            ffxiWindowHandle = context.GetValueData<IntPtr>("FFXIWindowHandle");
+            ffxiWindowHandle = ValidateWindowContextAsync(context, ffxiWindowHandle);
 
-            // Allow menu animations to complete
-            await Task.Delay(1000, cancellationToken);
+            // Allow menu animations to complete and execute selection
+            await WaitForScreenTransitionAsync(subtask, FFXIGameConfiguration.Delays.ScreenStabilization, 
+                70, "Selecting character option (pressing Enter)...", cancellationToken);
 
-            subtask.UpdateProgress(70, "Selecting character option (pressing Enter)...");
-
-            // Ensure window has focus
-            await _automationService.EnsureWindowFocusAsync(ffxiWindowHandle, cancellationToken);
-            await Task.Delay(500, cancellationToken);
-
-            // Press Enter to select "Select Character" menu option (default selection) - using DirectX-compatible method
-            await _automationService.SendKeyAsync(ConsoleKey.Enter, ffxiWindowHandle, cancellationToken);
-
-            await Task.Delay(2000, cancellationToken); // Allow transition time
+            // Execute menu selection with standardized navigation
+            await ExecuteNavigationStepAsync(
+                ffxiWindowHandle,
+                ConsoleKey.Enter,
+                FFXIGameConfiguration.Delays.WindowFocus,
+                FFXIGameConfiguration.Delays.Transition,
+                cancellationToken);
 
             subtask.UpdateProgress(100, "Main menu navigation completed - transitioning to character slots");
         }
 
+        /// <summary>
+        /// Validates the character slot number is within acceptable range.
+        /// Provides clear error messages for invalid slot configurations.
+        /// </summary>
+        /// <param name="characterSlot">Character slot number to validate</param>
+        /// <returns>True if slot is valid, throws exception if invalid</returns>
+        /// <exception cref="InvalidOperationException">Thrown when slot is outside valid range</exception>
+        private static bool ValidateCharacterSlot(int characterSlot)
+        {
+            if (characterSlot < FFXIGameConfiguration.CharacterSlots.MinSlotNumber || 
+                characterSlot > FFXIGameConfiguration.CharacterSlots.MaxSlotNumber)
+            {
+                throw new InvalidOperationException(
+                    $"Invalid character slot: {characterSlot}. Must be between " +
+                    $"{FFXIGameConfiguration.CharacterSlots.MinSlotNumber} and {FFXIGameConfiguration.CharacterSlots.MaxSlotNumber}");
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Performs screen detection with fallback to window redetection on timeout.
+        /// Centralizes the common pattern of standard detection + redetection fallback used throughout FFXI handler.
+        /// </summary>
+        /// <param name="subtask">Subtask for progress reporting during detection attempts</param>
+        /// <param name="templatePath">Template path for screen detection (e.g., "FFXI/ffxi_terms_acceptance")</param>
+        /// <param name="windowHandle">Current FFXI window handle to capture from</param>
+        /// <param name="context">Context for window handle updates if redetection occurs</param>
+        /// <param name="screenDescription">Human-readable description of screen being detected (for logging)</param>
+        /// <param name="timeout">Maximum time to spend on detection attempts</param>
+        /// <param name="checkInterval">Time between individual detection attempts</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>Template match result with confidence score</returns>
+        /// <remarks>
+        /// <para><strong>Detection Strategy:</strong></para>
+        /// <list type="number">
+        ///   <item><description>Primary: Use base class WaitForScreenDetectionAsync with standard retry logic</description></item>
+        ///   <item><description>Fallback: On timeout, attempt WaitForScreenDetectionWithRedetectionAsync for window handle recovery</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Configuration Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>Template JSON metadata for confidence thresholds</description></item>
+        ///   <item><description>Provided timeout and checkInterval parameters (typically from FFXIGameConfiguration)</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>FFXI-Specific Behavior:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>Handles window handle invalidation during FFXI screen transitions</description></item>
+        ///   <item><description>Provides enhanced error logging for detection failures</description></item>
+        ///   <item><description>Integrates with centralized window handle management in context</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Example Usage:</strong></para>
+        /// <code>
+        /// var termsMatch = await WaitForScreenWithRedetectionFallbackAsync(
+        ///     subtask,
+        ///     FFXIGameConfiguration.TemplatePaths.TermsAcceptance,
+        ///     ffxiWindowHandle,
+        ///     context,
+        ///     "FFXI Terms of Service",
+        ///     FFXIGameConfiguration.Timeouts.TermsAcceptance,
+        ///     FFXIGameConfiguration.PollingIntervals.ScreenCheck,
+        ///     cancellationToken);
+        /// </code>
+        /// </remarks>
+        /// <exception cref="TimeoutException">Both standard and redetection attempts fail within timeout</exception>
+        /// <exception cref="OperationCanceledException">Operation cancelled via cancellation token</exception>
+        private async Task<TemplateMatchResult> WaitForScreenWithRedetectionFallbackAsync(
+            AutoLoginSubtask subtask,
+            string templatePath,
+            IntPtr windowHandle,
+            IAutoLoginContext context,
+            string screenDescription,
+            TimeSpan timeout,
+            TimeSpan checkInterval,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await WaitForScreenDetectionAsync(
+                    subtask,
+                    templatePath,
+                    windowHandle,
+                    screenDescription,
+                    cancellationToken,
+                    new ScreenDetectionOptions
+                    {
+                        Timeout = timeout,
+                        CheckInterval = checkInterval
+                    });
+            }
+            catch (TimeoutException)
+            {
+                // Fallback to window redetection if standard detection fails
+                await _loggingService.LogInfoAsync($"Standard {screenDescription} detection failed, attempting with window redetection");
+                return await WaitForScreenDetectionWithRedetectionAsync(
+                    subtask,
+                    templatePath,
+                    windowHandle,
+                    context,
+                    screenDescription,
+                    cancellationToken,
+                    new ScreenDetectionOptions
+                    {
+                        Timeout = timeout,
+                        CheckInterval = checkInterval
+                    });
+            }
+        }
+
+        /// <summary>
+        /// Waits for screen transition with standardized delay and optional progress update.
+        /// Centralizes transition waiting patterns used throughout the FFXI handler for consistent timing.
+        /// </summary>
+        /// <param name="subtask">Subtask for optional progress reporting during the delay</param>
+        /// <param name="delayType">Configured delay duration (e.g., FFXIGameConfiguration.Delays.Transition)</param>
+        /// <param name="progressValue">Optional progress percentage to set before waiting</param>
+        /// <param name="progressMessage">Optional progress message to display during wait</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <remarks>
+        /// <para><strong>Purpose:</strong></para>
+        /// Eliminates duplicate delay + progress update patterns throughout the handler by providing
+        /// a centralized method for screen transition timing with optional progress reporting.
+        /// 
+        /// <para><strong>Configuration Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>Delay duration provided via FFXIGameConfiguration.Delays.* constants</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>FFXI-Specific Timing:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>ScreenStabilization: After template detection, before UI interaction</description></item>
+        ///   <item><description>Transition: After UI input, waiting for screen change</description></item>
+        ///   <item><description>WindowFocus: Before input delivery to ensure focus</description></item>
+        ///   <item><description>NavigationStep: Between navigation inputs to prevent skipping</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Example Usage:</strong></para>
+        /// <code>
+        /// // Screen stabilization with progress update
+        /// await WaitForScreenTransitionAsync(
+        ///     subtask, 
+        ///     FFXIGameConfiguration.Delays.ScreenStabilization, 
+        ///     70, 
+        ///     "Selecting character option...", 
+        ///     cancellationToken);
+        /// 
+        /// // Simple delay without progress update
+        /// await WaitForScreenTransitionAsync(
+        ///     subtask, 
+        ///     FFXIGameConfiguration.Delays.Transition, 
+        ///     cancellationToken: cancellationToken);
+        /// </code>
+        /// </remarks>
+        /// <exception cref="OperationCanceledException">Operation cancelled via cancellation token</exception>
+        private async Task WaitForScreenTransitionAsync(
+            AutoLoginSubtask subtask,
+            TimeSpan delayType,
+            int? progressValue = null,
+            string progressMessage = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (progressValue.HasValue && !string.IsNullOrEmpty(progressMessage))
+            {
+                await UpdateProgressAsync(subtask, progressValue.Value, progressMessage);
+            }
+            
+            await Task.Delay(delayType, cancellationToken);
+        }
+
+        /// <summary>
+        /// Executes a navigation step with proper window focus, key input, and configured delays.
+        /// Centralizes the critical FFXI navigation pattern of focus preparation + input + processing delay.
+        /// </summary>
+        /// <param name="windowHandle">Target FFXI window handle for input delivery</param>
+        /// <param name="key">Console key to send (Enter, DownArrow, etc.)</param>
+        /// <param name="preparationDelay">Delay before key input for window focus stabilization</param>
+        /// <param name="postInputDelay">Delay after key input for FFXI processing time</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <remarks>
+        /// <para><strong>Navigation Pattern:</strong></para>
+        /// <list type="number">
+        ///   <item><description>PrepareWindowForNavigationAsync: Focus window and apply preparation delay</description></item>
+        ///   <item><description>SendKeyAsync: Deliver DirectX-compatible key input to window</description></item>
+        ///   <item><description>Post-input delay: Allow FFXI to process the input before next action</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Configuration Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>preparationDelay: Typically FFXIGameConfiguration.Delays.WindowFocus</description></item>
+        ///   <item><description>postInputDelay: Typically FFXIGameConfiguration.Delays.Transition or NavigationStep</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Service Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>PrepareWindowForNavigationAsync - Window preparation with focus management</description></item>
+        ///   <item><description>IUIAutomationService.SendKeyAsync - DirectX-compatible key input delivery</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>FFXI-Specific Requirements:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>DirectX input requires precise window focus before each key press</description></item>
+        ///   <item><description>UI processing delays prevent input from being lost or ignored</description></item>
+        ///   <item><description>Focus preparation ensures reliable input delivery in both windowed and fullscreen modes</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Example Usage:</strong></para>
+        /// <code>
+        /// // Terms acceptance - Enter key with standard delays
+        /// await ExecuteNavigationStepAsync(
+        ///     ffxiWindowHandle,
+        ///     ConsoleKey.Enter,
+        ///     FFXIGameConfiguration.Delays.WindowFocus,
+        ///     FFXIGameConfiguration.Delays.Transition,
+        ///     cancellationToken);
+        /// 
+        /// // Character navigation - Down arrow with navigation timing
+        /// await ExecuteNavigationStepAsync(
+        ///     ffxiWindowHandle,
+        ///     ConsoleKey.DownArrow,
+        ///     FFXIGameConfiguration.Delays.WindowFocus,
+        ///     FFXIGameConfiguration.Delays.NavigationStep,
+        ///     cancellationToken);
+        /// </code>
+        /// </remarks>
+        /// <exception cref="OperationCanceledException">Operation cancelled via cancellation token</exception>
+        private async Task ExecuteNavigationStepAsync(
+            IntPtr windowHandle,
+            ConsoleKey key,
+            TimeSpan preparationDelay,
+            TimeSpan postInputDelay,
+            CancellationToken cancellationToken)
+        {
+            // Prepare window for input
+            await PrepareWindowForNavigationAsync(windowHandle, preparationDelay, cancellationToken);
+            
+            // Send navigation input
+            await _automationService.SendKeyAsync(key, windowHandle, cancellationToken);
+            
+            // Allow processing time
+            await Task.Delay(postInputDelay, cancellationToken);
+        }
+
+        /// <summary>
+        /// Validates and updates window handle from context with error handling.
+        /// Centralizes window handle management pattern used throughout the handler.
+        /// </summary>
+        /// <param name="context">Context to retrieve window handle from</param>
+        /// <param name="fallbackHandle">Fallback handle if context handle is invalid</param>
+        /// <returns>Valid window handle</returns>
+        private IntPtr ValidateWindowContextAsync(IAutoLoginContext context, IntPtr fallbackHandle = default)
+        {
+            var contextHandle = context.GetValueData<IntPtr>("FFXIWindowHandle");
+            return contextHandle != IntPtr.Zero ? contextHandle : fallbackHandle;
+        }
+
+        /// <summary>
+        /// Prepares window for navigation by ensuring focus and allowing stabilization.
+        /// Critical for DirectX input reliability - centralizes focus management pattern used throughout FFXI automation.
+        /// </summary>
+        /// <param name="windowHandle">Handle of the FFXI window to prepare for input</param>
+        /// <param name="delayType">Configured delay for focus stabilization (from FFXIGameConfiguration.Delays)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <remarks>
+        /// <para><strong>Focus Preparation Pattern:</strong></para>
+        /// <list type="number">
+        ///   <item><description>EnsureWindowFocusAsync: Bring FFXI window to foreground and set input focus</description></item>
+        ///   <item><description>Stabilization delay: Allow focus change to complete before input delivery</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Configuration Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>delayType: Typically WindowFocus (500ms) or FocusStabilization (750ms)</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Service Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>IUIAutomationService.EnsureWindowFocusAsync - Platform-specific window focus management</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>FFXI-Specific Requirements:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>DirectX applications require explicit focus before accepting input reliably</description></item>
+        ///   <item><description>Focus changes need processing time before input delivery (timing-sensitive)</description></item>
+        ///   <item><description>Window focus can be lost between navigation steps, especially in windowed mode</description></item>
+        ///   <item><description>Stabilization delay prevents input timing issues with FFXI's UI processing</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Common Delay Types:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>WindowFocus (500ms): Standard focus preparation before input</description></item>
+        ///   <item><description>FocusStabilization (750ms): Extended stabilization for complex navigation</description></item>
+        ///   <item><description>EnterPreparation (750ms): Focus preparation before critical Enter key presses</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Example Usage:</strong></para>
+        /// <code>
+        /// // Standard window preparation before key input
+        /// await PrepareWindowForNavigationAsync(
+        ///     windowHandle, 
+        ///     FFXIGameConfiguration.Delays.WindowFocus, 
+        ///     cancellationToken);
+        /// 
+        /// // Extended preparation before character selection
+        /// await PrepareWindowForNavigationAsync(
+        ///     windowHandle, 
+        ///     FFXIGameConfiguration.Delays.FocusStabilization, 
+        ///     cancellationToken);
+        /// </code>
+        /// </remarks>
+        /// <exception cref="OperationCanceledException">Operation cancelled via cancellation token</exception>
+        private async Task PrepareWindowForNavigationAsync(
+            IntPtr windowHandle,
+            TimeSpan delayType,
+            CancellationToken cancellationToken)
+        {
+            await _automationService.EnsureWindowFocusAsync(windowHandle, cancellationToken);
+            await Task.Delay(delayType, cancellationToken);
+        }
+
+        /// <summary>
+        /// Navigates to the specified character slot using arrow key navigation.
+        /// Handles the step-by-step navigation with progress reporting and proper delays.
+        /// </summary>
+        /// <param name="subtask">Subtask for progress updates</param>
+        /// <param name="targetSlot">Target character slot number</param>
+        /// <param name="windowHandle">FFXI window handle</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        private async Task NavigateToCharacterSlotAsync(
+            AutoLoginSubtask subtask,
+            int targetSlot,
+            IntPtr windowHandle,
+            CancellationToken cancellationToken)
+        {
+            if (targetSlot <= FFXIGameConfiguration.CharacterSlots.DefaultSlotNumber)
+            {
+                await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.SlotNavigationEnd, 
+                    $"Using default character slot {targetSlot}");
+                return;
+            }
+
+            await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.SlotNavigationStart, 
+                $"Navigating to character slot {targetSlot}...");
+            await _loggingService.LogInfoAsync($"[NAVIGATION] Need to navigate from slot 1 to slot {targetSlot} (sending {targetSlot - 1} down arrows)");
+
+            // Prepare window for navigation
+            await PrepareWindowForNavigationAsync(windowHandle, FFXIGameConfiguration.Delays.FocusStabilization, cancellationToken);
+
+            // FFXI-Specific: Character slots use arrow key navigation from default position (slot 1)
+            // Each down arrow moves one slot down in the character selection UI
+            int stepsNeeded = targetSlot - FFXIGameConfiguration.CharacterSlots.DefaultSlotNumber;
+            for (int step = 1; step <= stepsNeeded; step++)
+            {
+                await _loggingService.LogInfoAsync($"[NAVIGATION] Sending down arrow {step} of {stepsNeeded} to reach slot {targetSlot}");
+
+                // FFXI-Specific: DirectX input requires window focus before each key press
+                // Focus can be lost between navigation steps, especially in windowed mode
+                await PrepareWindowForNavigationAsync(windowHandle, FFXIGameConfiguration.Delays.WindowFocus, cancellationToken);
+
+                // Send navigation input using DirectX-compatible key simulation
+                await _automationService.SendKeyAsync(ConsoleKey.DownArrow, windowHandle, cancellationToken);
+                await _loggingService.LogInfoAsync($"[NAVIGATION] Down arrow {step} sent successfully");
+
+                // FFXI-Specific: UI navigation requires processing time between inputs
+                // Too rapid input can cause navigation to skip slots or become unresponsive
+                await Task.Delay(FFXIGameConfiguration.Delays.NavigationStep, cancellationToken);
+
+                // Update progress during navigation
+                var navProgress = FFXIGameConfiguration.ProgressMilestones.SlotNavigationStart + 
+                    ((FFXIGameConfiguration.ProgressMilestones.SlotNavigationEnd - FFXIGameConfiguration.ProgressMilestones.SlotNavigationStart) * step / stepsNeeded);
+                await UpdateProgressAsync(subtask, navProgress, $"Navigating to slot {targetSlot} ({step}/{stepsNeeded})...");
+            }
+
+            // Stabilize after navigation completion
+            await Task.Delay(FFXIGameConfiguration.Delays.NavigationStep, cancellationToken);
+            await _loggingService.LogInfoAsync($"[NAVIGATION] Navigation complete - should now be on slot {targetSlot}");
+        }
+
+        /// <summary>
+        /// Selects the currently highlighted character slot by pressing Enter.
+        /// Includes proper window focus preparation and transition timing.
+        /// </summary>
+        /// <param name="subtask">Subtask for progress updates</param>
+        /// <param name="characterSlot">Character slot number being selected</param>
+        /// <param name="windowHandle">FFXI window handle</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        private async Task SelectCharacterSlotAsync(
+            AutoLoginSubtask subtask,
+            int characterSlot,
+            IntPtr windowHandle,
+            CancellationToken cancellationToken)
+        {
+            await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.SlotSelecting, 
+                $"Selecting character slot {characterSlot} (pressing Enter)...");
+            await _loggingService.LogInfoAsync($"[NAVIGATION] About to press Enter to select character slot {characterSlot}");
+
+            // Prepare window for selection
+            await PrepareWindowForNavigationAsync(windowHandle, FFXIGameConfiguration.Delays.EnterPreparation, cancellationToken);
+
+            // Execute selection
+            await _automationService.SendKeyAsync(ConsoleKey.Enter, windowHandle, cancellationToken);
+            await _loggingService.LogInfoAsync($"[NAVIGATION] Enter key sent to select character slot {characterSlot}");
+
+            // Allow character loading time
+            await Task.Delay(FFXIGameConfiguration.Delays.CharacterLoading, cancellationToken);
+
+            await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.SlotComplete, 
+                $"Character slot {characterSlot} selected successfully");
+        }
+
+        /// <summary>
+        /// Executes character slot selection with decomposed, focused helper methods.
+        /// Orchestrates slot validation, screen detection, navigation, and selection.
+        /// </summary>
+        /// <param name="subtask">Subtask for progress reporting</param>
+        /// <param name="queueItem">Queue item containing account and slot information</param>
+        /// <param name="context">Context for window handle management</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <remarks>
+        /// Configuration Dependencies:
+        /// - FFXIGameConfiguration.CharacterSlots.* for slot validation
+        /// - FFXIGameConfiguration.Timeouts.CharacterSlot for screen detection timeout
+        /// - FFXIGameConfiguration.Delays.* for UI timing
+        /// - FFXIGameConfiguration.ProgressMilestones.Slot* for progress reporting
+        /// 
+        /// Service Dependencies:
+        /// - IAutoLoginContext for window handle retrieval
+        /// - IUIAutomationService for window focus and key input
+        /// - ILoggingService for navigation logging
+        /// 
+        /// Error Scenarios:
+        /// - Invalid character slot: InvalidOperationException
+        /// - Window handle retrieval fails: Handled by GetFFXIWindowHandleAsync
+        /// - Screen detection timeout: Handled by WaitForScreenDetectionWithRedetectionAsync
+        /// - Navigation input failures: Logged but operation continues
+        /// </remarks>
         private async Task ExecuteCharacterSlotPickAsync(
             AutoLoginSubtask subtask,
             AutoLoginQueueItem queueItem,
             IAutoLoginContext context,
             CancellationToken cancellationToken)
         {
+            // Get character slot and validate it
+            var characterSlot = queueItem.Account?.FFXICharacterSlot ?? FFXIGameConfiguration.CharacterSlots.DefaultSlotNumber;
+            ValidateCharacterSlot(characterSlot);
+
             // Get FFXI window handle from context
             var ffxiWindowHandle = await GetFFXIWindowHandleAsync(subtask, context, cancellationToken);
 
-            // Get character slot from account configuration
-            var characterSlot = queueItem.Account?.FFXICharacterSlot ?? 1;
-            if (characterSlot < 1 || characterSlot > 16)
-            {
-                throw new InvalidOperationException($"Invalid character slot: {characterSlot}. Must be between 1 and 16");
-            }
+            await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.SlotWait, "Waiting for character slot selection screen...");
 
-            subtask.UpdateProgress(10, "Waiting for character slot selection screen...");
-
-            // Wait for character slot screen with window handle re-detection on failure
-            // Use template's configured threshold (0.50 from JSON) instead of hardcoded value
-            var slotScreenMatch = await WaitForScreenDetectionWithRedetectionAsync(
+            // Wait for character slot screen using standardized detection with fallback
+            var slotScreenMatch = await WaitForScreenWithRedetectionFallbackAsync(
                 subtask,
-                "FFXI/ffxi_character_slot_select_screen",
+                FFXIGameConfiguration.TemplatePaths.CharacterSlotSelection,
                 ffxiWindowHandle,
                 context,
                 "character slot selection screen",
-                cancellationToken,
-                new ScreenDetectionOptions
-                {
-                    Timeout = TimeSpan.FromSeconds(45),
-                    CheckInterval = TimeSpan.FromSeconds(1.5)
-                    // ConfidenceThreshold will be loaded from template JSON (currently 0.50)
-                });
+                FFXIGameConfiguration.Timeouts.CharacterSlot,
+                FFXIGameConfiguration.PollingIntervals.MenuCheck,
+                cancellationToken);
 
-            // The WaitForScreenDetectionWithRedetectionAsync method already validates against the template threshold,
-            // so if we get here, detection was successful - no need for additional validation
             await _loggingService.LogInfoAsync($"Character slot screen detected with confidence: {slotScreenMatch.Confidence:P}");
+            
+            // Get updated window handle and allow screen stabilization
+            ffxiWindowHandle = ValidateWindowContextAsync(context, ffxiWindowHandle);
+            await WaitForScreenTransitionAsync(subtask, FFXIGameConfiguration.Delays.ScreenStabilization, 
+                FFXIGameConfiguration.ProgressMilestones.SlotDetected, "Character slot screen detected", cancellationToken);
 
-            subtask.UpdateProgress(40, "Character slot screen detected");
+            // Navigate to the target character slot
+            await NavigateToCharacterSlotAsync(subtask, characterSlot, ffxiWindowHandle, cancellationToken);
 
-            // Get updated window handle from context
-            ffxiWindowHandle = context.GetValueData<IntPtr>("FFXIWindowHandle");
-
-            // Allow screen to fully render
-            await Task.Delay(1000, cancellationToken);
-
-            // Navigate to the correct slot if not slot 1
-            if (characterSlot > 1)
-            {
-                subtask.UpdateProgress(50, $"Navigating to character slot {characterSlot}...");
-                await _loggingService.LogInfoAsync($"[NAVIGATION] Need to navigate from slot 1 to slot {characterSlot} (sending {characterSlot - 1} down arrows)");
-
-                // Ensure window has focus before starting navigation
-                await _automationService.EnsureWindowFocusAsync(ffxiWindowHandle, cancellationToken);
-                await Task.Delay(750, cancellationToken); // Longer delay to ensure focus is stable
-
-                // Press Down arrow key (characterSlot - 1) times to reach the desired slot - using DirectX-compatible method
-                for (int i = 1; i < characterSlot; i++)
-                {
-                    await _loggingService.LogInfoAsync($"[NAVIGATION] Sending down arrow {i} of {characterSlot - 1} to reach slot {characterSlot}");
-
-                    // Ensure focus is maintained before each key press
-                    await _automationService.EnsureWindowFocusAsync(ffxiWindowHandle, cancellationToken);
-                    await Task.Delay(500, cancellationToken); // Increased delay to ensure focus is stable
-
-                    await _automationService.SendKeyAsync(ConsoleKey.DownArrow, ffxiWindowHandle, cancellationToken);
-                    await _loggingService.LogInfoAsync($"[NAVIGATION] Down arrow {i} sent successfully");
-
-                    await Task.Delay(1000, cancellationToken); // Increased delay to ensure FFXI processes the input
-
-                    // Update progress during navigation
-                    var navProgress = 50 + (20 * i / (characterSlot - 1));
-                    subtask.UpdateProgress(navProgress, $"Navigating to slot {characterSlot} ({i}/{characterSlot - 1})...");
-                }
-
-                // Extra delay after navigation to ensure selection is stable
-                await Task.Delay(1000, cancellationToken);
-                await _loggingService.LogInfoAsync($"[NAVIGATION] Navigation complete - should now be on slot {characterSlot}");
-            }
-            else
-            {
-                subtask.UpdateProgress(60, "Using default character slot 1");
-            }
-
-            subtask.UpdateProgress(80, $"Selecting character slot {characterSlot} (pressing Enter)...");
-            await _loggingService.LogInfoAsync($"[NAVIGATION] About to press Enter to select character slot {characterSlot}");
-
-            // Ensure window still has focus before Enter
-            await _automationService.EnsureWindowFocusAsync(ffxiWindowHandle, cancellationToken);
-            await Task.Delay(750, cancellationToken); // Consistent longer delay
-
-            // Press Enter to select the character slot - using DirectX-compatible method
-            await _automationService.SendKeyAsync(ConsoleKey.Enter, ffxiWindowHandle, cancellationToken);
-            await _loggingService.LogInfoAsync($"[NAVIGATION] Enter key sent to select character slot {characterSlot}");
-
-            await Task.Delay(3000, cancellationToken); // Allow character loading time
-
-            subtask.UpdateProgress(100, $"Character slot {characterSlot} selected successfully");
+            // Select the character slot
+            await SelectCharacterSlotAsync(subtask, characterSlot, ffxiWindowHandle, cancellationToken);
         }
 
+        /// <summary>
+        /// Executes the final FFXI login confirmation phase to enter the game world.
+        /// Detects the character confirmation screen and sends final Enter to complete the login process.
+        /// </summary>
+        /// <param name="subtask">Subtask for progress reporting (0-100%)</param>
+        /// <param name="queueItem">Queue item containing account and character slot information for logging</param>
+        /// <param name="context">Context for retrieving FFXI window handle and cleanup after completion</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <remarks>
+        /// <para><strong>Configuration Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>FFXIGameConfiguration.Timeouts.CharacterConfirmation - Screen detection timeout</description></item>
+        ///   <item><description>FFXIGameConfiguration.PollingIntervals.MenuCheck - Detection polling frequency</description></item>
+        ///   <item><description>FFXIGameConfiguration.Delays.ScreenStabilization - Screen stabilization wait</description></item>
+        ///   <item><description>FFXIGameConfiguration.Delays.WindowFocus - Window focus preparation</description></item>
+        ///   <item><description>FFXIGameConfiguration.Delays.GameWorldLoading - Game world entry wait time</description></item>
+        ///   <item><description>FFXIGameConfiguration.Delays.CharacterLoading - Final character load verification</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Service Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>GetFFXIWindowHandleAsync - Window handle retrieval and validation</description></item>
+        ///   <item><description>WaitForScreenDetectionWithRedetectionAsync - Character confirmation screen detection</description></item>
+        ///   <item><description>IUIAutomationService - Window focus management and DirectX-compatible Enter key input</description></item>
+        ///   <item><description>IAutoLoginContext - Window handle management and cleanup after completion</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Error Scenarios:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>Window handle not found/invalid: GetFFXIWindowHandleAsync handles redetection</description></item>
+        ///   <item><description>Character confirmation screen not detected: TimeoutException with redetection fallback</description></item>
+        ///   <item><description>Game world loading takes longer than expected: Extended wait times handle normal variations</description></item>
+        ///   <item><description>Final confirmation input fails: Logged but operation continues to completion</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Progress Milestones:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>10% - Starting character confirmation screen detection</description></item>
+        ///   <item><description>40% - Character confirmation screen detected</description></item>
+        ///   <item><description>60% - Confirming character login (sending Enter)</description></item>
+        ///   <item><description>80% - Login confirmation sent, entering game world</description></item>
+        ///   <item><description>95% - Verifying successful game entry</description></item>
+        ///   <item><description>100% - Character successfully entered game world</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>FFXI-Specific Behavior:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>Character confirmation screen requires specific template detection confidence</description></item>
+        ///   <item><description>Game world loading can vary significantly based on server conditions and character location</description></item>
+        ///   <item><description>DirectX input requires precise window focus management for final confirmation</description></item>
+        ///   <item><description>Context cleanup removes "FFXIWindowHandle" as login process is complete</description></item>
+        ///   <item><description>Extended loading times account for zone loading and character data synchronization</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Example Usage:</strong></para>
+        /// <code>
+        /// // Called automatically by ExecuteHandlerLogicAsync when
+        /// // subtask.TaskStep == LoginTaskStep.ConfirmLogin
+        /// //
+        /// // Typical flow:
+        /// // 1. GetFFXIWindowHandleAsync() retrieves window handle from context
+        /// // 2. WaitForScreenDetectionWithRedetectionAsync() detects character confirmation screen
+        /// // 3. Screen stabilization delay allows UI animations to complete
+        /// // 4. Window focus preparation ensures reliable input delivery
+        /// // 5. SendKeyAsync(Enter) confirms final login to game world
+        /// // 6. Extended delays allow game world loading and character synchronization
+        /// // 7. Context cleanup removes stored window handle as login is complete
+        /// </code>
+        /// </remarks>
+        /// <exception cref="InvalidOperationException">FFXI window handle cannot be found or validated</exception>
+        /// <exception cref="TimeoutException">Character confirmation screen detection fails even with redetection</exception>
+        /// <exception cref="OperationCanceledException">Operation cancelled via cancellation token</exception>
         private async Task ExecuteConfirmLoginAsync(
             AutoLoginSubtask subtask,
             AutoLoginQueueItem queueItem,
@@ -331,8 +987,8 @@ namespace FFXIManager.Services.AutoLogin
                 cancellationToken,
                 new ScreenDetectionOptions
                 {
-                    Timeout = TimeSpan.FromSeconds(45),
-                    CheckInterval = TimeSpan.FromSeconds(1.5)
+                    Timeout = FFXIGameConfiguration.Timeouts.CharacterConfirmation,
+                    CheckInterval = FFXIGameConfiguration.PollingIntervals.MenuCheck
                     // ConfidenceThreshold will be loaded from template JSON (0.80)
                 });
 
@@ -346,13 +1002,13 @@ namespace FFXIManager.Services.AutoLogin
             ffxiWindowHandle = context.GetValueData<IntPtr>("FFXIWindowHandle");
 
             // Allow screen to stabilize
-            await Task.Delay(1000, cancellationToken);
+            await Task.Delay(FFXIGameConfiguration.Delays.ScreenStabilization, cancellationToken);
 
             subtask.UpdateProgress(60, "Confirming character login (pressing Enter)...");
 
             // Ensure window has focus
             await _automationService.EnsureWindowFocusAsync(ffxiWindowHandle, cancellationToken);
-            await Task.Delay(500, cancellationToken);
+            await Task.Delay(FFXIGameConfiguration.Delays.WindowFocus, cancellationToken);
 
             // Press Enter to confirm and enter the game world - using DirectX-compatible method
             await _automationService.SendKeyAsync(ConsoleKey.Enter, ffxiWindowHandle, cancellationToken);
@@ -360,12 +1016,12 @@ namespace FFXIManager.Services.AutoLogin
             subtask.UpdateProgress(80, "Login confirmation sent, entering game world...");
 
             // Allow significant time for the game world to load
-            await Task.Delay(5000, cancellationToken);
+            await Task.Delay(FFXIGameConfiguration.Delays.GameWorldLoading, cancellationToken);
 
             subtask.UpdateProgress(95, "Verifying successful game entry...");
 
             // Additional wait to ensure character is fully loaded into the game world
-            await Task.Delay(3000, cancellationToken);
+            await Task.Delay(FFXIGameConfiguration.Delays.CharacterLoading, cancellationToken);
 
             subtask.UpdateProgress(100, $"Success! {accountName} (slot {characterSlot}) has entered the game world");
 
@@ -374,9 +1030,219 @@ namespace FFXIManager.Services.AutoLogin
         }
 
         /// <summary>
-        /// Screen detection with automatic window handle re-detection when screenshots fail
-        /// This handles the common FFXI issue where window handles become invalid during transitions
+        /// Validates and logs template matching results with appropriate diagnostic information.
+        /// Provides detailed confidence analysis to aid in troubleshooting detection issues.
         /// </summary>
+        /// <param name="match">The template match result to validate</param>
+        /// <param name="confidenceThreshold">Minimum confidence threshold for success</param>
+        /// <param name="screenDescription">Description of the screen being detected</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if match meets confidence threshold, false otherwise</returns>
+        private async Task<bool> ValidateDetectionResultAsync(
+            TemplateMatchResult match,
+            float confidenceThreshold,
+            string screenDescription,
+            CancellationToken cancellationToken)
+        {
+            if (match.Confidence >= confidenceThreshold)
+            {
+                await _loggingService.LogInfoAsync($"{screenDescription} detection successful (confidence: {match.Confidence:P})");
+                return true;
+            }
+
+            // Enhanced diagnostic logging for different confidence ranges
+            if (match.Confidence < 0.10f)
+            {
+                await _loggingService.LogWarningAsync($"{screenDescription} very low confidence ({match.Confidence:P}) - possible template mismatch or screen state issue");
+            }
+            else if (match.Confidence >= 0.60f)
+            {
+                await _loggingService.LogDebugAsync($"{screenDescription} partially detected (confidence: {match.Confidence:P}) - getting close");
+            }
+            else if (match.Confidence >= 0.30f)
+            {
+                await _loggingService.LogDebugAsync($"{screenDescription} moderate confidence ({match.Confidence:P}) - template may be partially visible");
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Handles window handle redetection when consecutive screenshot failures occur.
+        /// Updates the context with the new window handle if redetection is successful.
+        /// </summary>
+        /// <param name="currentWindowHandle">Current window handle that may be invalid</param>
+        /// <param name="context">Context to update with new window handle</param>
+        /// <param name="consecutiveFailures">Number of consecutive screenshot failures</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>New window handle if redetection successful, otherwise the original handle</returns>
+        private async Task<IntPtr> HandleWindowRedetectionAsync(
+            IntPtr currentWindowHandle,
+            IAutoLoginContext context,
+            int consecutiveFailures,
+            CancellationToken cancellationToken)
+        {
+            await _loggingService.LogInfoAsync($"Re-detecting FFXI window handle after {consecutiveFailures} consecutive screenshot failures");
+
+            try
+            {
+                // Get the PID of the current (possibly stale) window for prioritization
+                int? currentPid = null;
+                if (currentWindowHandle != IntPtr.Zero)
+                {
+                    try
+                    {
+                        var currentScreenshot = await _screenshotService.CaptureWindowAsync(currentWindowHandle, cancellationToken);
+                        currentPid = currentScreenshot?.ProcessId;
+                        await _loggingService.LogDebugAsync($"[REDETECTION] Current window handle 0x{currentWindowHandle.ToInt64():X} belongs to PID: {currentPid}");
+                    }
+                    catch
+                    {
+                        await _loggingService.LogDebugAsync($"[REDETECTION] Could not determine PID for current handle 0x{currentWindowHandle.ToInt64():X}");
+                    }
+                }
+
+                // Since we no longer have a monitor service, use process utility service for basic window enumeration
+                await _loggingService.LogDebugAsync("[REDETECTION] Using fallback process discovery...");
+                var ffxiHandle = await CreateFallbackWindowSearch(cancellationToken);
+                if (ffxiHandle != IntPtr.Zero)
+                {
+                    await _loggingService.LogInfoAsync($"[REDETECTION] ✓ Found FFXI window: 0x{ffxiHandle.ToInt64():X}");
+                    context.SetData("FFXIWindowHandle", ffxiHandle);
+                    return ffxiHandle;
+                }
+                
+                // No suitable windows found
+                await _loggingService.LogWarningAsync("[REDETECTION] No valid FFXI windows found");
+                return currentWindowHandle;
+            }
+            catch (Exception redetectEx)
+            {
+                await _loggingService.LogWarningAsync($"Failed to re-detect FFXI window: {redetectEx.Message}");
+            }
+
+            return currentWindowHandle;
+        }
+
+        /// <summary>
+        /// Performs core screen detection with retry logic and window handle redetection.
+        /// Centralizes the main detection loop with proper error handling and progress reporting.
+        /// </summary>
+        /// <param name="subtask">Subtask for progress reporting</param>
+        /// <param name="templatePath">Path to the template for detection</param>
+        /// <param name="initialWindowHandle">Initial window handle to use</param>
+        /// <param name="context">Context for storing updated window handle</param>
+        /// <param name="screenDescription">Description of screen being detected</param>
+        /// <param name="options">Detection options including timeout and intervals</param>
+        /// <param name="confidenceThreshold">Minimum confidence required for success</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>Template match result if successful, null if detection fails</returns>
+        private async Task<TemplateMatchResult?> DetectScreenWithRetryAsync(
+            AutoLoginSubtask subtask,
+            string templatePath,
+            IntPtr initialWindowHandle,
+            IAutoLoginContext context,
+            string screenDescription,
+            ScreenDetectionOptions options,
+            float confidenceThreshold,
+            CancellationToken cancellationToken)
+        {
+            var currentWindowHandle = initialWindowHandle;
+            var maxAttempts = (int)(options.Timeout.TotalSeconds / options.CheckInterval.TotalSeconds);
+            var consecutiveFailures = 0;
+            var maxConsecutiveFailures = FFXIGameConfiguration.ProcessDiscovery.MaxConsecutiveFailures;
+
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Update progress
+                var progress = Math.Min(FFXIGameConfiguration.ProgressMilestones.DetectionAttempting, (attempt * 100) / maxAttempts);
+                subtask.UpdateProgress(progress, $"Detecting {screenDescription} ({attempt}/{maxAttempts})...");
+
+                try
+                {
+                    var screenshot = await _screenshotService.CaptureWindowAsync(currentWindowHandle, cancellationToken);
+
+                    if (screenshot == null || !screenshot.IsValid)
+                    {
+                        consecutiveFailures++;
+                        await _loggingService.LogDebugAsync($"{screenDescription} screenshot failed (attempt {attempt}/{maxAttempts}) - consecutive failures: {consecutiveFailures}");
+
+                // FFXI-Specific: Window handles can become invalid during screen transitions
+                        // This is common when FFXI changes resolution or enters fullscreen mode
+                        if (consecutiveFailures >= maxConsecutiveFailures)
+                        {
+                            var newHandle = await HandleWindowRedetectionAsync(currentWindowHandle, context, consecutiveFailures, cancellationToken);
+                            if (newHandle != currentWindowHandle)
+                            {
+                                currentWindowHandle = newHandle;
+                                consecutiveFailures = 0;
+                                continue; // Immediate retry with fresh window handle - no delay needed
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Screenshot successful, reset failure count and try template matching
+                        consecutiveFailures = 0;
+                        var match = await _templateService.FindElementAsync(screenshot, templatePath, cancellationToken);
+
+                        await _loggingService.LogDebugAsync($"{screenDescription} detection attempt {attempt}/{maxAttempts}: confidence={match.Confidence:P}, threshold={confidenceThreshold:P}");
+
+                        if (await ValidateDetectionResultAsync(match, confidenceThreshold, screenDescription, cancellationToken))
+                        {
+                            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.DetectionSuccessful, $"{screenDescription} detected successfully");
+                            context.SetData("FFXIWindowHandle", currentWindowHandle);
+                            return match;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await _loggingService.LogDebugAsync($"Exception during {screenDescription} detection attempt {attempt}: {ex.Message}");
+                    consecutiveFailures++;
+                }
+
+                if (attempt < maxAttempts)
+                {
+                    await Task.Delay(options.CheckInterval, cancellationToken);
+                }
+            }
+
+            return null; // Detection failed
+        }
+
+        /// <summary>
+        /// Screen detection with automatic window handle re-detection when screenshots fail.
+        /// This handles the common FFXI issue where window handles become invalid during transitions.
+        /// Now orchestrates the detection process using focused helper methods.
+        /// </summary>
+        /// <param name="subtask">Subtask for progress reporting</param>
+        /// <param name="templatePath">Path to the template for detection</param>
+        /// <param name="initialWindowHandle">Initial window handle to use</param>
+        /// <param name="context">Context for storing window handle updates</param>
+        /// <param name="screenDescription">Description of the screen being detected</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <param name="options">Detection options (timeout, intervals, etc.)</param>
+        /// <returns>Template match result</returns>
+        /// <remarks>
+        /// Configuration Dependencies:
+        /// - FFXIGameConfiguration.ProcessDiscovery.MaxConsecutiveFailures
+        /// - FFXIGameConfiguration.ProgressMilestones.DetectionAttempting/DetectionSuccessful
+        /// 
+        /// Service Dependencies:
+        /// - ITemplateManagementService for metadata loading
+        /// - IScreenshotCaptureService for window capture
+        /// - ITemplateMatchingService for element detection
+        /// - ILoggingService for diagnostic logging
+        /// 
+        /// Error Scenarios:
+        /// - Template metadata not found: InvalidOperationException
+        /// - Screenshot capture failures: Automatic window redetection
+        /// - Template matching failures: Enhanced diagnostic logging
+        /// - Window handle becomes invalid: Automatic redetection and context update
+        /// </remarks>
         private async Task<TemplateMatchResult> WaitForScreenDetectionWithRedetectionAsync(
             AutoLoginSubtask subtask,
             string templatePath,
@@ -395,231 +1261,286 @@ namespace FFXIManager.Services.AutoLogin
                 throw new InvalidOperationException($"Template metadata not found for: {templatePath}");
             }
 
-            // Use template's configured confidence threshold instead of options default
             var confidenceThreshold = templateMetadata.ConfidenceThreshold;
             await _loggingService.LogInfoAsync($"Using template confidence threshold: {confidenceThreshold:P} for {screenDescription}");
-
-            var currentWindowHandle = initialWindowHandle;
-            var maxAttempts = (int)(options.Timeout.TotalSeconds / options.CheckInterval.TotalSeconds);
-            var consecutiveFailures = 0;
-            const int maxConsecutiveFailures = 5; // Re-detect window after 5 consecutive screenshot failures
-
             await _loggingService.LogInfoAsync($"Waiting for {screenDescription} (max {options.Timeout.TotalSeconds}s, checking every {options.CheckInterval.TotalSeconds}s, confidence={confidenceThreshold:P})");
 
-            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            // Orchestrate the detection process using focused helper methods
+            var detectionResult = await DetectScreenWithRetryAsync(
+                subtask,
+                templatePath,
+                initialWindowHandle,
+                context,
+                screenDescription,
+                options,
+                confidenceThreshold,
+                cancellationToken);
+
+            if (detectionResult != null)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                // Update progress based on attempt
-                var progress = Math.Min(95, (attempt * 100) / maxAttempts);
-                subtask.UpdateProgress(progress, $"Detecting {screenDescription} ({attempt}/{maxAttempts})...");
-
-                try
-                {
-                    // Try to capture screenshot with current window handle
-                    var screenshot = await _screenshotService.CaptureWindowAsync(currentWindowHandle, cancellationToken);
-
-                    if (screenshot == null || !screenshot.IsValid)
-                    {
-                        consecutiveFailures++;
-                        await _loggingService.LogDebugAsync($"{screenDescription} screenshot failed (attempt {attempt}/{maxAttempts}) - consecutive failures: {consecutiveFailures}");
-
-                        // If we've had too many consecutive failures, try to re-detect the window
-                        if (consecutiveFailures >= maxConsecutiveFailures)
-                        {
-                            await _loggingService.LogInfoAsync($"Re-detecting FFXI window handle after {consecutiveFailures} consecutive screenshot failures");
-
-                            try
-                            {
-                                // Re-detect FFXI window handle
-                                var newWindowHandle = await FindFFXIWindowHandleAsync(cancellationToken);
-                                if (newWindowHandle != IntPtr.Zero && newWindowHandle != currentWindowHandle)
-                                {
-                                    await _loggingService.LogInfoAsync($"Found new FFXI window handle: 0x{newWindowHandle.ToInt64():X} (was 0x{currentWindowHandle.ToInt64():X})");
-                                    currentWindowHandle = newWindowHandle;
-                                    context.SetData("FFXIWindowHandle", newWindowHandle);
-                                    consecutiveFailures = 0; // Reset failure count with new handle
-                                    continue; // Try again immediately with new handle
-                                }
-                            }
-                            catch (Exception redetectEx)
-                            {
-                                await _loggingService.LogWarningAsync($"Failed to re-detect FFXI window: {redetectEx.Message}");
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // Screenshot successful, reset failure count and try template matching
-                        consecutiveFailures = 0;
-                        var match = await _templateService.FindElementAsync(screenshot, templatePath, cancellationToken);
-
-                        await _loggingService.LogDebugAsync($"{screenDescription} detection attempt {attempt}/{maxAttempts}: confidence={match.Confidence:P}, threshold={confidenceThreshold:P}");
-
-                        if (match.Confidence >= confidenceThreshold)
-                        {
-                            subtask.UpdateProgress(100, $"{screenDescription} detected successfully");
-                            await _loggingService.LogInfoAsync($"{screenDescription} detected after {attempt} attempts (confidence: {match.Confidence:P})");
-
-                            // Update context with current window handle
-                            context.SetData("FFXIWindowHandle", currentWindowHandle);
-                            return match;
-                        }
-
-                        // Enhanced diagnostic logging for low confidence
-                        if (match.Confidence < 0.10f)
-                        {
-                            await _loggingService.LogWarningAsync($"{screenDescription} very low confidence ({match.Confidence:P}) - possible template mismatch or screen state issue");
-                        }
-                        else if (match.Confidence >= 0.60f)
-                        {
-                            await _loggingService.LogDebugAsync($"{screenDescription} partially detected (confidence: {match.Confidence:P}) - getting close");
-                        }
-                        else if (match.Confidence >= 0.30f)
-                        {
-                            await _loggingService.LogDebugAsync($"{screenDescription} moderate confidence ({match.Confidence:P}) - template may be partially visible");
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    await _loggingService.LogDebugAsync($"Exception during {screenDescription} detection attempt {attempt}: {ex.Message}");
-                    consecutiveFailures++;
-                }
-
-                if (attempt < maxAttempts)
-                {
-                    await Task.Delay(options.CheckInterval, cancellationToken);
-                }
+                await _loggingService.LogInfoAsync($"{screenDescription} detected successfully (confidence: {detectionResult.Confidence:P})");
+                return detectionResult;
             }
 
-            // Final attempt for diagnosis with current window handle
+            // Final diagnostic attempt if detection failed
+            await _loggingService.LogWarningAsync($"{screenDescription} detection failed after timeout");
             try
             {
-                var finalScreenshot = await _screenshotService.CaptureWindowAsync(currentWindowHandle, cancellationToken);
+                var currentHandle = context.GetValueData<IntPtr>("FFXIWindowHandle");
+                if (currentHandle == IntPtr.Zero) currentHandle = initialWindowHandle;
+                
+                var finalScreenshot = await _screenshotService.CaptureWindowAsync(currentHandle, cancellationToken);
                 var finalMatch = await _templateService.FindElementAsync(finalScreenshot, templatePath, cancellationToken);
 
-                await _loggingService.LogWarningAsync($"{screenDescription} not detected after {maxAttempts} attempts (final confidence: {finalMatch.Confidence:P})");
+                await _loggingService.LogWarningAsync($"{screenDescription} final diagnostic attempt - confidence: {finalMatch.Confidence:P}");
                 return finalMatch;
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync($"Final screenshot attempt failed for {screenDescription}", ex);
+                await _loggingService.LogErrorAsync($"Final diagnostic attempt failed for {screenDescription}", ex);
                 return new TemplateMatchResult { Confidence = 0.0f };
             }
         }
 
-        /// <summary>
-        /// Find current FFXI window handle by process name and title
-        /// </summary>
-        private async Task<IntPtr> FindFFXIWindowHandleAsync(CancellationToken cancellationToken)
-        {
-            // Check for FFXI process (could be pol.exe or ffximain.exe depending on version)
-            var processes = Process.GetProcessesByName("pol");
-            var ffxiProcesses = Process.GetProcessesByName("ffximain");
 
-            // Combine both process lists
-            var allProcesses = new Process[processes.Length + ffxiProcesses.Length];
-            processes.CopyTo(allProcesses, 0);
-            ffxiProcesses.CopyTo(allProcesses, processes.Length);
-
-            foreach (var process in allProcesses)
-            {
-                try
-                {
-                    if (process.HasExited || process.MainWindowHandle == IntPtr.Zero)
-                        continue;
-
-                    var windowTitle = process.MainWindowTitle;
-
-                    // FFXI window title changes during startup, but usually contains "FINAL FANTASY XI"
-                    if (windowTitle.Contains("FINAL FANTASY", StringComparison.OrdinalIgnoreCase) ||
-                        windowTitle.Contains("FFXI", StringComparison.OrdinalIgnoreCase) ||
-                        (!string.IsNullOrEmpty(windowTitle) && process.ProcessName.Equals("pol", StringComparison.OrdinalIgnoreCase)))
-                    {
-                        await _loggingService.LogDebugAsync($"Found FFXI process - Handle: 0x{process.MainWindowHandle.ToInt64():X}, Title: '{windowTitle}', PID: {process.Id}");
-                        return process.MainWindowHandle;
-                    }
-                }
-                finally
-                {
-                    process?.Dispose();
-                }
-            }
-
-            return IntPtr.Zero;
-        }
 
         /// <summary>
-        /// Wait for FFXI process to launch and return its window handle
-        /// Uses the same approach as PlayOnlineAuthHandler for process detection
+        /// Waits for the FFXI process to launch and returns its window handle.
+        /// Handles the transition from PlayOnline to FFXI process with comprehensive discovery logic.
         /// </summary>
+        /// <param name="subtask">Subtask for progress reporting during process detection</param>
+        /// <param name="context">Context for checking stored window handles from previous handlers</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>Valid FFXI window handle</returns>
+        /// <remarks>
+        /// <para><strong>Configuration Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>FFXIGameConfiguration.ProcessDiscovery.ProcessDetectionAttempts - Maximum detection attempts</description></item>
+        ///   <item><description>FFXIGameConfiguration.ProcessDiscovery.WindowTitlePatterns - Window title validation patterns</description></item>
+        ///   <item><description>FFXIGameConfiguration.PollingIntervals.ProcessCheck - Time between detection attempts</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Service Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>FindFFXIWindowHandleAsync - Process enumeration and window discovery</description></item>
+        ///   <item><description>IScreenshotCaptureService - Window validation through screenshot capture</description></item>
+        ///   <item><description>IAutoLoginContext - Retrieval of stored window handles from PlayOnline phase</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>FFXI Process Discovery Strategy:</strong></para>
+        /// <list type="number">
+        ///   <item><description>Primary: Search for new FFXI processes using configured process names</description></item>
+        ///   <item><description>Fallback: Check if stored PlayOnline window handle has transitioned to FFXI</description></item>
+        ///   <item><description>Validation: Verify window responsiveness and title pattern matching</description></item>
+        ///   <item><description>Retry: Continue until process found or maximum attempts reached</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Error Scenarios:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>FFXI process doesn't launch: InvalidOperationException after configured timeout</description></item>
+        ///   <item><description>Process launches but window unresponsive: Continues detection attempts</description></item>
+        ///   <item><description>Window title doesn't match patterns: Uses fallback process name validation</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>FFXI-Specific Behavior:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>Process may start as 'pol' and transition to 'ffximain' during launch</description></item>
+        ///   <item><description>Window handle from PlayOnline phase may become the FFXI window</description></item>
+        ///   <item><description>Multiple process names supported for different FFXI launch configurations</description></item>
+        ///   <item><description>Window title validation supports various FFXI window states and versions</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Example Usage:</strong></para>
+        /// <code>
+        /// // Called during TermsAcceptance phase to establish FFXI window handle
+        /// var ffxiHandle = await WaitForFFXIProcessAsync(subtask, context, cancellationToken);
+        /// context.SetData("FFXIWindowHandle", ffxiHandle);
+        /// 
+        /// // Progress reporting:
+        /// // 5% - Starting process detection
+        /// // 10% - Found FFXI process (when successful)
+        /// // 12% - Process validated and ready
+        /// </code>
+        /// </remarks>
+        /// <exception cref="InvalidOperationException">FFXI process fails to launch within the configured timeout period</exception>
+        /// <exception cref="OperationCanceledException">Operation cancelled via cancellation token</exception>
         private async Task<IntPtr> WaitForFFXIProcessAsync(
             AutoLoginSubtask subtask,
             IAutoLoginContext context,
             CancellationToken cancellationToken)
         {
-            var maxAttempts = 60; // 60 seconds to wait for FFXI to launch
+            var maxAttempts = FFXIGameConfiguration.ProcessDiscovery.ProcessDetectionAttempts;
             var attempt = 0;
 
-            await _loggingService.LogInfoAsync("Waiting for Final Fantasy XI process to launch...");
+            await _loggingService.LogInfoAsync("[PID_TRACKING] Waiting for PlayOnline to FFXI transition by monitoring window handle changes...");
+
+            // Get stored PlayOnline context
+            var playOnlinePidData = context.GetValueData<int>("PlayOnlineProcessId");
+            var playOnlinePid = playOnlinePidData == 0 ? (int?)null : playOnlinePidData;
+            var playOnlineHandle = context.GetValueData<IntPtr>("PlayOnlineWindowHandle");
+
+            if (!playOnlinePid.HasValue || playOnlineHandle == IntPtr.Zero)
+            {
+                await _loggingService.LogWarningAsync("[PID_TRACKING] No PlayOnline PID/handle context found - falling back to process discovery");
+                return await FallbackProcessDiscoveryAsync(subtask, cancellationToken);
+            }
+
+            await _loggingService.LogInfoAsync($"[PID_TRACKING] Monitoring PID {playOnlinePid} for window handle changes (current: 0x{playOnlineHandle.ToInt64():X})");
 
             while (attempt < maxAttempts)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 attempt++;
 
-                var progress = Math.Min(10, (attempt * 10 / maxAttempts));
-                subtask.UpdateProgress(progress, $"Finding FFXI process ({attempt}/{maxAttempts})...");
+                var progress = Math.Min(FFXIGameConfiguration.ProgressMilestones.ProcessSearching, (attempt * FFXIGameConfiguration.ProgressMilestones.ProcessFound / maxAttempts));
+                subtask.UpdateProgress(progress, $"Monitoring transition ({attempt}/{maxAttempts})...");
+                
+                await _loggingService.LogInfoAsync($"[PID_TRACKING] Attempt {attempt}/{maxAttempts} - Checking PID {playOnlinePid} for new windows...");
 
-                var windowHandle = await FindFFXIWindowHandleAsync(cancellationToken);
-                if (windowHandle != IntPtr.Zero)
-                {
-                    subtask.UpdateProgress(12, "Found FFXI process");
-                    return windowHandle;
-                }
+                // Use ProcessUtilityService to get windows for the specific PID
+                var processWindows = await _processUtilityService.GetProcessWindowsAsync(playOnlinePid.Value);
+                
+                await _loggingService.LogInfoAsync($"[PID_TRACKING] Found {processWindows.Count} windows in PID {playOnlinePid}");
 
-                // Also check if we have a stored window handle from PlayOnline that might have transitioned
-                var storedHandle = context.GetValueData<IntPtr>("WindowHandle");
-                if (storedHandle != IntPtr.Zero)
+                foreach (var window in processWindows)
                 {
-                    try
+                    await _loggingService.LogInfoAsync($"[PID_TRACKING] - Window: 0x{window.Handle.ToInt64():X}, Title: '{window.Title}'");
+                    
+                    // Look for a different window handle with FFXI title patterns
+                    if (window.Handle != playOnlineHandle && window.Handle != IntPtr.Zero && !string.IsNullOrEmpty(window.Title))
                     {
-                        // Verify the window is still valid and might be FFXI now
-                        var screenshot = await _screenshotService.CaptureWindowAsync(storedHandle, cancellationToken);
-                        if (screenshot != null && screenshot.IsValid)
+                        // Check if this window has an FFXI title
+                        await _loggingService.LogInfoAsync($"[PID_TRACKING] New window detected - Testing title: '{window.Title}' against FFXI patterns");
+                        
+                        bool isFFXITitle = false;
+                        foreach (var pattern in FFXIGameConfiguration.ProcessDiscovery.WindowTitlePatterns)
                         {
-                            await _loggingService.LogDebugAsync($"Checking stored window handle: {screenshot.WindowTitle}");
-                            if (screenshot.WindowTitle.Contains("FINAL FANTASY", StringComparison.OrdinalIgnoreCase))
+                            if (window.Title.Contains(pattern, StringComparison.OrdinalIgnoreCase))
                             {
-                                subtask.UpdateProgress(12, $"Stored handle is now FFXI: {screenshot.WindowTitle}");
-                                await _loggingService.LogInfoAsync($"Stored window handle is now FFXI: {screenshot.WindowTitle}");
-                                return storedHandle;
+                                await _loggingService.LogInfoAsync($"[PID_TRACKING] ✓ FFXI pattern match: '{pattern}' in '{window.Title}'");
+                                isFFXITitle = true;
+                                break;
                             }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        await _loggingService.LogDebugAsync($"Error checking stored window handle: {ex.Message}");
+                        
+                        if (isFFXITitle)
+                        {
+                            await _loggingService.LogInfoAsync($"[PID_TRACKING] ✅ SUCCESS - FFXI transition detected! PID {playOnlinePid}, Handle: 0x{playOnlineHandle.ToInt64():X} → 0x{window.Handle.ToInt64():X}");
+                            subtask.UpdateProgress(FFXIGameConfiguration.ProgressMilestones.ProcessFound, "FFXI window transition detected");
+                            return window.Handle;
+                        }
+                        else
+                        {
+                            await _loggingService.LogInfoAsync($"[PID_TRACKING] New window 0x{window.Handle.ToInt64():X} does not match FFXI patterns: '{window.Title}'");
+                        }
                     }
                 }
 
+                // No transition detected yet, wait before next attempt
                 if (attempt < maxAttempts)
                 {
-                    await Task.Delay(1000, cancellationToken);
+                    await _loggingService.LogInfoAsync($"[PID_TRACKING] No FFXI window transition detected, waiting {FFXIGameConfiguration.PollingIntervals.ProcessCheck.TotalSeconds}s...");
+                    await Task.Delay(FFXIGameConfiguration.PollingIntervals.ProcessCheck, cancellationToken);
                 }
             }
 
-            throw new InvalidOperationException($"Final Fantasy XI process did not launch after {maxAttempts} seconds");
+            await _loggingService.LogWarningAsync($"[PID_TRACKING] No FFXI transition detected after {maxAttempts} attempts - falling back to process discovery");
+            return await FallbackProcessDiscoveryAsync(subtask, cancellationToken);
         }
 
         /// <summary>
-        /// Wait for FFXI to fully initialize - simplified approach similar to PlayOnlineAuthHandler
-        /// Just checks window responsiveness rather than template matching
+        /// Fallback method for FFXI process detection when PID tracking fails.
+        /// Uses traditional process enumeration and window title matching.
         /// </summary>
+        private async Task<IntPtr> FallbackProcessDiscoveryAsync(AutoLoginSubtask subtask, CancellationToken cancellationToken)
+        {
+            await _loggingService.LogInfoAsync("[FALLBACK] Using traditional FFXI process discovery...");
+            
+            var maxAttempts = FFXIGameConfiguration.ProcessDiscovery.ProcessDetectionAttempts;
+            var attempt = 0;
+            
+            while (attempt < maxAttempts)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                attempt++;
+                
+                await _loggingService.LogInfoAsync($"[FALLBACK] Attempt {attempt}/{maxAttempts} - Scanning for FFXI processes...");
+                
+                var ffxiHandle = await CreateFallbackWindowSearch(cancellationToken);
+                if (ffxiHandle != IntPtr.Zero)
+                {
+                    await _loggingService.LogInfoAsync($"[FALLBACK] ✅ Found FFXI window: 0x{ffxiHandle.ToInt64():X}");
+                    return ffxiHandle;
+                }
+                
+                if (attempt < maxAttempts)
+                {
+                    await Task.Delay(FFXIGameConfiguration.PollingIntervals.ProcessCheck, cancellationToken);
+                }
+            }
+            
+            throw new InvalidOperationException($"FFXI process could not be detected using fallback method after {maxAttempts} attempts");
+        }
+
+        /// <summary>
+        /// Waits for FFXI to fully initialize and become responsive for UI automation.
+        /// Validates window responsiveness through screenshot capture rather than template matching.
+        /// </summary>
+        /// <param name="windowHandle">FFXI window handle to validate</param>
+        /// <param name="subtask">Subtask for progress reporting during initialization checks</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <remarks>
+        /// <para><strong>Configuration Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>FFXIGameConfiguration.ProcessDiscovery.ResponsivenessCheckAttempts - Maximum check attempts</description></item>
+        ///   <item><description>FFXIGameConfiguration.PollingIntervals.ProcessCheck - Time between responsiveness checks</description></item>
+        ///   <item><description>FFXIGameConfiguration.Delays.ScreenStabilization - Final stabilization delay for DirectX rendering</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Service Dependencies:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>IScreenshotCaptureService - Window responsiveness validation through screenshot capture</description></item>
+        ///   <item><description>ILoggingService - Detailed startup progress logging</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Responsiveness Validation Strategy:</strong></para>
+        /// <list type="number">
+        ///   <item><description>Capture screenshot from provided window handle</description></item>
+        ///   <item><description>Validate screenshot is valid (not null, has dimensions)</description></item>
+        ///   <item><description>Log window title and dimensions for diagnostic purposes</description></item>
+        ///   <item><description>Require multiple consecutive successful captures before considering ready</description></item>
+        ///   <item><description>Apply final stabilization delay for DirectX rendering stability</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>FFXI-Specific Behavior:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>DirectX window may take time to become responsive for automation</description></item>
+        ///   <item><description>Multiple successful screenshots required to ensure window stability</description></item>
+        ///   <item><description>Window title and dimensions logged for debugging launch issues</description></item>
+        ///   <item><description>Extended stabilization delay accounts for DirectX rendering initialization</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Error Scenarios:</strong></para>
+        /// <list type="bullet">
+        ///   <item><description>Window becomes unresponsive during startup: Continues attempts until timeout</description></item>
+        ///   <item><description>Screenshot capture fails intermittently: Normal during FFXI initialization</description></item>
+        ///   <item><description>Window dimensions invalid: Logged for diagnostic purposes</description></item>
+        /// </list>
+        /// 
+        /// <para><strong>Example Usage:</strong></para>
+        /// <code>
+        /// // Called after WaitForFFXIProcessAsync to ensure window is ready for automation
+        /// await WaitForFFXIStartup(ffxiWindowHandle, subtask, cancellationToken);
+        /// 
+        /// // Progress reporting:
+        /// // 12-15% - FFXI responsiveness checks with attempt counting
+        /// // Final stabilization delay ensures DirectX readiness for subsequent screen detection
+        /// </code>
+        /// </remarks>
+        /// <exception cref="OperationCanceledException">Operation cancelled via cancellation token</exception>
         private async Task WaitForFFXIStartup(IntPtr windowHandle, AutoLoginSubtask subtask, CancellationToken cancellationToken)
         {
-            var maxAttempts = 10; // 10 seconds for FFXI window to become responsive
+            var maxAttempts = FFXIGameConfiguration.ProcessDiscovery.ResponsivenessCheckAttempts; // Time for FFXI window to become responsive
             var attempt = 0;
 
             await _loggingService.LogInfoAsync("Waiting for Final Fantasy XI window to become responsive...");
@@ -640,11 +1561,12 @@ namespace FFXIManager.Services.AutoLogin
                         var windowTitle = screenshot.WindowTitle;
                         await _loggingService.LogDebugAsync($"FFXI startup check {attempt + 1}/{maxAttempts}: Window responsive, title: '{windowTitle}', size: {screenshot.Width}x{screenshot.Height}");
 
-                        // If we get a few successful screenshots, consider FFXI ready
+                        // FFXI-Specific: Multiple successful screenshots required to ensure DirectX stability
+                        // Single successful capture may occur during initialization but window may still be unstable
                         if (attempt >= 2)
                         {
                             await _loggingService.LogInfoAsync("Final Fantasy XI window initialization completed");
-                            break;
+                            break; // Window is consistently responsive - safe to proceed
                         }
                     }
                     else
@@ -658,11 +1580,57 @@ namespace FFXIManager.Services.AutoLogin
                 }
 
                 attempt++;
-                await Task.Delay(1000, cancellationToken);
+                await Task.Delay(FFXIGameConfiguration.PollingIntervals.ProcessCheck, cancellationToken);
             }
 
-            // Additional buffer time for DirectX rendering to stabilize
-            await Task.Delay(1000, cancellationToken);
+            // FFXI-Specific: DirectX rendering pipeline requires additional stabilization
+            // This final delay ensures the window is fully ready for template matching and UI automation
+            await Task.Delay(FFXIGameConfiguration.Delays.ScreenStabilization, cancellationToken);
+        }
+
+        /// <summary>
+        /// Fallback method using ProcessUtilityService to search for FFXI windows by title patterns.
+        /// Leverages the existing infrastructure instead of duplicating process enumeration logic.
+        /// </summary>
+        private async Task<IntPtr> CreateFallbackWindowSearch(CancellationToken cancellationToken)
+        {
+            try
+            {
+                // Use ProcessUtilityService to get processes with their windows
+                var processNames = new[] { "pol", "ffxi", "ffximain", "PlayOnlineViewer" };
+                var processes = await _processUtilityService.GetProcessesByNamesAsync(processNames);
+                
+                await _loggingService.LogInfoAsync($"[FALLBACK] Found {processes.Count} processes across {processNames.Length} process names");
+                
+                foreach (var process in processes)
+                {
+                    await _loggingService.LogDebugAsync($"[FALLBACK] Checking process '{process.ProcessName}' (PID: {process.ProcessId}) with {process.Windows.Count} windows");
+                    
+                    foreach (var window in process.Windows)
+                    {
+                        if (window.Handle != IntPtr.Zero && !string.IsNullOrEmpty(window.Title))
+                        {
+                            // Check if this window title matches FFXI patterns
+                            foreach (var pattern in FFXIGameConfiguration.ProcessDiscovery.WindowTitlePatterns)
+                            {
+                                if (window.Title.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    await _loggingService.LogInfoAsync($"[FALLBACK] ✅ Found FFXI window: '{window.Title}' in process '{process.ProcessName}' (PID: {process.ProcessId}, Handle: 0x{window.Handle.ToInt64():X})");
+                                    return window.Handle;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                await _loggingService.LogDebugAsync("[FALLBACK] No FFXI windows found in fallback search");
+                return IntPtr.Zero;
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("[FALLBACK] Error in fallback window search", ex);
+                return IntPtr.Zero;
+            }
         }
 
         /// <summary>
