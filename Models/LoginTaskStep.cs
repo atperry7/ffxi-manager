@@ -11,7 +11,22 @@ namespace FFXIManager.Models
         None,
 
         /// <summary>
-        /// 1. Launch Windower application
+        /// 1. Launch POL Proxy (if configured)
+        /// </summary>
+        LaunchPOLProxy,
+
+        /// <summary>
+        /// 1.1. Check POL Proxy status (sub-task)
+        /// </summary>
+        CheckPOLProxyStatus,
+
+        /// <summary>
+        /// 1.2. Wait for POL Proxy to start (sub-task)
+        /// </summary>
+        WaitForPOLProxyStart,
+
+        /// <summary>
+        /// 2. Launch Windower application
         /// </summary>
         LaunchWindower,
 
@@ -31,37 +46,37 @@ namespace FFXIManager.Models
         ClickLaunchButton,
 
         /// <summary>
-        /// 2. PlayOnline - Member Selection
+        /// 3. PlayOnline - Member Selection
         /// </summary>
         MemberSelection,
 
         /// <summary>
-        /// 3. PlayOnline - Password Entry
+        /// 4. PlayOnline - Password Entry
         /// </summary>
         PasswordEntry,
 
         /// <summary>
-        /// 4. PlayOnline - OTP Entry (if required)
+        /// 5. PlayOnline - OTP Entry (if required)
         /// </summary>
         OTPEntry,
 
         /// <summary>
-        /// 5. Final Fantasy XI - Terms Acceptance
+        /// 6. Final Fantasy XI - Terms Acceptance
         /// </summary>
         TermsAcceptance,
 
         /// <summary>
-        /// 6. Final Fantasy XI - Select Character
+        /// 7. Final Fantasy XI - Select Character
         /// </summary>
         CharacterSelection,
 
         /// <summary>
-        /// 7. Final Fantasy XI - Pick Character Slot
+        /// 8. Final Fantasy XI - Pick Character Slot
         /// </summary>
         CharacterSlotPick,
 
         /// <summary>
-        /// 8. Final Fantasy XI - Confirm Character Login
+        /// 9. Final Fantasy XI - Confirm Character Login
         /// </summary>
         ConfirmLogin
     }
@@ -77,6 +92,9 @@ namespace FFXIManager.Models
         public static string GetDisplayName(this LoginTaskStep step) => step switch
         {
             LoginTaskStep.None => "Waiting",
+            LoginTaskStep.LaunchPOLProxy => "Launch POL Proxy",
+            LoginTaskStep.CheckPOLProxyStatus => "Check POL Proxy status",
+            LoginTaskStep.WaitForPOLProxyStart => "Wait for POL Proxy to start",
             LoginTaskStep.LaunchWindower => "Launch Windower",
             LoginTaskStep.WaitForWindowerStart => "Wait for Windower to start",
             LoginTaskStep.VerifyWindowerLoaded => "Verify Windower has loaded",
@@ -97,6 +115,9 @@ namespace FFXIManager.Models
         public static string GetShortDisplayName(this LoginTaskStep step) => step switch
         {
             LoginTaskStep.None => "Waiting",
+            LoginTaskStep.LaunchPOLProxy => "Launching POL Proxy",
+            LoginTaskStep.CheckPOLProxyStatus => "Checking POL Proxy",
+            LoginTaskStep.WaitForPOLProxyStart => "Starting POL Proxy",
             LoginTaskStep.LaunchWindower => "Launching Windower",
             LoginTaskStep.WaitForWindowerStart => "Starting Windower",
             LoginTaskStep.VerifyWindowerLoaded => "Verifying Windower",
@@ -109,6 +130,16 @@ namespace FFXIManager.Models
             LoginTaskStep.CharacterSlotPick => "Picking Slot",
             LoginTaskStep.ConfirmLogin => "Confirming Login",
             _ => "Unknown"
+        };
+
+        /// <summary>
+        /// Gets whether this step is a sub-task of the POL Proxy launch process
+        /// </summary>
+        public static bool IsPOLProxySubTask(this LoginTaskStep step) => step switch
+        {
+            LoginTaskStep.CheckPOLProxyStatus => true,
+            LoginTaskStep.WaitForPOLProxyStart => true,
+            _ => false
         };
 
         /// <summary>
@@ -127,6 +158,9 @@ namespace FFXIManager.Models
         /// </summary>
         public static int GetEstimatedDurationSeconds(this LoginTaskStep step) => step switch
         {
+            LoginTaskStep.LaunchPOLProxy => 2,
+            LoginTaskStep.CheckPOLProxyStatus => 1,
+            LoginTaskStep.WaitForPOLProxyStart => 3,
             LoginTaskStep.LaunchWindower => 3,
             LoginTaskStep.WaitForWindowerStart => 5,
             LoginTaskStep.VerifyWindowerLoaded => 2,
@@ -148,6 +182,7 @@ namespace FFXIManager.Models
         {
             return new[]
             {
+                LoginTaskStep.LaunchPOLProxy,
                 LoginTaskStep.LaunchWindower,
                 LoginTaskStep.MemberSelection,
                 LoginTaskStep.PasswordEntry,
@@ -156,6 +191,18 @@ namespace FFXIManager.Models
                 LoginTaskStep.CharacterSelection,
                 LoginTaskStep.CharacterSlotPick,
                 LoginTaskStep.ConfirmLogin
+            };
+        }
+
+        /// <summary>
+        /// Gets all sub-tasks for POL Proxy launch
+        /// </summary>
+        public static IEnumerable<LoginTaskStep> GetPOLProxySubTasks()
+        {
+            return new[]
+            {
+                LoginTaskStep.CheckPOLProxyStatus,
+                LoginTaskStep.WaitForPOLProxyStart
             };
         }
 

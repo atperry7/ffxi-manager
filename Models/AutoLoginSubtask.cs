@@ -339,7 +339,7 @@ namespace FFXIManager.Models
                 Name = step.GetShortDisplayName(),
                 Description = step.GetDisplayName(),
                 EstimatedDurationSeconds = step.GetEstimatedDurationSeconds(),
-                IsSkippable = step == LoginTaskStep.OTPEntry, // OTP might not be required
+                IsSkippable = step == LoginTaskStep.OTPEntry || step == LoginTaskStep.LaunchPOLProxy, // OTP and POL Proxy might not be required
                 ExecutionOrder = (int)step
             };
         }
@@ -355,6 +355,16 @@ namespace FFXIManager.Models
             foreach (var step in mainSteps)
             {
                 subtasks.Add(FromLoginTaskStep(step));
+
+                // Add POL Proxy sub-tasks if this is the LaunchPOLProxy step
+                if (step == LoginTaskStep.LaunchPOLProxy)
+                {
+                    var polProxySubTasks = LoginTaskStepExtensions.GetPOLProxySubTasks();
+                    foreach (var subStep in polProxySubTasks)
+                    {
+                        subtasks.Add(FromLoginTaskStep(subStep));
+                    }
+                }
 
                 // Add Windower sub-tasks if this is the LaunchWindower step
                 if (step == LoginTaskStep.LaunchWindower)

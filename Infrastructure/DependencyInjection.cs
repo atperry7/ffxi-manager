@@ -65,6 +65,7 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<IAutoLoginContextService, AutoLoginContextService>();
 
             // Auto-login handlers
+            services.AddSingleton<ILoginTaskHandler, POLProxyLaunchHandler>();
             services.AddSingleton<ILoginTaskHandler, WindowerLaunchHandler>();
             services.AddSingleton<ILoginTaskHandler, PlayOnlineAuthHandler>();
             services.AddSingleton<ILoginTaskHandler, FFXIGameHandler>();
