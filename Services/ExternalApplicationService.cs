@@ -579,6 +579,45 @@ namespace FFXIManager.Services
             return applications;
         }
 
+        public async Task<ExternalApplication?> FindApplicationByPatternAsync(string[] namePatterns, string[]? pathPatterns = null)
+        {
+            if (namePatterns == null || namePatterns.Length == 0)
+                return null;
+
+            var applications = await GetApplicationsAsync();
+            
+            // First, try to match by name patterns
+            foreach (var pattern in namePatterns)
+            {
+                var match = applications.FirstOrDefault(app => 
+                    app.Name.Contains(pattern, StringComparison.OrdinalIgnoreCase));
+                if (match != null)
+                    return match;
+            }
+
+            // If no name match and path patterns provided, try path patterns
+            if (pathPatterns != null && pathPatterns.Length > 0)
+            {
+                foreach (var pattern in pathPatterns)
+                {
+                    var match = applications.FirstOrDefault(app => 
+                        app.ExecutablePath.Contains(pattern, StringComparison.OrdinalIgnoreCase));
+                    if (match != null)
+                        return match;
+                }
+            }
+
+            return null;
+        }
+
+        public async Task<ExternalApplication?> FindApplicationByPatternAsync(string pattern)
+        {
+            if (string.IsNullOrEmpty(pattern))
+                return null;
+
+            return await FindApplicationByPatternAsync(new[] { pattern }, new[] { pattern });
+        }
+
         public void Dispose()
         {
             if (_disposed) return;

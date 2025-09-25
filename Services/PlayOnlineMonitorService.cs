@@ -85,7 +85,7 @@ namespace FFXIManager.Services
         public event EventHandler<PlayOnlineCharacterEventArgs>? CharacterRemoved;
 
         // Target process names for PlayOnline/FFXI
-        private readonly string[] _targetProcessNames = { "pol", "ffxi", "PlayOnlineViewer" };
+        private readonly string[] _targetProcessNames = { "pol", "ffxi", "ffximain", "PlayOnlineViewer" };
 
         // Injected dependency for better testability (fallback to ServiceLocator if not provided)
         private readonly IProcessManagementService? _processManagement;
@@ -145,21 +145,28 @@ namespace FFXIManager.Services
             var processes = await _unifiedMonitoring.GetProcessesAsync(_monitorId);
             var characters = new List<PlayOnlineCharacter>();
 
+            await _logging.LogInfoAsync($"[DEBUG_UNIFIED] GetCharactersAsync: Found {processes.Count} processes from UnifiedMonitoringService", "PlayOnlineMonitorService");
+
             foreach (var process in processes)
             {
+                await _logging.LogInfoAsync($"[DEBUG_UNIFIED] Process PID {process.ProcessId}, Name: '{process.ProcessName}', Windows: {process.Windows.Count}", "PlayOnlineMonitorService");
+                
                 // Convert each window to a character
                 foreach (var window in process.Windows)
                 {
+                    await _logging.LogInfoAsync($"[DEBUG_UNIFIED] - Window Handle: 0x{window.Handle.ToInt64():X}, Title: '{window.Title}'", "PlayOnlineMonitorService");
                     characters.Add(ConvertToCharacter(process, window));
                 }
 
                 // If no windows, create one character for the process
                 if (process.Windows.Count == 0)
                 {
+                    await _logging.LogInfoAsync($"[DEBUG_UNIFIED] - No windows found for process, creating fallback character", "PlayOnlineMonitorService");
                     characters.Add(ConvertToCharacter(process, null));
                 }
             }
 
+            await _logging.LogInfoAsync($"[DEBUG_UNIFIED] GetCharactersAsync: Returning {characters.Count} characters total", "PlayOnlineMonitorService");
             return characters;
         }
         

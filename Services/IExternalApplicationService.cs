@@ -64,5 +64,22 @@ namespace FFXIManager.Services
         /// Stops monitoring for application status changes
         /// </summary>
         void StopMonitoring();
+
+        /// <summary>
+        /// Finds an external application by name pattern matching.
+        /// Searches both application name and executable path for the specified patterns.
+        /// </summary>
+        /// <param name="namePatterns">Array of patterns to match against application names</param>
+        /// <param name="pathPatterns">Array of patterns to match against executable paths (optional)</param>
+        /// <returns>The first matching application, or null if none found</returns>
+        Task<ExternalApplication?> FindApplicationByPatternAsync(string[] namePatterns, string[]? pathPatterns = null);
+
+        /// <summary>
+        /// Finds an external application by a single name pattern.
+        /// Convenience method for simple pattern matching.
+        /// </summary>
+        /// <param name="pattern">Pattern to match against application name or path</param>
+        /// <returns>The first matching application, or null if none found</returns>
+        Task<ExternalApplication?> FindApplicationByPatternAsync(string pattern);
     }
 }

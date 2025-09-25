@@ -11,7 +11,7 @@
       "description": "Select Character menu option (defaults to Enter key)"
     }
   },
-  "confidenceThreshold": 0.80,
+  "confidenceThreshold": 0.70,
   "detectionOptions": {
     "timeout": 30,
     "checkInterval": 1

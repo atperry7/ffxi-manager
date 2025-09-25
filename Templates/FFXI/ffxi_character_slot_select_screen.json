@@ -12,7 +12,7 @@
       "navigationKey": "DownArrow"
     }
   },
-  "confidenceThreshold": 0.50,
+  "confidenceThreshold": 0.45,
   "detectionOptions": {
     "timeout": 30,
     "checkInterval": 1
