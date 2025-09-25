@@ -19,6 +19,8 @@ namespace FFXIManager.Services.AutoLogin
         private readonly IWindowsCredentialsService _credentialsService;
         private readonly IOTPService _otpService;
         private readonly IPlayOnlineMonitorService _playOnlineMonitorService;
+        private readonly IExternalApplicationService _externalApplicationService;
+        private readonly IAutoLoginContextService _contextService;
 
         public PlayOnlineAuthHandler(
             ILoggingService loggingService,
@@ -28,13 +30,17 @@ namespace FFXIManager.Services.AutoLogin
             IUIAutomationService automationService,
             IWindowsCredentialsService credentialsService,
             IOTPService otpService,
-            IPlayOnlineMonitorService playOnlineMonitorService)
+            IPlayOnlineMonitorService playOnlineMonitorService,
+            IExternalApplicationService externalApplicationService,
+            IAutoLoginContextService contextService)
             : base(loggingService, screenshotService, templateService, templateManagementService)
         {
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
             _credentialsService = credentialsService ?? throw new ArgumentNullException(nameof(credentialsService));
             _otpService = otpService ?? throw new ArgumentNullException(nameof(otpService));
             _playOnlineMonitorService = playOnlineMonitorService ?? throw new ArgumentNullException(nameof(playOnlineMonitorService));
+            _externalApplicationService = externalApplicationService ?? throw new ArgumentNullException(nameof(externalApplicationService));
+            _contextService = contextService ?? throw new ArgumentNullException(nameof(contextService));
         }
 
         public override LoginTaskStep TaskStep => LoginTaskStep.MemberSelection;
@@ -364,26 +370,52 @@ namespace FFXIManager.Services.AutoLogin
                 _automationService);
             await Task.Delay(2000, cancellationToken); // Allow connection to process
 
-            // Proceed to navigate through final PlayOnline screens
-            await NavigateToFinalFantasyXI(subtask, windowHandle, cancellationToken);
+            // Check if POL Proxy is configured to determine the flow
+            var applications = await _externalApplicationService.GetApplicationsAsync();
+            var polProxyApp = applications.FirstOrDefault(app =>
+                app.Name.Contains("POL Proxy", StringComparison.OrdinalIgnoreCase) ||
+                app.ExecutablePath.Contains("POLProxy", StringComparison.OrdinalIgnoreCase));
+
+            if (polProxyApp != null)
+            {
+                // POL Proxy is configured - skip PlayOnline navigation, go directly to FFXI
+                await _loggingService.LogInfoAsync($"POL Proxy detected ({polProxyApp.Name}) - skipping PlayOnline navigation screens");
+                subtask.UpdateProgress(90, "POL Proxy detected - bypassing PlayOnline screens, transitioning to FFXI...");
+
+                // Store the current window handle for potential FFXI transition
+                context.SetData("WindowHandle", windowHandle);
+
+                // Allow additional time for POL Proxy to handle the transition
+                await Task.Delay(3000, cancellationToken);
+            }
+            else
+            {
+                // No POL Proxy - proceed with standard PlayOnline navigation
+                await _loggingService.LogInfoAsync("No POL Proxy configured - proceeding with standard PlayOnline navigation");
+                await NavigateToFinalFantasyXI(subtask, windowHandle, context, cancellationToken);
+            }
 
             subtask.UpdateProgress(100, "OTP entry, connection, and game launch completed successfully");
         }
 
-        private async Task NavigateToFinalFantasyXI(AutoLoginSubtask subtask, IntPtr windowHandle, CancellationToken cancellationToken)
+        private async Task NavigateToFinalFantasyXI(AutoLoginSubtask subtask, IntPtr windowHandle, IAutoLoginContext context, CancellationToken cancellationToken)
         {
-            // Wait for main screen
+            // Wait for main screen with window handle re-detection capability
             subtask.UpdateProgress(75, "Waiting for PlayOnline main screen...");
-            var mainScreenMatch = await WaitForScreenDetectionAsync(
+            var mainScreenMatch = await WaitForScreenDetectionWithRedetectionAsync(
                 subtask,
                 "PlayOnline/main_screen",
                 windowHandle,
+                context,
                 "PlayOnline main screen",
                 cancellationToken,
                 ScreenDetectionOptions.WithTimeout(20));
 
             if (mainScreenMatch.Confidence >= 0.80f)
             {
+                // Get updated window handle from context
+                windowHandle = context.GetValueData<IntPtr>("WindowHandle");
+
                 // Click "Final Fantasy XI"
                 subtask.UpdateProgress(80, "Selecting Final Fantasy XI...");
                 await ClickAtCoordinatesAsync(
@@ -395,17 +427,21 @@ namespace FFXIManager.Services.AutoLogin
                     _automationService);
                 await Task.Delay(2000, cancellationToken);
 
-                // Wait for play screen
-                var playScreenMatch = await WaitForScreenDetectionAsync(
+                // Wait for play screen with window handle re-detection
+                var playScreenMatch = await WaitForScreenDetectionWithRedetectionAsync(
                     subtask,
                     "PlayOnline/play_screen",
                     windowHandle,
+                    context,
                     "PlayOnline play screen",
                     cancellationToken,
                     ScreenDetectionOptions.WithTimeout(15));
 
                 if (playScreenMatch.Confidence >= 0.80f)
                 {
+                    // Get updated window handle from context
+                    windowHandle = context.GetValueData<IntPtr>("WindowHandle");
+
                     // Click "Play"
                     subtask.UpdateProgress(85, "Clicking Play button...");
                     await ClickAtCoordinatesAsync(
@@ -417,17 +453,21 @@ namespace FFXIManager.Services.AutoLogin
                         _automationService);
                     await Task.Delay(2000, cancellationToken);
 
-                    // Wait for play confirmation
-                    var confirmScreenMatch = await WaitForScreenDetectionAsync(
+                    // Wait for play confirmation with window handle re-detection
+                    var confirmScreenMatch = await WaitForScreenDetectionWithRedetectionAsync(
                         subtask,
                         "PlayOnline/play_confirmation",
                         windowHandle,
+                        context,
                         "PlayOnline play confirmation screen",
                         cancellationToken,
                         ScreenDetectionOptions.WithTimeout(15));
 
                     if (confirmScreenMatch.Confidence >= 0.80f)
                     {
+                        // Get updated window handle from context
+                        windowHandle = context.GetValueData<IntPtr>("WindowHandle");
+
                         // Click final "Play"
                         subtask.UpdateProgress(90, "Confirming game launch...");
                         await ClickAtCoordinatesAsync(
@@ -441,6 +481,187 @@ namespace FFXIManager.Services.AutoLogin
                     }
                 }
             }
+
+            // Store the final window handle for FFXI handler to use
+            context.SetData("WindowHandle", windowHandle);
+        }
+
+        /// <summary>
+        /// Screen detection with automatic window handle re-detection when screenshots fail
+        /// This handles PlayOnline window handle invalidation during transitions
+        /// </summary>
+        private async Task<TemplateMatchResult> WaitForScreenDetectionWithRedetectionAsync(
+            AutoLoginSubtask subtask,
+            string templatePath,
+            IntPtr initialWindowHandle,
+            IAutoLoginContext context,
+            string screenDescription,
+            CancellationToken cancellationToken,
+            ScreenDetectionOptions options = null)
+        {
+            options ??= ScreenDetectionOptions.Default;
+
+            // Load template metadata to get the configured confidence threshold
+            var templateMetadata = await _templateManagementService.GetTemplateMetadataAsync(templatePath);
+            if (templateMetadata == null)
+            {
+                throw new InvalidOperationException($"Template metadata not found for: {templatePath}");
+            }
+
+            // Use template's configured confidence threshold instead of options default
+            var confidenceThreshold = templateMetadata.ConfidenceThreshold;
+            await _loggingService.LogInfoAsync($"Using template confidence threshold: {confidenceThreshold:P} for {screenDescription}");
+
+            var currentWindowHandle = initialWindowHandle;
+            var maxAttempts = (int)(options.Timeout.TotalSeconds / options.CheckInterval.TotalSeconds);
+            var consecutiveFailures = 0;
+            const int maxConsecutiveFailures = 5; // Re-detect window after 5 consecutive screenshot failures
+
+            await _loggingService.LogInfoAsync($"Waiting for {screenDescription} (max {options.Timeout.TotalSeconds}s, checking every {options.CheckInterval.TotalSeconds}s, confidence={confidenceThreshold:P})");
+
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Update progress based on attempt
+                var progress = Math.Min(95, (attempt * 100) / maxAttempts);
+                subtask.UpdateProgress(progress, $"Detecting {screenDescription} ({attempt}/{maxAttempts})...");
+
+                try
+                {
+                    // Try to capture screenshot with current window handle
+                    var screenshot = await _screenshotService.CaptureWindowAsync(currentWindowHandle, cancellationToken);
+
+                    if (screenshot == null || !screenshot.IsValid)
+                    {
+                        consecutiveFailures++;
+                        await _loggingService.LogDebugAsync($"{screenDescription} screenshot failed (attempt {attempt}/{maxAttempts}) - consecutive failures: {consecutiveFailures}");
+
+                        // If we've had too many consecutive failures, try to re-detect the window
+                        if (consecutiveFailures >= maxConsecutiveFailures)
+                        {
+                            await _loggingService.LogInfoAsync($"Re-detecting PlayOnline window handle after {consecutiveFailures} consecutive screenshot failures");
+
+                            try
+                            {
+                                // Re-detect PlayOnline or FFXI window handle
+                                var newWindowHandle = await FindPlayOnlineOrFFXIWindowHandleAsync(cancellationToken);
+                                if (newWindowHandle != IntPtr.Zero && newWindowHandle != currentWindowHandle)
+                                {
+                                    await _loggingService.LogInfoAsync($"Found new window handle: 0x{newWindowHandle.ToInt64():X} (was 0x{currentWindowHandle.ToInt64():X})");
+                                    currentWindowHandle = newWindowHandle;
+                                    context.SetData("WindowHandle", newWindowHandle);
+                                    consecutiveFailures = 0; // Reset failure count with new handle
+                                    continue; // Try again immediately with new handle
+                                }
+                            }
+                            catch (Exception redetectEx)
+                            {
+                                await _loggingService.LogWarningAsync($"Failed to re-detect window: {redetectEx.Message}");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Screenshot successful, reset failure count and try template matching
+                        consecutiveFailures = 0;
+                        var match = await _templateService.FindElementAsync(screenshot, templatePath, cancellationToken);
+
+                        await _loggingService.LogDebugAsync($"{screenDescription} detection attempt {attempt}/{maxAttempts}: confidence={match.Confidence:P}, threshold={confidenceThreshold:P}");
+
+                        if (match.Confidence >= confidenceThreshold)
+                        {
+                            subtask.UpdateProgress(100, $"{screenDescription} detected successfully");
+                            await _loggingService.LogInfoAsync($"{screenDescription} detected after {attempt} attempts (confidence: {match.Confidence:P})");
+
+                            // Update context with current window handle
+                            context.SetData("WindowHandle", currentWindowHandle);
+                            return match;
+                        }
+
+                        // Enhanced diagnostic logging for low confidence
+                        if (match.Confidence < 0.10f)
+                        {
+                            await _loggingService.LogWarningAsync($"{screenDescription} very low confidence ({match.Confidence:P}) - possible template mismatch or screen state issue");
+                        }
+                        else if (match.Confidence >= 0.60f)
+                        {
+                            await _loggingService.LogDebugAsync($"{screenDescription} partially detected (confidence: {match.Confidence:P}) - getting close");
+                        }
+                        else if (match.Confidence >= 0.30f)
+                        {
+                            await _loggingService.LogDebugAsync($"{screenDescription} moderate confidence ({match.Confidence:P}) - template may be partially visible");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await _loggingService.LogDebugAsync($"Exception during {screenDescription} detection attempt {attempt}: {ex.Message}");
+                    consecutiveFailures++;
+                }
+
+                if (attempt < maxAttempts)
+                {
+                    await Task.Delay(options.CheckInterval, cancellationToken);
+                }
+            }
+
+            // Final attempt for diagnosis with current window handle
+            try
+            {
+                var finalScreenshot = await _screenshotService.CaptureWindowAsync(currentWindowHandle, cancellationToken);
+                var finalMatch = await _templateService.FindElementAsync(finalScreenshot, templatePath, cancellationToken);
+
+                await _loggingService.LogWarningAsync($"{screenDescription} not detected after {maxAttempts} attempts (final confidence: {finalMatch.Confidence:P})");
+                return finalMatch;
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync($"Final screenshot attempt failed for {screenDescription}", ex);
+                return new TemplateMatchResult { Confidence = 0.0f };
+            }
+        }
+
+        /// <summary>
+        /// Find current PlayOnline or FFXI window handle by process name and title
+        /// </summary>
+        private async Task<IntPtr> FindPlayOnlineOrFFXIWindowHandleAsync(CancellationToken cancellationToken)
+        {
+            // Check for both POL and FFXI processes since PlayOnline transitions to FFXI
+            var polProcesses = System.Diagnostics.Process.GetProcessesByName("pol");
+            var ffxiProcesses = System.Diagnostics.Process.GetProcessesByName("ffximain");
+
+            // Combine both process lists
+            var allProcesses = new System.Diagnostics.Process[polProcesses.Length + ffxiProcesses.Length];
+            polProcesses.CopyTo(allProcesses, 0);
+            ffxiProcesses.CopyTo(allProcesses, polProcesses.Length);
+
+            foreach (var process in allProcesses)
+            {
+                try
+                {
+                    if (process.HasExited || process.MainWindowHandle == IntPtr.Zero)
+                        continue;
+
+                    var windowTitle = process.MainWindowTitle;
+
+                    // Look for PlayOnline or FFXI window titles
+                    if (windowTitle.Contains("PlayOnline", StringComparison.OrdinalIgnoreCase) ||
+                        windowTitle.Contains("FINAL FANTASY", StringComparison.OrdinalIgnoreCase) ||
+                        windowTitle.Contains("FFXI", StringComparison.OrdinalIgnoreCase) ||
+                        (!string.IsNullOrEmpty(windowTitle) && process.ProcessName.Equals("pol", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        await _loggingService.LogDebugAsync($"Found window process - Handle: 0x{process.MainWindowHandle.ToInt64():X}, Title: '{windowTitle}', PID: {process.Id}");
+                        return process.MainWindowHandle;
+                    }
+                }
+                finally
+                {
+                    process?.Dispose();
+                }
+            }
+
+            return IntPtr.Zero;
         }
 
         private async Task WaitForPlayOnlineStartup(IntPtr windowHandle, CancellationToken cancellationToken)

@@ -63,6 +63,14 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         Task SendKeyAsync(ConsoleKey key, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Sends a keyboard key press to a specific window (DirectX-compatible)
+        /// </summary>
+        /// <param name="key">Key to press</param>
+        /// <param name="targetWindow">Target window handle for DirectX applications</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        Task SendKeyAsync(ConsoleKey key, IntPtr targetWindow, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Sends a key combination (e.g., Ctrl+A)
         /// </summary>
         /// <param name="modifiers">Modifier keys (Ctrl, Alt, Shift)</param>

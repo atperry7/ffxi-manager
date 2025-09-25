@@ -240,9 +240,20 @@ namespace FFXIManager.Services.AutoLogin
         {
             options ??= ScreenDetectionOptions.Default;
 
+            // Load template metadata to get the configured confidence threshold
+            var templateMetadata = await _templateManagementService.GetTemplateMetadataAsync(templatePath);
+            if (templateMetadata == null)
+            {
+                throw new InvalidOperationException($"Template metadata not found for: {templatePath}");
+            }
+
+            // Use template's configured confidence threshold instead of options default
+            var confidenceThreshold = templateMetadata.ConfidenceThreshold;
+            await _loggingService.LogInfoAsync($"Using template confidence threshold: {confidenceThreshold:P} for {screenDescription}");
+
             var maxAttempts = (int)(options.Timeout.TotalSeconds / options.CheckInterval.TotalSeconds);
 
-            await _loggingService.LogInfoAsync($"Waiting for {screenDescription} (max {options.Timeout.TotalSeconds}s, checking every {options.CheckInterval.TotalSeconds}s)");
+            await _loggingService.LogInfoAsync($"Waiting for {screenDescription} (max {options.Timeout.TotalSeconds}s, checking every {options.CheckInterval.TotalSeconds}s, confidence={confidenceThreshold:P})");
 
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
@@ -255,9 +266,9 @@ namespace FFXIManager.Services.AutoLogin
                 var screenshot = await CaptureScreenshotWithLogging(windowHandle, screenDescription, cancellationToken);
                 var match = await _templateService.FindElementAsync(screenshot, templatePath, cancellationToken);
 
-                await _loggingService.LogDebugAsync($"{screenDescription} detection attempt {attempt}/{maxAttempts}: confidence {match.Confidence:P}");
+                await _loggingService.LogDebugAsync($"{screenDescription} detection attempt {attempt}/{maxAttempts}: confidence={match.Confidence:P}, threshold={confidenceThreshold:P}");
 
-                if (match.Confidence >= options.ConfidenceThreshold)
+                if (match.Confidence >= confidenceThreshold)
                 {
                     subtask.UpdateProgress(100, $"{screenDescription} detected successfully");
                     await _loggingService.LogInfoAsync($"{screenDescription} detected after {attempt} attempts (confidence: {match.Confidence:P})");
