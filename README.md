@@ -1,19 +1,19 @@
-# ⚔️ FFXI Manager - The Ultimate Linkshell Leader's Arsenal
+# ⚔️ FFXI Manager - The Ultimate Multi-Box Arsenal
 
-*"Because managing 18 mules shouldn't be harder than beating Absolute Virtue pre-nerf"*
+*"Because managing 18 characters shouldn't be harder than beating Absolute Virtue pre-nerf"*
 
-Welcome, Adventurer! Are you tired of manually logging in your army of characters like some Level 1 noob? Does switching between your main, crafting mules, and storage characters feel like grinding merit points in 2004? **FFXI Manager** is here to turn you into the most efficient Taru overlord Vana'diel has ever seen!
+Welcome, Adventurer! Are you tired of manually logging in your army of characters like some Level 1 noob? **FFXI Manager** is here to turn you into the most efficient Taru overlord Vana'diel has ever seen!
 
-<img width="1058" height="605" alt="ffxi-manager-track-characters" src="https://github.com/user-attachments/assets/cbe3b8f7-065f-4569-807d-9fed1af62787" />
+<img width="1058" height="705" alt="ffxi-manager-showcase" src="Assets\ffxi-manager-showcase.png" />
 
 ## 🎯 What This Bad Boy Does
 
-### 🚀 **Auto-Login System** *(The Crown Jewel)*
-### 🏠 **Profile Management** *(login_w.bin Swapping Made Easy)*
-### 🎮 **Controller Support** *(Now We're Talking)*
-### 👑 **Character Hotkeys** *(Win+F1 to Win+F9, Baby!)*
-### 📱 **Character Monitor Window** *(The Command Center)*
-### 🛠️ **Application Management** *(Who has time to find those?)*
+- 🚀 **Auto-Login System** *(The Crown Jewel)*
+- 🏠 **Profile Management** *(login_w.bin Swapping Made Easy)*
+- 🎮 **Controller Support** *(Now We're Talking)*
+- 👑 **Character Hotkeys** *(Win+F1 to Win+F9, Baby!)*
+- 📱 **Character Monitor Window** *(The Command Center)*
+- 🛠️ **Application Management** *(Who has time to find those?)*
 
 ## 🎮 System Requirements
 

@@ -334,17 +334,17 @@ namespace FFXIManager.Services
         // Task-level event handlers
         private void OnTaskExecutorTaskStarted(object? sender, AutoLoginTaskEventArgs e)
         {
-            _ = Task.Run(async () => _loggingService.LogDebugAsync($"Task started: {e.Task.Name} for {e.QueueItem.DisplayName}"));
+            _ = _loggingService.LogDebugAsync($"Task started: {e.Task.Name} for {e.QueueItem.DisplayName}");
         }
 
         private void OnTaskExecutorTaskCompleted(object? sender, AutoLoginTaskEventArgs e)
         {
-            _ = Task.Run(async () => _loggingService.LogDebugAsync($"Task completed: {e.Task.Name} for {e.QueueItem.DisplayName}"));
+            _ = _loggingService.LogDebugAsync($"Task completed: {e.Task.Name} for {e.QueueItem.DisplayName}");
         }
 
         private void OnTaskExecutorTaskFailed(object? sender, AutoLoginTaskEventArgs e)
         {
-            _ = Task.Run(async () => _loggingService.LogWarningAsync($"Task failed: {e.Task.Name} for {e.QueueItem.DisplayName} - {e.Message}"));
+            _ = _loggingService.LogWarningAsync($"Task failed: {e.Task.Name} for {e.QueueItem.DisplayName} - {e.Message}");
         }
 
         private void OnTaskExecutorTaskProgressUpdated(object? sender, AutoLoginTaskEventArgs e)
@@ -356,7 +356,7 @@ namespace FFXIManager.Services
         // Subtask-level event handlers
         private void OnTaskExecutorSubtaskStarted(object? sender, AutoLoginSubtaskEventArgs e)
         {
-            _ = Task.Run(async () => _loggingService.LogDebugAsync($"Subtask started: {e.Subtask.Name} for {e.QueueItem.DisplayName}"));
+            _ = _loggingService.LogDebugAsync($"Subtask started: {e.Subtask.Name} for {e.QueueItem.DisplayName}");
 
             // Update legacy queue item properties for backward compatibility
             e.QueueItem.CurrentStep = e.Subtask.TaskStep;
@@ -365,7 +365,7 @@ namespace FFXIManager.Services
 
         private void OnTaskExecutorSubtaskCompleted(object? sender, AutoLoginSubtaskEventArgs e)
         {
-            _ = Task.Run(async () => _loggingService.LogDebugAsync($"Subtask completed: {e.Subtask.Name} for {e.QueueItem.DisplayName}"));
+            _ = _loggingService.LogDebugAsync($"Subtask completed: {e.Subtask.Name} for {e.QueueItem.DisplayName}");
 
             // Update legacy completed steps for backward compatibility
             e.QueueItem.CompleteStep(e.Subtask.TaskStep);
@@ -373,12 +373,12 @@ namespace FFXIManager.Services
 
         private void OnTaskExecutorSubtaskFailed(object? sender, AutoLoginSubtaskEventArgs e)
         {
-            _ = Task.Run(async () => _loggingService.LogWarningAsync($"Subtask failed: {e.Subtask.Name} for {e.QueueItem.DisplayName} - {e.Message}"));
+            _ = _loggingService.LogWarningAsync($"Subtask failed: {e.Subtask.Name} for {e.QueueItem.DisplayName} - {e.Message}");
         }
 
         private void OnTaskExecutorSubtaskProgressUpdated(object? sender, AutoLoginSubtaskEventArgs e)
         {
-            _ = Task.Run(async () => _loggingService.LogDebugAsync($"Subtask progress: {e.Subtask.Name} - {e.Subtask.Progress}% for {e.QueueItem.DisplayName}"));
+            _ = _loggingService.LogDebugAsync($"Subtask progress: {e.Subtask.Name} - {e.Subtask.Progress}% for {e.QueueItem.DisplayName}");
 
             // Update legacy queue item progress for backward compatibility
             e.QueueItem.CurrentStepProgress = e.Subtask.Progress;

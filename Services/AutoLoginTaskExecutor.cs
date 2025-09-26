@@ -103,7 +103,7 @@ namespace FFXIManager.Services
             queueItem.Task = task;
             _currentTask = task;
 
-            _loggingService.LogInfoAsync($"Starting auto-login task execution for {queueItem.DisplayName}");
+            _ = _loggingService.LogInfoAsync($"Starting auto-login task execution for {queueItem.DisplayName}");
 
             try
             {
@@ -144,7 +144,7 @@ namespace FFXIManager.Services
                 // Mark task as completed
                 task.Complete();
                 OnTaskCompleted(new AutoLoginTaskEventArgs(queueItem, task, "Task execution completed successfully"));
-                _loggingService.LogInfoAsync($"Auto-login task completed successfully for {queueItem.DisplayName}");
+                _ = _loggingService.LogInfoAsync($"Auto-login task completed successfully for {queueItem.DisplayName}");
 
                 // Clean up context
                 await _contextService.DisposeContextAsync(queueItem.Id.ToString());
@@ -152,7 +152,7 @@ namespace FFXIManager.Services
             catch (OperationCanceledException)
             {
                 task.Cancel();
-                _loggingService.LogInfoAsync($"Auto-login task cancelled for {queueItem.DisplayName}");
+                _ = _loggingService.LogInfoAsync($"Auto-login task cancelled for {queueItem.DisplayName}");
 
                 // Clean up context
                 await _contextService.DisposeContextAsync(queueItem.Id.ToString());
@@ -163,7 +163,7 @@ namespace FFXIManager.Services
                 var errorMessage = $"Unexpected error during task execution: {ex.Message}";
                 task.Fail(errorMessage);
                 OnTaskFailed(new AutoLoginTaskEventArgs(queueItem, task, errorMessage));
-                _loggingService.LogErrorAsync($"Auto-login task failed for {queueItem.DisplayName}", ex);
+                _ = _loggingService.LogErrorAsync($"Auto-login task failed for {queueItem.DisplayName}", ex);
 
                 // Clean up context
                 await _contextService.DisposeContextAsync(queueItem.Id.ToString());
@@ -181,7 +181,7 @@ namespace FFXIManager.Services
 
             try
             {
-                _loggingService.LogDebugAsync($"Starting subtask: {subtask.Name} for {queueItem.DisplayName}");
+                _ = _loggingService.LogDebugAsync($"Starting subtask: {subtask.Name} for {queueItem.DisplayName}");
 
                 // Start the subtask
                 subtask.Start();
@@ -196,12 +196,12 @@ namespace FFXIManager.Services
                 {
                     subtask.Complete();
                     OnSubtaskCompleted(new AutoLoginSubtaskEventArgs(queueItem, task, subtask, "Subtask completed"));
-                    _loggingService.LogDebugAsync($"Completed subtask: {subtask.Name} for {queueItem.DisplayName}");
+                    _ = _loggingService.LogDebugAsync($"Completed subtask: {subtask.Name} for {queueItem.DisplayName}");
                 }
                 else
                 {
                     // Subtask was already completed by handler (failed, skipped, etc.)
-                    _loggingService.LogDebugAsync($"Subtask {subtask.Name} finished with status: {subtask.Status} for {queueItem.DisplayName}");
+                    _ = _loggingService.LogDebugAsync($"Subtask {subtask.Name} finished with status: {subtask.Status} for {queueItem.DisplayName}");
                 }
             }
             catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
@@ -209,7 +209,7 @@ namespace FFXIManager.Services
                 var errorMessage = $"Subtask timed out after {SubtaskTimeoutSeconds} seconds";
                 subtask.Fail(errorMessage);
                 OnSubtaskFailed(new AutoLoginSubtaskEventArgs(queueItem, task, subtask, errorMessage));
-                _loggingService.LogWarningAsync($"Subtask {subtask.Name} timed out for {queueItem.DisplayName}");
+                _ = _loggingService.LogWarningAsync($"Subtask {subtask.Name} timed out for {queueItem.DisplayName}");
 
                 if (!ContinueOnSubtaskFailure)
                 {
@@ -219,7 +219,7 @@ namespace FFXIManager.Services
             catch (OperationCanceledException)
             {
                 subtask.Cancel();
-                _loggingService.LogDebugAsync($"Subtask {subtask.Name} cancelled for {queueItem.DisplayName}");
+                _ = _loggingService.LogDebugAsync($"Subtask {subtask.Name} cancelled for {queueItem.DisplayName}");
                 throw;
             }
             catch (Exception ex)
@@ -227,7 +227,7 @@ namespace FFXIManager.Services
                 var errorMessage = $"Subtask execution failed: {ex.Message}";
                 subtask.Fail(errorMessage);
                 OnSubtaskFailed(new AutoLoginSubtaskEventArgs(queueItem, task, subtask, errorMessage));
-                _loggingService.LogErrorAsync($"Subtask {subtask.Name} failed for {queueItem.DisplayName}", ex);
+                _ = _loggingService.LogErrorAsync($"Subtask {subtask.Name} failed for {queueItem.DisplayName}", ex);
 
                 if (!ContinueOnSubtaskFailure)
                 {
@@ -249,7 +249,7 @@ namespace FFXIManager.Services
                 throw new InvalidOperationException($"No handler registered for subtask: {subtask.TaskStep}. Please ensure all task steps have corresponding handlers registered in DependencyInjection.");
             }
 
-            _loggingService.LogDebugAsync($"Executing subtask {subtask.TaskStep} using handler: {handler.GetType().Name} for {queueItem.DisplayName}");
+            _ = _loggingService.LogDebugAsync($"Executing subtask {subtask.TaskStep} using handler: {handler.GetType().Name} for {queueItem.DisplayName}");
 
             // Set up progress monitoring that respects pause state
             var lastProgress = 0;
@@ -289,7 +289,7 @@ namespace FFXIManager.Services
                 catch (Exception ex)
                 {
                     // Handler threw an exception, let it bubble up
-                    _loggingService.LogErrorAsync($"Handler {handler.GetType().Name} failed for subtask {subtask.TaskStep}", ex);
+                    _ = _loggingService.LogErrorAsync($"Handler {handler.GetType().Name} failed for subtask {subtask.TaskStep}", ex);
                     throw;
                 }
             }
@@ -324,7 +324,7 @@ namespace FFXIManager.Services
         /// <summary>
         /// Pauses the current task execution
         /// </summary>
-        public async Task<bool> PauseCurrentTaskAsync()
+        public Task<bool> PauseCurrentTaskAsync()
         {
             string? taskName = null;
             bool paused = false;
@@ -341,16 +341,16 @@ namespace FFXIManager.Services
 
             if (paused && taskName != null)
             {
-                _loggingService.LogInfoAsync($"Paused current task: {taskName}");
+                _ = _loggingService.LogInfoAsync($"Paused current task: {taskName}");
             }
 
-            return paused;
+            return Task.FromResult(paused);
         }
 
         /// <summary>
         /// Resumes a paused task execution
         /// </summary>
-        public async Task<bool> ResumeCurrentTaskAsync()
+        public Task<bool> ResumeCurrentTaskAsync()
         {
             string? taskName = null;
             bool resumed = false;
@@ -367,16 +367,16 @@ namespace FFXIManager.Services
 
             if (resumed && taskName != null)
             {
-                _loggingService.LogInfoAsync($"Resumed current task: {taskName}");
+                _ = _loggingService.LogInfoAsync($"Resumed current task: {taskName}");
             }
 
-            return resumed;
+            return Task.FromResult(resumed);
         }
 
         /// <summary>
         /// Skips the current subtask
         /// </summary>
-        public async Task<bool> SkipCurrentSubtaskAsync()
+        public Task<bool> SkipCurrentSubtaskAsync()
         {
             string? subtaskName = null;
             bool skipped = false;
@@ -400,10 +400,10 @@ namespace FFXIManager.Services
 
             if (skipped && subtaskName != null)
             {
-                _loggingService.LogInfoAsync($"Skipped current subtask: {subtaskName}");
+                _ = _loggingService.LogInfoAsync($"Skipped current subtask: {subtaskName}");
             }
 
-            return skipped;
+            return Task.FromResult(skipped);
         }
 
         #endregion

@@ -581,7 +581,7 @@ namespace FFXIManager.Services.AutoLogin
             AutoLoginSubtask subtask,
             TimeSpan delayType,
             int? progressValue = null,
-            string progressMessage = null,
+            string? progressMessage = null,
             CancellationToken cancellationToken = default)
         {
             if (progressValue.HasValue && !string.IsNullOrEmpty(progressMessage))
@@ -1265,7 +1265,7 @@ namespace FFXIManager.Services.AutoLogin
             IAutoLoginContext context,
             string screenDescription,
             CancellationToken cancellationToken,
-            ScreenDetectionOptions options = null)
+            ScreenDetectionOptions? options = null)
         {
             options ??= ScreenDetectionOptions.Default;
 
@@ -1305,7 +1305,7 @@ namespace FFXIManager.Services.AutoLogin
                 if (currentHandle == IntPtr.Zero) currentHandle = initialWindowHandle;
                 
                 var finalScreenshot = await _screenshotService.CaptureWindowAsync(currentHandle, cancellationToken);
-                var finalMatch = await _templateService.FindElementAsync(finalScreenshot, templatePath, cancellationToken);
+                var finalMatch = await _templateService.FindElementAsync(finalScreenshot!, templatePath, cancellationToken);
 
                 await _loggingService.LogWarningAsync($"{screenDescription} final diagnostic attempt - confidence: {finalMatch.Confidence:P}");
                 return finalMatch;

@@ -192,10 +192,10 @@ namespace FFXIManager.Services.AutoLogin
         private async Task<int> ValidateMemberSelectionConfigurationAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
         {
             // Validate account information
-            ValidateAccountProperty(queueItem.Account?.AccountName, "Account Name", "member selection");
+            ValidateAccountProperty(queueItem.Account?.AccountName!, "Account Name", "member selection");
 
             // Get and validate member slot configuration
-            var memberSlot = queueItem.Account.POLMemberSlot;
+            var memberSlot = queueItem.Account!.POLMemberSlot;
             PlayOnlineAuthConfiguration.MemberSlots.ValidateSlot(memberSlot);
 
             await _loggingService.LogInfoAsync($"Member selection validated - Account: {queueItem.Account.AccountName}, Slot: {memberSlot}");

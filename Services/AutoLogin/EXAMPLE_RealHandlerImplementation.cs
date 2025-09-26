@@ -138,14 +138,14 @@ namespace FFXIManager.Services.AutoLogin
             try
             {
                 await WaitForConditionAsync(
-                    async () =>
+                    () =>
                     {
-                        windowHandle = FindWindow(null, "Windower");
-                        return windowHandle != IntPtr.Zero && IsWindowVisible(windowHandle);
+                        windowHandle = FindWindow(null!, "Windower");
+                        return Task.FromResult(windowHandle != IntPtr.Zero && IsWindowVisible(windowHandle));
                     },
                     "Windower window detection",
                     subtask,
-                    queueItem.Task,
+                    queueItem.Task!,
                     timeout,
                     progressStart: 20,
                     progressEnd: 85,
@@ -176,12 +176,12 @@ namespace FFXIManager.Services.AutoLogin
 
             // Find Windower window
             var windowHandle = await ExecuteWithRetryAsync(
-                async (ct) =>
+                (ct) =>
                 {
-                    var handle = FindWindow(null, "Windower");
+                    var handle = FindWindow(null!, "Windower");
                     if (handle == IntPtr.Zero)
                         throw new InvalidOperationException("Windower window not found");
-                    return handle;
+                    return Task.FromResult(handle);
                 },
                 "Windower window detection",
                 maxRetries: 5,
@@ -221,7 +221,7 @@ namespace FFXIManager.Services.AutoLogin
             await UpdateProgressAsync(subtask, 15, "Focusing Windower window...");
 
             // Find and focus Windower window
-            var windowHandle = FindWindow(null, "Windower");
+            var windowHandle = FindWindow(null!, "Windower");
             if (windowHandle == IntPtr.Zero)
             {
                 throw new InvalidOperationException("Windower window not found for button click");
@@ -258,15 +258,15 @@ namespace FFXIManager.Services.AutoLogin
 
             // Wait for PlayOnline to start as a result of the button click
             await WaitForConditionAsync(
-                async () =>
+                () =>
                 {
                     // Check if PlayOnline process is running
                     var processes = Process.GetProcessesByName("pol");
-                    return processes.Length > 0;
+                    return Task.FromResult(processes.Length > 0);
                 },
                 "PlayOnline process startup",
                 subtask,
-                queueItem.Task,
+                queueItem.Task!,
                 TimeSpan.FromSeconds(15),
                 progressStart: 75,
                 progressEnd: 95,

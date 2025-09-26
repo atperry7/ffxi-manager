@@ -328,7 +328,7 @@ namespace FFXIManager.Services.AutoLogin
             IntPtr windowHandle,
             string screenDescription,
             CancellationToken cancellationToken,
-            ScreenDetectionOptions options = null)
+            ScreenDetectionOptions? options = null)
         {
             options ??= ScreenDetectionOptions.Default;
 
@@ -467,7 +467,7 @@ namespace FFXIManager.Services.AutoLogin
             IntPtr windowHandle,
             string description,
             CancellationToken cancellationToken,
-            IUIAutomationService automationService = null)
+            IUIAutomationService? automationService = null)
         {
             if (automationService == null)
                 throw new ArgumentNullException(nameof(automationService), "IUIAutomationService must be provided for coordinate clicking");
@@ -553,7 +553,7 @@ namespace FFXIManager.Services.AutoLogin
             string templatePath,
             IntPtr windowHandle,
             CancellationToken cancellationToken,
-            IUIAutomationService automationService = null)
+            IUIAutomationService? automationService = null)
         {
             if (automationService == null)
                 throw new ArgumentNullException(nameof(automationService), "IUIAutomationService must be provided for template-based clicking");

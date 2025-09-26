@@ -151,7 +151,10 @@ namespace FFXIManager.Services
         {
             if (_currentContext?.StateMachine.CanSkipCurrentItem() != true)
             {
-                await _currentContext?.LoggingService.LogWarningAsync($"Cannot skip: invalid state ({_currentContext?.StateMachine.ExecutionState})");
+                if (_currentContext != null)
+                {
+                    await _currentContext.LoggingService.LogWarningAsync($"Cannot skip: invalid state ({_currentContext.StateMachine.ExecutionState})");
+                }
                 return;
             }
 

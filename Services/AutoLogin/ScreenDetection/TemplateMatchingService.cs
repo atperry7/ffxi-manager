@@ -42,7 +42,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
                 if (template?.ImageData == null || !template.IsValid())
                 {
-                    return TemplateMatchResult.Failed(template);
+                    return TemplateMatchResult.Failed(template!);
                 }
 
                 // Create Mats using standardized image processor
