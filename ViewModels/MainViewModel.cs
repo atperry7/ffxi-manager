@@ -36,7 +36,8 @@ namespace FFXIManager.ViewModels
             IPlayOnlineMemberAccountService memberAccountService,
             IOTPService otpService,
             IAutoLoginQueueService autoLoginQueueService,
-            AutoLoginQueueViewModel autoLoginQueueViewModel)
+            AutoLoginQueueViewModel autoLoginQueueViewModel,
+            IWindowsCredentialsService credentialsService)
         {
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
             _configService = configService ?? throw new ArgumentNullException(nameof(configService));
@@ -59,7 +60,7 @@ namespace FFXIManager.ViewModels
 
             PlayOnlineMemberAccounts = new PlayOnlineMemberAccountsViewModel(
                 memberAccountService, statusService, loggingService,
-                dialogService, uiDispatcher, otpService, autoLoginQueueService);
+                dialogService, uiDispatcher, otpService, autoLoginQueueService, credentialsService);
 
             AutoLoginQueueViewModel = autoLoginQueueViewModel ?? throw new ArgumentNullException(nameof(autoLoginQueueViewModel));
 

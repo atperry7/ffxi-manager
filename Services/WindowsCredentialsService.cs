@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using FFXIManager.Models;
 
 namespace FFXIManager.Services
 {
@@ -244,6 +247,131 @@ namespace FFXIManager.Services
             return $"{CREDENTIAL_PREFIX}.{profileHash}.{accountId:N}";
         }
 
+        public Task<List<OrphanedCredential>> FindOrphanedCredentialsAsync(string profileFilePath, List<Guid> knownAccountIds)
+        {
+            return Task.Run(async () =>
+            {
+                var orphanedCredentials = new List<OrphanedCredential>();
+
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(profileFilePath))
+                    {
+                        await _loggingService.LogWarningAsync("Cannot find orphaned credentials without profile file path");
+                        return orphanedCredentials;
+                    }
+
+                    // Enumerate all credentials
+                    bool result = CredEnumerate(null, 0, out int count, out IntPtr pCredentials);
+                    if (!result)
+                    {
+                        int error = Marshal.GetLastWin32Error();
+                        if (error == ERROR_NOT_FOUND)
+                        {
+                            await _loggingService.LogDebugAsync("No credentials found in Windows Credential Manager");
+                            return orphanedCredentials;
+                        }
+
+                        await _loggingService.LogErrorAsync($"Failed to enumerate credentials: Win32 error {error}");
+                        return orphanedCredentials;
+                    }
+
+                    try
+                    {
+                        // Build profile hash for comparison
+                        var profileBytes = Encoding.UTF8.GetBytes(profileFilePath);
+                        var profileHash = Convert.ToBase64String(profileBytes).Replace('/', '_').Replace('+', '-').Replace('=', 'X');
+                        if (profileHash.Length > 50)
+                        {
+                            profileHash = profileHash.Substring(0, 50);
+                        }
+
+                        // Parse each credential
+                        for (int i = 0; i < count; i++)
+                        {
+                            IntPtr credPtr = Marshal.ReadIntPtr(pCredentials, i * IntPtr.Size);
+                            var credential = Marshal.PtrToStructure<CREDENTIAL>(credPtr);
+
+                            // Only process FFXIManager credentials
+                            if (credential.TargetName == null || !credential.TargetName.StartsWith(CREDENTIAL_PREFIX))
+                                continue;
+
+                            // Try to parse as password credential: FFXIManager.{profileHash}.{accountId}
+                            // or OTP credential: FFXIManager.OTP.{profileHash}.{accountId}
+                            var parts = credential.TargetName.Split('.');
+
+                            Guid accountId;
+                            string? credType = null;
+                            string? targetProfileHash = null;
+
+                            if (parts.Length >= 3 && parts[0] == CREDENTIAL_PREFIX)
+                            {
+                                if (parts[1] == "OTP" && parts.Length >= 4)
+                                {
+                                    // OTP format: FFXIManager.OTP.{profileHash}.{accountId}
+                                    targetProfileHash = parts[2];
+                                    credType = "otp";
+                                    if (!Guid.TryParse(parts[3], out accountId))
+                                        continue;
+                                }
+                                else if (parts.Length >= 3)
+                                {
+                                    // Password format: FFXIManager.{profileHash}.{accountId}
+                                    targetProfileHash = parts[1];
+                                    credType = "password";
+                                    if (!Guid.TryParse(parts[2], out accountId))
+                                        continue;
+                                }
+                                else
+                                {
+                                    continue;
+                                }
+
+                                // Check if this credential belongs to the current profile
+                                if (targetProfileHash != profileHash)
+                                    continue;
+
+                                // Skip if this account ID is known (actively used)
+                                if (knownAccountIds.Contains(accountId))
+                                    continue;
+
+                                // Find or create orphaned credential entry
+                                var orphaned = orphanedCredentials.FirstOrDefault(o => o.AccountId == accountId);
+                                if (orphaned == null)
+                                {
+                                    orphaned = new OrphanedCredential { AccountId = accountId };
+                                    orphanedCredentials.Add(orphaned);
+                                }
+
+                                // Categorize credential type
+                                if (credType == "password")
+                                {
+                                    orphaned.PasswordTargetName = credential.TargetName;
+                                    orphaned.PasswordUsername = credential.UserName;
+                                }
+                                else if (credType == "otp")
+                                {
+                                    orphaned.OtpTargetName = credential.TargetName;
+                                }
+                            }
+                        }
+
+                        await _loggingService.LogInfoAsync($"Found {orphanedCredentials.Count} orphaned credential(s) for profile");
+                    }
+                    finally
+                    {
+                        CredFree(pCredentials);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await _loggingService.LogErrorAsync("Error finding orphaned credentials", ex);
+                }
+
+                return orphanedCredentials;
+            });
+        }
+
         #region Win32 API Declarations
 
         private const int ERROR_NOT_FOUND = 1168;
@@ -259,6 +387,9 @@ namespace FFXIManager.Services
 
         [DllImport("advapi32.dll", SetLastError = true)]
         private static extern bool CredFree([In] IntPtr cred);
+
+        [DllImport("advapi32.dll", EntryPoint = "CredEnumerateW", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool CredEnumerate(string? filter, int flags, out int count, out IntPtr pCredentials);
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         private struct CREDENTIAL

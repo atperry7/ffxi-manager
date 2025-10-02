@@ -235,6 +235,12 @@
                         </ToolTip>
                     </Button.ToolTip>
                 </Button>
+                <Button Content="🔍"
+                        Style="{StaticResource CircularWarningButton}"
+                        Command="{Binding RecoverCredentialsCommand}"
+                        ToolTip="Recover orphaned credentials from Windows Credential Manager"
+                        AutomationProperties.Name="Recover Credentials"
+                        Margin="0,0,5,0"/>
                 <Button Content="🔄"
                         Style="{StaticResource CircularInfoButton}"
                         Command="{Binding RefreshCommand}"

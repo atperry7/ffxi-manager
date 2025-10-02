@@ -27,6 +27,7 @@ namespace FFXIManager.ViewModels
         private readonly IUiDispatcher _uiDispatcher;
         private readonly IOTPService _otpService;
         private readonly IAutoLoginQueueService _queueService;
+        private readonly IWindowsCredentialsService _credentialsService;
 
         private ProfileInfo? _currentProfile;
         private PlayOnlineMemberAccount? _selectedAccount;
@@ -42,7 +43,8 @@ namespace FFXIManager.ViewModels
             IDialogService dialogService,
             IUiDispatcher uiDispatcher,
             IOTPService otpService,
-            IAutoLoginQueueService queueService)
+            IAutoLoginQueueService queueService,
+            IWindowsCredentialsService credentialsService)
         {
             _accountService = accountService ?? throw new ArgumentNullException(nameof(accountService));
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
@@ -51,6 +53,7 @@ namespace FFXIManager.ViewModels
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
             _otpService = otpService ?? throw new ArgumentNullException(nameof(otpService));
             _queueService = queueService ?? throw new ArgumentNullException(nameof(queueService));
+            _credentialsService = credentialsService ?? throw new ArgumentNullException(nameof(credentialsService));
 
             Accounts = new ObservableCollection<PlayOnlineMemberAccount>();
             Accounts.CollectionChanged += (_, _) =>
@@ -144,6 +147,7 @@ namespace FFXIManager.ViewModels
         public ICommand RefreshCommand { get; private set; } = null!;
         public ICommand LoginNowCommand { get; private set; } = null!;
         public ICommand AddToQueueCommand { get; private set; } = null!;
+        public ICommand RecoverCredentialsCommand { get; private set; } = null!;
 
         // Parameter-based commands for context menu
         public ICommand EditAccountParameterCommand { get; private set; } = null!;
@@ -160,6 +164,7 @@ namespace FFXIManager.ViewModels
             RefreshCommand = new RelayCommand(async () => await RefreshAccountsAsync());
             LoginNowCommand = new RelayCommand(async () => await LoginNowSelectedAsync(), () => SelectedAccount != null);
             AddToQueueCommand = new RelayCommand(async () => await AddToQueueSelectedAsync(), () => SelectedAccount != null);
+            RecoverCredentialsCommand = new RelayCommand(async () => await RecoverCredentialsAsync(), () => HasProfileSelected);
 
             EditAccountParameterCommand = new RelayCommandWithParameter<PlayOnlineMemberAccount>(async account => await EditAccountAsync(account));
             DeleteAccountParameterCommand = new RelayCommandWithParameter<PlayOnlineMemberAccount>(async account => await DeleteAccountAsync(account));
@@ -447,6 +452,76 @@ namespace FFXIManager.ViewModels
             finally
             {
                 IsLoading = false;
+            }
+        }
+
+        private async Task RecoverCredentialsAsync()
+        {
+            if (CurrentProfile == null || CurrentProfile.IsSystemFile)
+            {
+                _statusService.SetTemporaryMessage("Please select a non-system profile first", TimeSpan.FromSeconds(3));
+                return;
+            }
+
+            try
+            {
+                // Find orphaned credentials
+                var knownAccountIds = Accounts.Select(a => a.Id).ToList();
+                var orphanedCredentials = await _credentialsService.FindOrphanedCredentialsAsync(CurrentProfile.FilePath, knownAccountIds);
+
+                if (orphanedCredentials.Count == 0)
+                {
+                    _statusService.SetTemporaryMessage("No orphaned credentials found", TimeSpan.FromSeconds(3));
+                    return;
+                }
+
+                // Show recovery dialog
+                var dialog = new CredentialRecoveryDialog();
+                dialog.SetOrphanedCredentials(new ObservableCollection<OrphanedCredential>(orphanedCredentials));
+
+                if (dialog.ShowDialog() == true && dialog.RestoredCredential != null)
+                {
+                    // Create a new account with the orphaned credential's ID
+                    var restoredCredential = dialog.RestoredCredential;
+
+                    // Use the username from the password credential if available, otherwise use a default
+                    var accountName = !string.IsNullOrWhiteSpace(restoredCredential.PasswordUsername)
+                        ? restoredCredential.PasswordUsername
+                        : $"Recovered {restoredCredential.ShortId}";
+
+                    var newAccount = new PlayOnlineMemberAccount
+                    {
+                        Id = restoredCredential.AccountId,
+                        POLMemberSlot = GetNextAvailableSlot(),
+                        FFXICharacterSlot = 1,
+                        AccountName = accountName,
+                        HasStoredPassword = restoredCredential.HasPassword,
+                        OTPConfiguration = restoredCredential.HasOtp
+                            ? new OTPConfiguration
+                            {
+                                IsEnabled = true,
+                                HasStoredSecret = true,
+                                ProviderName = "Square Enix"
+                            }
+                            : null
+                    };
+
+                    var success = await _accountService.AddAccountAsync(CurrentProfile.FilePath, newAccount);
+                    if (success)
+                    {
+                        await RefreshAccountsAsync();
+                        _statusService.SetTemporaryMessage($"Restored account with credentials from {restoredCredential.ShortId}", TimeSpan.FromSeconds(3));
+                    }
+                    else
+                    {
+                        _statusService.SetTemporaryMessage("Failed to restore account", TimeSpan.FromSeconds(3));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error recovering credentials", ex);
+                _statusService.SetTemporaryMessage("Error recovering credentials", TimeSpan.FromSeconds(3));
             }
         }
 
@@ -775,6 +850,8 @@ namespace FFXIManager.ViewModels
                 editCmd.RaiseCanExecuteChanged();
             if (DeleteAccountCommand is RelayCommand deleteCmd)
                 deleteCmd.RaiseCanExecuteChanged();
+            if (RecoverCredentialsCommand is RelayCommand recoverCmd)
+                recoverCmd.RaiseCanExecuteChanged();
         }
 
         #endregion

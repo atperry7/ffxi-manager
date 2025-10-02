@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using FFXIManager.Models;
 
 namespace FFXIManager.Services
 {
@@ -57,5 +59,13 @@ namespace FFXIManager.Services
         /// <param name="accountId">Account ID for uniqueness</param>
         /// <returns>Standardized target name</returns>
         string GenerateCredentialTarget(string profileFilePath, Guid accountId);
+
+        /// <summary>
+        /// Finds credentials in Windows Credential Manager that are not linked to any current account
+        /// </summary>
+        /// <param name="profileFilePath">Profile file path to generate credential targets</param>
+        /// <param name="knownAccountIds">List of account IDs that are currently in use</param>
+        /// <returns>List of orphaned credentials found</returns>
+        Task<List<OrphanedCredential>> FindOrphanedCredentialsAsync(string profileFilePath, List<Guid> knownAccountIds);
     }
 }
