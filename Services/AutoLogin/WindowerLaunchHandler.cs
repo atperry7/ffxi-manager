@@ -492,15 +492,19 @@ namespace FFXIManager.Services.AutoLogin
                     throw new InvalidOperationException($"Could not detect launch arrow button (confidence: {launchArrowMatch.Confidence:P})");
                 }
 
-                // Use standardized coordinate clicking
-                var clickPoint = launchArrowMatch.GetClickPoint();
-                await ClickAtCoordinatesAsync(
+                // Use template-driven navigation (relative click anchored to detected template)
+                var navSuccess = await ExecuteNavigationFromTemplateAsync(
                     subtask,
-                    clickPoint,
+                    WindowerLaunchConfiguration.TemplatePaths.LaunchArrow,
                     windowHandle,
-                    "launch button",
-                    cancellationToken,
-                    _automationService);
+                    launchArrowMatch,
+                    _automationService,
+                    cancellationToken);
+
+                if (!navSuccess)
+                {
+                    throw new InvalidOperationException("Failed to activate Windower launch button");
+                }
 
                 await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.ButtonClick,
                                                      "Starting PlayOnline launcher");

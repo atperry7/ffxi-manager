@@ -203,6 +203,19 @@ namespace FFXIManager.Services.AutoLogin.Configuration
         }
 
         /// <summary>
+        /// Navigation counts for keyboard-based movement between fields on PlayOnline screens.
+        /// These values may vary slightly by environment; adjust as needed.
+        /// </summary>
+        public static class NavigationCounts
+        {
+            /// <summary>
+            /// Number of Tab presses to move focus from the password input to the OTP field
+            /// on the Connect to PlayOnline screen. Default is 1; adjust if Tab order differs.
+            /// </summary>
+            public const int TabsToOTPFromPassword = 1;
+        }
+
+        /// <summary>
         /// Process names and patterns used for application detection.
         /// Centralized to ensure consistency across different detection methods.
         /// </summary>

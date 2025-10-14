@@ -581,5 +581,106 @@ namespace FFXIManager.Services.AutoLogin
                 cancellationToken,
                 automationService);
         }
+
+        /// <summary>
+        /// Executes navigation using the strategy defined in template metadata.
+        /// This is the NEW PREFERRED method for all UI navigation (replaces direct clicking).
+        /// Supports keyboard navigation (resolution/DPI independent) with fallback to relative clicking.
+        /// </summary>
+        /// <param name="subtask">Subtask for progress reporting</param>
+        /// <param name="templatePath">Path to template with navigation metadata</param>
+        /// <param name="windowHandle">Window handle to interact with</param>
+        /// <param name="templateMatch">Template match result for relative positioning (required for click fallback)</param>
+        /// <param name="automationService">UI automation service for input simulation</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if navigation succeeded, false otherwise</returns>
+        /// <remarks>
+        /// This method reads the navigation configuration from template JSON metadata
+        /// and uses the appropriate strategy (Keyboard, RelativeClick, or Hybrid).
+        /// </remarks>
+        protected async Task<bool> ExecuteNavigationFromTemplateAsync(
+            AutoLoginSubtask subtask,
+            string templatePath,
+            IntPtr windowHandle,
+            TemplateMatchResult templateMatch,
+            IUIAutomationService automationService,
+            CancellationToken cancellationToken)
+        {
+            // Load template metadata to get navigation configuration
+            var metadata = await _templateManagementService.GetTemplateMetadataAsync(templatePath);
+            if (metadata == null)
+            {
+                await _loggingService.LogWarningAsync($"Template metadata not found for: {templatePath}");
+                return false;
+            }
+
+            // Check if navigation metadata exists
+            if (metadata.Navigation == null)
+            {
+                await _loggingService.LogWarningAsync($"No navigation metadata defined in template: {templatePath}");
+                return false;
+            }
+
+            // Execute navigation using the configured action
+            return await ExecuteNavigationActionAsync(
+                subtask,
+                metadata.Navigation,
+                windowHandle,
+                templateMatch,
+                automationService,
+                cancellationToken);
+        }
+
+        /// <summary>
+        /// Executes a navigation action using the appropriate strategy.
+        /// Supports Keyboard, RelativeClick, and Hybrid navigation types.
+        /// </summary>
+        /// <param name="subtask">Subtask for progress reporting</param>
+        /// <param name="action">Navigation action configuration</param>
+        /// <param name="windowHandle">Window handle to interact with</param>
+        /// <param name="templateMatch">Template match result for relative positioning</param>
+        /// <param name="automationService">UI automation service for input simulation</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if navigation succeeded, false otherwise</returns>
+        protected async Task<bool> ExecuteNavigationActionAsync(
+            AutoLoginSubtask subtask,
+            NavigationAction action,
+            IntPtr windowHandle,
+            TemplateMatchResult? templateMatch,
+            IUIAutomationService automationService,
+            CancellationToken cancellationToken)
+        {
+            // Select and execute the appropriate navigation strategy
+            Navigation.INavigationStrategy strategy = action.Type switch
+            {
+                NavigationType.Keyboard => new Navigation.KeyboardNavigationStrategy(automationService, _loggingService),
+                NavigationType.RelativeClick => new Navigation.RelativeClickNavigationStrategy(automationService, _screenshotService, _loggingService),
+                NavigationType.Hybrid => new Navigation.HybridNavigationStrategy(automationService, _screenshotService, _loggingService),
+                _ => throw new NotSupportedException($"Navigation type {action.Type} is not supported")
+            };
+
+            await _loggingService.LogInfoAsync($"Executing navigation using strategy: {strategy.StrategyName}");
+
+            return await strategy.ExecuteAsync(windowHandle, action, templateMatch, cancellationToken);
+        }
+
+        /// <summary>
+        /// Calculates a relative click point from a template match and offset percentage.
+        /// This enables resolution/DPI independent clicking by using the detected template as an anchor.
+        /// </summary>
+        /// <param name="templateMatch">The template match result providing location and dimensions</param>
+        /// <param name="relativeOffset">Relative offset (0.0 to 1.0) within the template region</param>
+        /// <returns>Absolute point in window coordinates</returns>
+        /// <remarks>
+        /// Example: For a template at (100, 100) with size (200, 100) and offset (0.5, 0.5),
+        /// the calculated point would be (200, 150) - the center of the template region.
+        /// </remarks>
+        protected Point CalculateRelativeClickPoint(TemplateMatchResult templateMatch, RelativeClickOffset relativeOffset)
+        {
+            var absoluteX = templateMatch.WindowRelativePosition.X + (int)(templateMatch.MatchSize.Width * relativeOffset.X);
+            var absoluteY = templateMatch.WindowRelativePosition.Y + (int)(templateMatch.MatchSize.Height * relativeOffset.Y);
+
+            return new Point(absoluteX, absoluteY);
+        }
     }
 }

@@ -1,11 +1,41 @@
 {
   "name": "PlayOnline Play Confirmation Screen",
   "templatePath": "PlayOnline/play_confirmation",
+  "elementType": "button",
   "associatedStep": "ConfirmLogin",
+  "confidenceThreshold": 0.80,
+  "tolerance": 5,
+  "version": "2.0.0",
+  "navigation": {
+    "type": "Hybrid",
+    "description": "Navigate to and activate final Play button",
+    "sequence": [
+      {
+        "action": "Tab",
+        "count": 1,
+        "delayMs": 100,
+        "description": "Tab to Play button"
+      },
+      {
+        "action": "Enter",
+        "count": 1,
+        "delayMs": 500,
+        "description": "Activate Play button"
+      }
+    ],
+    "fallback": {
+      "type": "RelativeClick",
+      "clickOffset": {
+        "x": 0.5,
+        "y": 0.5,
+        "description": "Click center of Play button"
+      }
+    },
+    "postNavigationDelayMs": 3000
+  },
   "action": {
     "type": "click",
     "clickOffset": { "x": 495, "y": 940 },
     "description": "Final Play button"
-  },
-  "confidenceThreshold": 0.80
+  }
 }

@@ -1,11 +1,33 @@
 {
   "name": "PlayOnline Main Screen",
   "templatePath": "PlayOnline/main_screen",
+  "elementType": "menu",
   "associatedStep": "CharacterSelection",
+  "confidenceThreshold": 0.80,
+  "tolerance": 5,
+  "version": "2.0.0",
+  "navigation": {
+    "type": "Keyboard",
+    "description": "Navigate to FINAL FANTASY XI in menu and select",
+    "sequence": [
+      {
+        "action": "DownArrow",
+        "count": 1,
+        "delayMs": 150,
+        "description": "Navigate to FFXI in menu"
+      },
+      {
+        "action": "Enter",
+        "count": 1,
+        "delayMs": 500,
+        "description": "Select FFXI"
+      }
+    ],
+    "postNavigationDelayMs": 1000
+  },
   "action": {
     "type": "click",
     "clickOffset": { "x": 300, "y": 410 },
     "description": "Final Fantasy XI button"
-  },
-  "confidenceThreshold": 0.80
+  }
 }

@@ -61,6 +61,11 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         public Dictionary<string, object> Properties { get; set; } = new();
 
         /// <summary>
+        /// Navigation action configuration (NEW - preferred over Action for resolution independence)
+        /// </summary>
+        public NavigationAction? Navigation { get; set; }
+
+        /// <summary>
         /// Action configuration for the template
         /// </summary>
         public class ActionConfig

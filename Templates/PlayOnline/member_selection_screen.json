@@ -1,7 +1,38 @@
 {
   "name": "PlayOnline Member Selection Screen",
   "templatePath": "PlayOnline/member_selection_screen",
+  "elementType": "screen",
   "associatedStep": "MemberSelection",
+  "confidenceThreshold": 0.80,
+  "tolerance": 5,
+  "version": "2.0.0",
+  "navigation": {
+    "type": "Hybrid",
+    "description": "Navigate to and select member slot using Tab+Enter, fallback to click",
+    "sequence": [
+      {
+        "action": "Tab",
+        "count": 1,
+        "delayMs": 150,
+        "description": "Tab to member slot area"
+      },
+      {
+        "action": "Enter",
+        "count": 1,
+        "delayMs": 500,
+        "description": "Select default slot (slot 1)"
+      }
+    ],
+    "fallback": {
+      "type": "RelativeClick",
+      "clickOffset": {
+        "x": 0.5,
+        "y": 0.2,
+        "description": "Click upper-center of first slot area"
+      }
+    },
+    "postNavigationDelayMs": 1000
+  },
   "action": {
     "type": "screen_detection",
     "memberSlots": {
@@ -10,6 +41,5 @@
       "slot3": { "x": 840, "y": 630 },
       "slot4": { "x": 840, "y": 765 }
     }
-  },
-  "confidenceThreshold": 0.80
+  }
 }

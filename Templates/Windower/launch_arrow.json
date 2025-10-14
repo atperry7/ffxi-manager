@@ -3,6 +3,19 @@
   "templatePath": "Windower/launch_arrow",
   "elementType": "button",
   "associatedStep": "ClickLaunchButton",
+  "confidenceThreshold": 0.80,
+  "tolerance": 5,
+  "version": "2.0.0",
+  "navigation": {
+    "type": "RelativeClick",
+    "description": "Click Windower launch arrow (template-relative positioning)",
+    "clickOffset": {
+      "x": 0.5,
+      "y": 0.5,
+      "description": "Click center of detected launch arrow"
+    },
+    "postNavigationDelayMs": 2000
+  },
   "action": {
     "type": "click",
     "clickOffset": {
@@ -10,9 +23,6 @@
       "y": 802
     }
   },
-  "confidenceThreshold": 0.80,
-  "tolerance": 5,
-  "version": "1.0.0",
   "variants": [],
   "properties": {
     "description": "The arrow button that launches PlayOnline from Windower",

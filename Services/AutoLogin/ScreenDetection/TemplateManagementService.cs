@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using FFXIManager.Models;
@@ -233,6 +234,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 {
                     PropertyNameCaseInsensitive = true
                 };
+                options.Converters.Add(new JsonStringEnumConverter());
                 return JsonSerializer.Deserialize<FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata>(jsonContent, options);
             }
             catch (Exception ex)
@@ -345,6 +347,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 {
                     PropertyNameCaseInsensitive = true
                 };
+                options.Converters.Add(new JsonStringEnumConverter());
                 var metadata = JsonSerializer.Deserialize<FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata>(jsonContent, options);
 
                 if (metadata == null)
@@ -454,6 +457,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                         {
                             PropertyNameCaseInsensitive = true
                         };
+                        options.Converters.Add(new JsonStringEnumConverter());
                         var metadata = JsonSerializer.Deserialize<FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata>(json, options);
 
                         if (metadata?.AssociatedStep != null && ParseLoginTaskStep(metadata.AssociatedStep) == step)

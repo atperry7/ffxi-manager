@@ -168,10 +168,10 @@ namespace FFXIManager.Services.AutoLogin
             var windowHandle = await EstablishPlayOnlineConnectionAsync(subtask, cancellationToken);
 
             // Phase 3: Detect and validate member selection screen
-            await DetectMemberSelectionScreenAsync(subtask, windowHandle, cancellationToken);
+            var memberScreenMatch = await DetectMemberSelectionScreenAsync(subtask, windowHandle, cancellationToken);
 
             // Phase 4: Perform member slot selection
-            await SelectMemberSlotAsync(subtask, memberSlot, windowHandle, accountName, cancellationToken);
+            await SelectMemberSlotAsync(subtask, memberSlot, windowHandle, memberScreenMatch, accountName, cancellationToken);
 
             // Phase 5: Store context for subsequent steps
             await StoreMemberSelectionContextAsync(context, memberSlot, windowHandle);
@@ -232,23 +232,26 @@ namespace FFXIManager.Services.AutoLogin
 
         /// <summary>
         /// Detects and validates the member selection screen with extended timeout.
+        /// Returns the template match result for use in resolution-independent navigation.
         /// </summary>
         /// <param name="subtask">Current subtask for progress reporting</param>
         /// <param name="windowHandle">PlayOnline window handle</param>
         /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>Template match result for member selection screen</returns>
         /// <exception cref="InvalidOperationException">Thrown when member selection screen cannot be detected</exception>
         /// <remarks>
         /// Uses extended timeout (60 seconds) as member selection screen can take longer
         /// on slower systems or when PlayOnline is performing background operations.
+        /// The returned template match is used for resolution-independent navigation.
         /// </remarks>
-        private async Task DetectMemberSelectionScreenAsync(AutoLoginSubtask subtask, IntPtr windowHandle, CancellationToken cancellationToken)
+        private async Task<TemplateMatchResult> DetectMemberSelectionScreenAsync(AutoLoginSubtask subtask, IntPtr windowHandle, CancellationToken cancellationToken)
         {
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.ScreenDetection,
                                                 "Loading character selection");
 
             // Use configuration-driven screen detection with extended timeout
             var detectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.MemberSelectionDetection.TotalSeconds);
-            
+
             var memberScreenMatch = await WaitForScreenDetectionAsync(
                 subtask,
                 PlayOnlineAuthConfiguration.TemplatePaths.MemberSelectionScreen,
@@ -267,48 +270,52 @@ namespace FFXIManager.Services.AutoLogin
             // Allow screen stabilization before interaction
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.ScreenStabilization,
                                                 "Preparing character selection");
-            
+
             await Task.Delay(PlayOnlineAuthConfiguration.Delays.UIStabilization, cancellationToken);
+
+            return memberScreenMatch;
         }
 
         /// <summary>
-        /// Performs the actual member slot selection by clicking the appropriate coordinates.
+        /// Performs the actual member slot selection using resolution-independent navigation.
+        /// Uses hybrid navigation (keyboard first, relative click fallback) from template metadata.
         /// </summary>
         /// <param name="subtask">Current subtask for progress reporting</param>
         /// <param name="memberSlot">Member slot number to select (1-4)</param>
         /// <param name="windowHandle">PlayOnline window handle</param>
+        /// <param name="memberScreenMatch">Template match result from member selection screen detection</param>
         /// <param name="accountName">Account name for logging</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <remarks>
-        /// Uses coordinates from PlayOnlineAuthConfiguration to ensure consistency
-        /// and allow for easy adjustment without code changes.
+        /// Uses resolution/DPI-independent navigation from template metadata.
+        /// Supports keyboard navigation (Tab+Enter) with intelligent fallback to relative clicking.
         /// </remarks>
-        private async Task SelectMemberSlotAsync(AutoLoginSubtask subtask, int memberSlot, IntPtr windowHandle, string accountName, CancellationToken cancellationToken)
+        private async Task SelectMemberSlotAsync(AutoLoginSubtask subtask, int memberSlot, IntPtr windowHandle, TemplateMatchResult memberScreenMatch, string accountName, CancellationToken cancellationToken)
         {
-            // Get fresh screenshot for interaction
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.PreparingSelection,
                                                 "Selecting character slot");
-            
-            var finalScreenshot = await CaptureScreenshotWithLogging(windowHandle, "member slot selection", cancellationToken);
 
-            // Perform member slot click using configuration coordinates
+            // Perform member slot selection using resolution-independent navigation
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.ClickingMember,
                                                 "Confirming character selection");
-            
-            var memberCoordinates = PlayOnlineAuthConfiguration.Coordinates.MemberSlots.GetSlotCoordinate(memberSlot);
-            
-            await ClickAtCoordinatesAsync(
+
+            var navigationSuccess = await ExecuteNavigationFromTemplateAsync(
                 subtask,
-                memberCoordinates,
+                PlayOnlineAuthConfiguration.TemplatePaths.MemberSelectionScreen,
                 windowHandle,
-                $"member slot {memberSlot}",
-                cancellationToken,
-                _automationService);
+                memberScreenMatch,
+                _automationService,
+                cancellationToken);
+
+            if (!navigationSuccess)
+            {
+                throw new InvalidOperationException($"Failed to navigate member slot selection for {accountName}");
+            }
 
             // Wait for PlayOnline response using configured delay
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.ConfirmingSelection,
                                                 "Processing selection");
-            
+
             await Task.Delay(PlayOnlineAuthConfiguration.Delays.PlayOnlineResponse, cancellationToken);
         }
 
@@ -400,18 +407,23 @@ namespace FFXIManager.Services.AutoLogin
                     $"Could not detect login information screen (confidence: {loginScreenMatch.Confidence:P}, threshold: {PlayOnlineAuthConfiguration.ConfidenceThresholds.ScreenDetection:P})");
             }
 
-            // Click "Log In" button using configuration coordinates
+            // Navigate to and activate "Log In" using template-driven navigation (keyboard-first)
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.LoginButtonClick,
                                                 "Accessing login form");
-            
-            await ClickAtCoordinatesAsync(
+
+            var navSuccess = await ExecuteNavigationFromTemplateAsync(
                 subtask,
-                PlayOnlineAuthConfiguration.Coordinates.LoginScreen.LoginButton,
+                PlayOnlineAuthConfiguration.TemplatePaths.LoginInformationScreen,
                 windowHandle,
-                "Log In button",
-                cancellationToken,
-                _automationService);
-            
+                loginScreenMatch,
+                _automationService,
+                cancellationToken);
+
+            if (!navSuccess)
+            {
+                throw new InvalidOperationException("Failed to navigate to Log In button using keyboard/click fallback");
+            }
+
             // Wait for PlayOnline response using configuration
             await Task.Delay(PlayOnlineAuthConfiguration.Delays.PlayOnlineResponse, cancellationToken);
 
@@ -448,7 +460,7 @@ namespace FFXIManager.Services.AutoLogin
         }
 
         /// <summary>
-        /// Activates the password entry interface by clicking the password field and virtual keyboard.
+        /// Activates the password entry interface using template-driven navigation.
         /// </summary>
         /// <param name="subtask">Current subtask for progress reporting</param>
         /// <param name="windowHandle">PlayOnline window handle</param>
@@ -461,18 +473,32 @@ namespace FFXIManager.Services.AutoLogin
         /// </remarks>
         private async Task ActivatePasswordEntryInterfaceAsync(AutoLoginSubtask subtask, IntPtr windowHandle, CancellationToken cancellationToken)
         {
-            // Click password field using configuration coordinates
+            // Focus password field using keyboard-first navigation from connect screen template
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.PasswordFieldClick,
                                                 "Preparing password entry");
-            
-            await ClickAtCoordinatesAsync(
+
+            var connectDetectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.LoginScreenDetection.TotalSeconds);
+            var connectScreenMatch = await WaitForScreenDetectionAsync(
                 subtask,
-                PlayOnlineAuthConfiguration.Coordinates.LoginScreen.PasswordField,
+                PlayOnlineAuthConfiguration.TemplatePaths.ConnectToPlayOnlineScreen,
                 windowHandle,
-                "password field",
+                "connect to PlayOnline screen",
                 cancellationToken,
-                _automationService);
-            
+                connectDetectionOptions);
+
+            var pwdNavSuccess = await ExecuteNavigationFromTemplateAsync(
+                subtask,
+                PlayOnlineAuthConfiguration.TemplatePaths.ConnectToPlayOnlineScreen,
+                windowHandle,
+                connectScreenMatch,
+                _automationService,
+                cancellationToken);
+
+            if (!pwdNavSuccess)
+            {
+                throw new InvalidOperationException("Failed to navigate to password field on connection screen");
+            }
+
             await Task.Delay(PlayOnlineAuthConfiguration.Delays.InteractionCompletion, cancellationToken);
 
             // Wait for virtual keyboard appearance
@@ -494,18 +520,23 @@ namespace FFXIManager.Services.AutoLogin
                     $"Could not detect virtual keyboard (confidence: {keyboardMatch.Confidence:P}, threshold: {PlayOnlineAuthConfiguration.ConfidenceThresholds.ScreenDetection:P})");
             }
 
-            // Click virtual keyboard password field using configuration coordinates
+            // Activate virtual keyboard password field using template navigation (RelativeClick per template)
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.KeyboardFieldClick,
                                                 "Accessing secure input");
-            
-            await ClickAtCoordinatesAsync(
+
+            var vkNavSuccess = await ExecuteNavigationFromTemplateAsync(
                 subtask,
-                PlayOnlineAuthConfiguration.Coordinates.LoginScreen.VirtualKeyboardPasswordField,
+                PlayOnlineAuthConfiguration.TemplatePaths.VirtualKeyboardPasswordInputScreen,
                 windowHandle,
-                "virtual keyboard password field",
-                cancellationToken,
-                _automationService);
-            
+                keyboardMatch,
+                _automationService,
+                cancellationToken);
+
+            if (!vkNavSuccess)
+            {
+                throw new InvalidOperationException("Failed to focus virtual keyboard password field");
+            }
+
             await Task.Delay(PlayOnlineAuthConfiguration.Delays.KeyboardInput, cancellationToken);
         }
 
@@ -578,17 +609,32 @@ namespace FFXIManager.Services.AutoLogin
         /// </remarks>
         private async Task ConfirmPasswordAndConnectAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IntPtr windowHandle, IAutoLoginContext context, CancellationToken cancellationToken)
         {
-            // Click CircleConfirmation button to confirm password entry
+            // Confirm password using template-driven navigation (keyboard-first)
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.Confirmation,
                                                 "Confirming login details");
-            
-            await ClickAtTemplateCoordinatesAsync(
+
+            var confirmDetectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.LoginScreenDetection.TotalSeconds);
+            var confirmMatch = await WaitForScreenDetectionAsync(
                 subtask,
                 PlayOnlineAuthConfiguration.TemplatePaths.CircleConfirmationPassword,
                 windowHandle,
+                "password confirmation",
                 cancellationToken,
-                _automationService);
-            
+                confirmDetectionOptions);
+
+            var confirmNavSuccess = await ExecuteNavigationFromTemplateAsync(
+                subtask,
+                PlayOnlineAuthConfiguration.TemplatePaths.CircleConfirmationPassword,
+                windowHandle,
+                confirmMatch,
+                _automationService,
+                cancellationToken);
+
+            if (!confirmNavSuccess)
+            {
+                throw new InvalidOperationException("Failed to confirm password entry");
+            }
+
             // Allow confirmation to process
             await Task.Delay(PlayOnlineAuthConfiguration.Delays.InteractionCompletion, cancellationToken);
 
@@ -599,12 +645,27 @@ namespace FFXIManager.Services.AutoLogin
 
                 await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.Confirmation, "Connecting to game servers");
 
-                await ClickAtTemplateCoordinatesAsync(
+                var connectBtnDetectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.LoginScreenDetection.TotalSeconds);
+                var connectBtnMatch = await WaitForScreenDetectionAsync(
                     subtask,
                     PlayOnlineAuthConfiguration.TemplatePaths.ConnectButton,
                     windowHandle,
+                    "connect button",
                     cancellationToken,
-                    _automationService);
+                    connectBtnDetectionOptions);
+
+                var connectNavSuccess = await ExecuteNavigationFromTemplateAsync(
+                    subtask,
+                    PlayOnlineAuthConfiguration.TemplatePaths.ConnectButton,
+                    windowHandle,
+                    connectBtnMatch,
+                    _automationService,
+                    cancellationToken);
+
+                if (!connectNavSuccess)
+                {
+                    throw new InvalidOperationException("Failed to activate Connect button");
+                }
 
                 // Allow connection to process
                 await Task.Delay(PlayOnlineAuthConfiguration.Delays.ConnectionProcessing, cancellationToken);
@@ -794,23 +855,43 @@ namespace FFXIManager.Services.AutoLogin
         /// <param name="otpCode">Generated OTP code to enter</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <remarks>
-        /// Uses configuration-driven coordinates and secure text entry mechanisms.
-        /// Provides masked logging for security purposes.
+        /// Uses keyboard navigation (Tab) on the same screen as the password field
+        /// to focus the OTP field, then enters the code securely. Avoids absolute clicks.
         /// </remarks>
         private async Task PerformSecureOTPEntryAsync(AutoLoginSubtask subtask, IntPtr windowHandle, string otpCode, CancellationToken cancellationToken)
         {
-            // Locate and activate OTP input field
+            // Move focus to OTP input field via keyboard
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.FieldLocation,
                                                 "Preparing security verification");
-            
-            var otpScreenshot = await CaptureScreenshotWithLogging(windowHandle, "OTP field selection", cancellationToken);
 
-            // Click OTP field using configuration coordinates
-            var otpFieldPoint = otpScreenshot.ToScreenCoordinates(PlayOnlineAuthConfiguration.Coordinates.LoginScreen.OTPField);
-            await _automationService.ClickAsync(otpFieldPoint, cancellationToken);
-            
-            // Allow field activation
-            await Task.Delay(PlayOnlineAuthConfiguration.Delays.KeyboardInput, cancellationToken);
+            await _automationService.EnsureWindowFocusAsync(windowHandle, cancellationToken);
+            await Task.Delay(200, cancellationToken);
+
+            var otpNav = new NavigationAction
+            {
+                Type = NavigationType.Keyboard,
+                PostNavigationDelayMs = (int)PlayOnlineAuthConfiguration.Delays.KeyboardInput.TotalMilliseconds
+            };
+            otpNav.Sequence.Add(new KeyboardAction
+            {
+                Action = "Tab",
+                Count = PlayOnlineAuthConfiguration.NavigationCounts.TabsToOTPFromPassword,
+                DelayMs = 100,
+                Description = "Tab to OTP field"
+            });
+
+            var otpNavSuccess = await ExecuteNavigationActionAsync(
+                subtask,
+                otpNav,
+                windowHandle,
+                null,
+                _automationService,
+                cancellationToken);
+
+            if (!otpNavSuccess)
+            {
+                throw new InvalidOperationException("Failed to focus OTP field using keyboard navigation");
+            }
 
             // Enter OTP code securely
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.OTPInput,
@@ -832,17 +913,32 @@ namespace FFXIManager.Services.AutoLogin
         /// <param name="cancellationToken">Cancellation token</param>
         private async Task InitiateOTPConnectionAsync(AutoLoginSubtask subtask, IntPtr windowHandle, CancellationToken cancellationToken)
         {
-            // Click Connect button after OTP entry using configuration
+            // Activate Connect button after OTP entry using template-driven navigation
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.Connection,
                                                 "Connecting with verified credentials");
-            
-            await ClickAtTemplateCoordinatesAsync(
+
+            var detectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.LoginScreenDetection.TotalSeconds);
+            var connectBtnMatch = await WaitForScreenDetectionAsync(
                 subtask,
                 PlayOnlineAuthConfiguration.TemplatePaths.ConnectButton,
                 windowHandle,
+                "connect button",
                 cancellationToken,
-                _automationService);
-            
+                detectionOptions);
+
+            var navSuccess = await ExecuteNavigationFromTemplateAsync(
+                subtask,
+                PlayOnlineAuthConfiguration.TemplatePaths.ConnectButton,
+                windowHandle,
+                connectBtnMatch,
+                _automationService,
+                cancellationToken);
+
+            if (!navSuccess)
+            {
+                throw new InvalidOperationException("Failed to activate Connect button after OTP entry");
+            }
+
             // Allow connection to process using configuration delay
             await Task.Delay(PlayOnlineAuthConfiguration.Delays.ConnectionProcessing, cancellationToken);
         }
@@ -1013,13 +1109,28 @@ namespace FFXIManager.Services.AutoLogin
             await UpdateProgressWithPhaseAsync(subtask, "gameconnection", PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.GameSelection,
                                                 "Selecting FINAL FANTASY XI");
 
-            await ClickAtCoordinatesAsync(
+            // Detect main screen to obtain anchor for navigation
+            var detectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.MainScreenDetection.TotalSeconds);
+            var mainScreenMatch = await WaitForScreenDetectionAsync(
                 subtask,
-                PlayOnlineAuthConfiguration.Coordinates.Navigation.FinalFantasyXIButton,
+                PlayOnlineAuthConfiguration.TemplatePaths.MainScreen,
                 windowHandle,
-                "Final Fantasy XI button",
+                "PlayOnline main screen",
                 cancellationToken,
-                _automationService);
+                detectionOptions);
+
+            var navSuccess = await ExecuteNavigationFromTemplateAsync(
+                subtask,
+                PlayOnlineAuthConfiguration.TemplatePaths.MainScreen,
+                windowHandle,
+                mainScreenMatch,
+                _automationService,
+                cancellationToken);
+
+            if (!navSuccess)
+            {
+                throw new InvalidOperationException("Failed to select Final Fantasy XI from main menu");
+            }
 
             // Allow game selection to process
             await Task.Delay(PlayOnlineAuthConfiguration.Delays.ConnectionProcessing, cancellationToken);
@@ -1050,14 +1161,19 @@ namespace FFXIManager.Services.AutoLogin
 
             if (playScreenMatch.Confidence >= PlayOnlineAuthConfiguration.ConfidenceThresholds.ScreenDetection)
             {
-                // Click Play button
-                await ClickAtCoordinatesAsync(
+                // Activate Play button using template navigation
+                var playNavSuccess = await ExecuteNavigationFromTemplateAsync(
                     subtask,
-                    PlayOnlineAuthConfiguration.Coordinates.Navigation.PlayButton,
+                    PlayOnlineAuthConfiguration.TemplatePaths.PlayScreen,
                     windowHandle,
-                    "Play button",
-                    cancellationToken,
-                    _automationService);
+                    playScreenMatch,
+                    _automationService,
+                    cancellationToken);
+
+                if (!playNavSuccess)
+                {
+                    throw new InvalidOperationException("Failed to activate Play button");
+                }
 
                 await Task.Delay(PlayOnlineAuthConfiguration.Delays.ConnectionProcessing, cancellationToken);
 
@@ -1092,17 +1208,22 @@ namespace FFXIManager.Services.AutoLogin
 
             if (confirmScreenMatch.Confidence >= PlayOnlineAuthConfiguration.ConfidenceThresholds.ScreenDetection)
             {
-                // Click final Play button
+                // Activate final Play using template navigation
                 await UpdateProgressWithPhaseAsync(subtask, "gameconnection", PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.Complete,
                                                     "Launching FINAL FANTASY XI");
 
-                await ClickAtCoordinatesAsync(
+                var finalNavSuccess = await ExecuteNavigationFromTemplateAsync(
                     subtask,
-                    PlayOnlineAuthConfiguration.Coordinates.Navigation.FinalPlayButton,
+                    PlayOnlineAuthConfiguration.TemplatePaths.PlayConfirmation,
                     windowHandle,
-                    "final Play button",
-                    cancellationToken,
-                    _automationService);
+                    confirmScreenMatch,
+                    _automationService,
+                    cancellationToken);
+
+                if (!finalNavSuccess)
+                {
+                    throw new InvalidOperationException("Failed to confirm final Play");
+                }
 
                 // Allow game launch processing
                 await Task.Delay(PlayOnlineAuthConfiguration.Delays.POLProxyTransition, cancellationToken);
