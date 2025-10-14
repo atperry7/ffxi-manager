@@ -1,4 +1,7 @@
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
 namespace FFXIManager.Models
 {
@@ -27,29 +30,81 @@ namespace FFXIManager.Models
     }
 
     /// <summary>
-    /// Defines a single keyboard action within a navigation sequence.
+    /// Defines a single navigation action within a sequence (keyboard or mouse click).
     /// </summary>
-    public class KeyboardAction
+    public class KeyboardAction : INotifyPropertyChanged
     {
+        private string _action = string.Empty;
+        private int _count = 1;
+        private int _delayMs = 100;
+        private string? _description;
+        private double _clickX = 0.5;
+        private double _clickY = 0.5;
+
         /// <summary>
-        /// The keyboard action to perform (Tab, Enter, DownArrow, UpArrow, etc.)
+        /// The navigation action to perform (Tab, Enter, Click, etc.)
+        /// For keyboard: Tab, Enter, DownArrow, UpArrow, LeftArrow, RightArrow, Escape, Spacebar, Home, End, PageUp, PageDown
+        /// For mouse: Click (uses ClickX and ClickY coordinates)
         /// </summary>
-        public string Action { get; set; } = string.Empty;
+        public string Action
+        {
+            get => _action;
+            set { _action = value; OnPropertyChanged(); }
+        }
 
         /// <summary>
         /// Number of times to repeat this action (default: 1)
         /// </summary>
-        public int Count { get; set; } = 1;
+        public int Count
+        {
+            get => _count;
+            set { _count = value; OnPropertyChanged(); }
+        }
 
         /// <summary>
         /// Delay in milliseconds after executing this action (default: 100ms)
         /// </summary>
-        public int DelayMs { get; set; } = 100;
+        public int DelayMs
+        {
+            get => _delayMs;
+            set { _delayMs = value; OnPropertyChanged(); }
+        }
 
         /// <summary>
         /// Optional description of what this action accomplishes
         /// </summary>
-        public string? Description { get; set; }
+        public string? Description
+        {
+            get => _description;
+            set { _description = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>
+        /// Relative X coordinate for Click action (0.0 = left edge, 0.5 = center, 1.0 = right edge)
+        /// Only used when Action = "Click"
+        /// </summary>
+        public double ClickX
+        {
+            get => _clickX;
+            set { _clickX = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>
+        /// Relative Y coordinate for Click action (0.0 = top edge, 0.5 = center, 1.0 = bottom edge)
+        /// Only used when Action = "Click"
+        /// </summary>
+        public double ClickY
+        {
+            get => _clickY;
+            set { _clickY = value; OnPropertyChanged(); }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
     }
 
     /// <summary>
@@ -78,17 +133,25 @@ namespace FFXIManager.Models
     /// Defines a complete navigation action for UI interaction.
     /// Supports keyboard sequences, relative clicking, and hybrid approaches.
     /// </summary>
-    public class NavigationAction
+    public class NavigationAction : INotifyPropertyChanged
     {
+        private NavigationType _type = NavigationType.Keyboard;
+        private int _postNavigationDelayMs = 500;
+        private string? _description;
+
         /// <summary>
         /// The type of navigation to perform
         /// </summary>
-        public NavigationType Type { get; set; } = NavigationType.Keyboard;
+        public NavigationType Type
+        {
+            get => _type;
+            set { _type = value; OnPropertyChanged(); }
+        }
 
         /// <summary>
         /// Sequence of keyboard actions (used when Type is Keyboard or Hybrid)
         /// </summary>
-        public List<KeyboardAction> Sequence { get; set; } = new();
+        public ObservableCollection<KeyboardAction> Sequence { get; set; } = new();
 
         /// <summary>
         /// Relative click offset (used when Type is RelativeClick or as Hybrid fallback)
@@ -104,11 +167,26 @@ namespace FFXIManager.Models
         /// <summary>
         /// Human-readable description of this navigation action
         /// </summary>
-        public string? Description { get; set; }
+        public string? Description
+        {
+            get => _description;
+            set { _description = value; OnPropertyChanged(); }
+        }
 
         /// <summary>
         /// Delay in milliseconds after completing the entire navigation sequence
         /// </summary>
-        public int PostNavigationDelayMs { get; set; } = 500;
+        public int PostNavigationDelayMs
+        {
+            get => _postNavigationDelayMs;
+            set { _postNavigationDelayMs = value; OnPropertyChanged(); }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
     }
 }

@@ -41,6 +41,8 @@ namespace FFXIManager.ViewModels
         // Duration update timer
         private readonly DispatcherTimer _durationUpdateTimer;
 
+        private readonly IServiceProvider _serviceProvider;
+
         public AutoLoginQueueViewModel(
             IAutoLoginQueueService queueService,
             IPlayOnlineMemberAccountService accountService,
@@ -48,7 +50,8 @@ namespace FFXIManager.ViewModels
             IStatusMessageService statusService,
             ILoggingService loggingService,
             IDialogService dialogService,
-            IUiDispatcher uiDispatcher)
+            IUiDispatcher uiDispatcher,
+            IServiceProvider serviceProvider)
         {
             _queueService = queueService ?? throw new ArgumentNullException(nameof(queueService));
             _accountService = accountService ?? throw new ArgumentNullException(nameof(accountService));
@@ -57,6 +60,7 @@ namespace FFXIManager.ViewModels
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
+            _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
 
             AvailableAccounts = new ObservableCollection<PlayOnlineMemberAccount>();
 
@@ -501,6 +505,7 @@ namespace FFXIManager.ViewModels
         public ICommand RetryFailedCommand { get; private set; } = null!;
         public ICommand ResetQueueCommand { get; private set; } = null!;
         public ICommand RefreshAccountsCommand { get; private set; } = null!;
+        public ICommand OpenTemplateTunerCommand { get; private set; } = null!;
 
         // Parameter-based commands
         public ICommand RemoveItemParameterCommand { get; private set; } = null!;
@@ -560,6 +565,9 @@ namespace FFXIManager.ViewModels
 
             RefreshAccountsCommand = new RelayCommand(
                 async () => await RefreshAvailableAccountsAsync());
+
+            OpenTemplateTunerCommand = new RelayCommand(
+                () => OpenTemplateTuner());
 
             // Parameter-based commands
             RemoveItemParameterCommand = new RelayCommandWithParameter<AutoLoginQueueItem>(
@@ -1022,6 +1030,27 @@ namespace FFXIManager.ViewModels
         }
 
         #endregion
+
+        private void OpenTemplateTuner()
+        {
+            try
+            {
+                var window = _serviceProvider.GetService(typeof(FFXIManager.Views.TemplateNavigationTuner)) as System.Windows.Window;
+                if (window != null)
+                {
+                    window.Owner = System.Windows.Application.Current?.MainWindow;
+                    window.Show();
+                }
+                else
+                {
+                    _ = _loggingService.LogWarningAsync("TemplateNavigationTuner window could not be created");
+                }
+            }
+            catch (Exception ex)
+            {
+                _ = _loggingService.LogErrorAsync("Failed to open Template Navigation Tuner", ex);
+            }
+        }
 
         #region Helper Methods
 

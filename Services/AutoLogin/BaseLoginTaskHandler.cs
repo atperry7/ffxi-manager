@@ -650,17 +650,9 @@ namespace FFXIManager.Services.AutoLogin
             IUIAutomationService automationService,
             CancellationToken cancellationToken)
         {
-            // Select and execute the appropriate navigation strategy
-            Navigation.INavigationStrategy strategy = action.Type switch
-            {
-                NavigationType.Keyboard => new Navigation.KeyboardNavigationStrategy(automationService, _loggingService),
-                NavigationType.RelativeClick => new Navigation.RelativeClickNavigationStrategy(automationService, _screenshotService, _loggingService),
-                NavigationType.Hybrid => new Navigation.HybridNavigationStrategy(automationService, _screenshotService, _loggingService),
-                _ => throw new NotSupportedException($"Navigation type {action.Type} is not supported")
-            };
-
-            await _loggingService.LogInfoAsync($"Executing navigation using strategy: {strategy.StrategyName}");
-
+            // Enforce Hybrid strategy for consistency and maintainability
+            var strategy = new Navigation.HybridNavigationStrategy(automationService, _screenshotService, _loggingService);
+            await _loggingService.LogInfoAsync($"Executing navigation using strategy: {strategy.StrategyName} (forced hybrid)");
             return await strategy.ExecuteAsync(windowHandle, action, templateMatch, cancellationToken);
         }
 

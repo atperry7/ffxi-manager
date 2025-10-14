@@ -293,6 +293,50 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             }
         }
 
+        public async Task<bool> UpdateTemplateNavigationAsync(string templatePath, NavigationAction navigation)
+        {
+            try
+            {
+                var basePath = GetTemplateFilePath(templatePath);
+                var jsonPath = Path.ChangeExtension(basePath, ".json");
+
+                if (!File.Exists(jsonPath))
+                {
+                    await _loggingService.LogWarningAsync($"Template JSON not found for update: {templatePath}");
+                    return false;
+                }
+
+                var jsonContent = await File.ReadAllTextAsync(jsonPath);
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                options.Converters.Add(new JsonStringEnumConverter());
+
+                var metadata = JsonSerializer.Deserialize<TemplateMetadata>(jsonContent, options);
+                if (metadata == null)
+                {
+                    await _loggingService.LogWarningAsync($"Failed to deserialize metadata for update: {templatePath}");
+                    return false;
+                }
+
+                metadata.Navigation = navigation;
+
+                var writeOptions = new JsonSerializerOptions { WriteIndented = true };
+                writeOptions.Converters.Add(new JsonStringEnumConverter());
+
+                var updatedJson = JsonSerializer.Serialize(metadata, writeOptions);
+                await File.WriteAllTextAsync(jsonPath, updatedJson);
+
+                // Invalidate cache so next load uses new metadata
+                _templateCache.TryRemove(templatePath, out _);
+                await _loggingService.LogInfoAsync($"[Template Update] Navigation saved and cache invalidated: {templatePath}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync($"Failed to update template navigation for '{templatePath}': {ex.Message}", ex);
+                return false;
+            }
+        }
+
         public async Task<IList<string>> GetAvailableTemplatePathsAsync(CancellationToken cancellationToken = default)
         {
             var paths = new List<string>();

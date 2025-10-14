@@ -69,6 +69,9 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<ILoginTaskHandler, WindowerLaunchHandler>();
             services.AddSingleton<ILoginTaskHandler, PlayOnlineAuthHandler>();
             services.AddSingleton<ILoginTaskHandler, FFXIGameHandler>();
+
+            // Diagnostics UI (Template Navigation Tuner)
+            services.AddTransient<FFXIManager.Views.TemplateNavigationTuner>();
             services.AddSingleton<ILoginTaskHandlerResolver, LoginTaskHandlerResolver>();
 
             // Auto-login queue services (refactored for SOLID principles)

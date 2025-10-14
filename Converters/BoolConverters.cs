@@ -249,4 +249,30 @@ namespace FFXIManager.Converters
             throw new NotImplementedException();
         }
     }
+
+    /// <summary>
+    /// Converts Action string to Visibility - shows only when Action is "Click"
+    /// Used to hide/show coordinate columns in navigation sequence editor
+    /// </summary>
+    public class IsClickActionToVisibilityConverter : IValueConverter
+    {
+        public static readonly IsClickActionToVisibilityConverter Instance = new();
+
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is string action)
+            {
+                return action.Equals("Click", StringComparison.OrdinalIgnoreCase)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            }
+
+            return Visibility.Collapsed;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
 }

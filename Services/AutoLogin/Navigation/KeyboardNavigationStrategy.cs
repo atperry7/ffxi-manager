@@ -51,11 +51,11 @@ namespace FFXIManager.Services.AutoLogin.Navigation
                 await _automationService.EnsureWindowFocusAsync(windowHandle, cancellationToken);
                 await Task.Delay(200, cancellationToken); // Brief stabilization delay
 
-                // Execute each keyboard action in sequence
+                // Execute each action in sequence (keyboard or click)
                 for (int i = 0; i < action.Sequence.Count; i++)
                 {
                     var keyAction = action.Sequence[i];
-                    await ExecuteKeyboardActionAsync(windowHandle, keyAction, i + 1, action.Sequence.Count, cancellationToken);
+                    await ExecuteActionAsync(windowHandle, keyAction, templateMatch, i + 1, action.Sequence.Count, cancellationToken);
                 }
 
                 // Post-navigation delay for UI to process the sequence
@@ -80,39 +80,70 @@ namespace FFXIManager.Services.AutoLogin.Navigation
         }
 
         /// <summary>
-        /// Executes a single keyboard action from the sequence.
+        /// Executes a single action from the sequence (keyboard or mouse click).
         /// </summary>
-        private async Task ExecuteKeyboardActionAsync(
+        private async Task ExecuteActionAsync(
             IntPtr windowHandle,
             KeyboardAction keyAction,
+            TemplateMatchResult? templateMatch,
             int stepNumber,
             int totalSteps,
             CancellationToken cancellationToken)
         {
-            var consoleKey = ParseConsoleKey(keyAction.Action);
-            if (consoleKey == null)
-            {
-                await _loggingService.LogWarningAsync($"[{StrategyName}] Unsupported keyboard action: {keyAction.Action}");
-                return;
-            }
-
             var description = string.IsNullOrEmpty(keyAction.Description)
                 ? $"{keyAction.Action} x{keyAction.Count}"
                 : keyAction.Description;
 
             await _loggingService.LogDebugAsync($"[{StrategyName}] Step {stepNumber}/{totalSteps}: {description}");
 
-            // Execute the key action the specified number of times
-            for (int i = 0; i < keyAction.Count; i++)
+            // Handle Click action
+            if (keyAction.Action.Equals("Click", StringComparison.OrdinalIgnoreCase))
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                await _automationService.SendKeyAsync(consoleKey.Value, windowHandle, cancellationToken);
-
-                // Brief delay between repetitions to prevent input flooding
-                if (i < keyAction.Count - 1)
+                if (templateMatch == null)
                 {
-                    await Task.Delay(50, cancellationToken);
+                    await _loggingService.LogWarningAsync($"[{StrategyName}] Click action requires template match, but none provided");
+                    return;
+                }
+
+                // Calculate absolute click position from relative coordinates
+                var clickPoint = CalculateAbsoluteClickPoint(templateMatch, keyAction.ClickX, keyAction.ClickY);
+
+                // Execute the click the specified number of times
+                for (int i = 0; i < keyAction.Count; i++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    await _automationService.ClickWindowRelativeAsync(windowHandle, clickPoint, cancellationToken);
+
+                    // Brief delay between repetitions
+                    if (i < keyAction.Count - 1)
+                    {
+                        await Task.Delay(50, cancellationToken);
+                    }
+                }
+            }
+            else
+            {
+                // Handle keyboard action
+                var consoleKey = ParseConsoleKey(keyAction.Action);
+                if (consoleKey == null)
+                {
+                    await _loggingService.LogWarningAsync($"[{StrategyName}] Unsupported keyboard action: {keyAction.Action}");
+                    return;
+                }
+
+                // Execute the key action the specified number of times
+                for (int i = 0; i < keyAction.Count; i++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    await _automationService.SendKeyAsync(consoleKey.Value, windowHandle, cancellationToken);
+
+                    // Brief delay between repetitions to prevent input flooding
+                    if (i < keyAction.Count - 1)
+                    {
+                        await Task.Delay(50, cancellationToken);
+                    }
                 }
             }
 
@@ -121,6 +152,29 @@ namespace FFXIManager.Services.AutoLogin.Navigation
             {
                 await Task.Delay(keyAction.DelayMs, cancellationToken);
             }
+        }
+
+        /// <summary>
+        /// Calculates the absolute window-relative click point from relative coordinates.
+        /// The coordinates are interpreted as percentages of the template match dimensions.
+        /// </summary>
+        /// <param name="templateMatch">The template match result providing location and dimensions</param>
+        /// <param name="relativeX">Relative X coordinate (0.0 = left edge, 0.5 = center, 1.0 = right edge)</param>
+        /// <param name="relativeY">Relative Y coordinate (0.0 = top edge, 0.5 = center, 1.0 = bottom edge)</param>
+        /// <returns>Absolute point in window coordinates</returns>
+        private System.Drawing.Point CalculateAbsoluteClickPoint(TemplateMatchResult templateMatch, double relativeX, double relativeY)
+        {
+            // Get template match location and dimensions
+            var matchX = templateMatch.WindowRelativePosition.X;
+            var matchY = templateMatch.WindowRelativePosition.Y;
+            var matchWidth = templateMatch.MatchSize.Width;
+            var matchHeight = templateMatch.MatchSize.Height;
+
+            // Calculate absolute position within the template region
+            var absoluteX = matchX + (int)(matchWidth * relativeX);
+            var absoluteY = matchY + (int)(matchHeight * relativeY);
+
+            return new System.Drawing.Point(absoluteX, absoluteY);
         }
 
         /// <summary>

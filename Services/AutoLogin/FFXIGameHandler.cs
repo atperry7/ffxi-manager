@@ -199,7 +199,7 @@ namespace FFXIManager.Services.AutoLogin
         ///   <item><description>WaitForFFXIProcessAsync - Process discovery and window handle retrieval</description></item>
         ///   <item><description>WaitForFFXIStartup - Window responsiveness validation</description></item>
         ///   <item><description>WaitForScreenWithRedetectionFallbackAsync - Screen detection with failover</description></item>
-        ///   <item><description>ExecuteNavigationStepAsync - Keyboard automation for Enter key</description></item>
+        ///   <item><description>ExecuteNavigationFromTemplateAsync - Template-driven keyboard navigation</description></item>
         /// </list>
         /// 
         /// <para><strong>Error Scenarios:</strong></para>
@@ -237,7 +237,7 @@ namespace FFXIManager.Services.AutoLogin
         /// // 2. Handle stored in context as "FFXIWindowHandle"
         /// // 3. WaitForFFXIStartup() ensures window responsiveness
         /// // 4. WaitForScreenWithRedetectionFallbackAsync() detects terms screen
-        /// // 5. ExecuteNavigationStepAsync() sends Enter to accept terms
+        /// // 5. ExecuteNavigationFromTemplateAsync() executes template-driven navigation to accept terms
         /// // 6. Transition delay allows menu loading for next phase
         /// </code>
         /// </remarks>
@@ -293,15 +293,21 @@ namespace FFXIManager.Services.AutoLogin
             // Prevents input timing issues with FFXI's rendering pipeline
             await WaitForScreenTransitionAsync(subtask, FFXIGameConfiguration.Delays.ScreenStabilization, cancellationToken: cancellationToken);
 
-            // Execute terms acceptance with standardized navigation
-            await ExecuteNavigationStepAsync(
+            // Execute terms acceptance with template-driven navigation
+            await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.TermsAccepting, "Accepting terms...");
+
+            var navSuccess = await ExecuteNavigationFromTemplateAsync(
+                subtask,
+                FFXIGameConfiguration.TemplatePaths.TermsAcceptance,
                 ffxiWindowHandle,
-                ConsoleKey.Enter,
-                FFXIGameConfiguration.Delays.WindowFocus,
-                FFXIGameConfiguration.Delays.Transition,
+                termsMatch,
+                _automationService,
                 cancellationToken);
 
-            await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.TermsAccepting, "Accepting terms (pressing Enter)...");
+            if (!navSuccess)
+            {
+                throw new InvalidOperationException("Failed to accept FFXI terms of service");
+            }
 
             await UpdateProgressWithPhaseAsync(subtask, "gameconnection", FFXIGameConfiguration.ProgressMilestones.TermsComplete,
                                                 "Accessing main menu");
@@ -329,7 +335,7 @@ namespace FFXIManager.Services.AutoLogin
         /// <list type="bullet">
         ///   <item><description>GetFFXIWindowHandleAsync - Window handle retrieval and validation</description></item>
         ///   <item><description>WaitForScreenWithRedetectionFallbackAsync - Main menu screen detection</description></item>
-        ///   <item><description>ExecuteNavigationStepAsync - Enter key automation for menu selection</description></item>
+        ///   <item><description>ExecuteNavigationFromTemplateAsync - Template-driven navigation for menu selection</description></item>
         ///   <item><description>ValidateWindowContextAsync - Window handle validation and updates</description></item>
         /// </list>
         /// 
@@ -366,7 +372,7 @@ namespace FFXIManager.Services.AutoLogin
         /// // 1. GetFFXIWindowHandleAsync() retrieves handle from context or rediscovers
         /// // 2. WaitForScreenWithRedetectionFallbackAsync() detects main menu screen
         /// // 3. WaitForScreenTransitionAsync() allows menu animations to complete
-        /// // 4. ExecuteNavigationStepAsync() sends Enter to select character option
+        /// // 4. ExecuteNavigationFromTemplateAsync() executes template-driven navigation to select character option
         /// // 5. Transition preparation for character slot selection phase
         /// </code>
         /// </remarks>
@@ -407,16 +413,22 @@ namespace FFXIManager.Services.AutoLogin
             ffxiWindowHandle = ValidateWindowContextAsync(context, ffxiWindowHandle);
 
             // Allow menu animations to complete and execute selection
-            await WaitForScreenTransitionAsync(subtask, FFXIGameConfiguration.Delays.ScreenStabilization, 
-                70, "Selecting character option (pressing Enter)...", cancellationToken);
+            await WaitForScreenTransitionAsync(subtask, FFXIGameConfiguration.Delays.ScreenStabilization,
+                70, "Selecting character option...", cancellationToken);
 
-            // Execute menu selection with standardized navigation
-            await ExecuteNavigationStepAsync(
+            // Execute menu selection with template-driven navigation
+            var navSuccess = await ExecuteNavigationFromTemplateAsync(
+                subtask,
+                FFXIGameConfiguration.TemplatePaths.MainMenu,
                 ffxiWindowHandle,
-                ConsoleKey.Enter,
-                FFXIGameConfiguration.Delays.WindowFocus,
-                FFXIGameConfiguration.Delays.Transition,
+                mainMenuMatch,
+                _automationService,
                 cancellationToken);
+
+            if (!navSuccess)
+            {
+                throw new InvalidOperationException("Failed to select character option from main menu");
+            }
 
             await UpdateProgressWithPhaseAsync(subtask, "gameconnection", 100,
                                                 "Accessing character selection");
@@ -593,79 +605,6 @@ namespace FFXIManager.Services.AutoLogin
         }
 
         /// <summary>
-        /// Executes a navigation step with proper window focus, key input, and configured delays.
-        /// Centralizes the critical FFXI navigation pattern of focus preparation + input + processing delay.
-        /// </summary>
-        /// <param name="windowHandle">Target FFXI window handle for input delivery</param>
-        /// <param name="key">Console key to send (Enter, DownArrow, etc.)</param>
-        /// <param name="preparationDelay">Delay before key input for window focus stabilization</param>
-        /// <param name="postInputDelay">Delay after key input for FFXI processing time</param>
-        /// <param name="cancellationToken">Cancellation token</param>
-        /// <remarks>
-        /// <para><strong>Navigation Pattern:</strong></para>
-        /// <list type="number">
-        ///   <item><description>PrepareWindowForNavigationAsync: Focus window and apply preparation delay</description></item>
-        ///   <item><description>SendKeyAsync: Deliver DirectX-compatible key input to window</description></item>
-        ///   <item><description>Post-input delay: Allow FFXI to process the input before next action</description></item>
-        /// </list>
-        /// 
-        /// <para><strong>Configuration Dependencies:</strong></para>
-        /// <list type="bullet">
-        ///   <item><description>preparationDelay: Typically FFXIGameConfiguration.Delays.WindowFocus</description></item>
-        ///   <item><description>postInputDelay: Typically FFXIGameConfiguration.Delays.Transition or NavigationStep</description></item>
-        /// </list>
-        /// 
-        /// <para><strong>Service Dependencies:</strong></para>
-        /// <list type="bullet">
-        ///   <item><description>PrepareWindowForNavigationAsync - Window preparation with focus management</description></item>
-        ///   <item><description>IUIAutomationService.SendKeyAsync - DirectX-compatible key input delivery</description></item>
-        /// </list>
-        /// 
-        /// <para><strong>FFXI-Specific Requirements:</strong></para>
-        /// <list type="bullet">
-        ///   <item><description>DirectX input requires precise window focus before each key press</description></item>
-        ///   <item><description>UI processing delays prevent input from being lost or ignored</description></item>
-        ///   <item><description>Focus preparation ensures reliable input delivery in both windowed and fullscreen modes</description></item>
-        /// </list>
-        /// 
-        /// <para><strong>Example Usage:</strong></para>
-        /// <code>
-        /// // Terms acceptance - Enter key with standard delays
-        /// await ExecuteNavigationStepAsync(
-        ///     ffxiWindowHandle,
-        ///     ConsoleKey.Enter,
-        ///     FFXIGameConfiguration.Delays.WindowFocus,
-        ///     FFXIGameConfiguration.Delays.Transition,
-        ///     cancellationToken);
-        /// 
-        /// // Character navigation - Down arrow with navigation timing
-        /// await ExecuteNavigationStepAsync(
-        ///     ffxiWindowHandle,
-        ///     ConsoleKey.DownArrow,
-        ///     FFXIGameConfiguration.Delays.WindowFocus,
-        ///     FFXIGameConfiguration.Delays.NavigationStep,
-        ///     cancellationToken);
-        /// </code>
-        /// </remarks>
-        /// <exception cref="OperationCanceledException">Operation cancelled via cancellation token</exception>
-        private async Task ExecuteNavigationStepAsync(
-            IntPtr windowHandle,
-            ConsoleKey key,
-            TimeSpan preparationDelay,
-            TimeSpan postInputDelay,
-            CancellationToken cancellationToken)
-        {
-            // Prepare window for input
-            await PrepareWindowForNavigationAsync(windowHandle, preparationDelay, cancellationToken);
-            
-            // Send navigation input
-            await _automationService.SendKeyAsync(key, windowHandle, cancellationToken);
-            
-            // Allow processing time
-            await Task.Delay(postInputDelay, cancellationToken);
-        }
-
-        /// <summary>
         /// Validates and updates window handle from context with error handling.
         /// Centralizes window handle management pattern used throughout the handler.
         /// </summary>
@@ -758,45 +697,47 @@ namespace FFXIManager.Services.AutoLogin
         {
             if (targetSlot <= FFXIGameConfiguration.CharacterSlots.DefaultSlotNumber)
             {
-                await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.SlotNavigationEnd, 
+                await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.SlotNavigationEnd,
                     $"Using default character slot {targetSlot}");
                 return;
             }
 
-            await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.SlotNavigationStart, 
+            await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.SlotNavigationStart,
                 $"Navigating to character slot {targetSlot}...");
-            await _loggingService.LogInfoAsync($"[NAVIGATION] Need to navigate from slot 1 to slot {targetSlot} (sending {targetSlot - 1} down arrows)");
 
-            // Prepare window for navigation
-            await PrepareWindowForNavigationAsync(windowHandle, FFXIGameConfiguration.Delays.FocusStabilization, cancellationToken);
-
-            // FFXI-Specific: Character slots use arrow key navigation from default position (slot 1)
-            // Each down arrow moves one slot down in the character selection UI
             int stepsNeeded = targetSlot - FFXIGameConfiguration.CharacterSlots.DefaultSlotNumber;
-            for (int step = 1; step <= stepsNeeded; step++)
+            await _loggingService.LogInfoAsync($"[NAVIGATION] Need to navigate from slot 1 to slot {targetSlot} (sending {stepsNeeded} down arrows)");
+
+            // Create programmatic navigation action with dynamic count
+            var slotNavigation = new NavigationAction
             {
-                await _loggingService.LogInfoAsync($"[NAVIGATION] Sending down arrow {step} of {stepsNeeded} to reach slot {targetSlot}");
+                Type = NavigationType.Keyboard,
+                PostNavigationDelayMs = (int)FFXIGameConfiguration.Delays.NavigationStep.TotalMilliseconds
+            };
+            slotNavigation.Sequence.Add(new KeyboardAction
+            {
+                Action = "DownArrow",
+                Count = stepsNeeded,
+                DelayMs = (int)FFXIGameConfiguration.Delays.NavigationStep.TotalMilliseconds,
+                Description = $"Navigate to character slot {targetSlot}"
+            });
 
-                // FFXI-Specific: DirectX input requires window focus before each key press
-                // Focus can be lost between navigation steps, especially in windowed mode
-                await PrepareWindowForNavigationAsync(windowHandle, FFXIGameConfiguration.Delays.WindowFocus, cancellationToken);
+            // Execute navigation using keyboard strategy
+            var navSuccess = await ExecuteNavigationActionAsync(
+                subtask,
+                slotNavigation,
+                windowHandle,
+                null, // No template match needed for programmatic navigation
+                _automationService,
+                cancellationToken);
 
-                // Send navigation input using DirectX-compatible key simulation
-                await _automationService.SendKeyAsync(ConsoleKey.DownArrow, windowHandle, cancellationToken);
-                await _loggingService.LogInfoAsync($"[NAVIGATION] Down arrow {step} sent successfully");
-
-                // FFXI-Specific: UI navigation requires processing time between inputs
-                // Too rapid input can cause navigation to skip slots or become unresponsive
-                await Task.Delay(FFXIGameConfiguration.Delays.NavigationStep, cancellationToken);
-
-                // Update progress during navigation
-                var navProgress = FFXIGameConfiguration.ProgressMilestones.SlotNavigationStart + 
-                    ((FFXIGameConfiguration.ProgressMilestones.SlotNavigationEnd - FFXIGameConfiguration.ProgressMilestones.SlotNavigationStart) * step / stepsNeeded);
-                await UpdateProgressAsync(subtask, navProgress, $"Navigating to slot {targetSlot} ({step}/{stepsNeeded})...");
+            if (!navSuccess)
+            {
+                throw new InvalidOperationException($"Failed to navigate to character slot {targetSlot}");
             }
 
-            // Stabilize after navigation completion
-            await Task.Delay(FFXIGameConfiguration.Delays.NavigationStep, cancellationToken);
+            await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.SlotNavigationEnd,
+                $"Reached character slot {targetSlot}");
             await _loggingService.LogInfoAsync($"[NAVIGATION] Navigation complete - should now be on slot {targetSlot}");
         }
 
@@ -814,21 +755,43 @@ namespace FFXIManager.Services.AutoLogin
             IntPtr windowHandle,
             CancellationToken cancellationToken)
         {
-            await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.SlotSelecting, 
+            await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.SlotSelecting,
                 $"Selecting character slot {characterSlot} (pressing Enter)...");
             await _loggingService.LogInfoAsync($"[NAVIGATION] About to press Enter to select character slot {characterSlot}");
 
             // Prepare window for selection
             await PrepareWindowForNavigationAsync(windowHandle, FFXIGameConfiguration.Delays.EnterPreparation, cancellationToken);
 
-            // Execute selection
-            await _automationService.SendKeyAsync(ConsoleKey.Enter, windowHandle, cancellationToken);
-            await _loggingService.LogInfoAsync($"[NAVIGATION] Enter key sent to select character slot {characterSlot}");
+            // Create programmatic navigation action for slot selection
+            var selectionAction = new NavigationAction
+            {
+                Type = NavigationType.Keyboard,
+                PostNavigationDelayMs = (int)FFXIGameConfiguration.Delays.CharacterLoading.TotalMilliseconds
+            };
+            selectionAction.Sequence.Add(new KeyboardAction
+            {
+                Action = "Enter",
+                Count = 1,
+                DelayMs = 100,
+                Description = $"Select character slot {characterSlot}"
+            });
 
-            // Allow character loading time
-            await Task.Delay(FFXIGameConfiguration.Delays.CharacterLoading, cancellationToken);
+            // Execute navigation using keyboard strategy
+            var navSuccess = await ExecuteNavigationActionAsync(
+                subtask,
+                selectionAction,
+                windowHandle,
+                null, // No template match needed for programmatic navigation
+                _automationService,
+                cancellationToken);
 
-            await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.SlotComplete, 
+            if (!navSuccess)
+            {
+                throw new InvalidOperationException($"Failed to select character slot {characterSlot}");
+            }
+
+            await _loggingService.LogInfoAsync($"[NAVIGATION] Character slot {characterSlot} selection completed");
+            await UpdateProgressAsync(subtask, FFXIGameConfiguration.ProgressMilestones.SlotComplete,
                 $"Character slot {characterSlot} selected successfully");
         }
 
@@ -988,7 +951,7 @@ namespace FFXIManager.Services.AutoLogin
             // Wait for character confirmation screen with window handle re-detection on failure
             var confirmMatch = await WaitForScreenDetectionWithRedetectionAsync(
                 subtask,
-                "FFXI/ffxi_character_confirmation",
+                FFXIGameConfiguration.TemplatePaths.CharacterConfirmation,
                 ffxiWindowHandle,
                 context,
                 "character confirmation screen",
@@ -1020,8 +983,19 @@ namespace FFXIManager.Services.AutoLogin
             await _automationService.EnsureWindowFocusAsync(ffxiWindowHandle, cancellationToken);
             await Task.Delay(FFXIGameConfiguration.Delays.WindowFocus, cancellationToken);
 
-            // Press Enter to confirm and enter the game world - using DirectX-compatible method
-            await _automationService.SendKeyAsync(ConsoleKey.Enter, ffxiWindowHandle, cancellationToken);
+            // Execute confirmation navigation using template-driven approach
+            var navSuccess = await ExecuteNavigationFromTemplateAsync(
+                subtask,
+                FFXIGameConfiguration.TemplatePaths.CharacterConfirmation,
+                ffxiWindowHandle,
+                confirmMatch,
+                _automationService,
+                cancellationToken);
+
+            if (!navSuccess)
+            {
+                throw new InvalidOperationException("Failed to confirm character login");
+            }
 
             await UpdateProgressWithPhaseAsync(subtask, "gameconnection", 80,
                                                 "Entering game world");
