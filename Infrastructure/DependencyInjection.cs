@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Serilog;
 using FFXIManager.Services;
 using FFXIManager.Services.AutoLogin;
+using FFXIManager.Services.AutoLogin.Navigation;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
 using FFXIManager.Configuration;
 using FFXIManager.ViewModels;
@@ -64,6 +65,10 @@ namespace FFXIManager.Infrastructure
 
             // Context management service for AutoLogin
             services.AddSingleton<IAutoLoginContextService, AutoLoginContextService>();
+
+            // AutoLogin support services (refactored for SOLID principles)
+            services.AddSingleton<IPlayOnlineNavigationService, Services.AutoLogin.Navigation.PlayOnlineNavigationService>();
+            services.AddSingleton<IPlayOnlineAuthenticationService, PlayOnlineAuthenticationService>();
 
             // Auto-login handlers
             services.AddSingleton<ILoginTaskHandler, POLProxyLaunchHandler>();

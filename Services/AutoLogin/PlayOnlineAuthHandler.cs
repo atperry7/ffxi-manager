@@ -7,6 +7,7 @@ using FFXIManager.Models;
 using FFXIManager.Services;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
 using FFXIManager.Services.AutoLogin.Configuration;
+using FFXIManager.Services.AutoLogin.Navigation;
 
 namespace FFXIManager.Services.AutoLogin
 {
@@ -55,6 +56,8 @@ namespace FFXIManager.Services.AutoLogin
         private readonly IPlayOnlineMonitorService _playOnlineMonitorService;
         private readonly IExternalApplicationService _externalApplicationService;
         private readonly IAutoLoginContextService _contextService;
+        private readonly IPlayOnlineNavigationService _navigationService;
+        private readonly IPlayOnlineAuthenticationService _authenticationService;
 
         public PlayOnlineAuthHandler(
             ILoggingService loggingService,
@@ -66,7 +69,9 @@ namespace FFXIManager.Services.AutoLogin
             IOTPService otpService,
             IPlayOnlineMonitorService playOnlineMonitorService,
             IExternalApplicationService externalApplicationService,
-            IAutoLoginContextService contextService)
+            IAutoLoginContextService contextService,
+            IPlayOnlineNavigationService navigationService,
+            IPlayOnlineAuthenticationService authenticationService)
             : base(loggingService, screenshotService, templateService, templateManagementService)
         {
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
@@ -75,6 +80,8 @@ namespace FFXIManager.Services.AutoLogin
             _playOnlineMonitorService = playOnlineMonitorService ?? throw new ArgumentNullException(nameof(playOnlineMonitorService));
             _externalApplicationService = externalApplicationService ?? throw new ArgumentNullException(nameof(externalApplicationService));
             _contextService = contextService ?? throw new ArgumentNullException(nameof(contextService));
+            _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
+            _authenticationService = authenticationService ?? throw new ArgumentNullException(nameof(authenticationService));
         }
 
         public override LoginTaskStep TaskStep => LoginTaskStep.MemberSelection;
@@ -351,6 +358,7 @@ namespace FFXIManager.Services.AutoLogin
 
         /// <summary>
         /// Validates that the account has a stored password for secure authentication.
+        /// Delegates to AuthenticationService for comprehensive validation.
         /// </summary>
         /// <param name="subtask">Current subtask for progress reporting</param>
         /// <param name="queueItem">Queue item containing account information</param>
@@ -358,14 +366,14 @@ namespace FFXIManager.Services.AutoLogin
         /// <exception cref="InvalidOperationException">Thrown when no stored password is found</exception>
         private async Task ValidatePasswordConfigurationAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
         {
-            var accountName = queueItem.Account?.AccountName ?? "Unknown";
-            
-            if (!queueItem.Account?.HasStoredPassword ?? true)
-            {
-                throw new InvalidOperationException($"No stored password found for account: {accountName}. Please configure password storage before attempting automatic login.");
-            }
+            var isValid = await _authenticationService.ValidatePasswordConfigurationAsync(
+                queueItem.Account!,
+                queueItem.Profile?.FilePath ?? string.Empty);
 
-            await _loggingService.LogDebugAsync($"Password configuration validated for account: {accountName}");
+            if (!isValid)
+            {
+                throw new InvalidOperationException($"Password configuration validation failed for account: {queueItem.Account?.AccountName ?? "Unknown"}");
+            }
         }
 
         /// <summary>
@@ -542,6 +550,7 @@ namespace FFXIManager.Services.AutoLogin
 
         /// <summary>
         /// Performs secure password entry with comprehensive diagnostic logging.
+        /// Delegates to AuthenticationService for secure password retrieval with logging.
         /// </summary>
         /// <param name="subtask">Current subtask for progress reporting</param>
         /// <param name="queueItem">Queue item containing account and profile information</param>
@@ -550,43 +559,33 @@ namespace FFXIManager.Services.AutoLogin
         /// <param name="cancellationToken">Cancellation token</param>
         /// <exception cref="InvalidOperationException">Thrown when password cannot be retrieved</exception>
         /// <remarks>
-        /// This method provides comprehensive security logging without exposing sensitive data:
-        /// - Logs password length for validation
-        /// - Identifies potentially problematic characters
-        /// - Uses secure text entry mechanisms
-        /// - Provides completion confirmation
+        /// This method uses AuthenticationService for secure password retrieval with:
+        /// - Comprehensive security logging without exposing content
+        /// - Password length validation
+        /// - Problematic character identification
+        /// - Secure text entry mechanisms
         /// </remarks>
         private async Task PerformSecurePasswordEntryAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IntPtr windowHandle, string accountName, CancellationToken cancellationToken)
         {
-            // Retrieve password from Windows Credential Manager
+            // Retrieve password from AuthenticationService (includes comprehensive logging)
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.PasswordRetrieval,
                                                 "Retrieving credentials");
-            
-            var credentialTarget = _credentialsService.GenerateCredentialTarget(queueItem.Profile?.FilePath ?? string.Empty, queueItem.Account.Id);
-            var password = await _credentialsService.RetrievePasswordAsync(credentialTarget, accountName);
-            
+
+            var password = await _authenticationService.RetrieveSecurePasswordAsync(
+                queueItem.Account!,
+                queueItem.Profile?.FilePath ?? string.Empty);
+
             if (string.IsNullOrEmpty(password))
             {
                 throw new InvalidOperationException($"Could not retrieve password for account: {accountName}. Please verify password storage configuration.");
             }
 
-            // SECURITY: Log password characteristics without exposing content
-            await _loggingService.LogDebugAsync($"Password retrieved for {accountName}: Length={password.Length} characters");
-
-            // DIAGNOSTIC: Check for potentially problematic characters
-            var problematicChars = password.Where(c => char.IsControl(c) || c > 127).ToList();
-            if (problematicChars.Any())
-            {
-                await _loggingService.LogWarningAsync(
-                    $"Password contains {problematicChars.Count} potentially problematic characters (control chars or non-ASCII) - may affect typing accuracy");
-            }
-
             // Perform secure password entry
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.PasswordEntry.PasswordInput,
                                                 "Verifying account credentials");
-            
+
             await _automationService.TypeSecureTextAsync(password, 50, cancellationToken);
-            
+
             // Allow keyboard input completion
             await Task.Delay(PlayOnlineAuthConfiguration.Delays.KeyboardInput, cancellationToken);
 
@@ -800,6 +799,7 @@ namespace FFXIManager.Services.AutoLogin
 
         /// <summary>
         /// Generates secure OTP code using the account's stored authentication key.
+        /// Delegates to AuthenticationService for secure OTP generation with logging.
         /// </summary>
         /// <param name="subtask">Current subtask for progress reporting</param>
         /// <param name="queueItem">Queue item containing account and profile information</param>
@@ -808,24 +808,23 @@ namespace FFXIManager.Services.AutoLogin
         /// <returns>Generated OTP code</returns>
         /// <exception cref="InvalidOperationException">Thrown when OTP code cannot be generated</exception>
         /// <remarks>
-        /// Uses TOTP (Time-based One-Time Password) algorithm with the account's
-        /// stored authentication key from Windows Credential Manager.
+        /// Uses AuthenticationService which handles TOTP (Time-based One-Time Password)
+        /// algorithm with comprehensive security logging.
         /// </remarks>
         private async Task<string> GenerateSecureOTPCodeAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, string accountName, CancellationToken cancellationToken)
         {
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.OTPEntry.OTPGeneration,
                                                 "Generating security code");
-            
-            var otpCode = await _otpService.GenerateOTPCodeAsync(queueItem.Profile?.FilePath ?? string.Empty, queueItem.Account.Id);
-            
+
+            var otpCode = await _authenticationService.GenerateSecureOTPCodeAsync(
+                queueItem.Account!,
+                queueItem.Profile?.FilePath ?? string.Empty);
+
             if (string.IsNullOrEmpty(otpCode))
             {
                 throw new InvalidOperationException($"Could not generate OTP code for account: {accountName}. Please verify OTP configuration and authentication key storage.");
             }
 
-            // SECURITY: Log OTP generation without exposing the full code
-            await _loggingService.LogDebugAsync($"Generated OTP code for {accountName}: {otpCode.Substring(0, 2)}**** (Length: {otpCode.Length})");
-            
             return otpCode;
         }
 
@@ -1006,232 +1005,13 @@ namespace FFXIManager.Services.AutoLogin
             }
             else
             {
-                // Standard PlayOnline navigation flow
+                // Standard PlayOnline navigation flow using navigation service
                 await _loggingService.LogInfoAsync($"[FLOW] No POL Proxy configured - proceeding with standard PlayOnline navigation. Called from: {(fromPasswordEntry ? "Password Entry" : "OTP Entry")}");
-                
+
                 context.SetData("POLProxyDetected", false);
-                await NavigateToFinalFantasyXI(subtask, windowHandle, context, cancellationToken);
+                windowHandle = await _navigationService.NavigateToFinalFantasyXIAsync(subtask, windowHandle, context, cancellationToken);
             }
         }
-
-        /// <summary>
-        /// Navigates through PlayOnline screens to launch Final Fantasy XI.
-        /// Handles main screen, game selection, play screen, and final confirmation.
-        /// </summary>
-        /// <param name="subtask">Current subtask for progress reporting</param>
-        /// <param name="windowHandle">Initial PlayOnline window handle</param>
-        /// <param name="context">AutoLogin context for window handle tracking</param>
-        /// <param name="cancellationToken">Cancellation token</param>
-        /// <remarks>
-        /// This method handles the complete PlayOnline to FFXI navigation flow:
-        /// 1. Waits for PlayOnline main screen detection
-        /// 2. Selects Final Fantasy XI from game list
-        /// 3. Navigates through play screens and confirmations
-        /// 4. Maintains window handle tracking throughout transitions
-        /// 
-        /// **Configuration Features:**
-        /// - Uses centralized coordinates from PlayOnlineAuthConfiguration
-        /// - Applies configuration-driven timeouts and delays
-        /// - Leverages base infrastructure for screen detection
-        /// - Consistent progress reporting with milestone constants
-        /// </remarks>
-        private async Task NavigateToFinalFantasyXI(AutoLoginSubtask subtask, IntPtr windowHandle, IAutoLoginContext context, CancellationToken cancellationToken)
-        {
-            // Phase 1: Wait for PlayOnline main screen
-            windowHandle = await WaitForPlayOnlineMainScreenAsync(subtask, windowHandle, context, cancellationToken);
-
-            // Phase 2: Select Final Fantasy XI
-            await SelectFinalFantasyXIAsync(subtask, windowHandle, cancellationToken);
-
-            // Phase 3: Navigate through play screens
-            windowHandle = await NavigatePlayScreensAsync(subtask, windowHandle, context, cancellationToken);
-
-            // Phase 4: Store final context
-            context.SetData("WindowHandle", windowHandle);
-            
-            // Update PlayOnline window handle for transition tracking
-            try
-            {
-                var screenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
-                if (screenshot?.ProcessId != null)
-                {
-                    context.SetData("PlayOnlineProcessId", screenshot.ProcessId);
-                    context.SetData("PlayOnlineWindowHandle", windowHandle);
-                    await _loggingService.LogDebugAsync($"Updated PlayOnline transition context after FFXI navigation - PID: {screenshot.ProcessId}, Handle: 0x{windowHandle.ToInt64():X}");
-                }
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogWarningAsync($"Could not update PlayOnline PID context after FFXI navigation: {ex.Message}");
-            }
-            
-            await _loggingService.LogDebugAsync($"FFXI navigation completed - Final handle: 0x{windowHandle.ToInt64():X}");
-        }
-
-        /// <summary>
-        /// Waits for PlayOnline main screen with window handle management.
-        /// </summary>
-        /// <param name="subtask">Current subtask for progress reporting</param>
-        /// <param name="windowHandle">Current window handle</param>
-        /// <param name="context">AutoLogin context</param>
-        /// <param name="cancellationToken">Cancellation token</param>
-        /// <returns>Updated window handle after detection</returns>
-        private async Task<IntPtr> WaitForPlayOnlineMainScreenAsync(AutoLoginSubtask subtask, IntPtr windowHandle, IAutoLoginContext context, CancellationToken cancellationToken)
-        {
-            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.MainScreenWait,
-                                                "Loading game menu");
-
-            var detectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.MainScreenDetection.TotalSeconds);
-            var mainScreenMatch = await WaitForScreenDetectionAsync(
-                subtask,
-                PlayOnlineAuthConfiguration.TemplatePaths.MainScreen,
-                windowHandle,
-                "PlayOnline main screen",
-                cancellationToken,
-                detectionOptions);
-
-            if (mainScreenMatch.Confidence < PlayOnlineAuthConfiguration.ConfidenceThresholds.ScreenDetection)
-            {
-                await _loggingService.LogWarningAsync($"Main screen detection confidence below threshold: {mainScreenMatch.Confidence:P}");
-            }
-
-            return windowHandle;
-        }
-
-        /// <summary>
-        /// Selects Final Fantasy XI from the PlayOnline game list.
-        /// </summary>
-        /// <param name="subtask">Current subtask for progress reporting</param>
-        /// <param name="windowHandle">PlayOnline window handle</param>
-        /// <param name="cancellationToken">Cancellation token</param>
-        private async Task SelectFinalFantasyXIAsync(AutoLoginSubtask subtask, IntPtr windowHandle, CancellationToken cancellationToken)
-        {
-            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.GameSelection,
-                                                "Selecting FINAL FANTASY XI");
-
-            // Detect main screen to obtain anchor for navigation
-            var detectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.MainScreenDetection.TotalSeconds);
-            var mainScreenMatch = await WaitForScreenDetectionAsync(
-                subtask,
-                PlayOnlineAuthConfiguration.TemplatePaths.MainScreen,
-                windowHandle,
-                "PlayOnline main screen",
-                cancellationToken,
-                detectionOptions);
-
-            var navSuccess = await ExecuteNavigationFromTemplateAsync(
-                subtask,
-                PlayOnlineAuthConfiguration.TemplatePaths.MainScreen,
-                windowHandle,
-                mainScreenMatch,
-                _automationService,
-                cancellationToken);
-
-            if (!navSuccess)
-            {
-                throw new InvalidOperationException("Failed to select Final Fantasy XI from main menu");
-            }
-
-            // Allow game selection to process
-            await Task.Delay(PlayOnlineAuthConfiguration.Delays.ConnectionProcessing, cancellationToken);
-        }
-
-        /// <summary>
-        /// Navigates through play screens and confirmations to launch the game.
-        /// </summary>
-        /// <param name="subtask">Current subtask for progress reporting</param>
-        /// <param name="windowHandle">Current window handle</param>
-        /// <param name="context">AutoLogin context</param>
-        /// <param name="cancellationToken">Cancellation token</param>
-        /// <returns>Updated window handle after navigation</returns>
-        private async Task<IntPtr> NavigatePlayScreensAsync(AutoLoginSubtask subtask, IntPtr windowHandle, IAutoLoginContext context, CancellationToken cancellationToken)
-        {
-            // Wait for play screen
-            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.PlayScreenWait,
-                                                "Loading game launcher");
-
-            var playDetectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.PlayScreenDetection.TotalSeconds);
-            var playScreenMatch = await WaitForScreenDetectionAsync(
-                subtask,
-                PlayOnlineAuthConfiguration.TemplatePaths.PlayScreen,
-                windowHandle,
-                "PlayOnline play screen",
-                cancellationToken,
-                playDetectionOptions);
-
-            if (playScreenMatch.Confidence >= PlayOnlineAuthConfiguration.ConfidenceThresholds.ScreenDetection)
-            {
-                // Activate Play button using template navigation
-                var playNavSuccess = await ExecuteNavigationFromTemplateAsync(
-                    subtask,
-                    PlayOnlineAuthConfiguration.TemplatePaths.PlayScreen,
-                    windowHandle,
-                    playScreenMatch,
-                    _automationService,
-                    cancellationToken);
-
-                if (!playNavSuccess)
-                {
-                    throw new InvalidOperationException("Failed to activate Play button");
-                }
-
-                await Task.Delay(PlayOnlineAuthConfiguration.Delays.ConnectionProcessing, cancellationToken);
-
-                // Handle final confirmation
-                windowHandle = await HandleFinalConfirmationAsync(subtask, windowHandle, context, cancellationToken);
-            }
-
-            return windowHandle;
-        }
-
-        /// <summary>
-        /// Handles the final play confirmation screen and launches the game.
-        /// </summary>
-        /// <param name="subtask">Current subtask for progress reporting</param>
-        /// <param name="windowHandle">Current window handle</param>
-        /// <param name="context">AutoLogin context</param>
-        /// <param name="cancellationToken">Cancellation token</param>
-        /// <returns>Updated window handle after confirmation</returns>
-        private async Task<IntPtr> HandleFinalConfirmationAsync(AutoLoginSubtask subtask, IntPtr windowHandle, IAutoLoginContext context, CancellationToken cancellationToken)
-        {
-            await UpdateProgressWithPhaseAsync(subtask, "gameconnection", PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.FinalConfirmation,
-                                                "Preparing to launch game");
-
-            var confirmDetectionOptions = ScreenDetectionOptions.WithTimeout((int)PlayOnlineAuthConfiguration.Timeouts.PlayScreenDetection.TotalSeconds);
-            var confirmScreenMatch = await WaitForScreenDetectionAsync(
-                subtask,
-                PlayOnlineAuthConfiguration.TemplatePaths.PlayConfirmation,
-                windowHandle,
-                "PlayOnline play confirmation screen",
-                cancellationToken,
-                confirmDetectionOptions);
-
-            if (confirmScreenMatch.Confidence >= PlayOnlineAuthConfiguration.ConfidenceThresholds.ScreenDetection)
-            {
-                // Activate final Play using template navigation
-                await UpdateProgressWithPhaseAsync(subtask, "gameconnection", PlayOnlineAuthConfiguration.ProgressMilestones.Navigation.Complete,
-                                                    "Launching FINAL FANTASY XI");
-
-                var finalNavSuccess = await ExecuteNavigationFromTemplateAsync(
-                    subtask,
-                    PlayOnlineAuthConfiguration.TemplatePaths.PlayConfirmation,
-                    windowHandle,
-                    confirmScreenMatch,
-                    _automationService,
-                    cancellationToken);
-
-                if (!finalNavSuccess)
-                {
-                    throw new InvalidOperationException("Failed to confirm final Play");
-                }
-
-                // Allow game launch processing
-                await Task.Delay(PlayOnlineAuthConfiguration.Delays.POLProxyTransition, cancellationToken);
-            }
-
-            return windowHandle;
-        }
-
 
         /// <summary>
         /// Waits for PlayOnline Viewer startup sequence to complete with configurable timeout.
