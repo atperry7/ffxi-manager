@@ -213,6 +213,14 @@ namespace FFXIManager
                 // Centralize global hotkey registration at app startup so it works regardless of UI windows
                 services.GetRequiredService<GlobalHotkeyManager>().RegisterHotkeysFromSettings();
 
+                // One-time migration notice: Hybrid-only navigation and template cleanup
+                try
+                {
+                    var logging = services.GetRequiredService<ILoggingService>();
+                    await logging.LogInfoAsync("Navigation runtime is Hybrid-only (keyboard-first, click fallback). Please remove legacy absolute coordinates from templates (action.clickOffset, memberSlots/otpField) and rely on navigation.fallback.clickOffset where needed.");
+                }
+                catch { /* best-effort */ }
+
                 // Ensure PlayOnline monitoring is started regardless of UI windows
                 services.GetRequiredService<IPlayOnlineMonitorService>().StartMonitoring();
                 

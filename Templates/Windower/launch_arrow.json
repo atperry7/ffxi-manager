@@ -7,21 +7,19 @@
   "tolerance": 5,
   "version": "2.0.0",
   "navigation": {
-    "type": "RelativeClick",
-    "description": "Click Windower launch arrow (template-relative positioning)",
-    "clickOffset": {
-      "x": 0.5,
-      "y": 0.5,
-      "description": "Click center of detected launch arrow"
-    },
-    "postNavigationDelayMs": 2000
-  },
-  "action": {
-    "type": "click",
-    "clickOffset": {
-      "x": 544,
-      "y": 802
-    }
+    "type": "Hybrid",
+    "description": "Activate Windower launch arrow (explicit click)",
+    "sequence": [
+      {
+        "action": "Click",
+        "count": 1,
+        "delayMs": 2000,
+        "description": "Click center of detected launch arrow",
+        "clickX": 0.5,
+        "clickY": 0.5
+      }
+    ],
+    "postNavigationDelayMs": 0
   },
   "variants": [],
   "properties": {

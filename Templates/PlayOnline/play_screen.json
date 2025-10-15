@@ -33,9 +33,6 @@
     },
     "postNavigationDelayMs": 2000
   },
-  "action": {
-    "type": "click",
-    "clickOffset": { "x": 360, "y": 240 },
-    "description": "Play button"
-  }
+  "variants": [],
+  "properties": {}
 }

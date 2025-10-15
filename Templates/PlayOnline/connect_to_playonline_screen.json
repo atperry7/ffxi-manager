@@ -27,13 +27,6 @@
     },
     "postNavigationDelayMs": 500
   },
-  "action": {
-    "type": "click",
-    "clickOffset": { "x": 1034, "y": 520 },
-    "description": "Square Enix Password field"
-  },
-  "otpField": {
-    "x": 1034,
-    "y": 579
-  }
+  "variants": [],
+  "properties": {}
 }

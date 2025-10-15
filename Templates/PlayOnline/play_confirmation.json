@@ -33,9 +33,6 @@
     },
     "postNavigationDelayMs": 3000
   },
-  "action": {
-    "type": "click",
-    "clickOffset": { "x": 495, "y": 940 },
-    "description": "Final Play button"
-  }
+  "variants": [],
+  "properties": {}
 }

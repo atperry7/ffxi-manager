@@ -27,8 +27,6 @@
     },
     "postNavigationDelayMs": 1000
   },
-  "action": {
-    "type": "click",
-    "clickOffset": { "x": 305, "y": 415 }
-  }
+  "variants": [],
+  "properties": {}
 }

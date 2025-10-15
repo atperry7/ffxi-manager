@@ -1,17 +1,142 @@
-# Template JSON Navigation Reference Guide
+# Template JSON Navigation Reference (Hybrid‑Only)
 
-## Quick Reference for Template Metadata Configuration
-
-This guide provides examples and reference for configuring navigation in template JSON files.
+This document defines the simplified, Hybrid‑only template format used by the auto‑login system. All templates must use Hybrid navigation (keyboard sequence first, with an optional relative‑click fallback). Absolute pixel coordinates are deprecated.
 
 ---
 
-## Navigation Types
+## Required Structure
 
-### 1. Keyboard Navigation (Preferred)
-**Resolution/DPI independent** - Works on any resolution
+Use this as the canonical shape for templates:
 
 ```json
+{
+  "name": "human_readable_name",
+  "templatePath": "PlayOnline/login_information_screen",
+  "associatedStep": "PasswordEntry",
+  "confidenceThreshold": 0.80,
+  "version": "2.0.0",
+  "navigation": {
+    "type": "Hybrid",
+    "description": "Keyboard first, click fallback",
+    "sequence": [
+      { "action": "Tab", "count": 3, "delayMs": 100, "description": "Tab to button" },
+      { "action": "Enter", "count": 1, "delayMs": 500, "description": "Activate button" }
+    ],
+    "fallback": {
+      "type": "RelativeClick",
+      "clickOffset": { "x": 0.5, "y": 0.5, "description": "Click element center" }
+    },
+    "postNavigationDelayMs": 1000
+  }
+}
+```
+
+Notes:
+- `navigation.type` must be `Hybrid` (runtime enforces Hybrid regardless, but keep JSON consistent).
+- Omit legacy `action` sections (absolute pixels). Do not include `memberSlots`, `otpField`, or any absolute coordinate blocks.
+
+---
+
+## Supported Keyboard Actions
+
+Action names (case‑insensitive):
+- Enter/Return, Tab, DownArrow/Down, UpArrow/Up, LeftArrow/Left, RightArrow/Right, Escape/Esc, Spacebar/Space, Home, End, PageUp, PageDown
+
+Keyboard action shape:
+```json
+{ "action": "Tab", "count": 2, "delayMs": 100, "description": "Optional" }
+```
+
+---
+
+## Relative Click Fallback
+
+Use only when the UI cannot be reached/activated via keyboard. Offsets are relative to the detected template region.
+
+Common offsets:
+- Center: `{ "x": 0.5, "y": 0.5 }`
+- Upper‑center: `{ "x": 0.5, "y": 0.3 }`
+- Slightly off‑center: `{ "x": 0.4, "y": 0.4 }`
+
+---
+
+## Examples
+
+Member selection (default slot):
+```json
+{
+  "name": "member_selection",
+  "templatePath": "PlayOnline/member_selection_screen",
+  "associatedStep": "MemberSelection",
+  "confidenceThreshold": 0.85,
+  "version": "2.0.0",
+  "navigation": {
+    "type": "Hybrid",
+    "description": "Select member slot via Tab+Enter, fallback click",
+    "sequence": [
+      { "action": "Tab", "count": 1, "delayMs": 150, "description": "Focus member slot area" },
+      { "action": "Enter", "count": 1, "delayMs": 500, "description": "Confirm selection" }
+    ],
+    "fallback": { "type": "RelativeClick", "clickOffset": { "x": 0.5, "y": 0.2 } },
+    "postNavigationDelayMs": 1000
+  }
+}
+```
+
+Virtual keyboard password field (click‑only fallback):
+```json
+{
+  "name": "virtual_keyboard_password_field",
+  "templatePath": "PlayOnline/virtual_keyboard_password_input_screen",
+  "associatedStep": "PasswordEntry",
+  "confidenceThreshold": 0.80,
+  "version": "2.0.0",
+  "navigation": {
+    "type": "Hybrid",
+    "description": "Activate input via relative click",
+    "sequence": [],
+    "fallback": { "type": "RelativeClick", "clickOffset": { "x": 0.5, "y": 0.5 } },
+    "postNavigationDelayMs": 500
+  }
+}
+```
+
+---
+
+## Deprecated Fields (Remove)
+
+- `action` (and `action.clickOffset` with absolute X/Y)
+- Any absolute coordinate blocks (e.g., `memberSlots`, `otpField`)
+- Optional metadata that doesn’t affect navigation (e.g., `elementType`, `variants`, custom `properties` for absolute positions)
+
+Runtime will log warnings when deprecated fields are detected to help track migration.
+
+---
+
+## Migration Checklist
+
+- [ ] Ensure `navigation.type` = `Hybrid`
+- [ ] Provide keyboard `sequence` (empty only when genuinely click‑only)
+- [ ] Provide `fallback.clickOffset` when click is needed
+- [ ] Remove legacy `action` blocks and absolute coordinate sections
+- [ ] Update `version` to `2.0.0`
+- [ ] Validate JSON and test with the Template Navigation Tuner (select window → Test)
+
+---
+
+## Validation Checklist
+
+- [ ] JSON syntax valid
+- [ ] `navigation` present with `type = Hybrid`
+- [ ] Actions in sequence are supported and correctly cased
+- [ ] Offsets are 0.0–1.0
+- [ ] Delays/counts are positive integers
+
+---
+
+This is a living document; keep examples current with observed UI behavior.
+
+`json
 {
   "navigation": {
     "type": "Keyboard",
@@ -35,10 +160,10 @@ This guide provides examples and reference for configuring navigation in templat
 }
 ```
 
-### 2. Relative Click Navigation
-**DPI-aware clicking** - Scales with resolution
+### Relative Click Fallback
+Use only when keyboard cannot reach/activate the element. Offsets are relative (0.0–1.0) to the detected template region.
 
-```json
+`json
 {
   "navigation": {
     "type": "RelativeClick",
@@ -53,7 +178,7 @@ This guide provides examples and reference for configuring navigation in templat
 }
 ```
 
-### 3. Hybrid Navigation (Recommended)
+### Hybrid Navigation (Required)
 **Best of both** - Try keyboard, fallback to click
 
 ```json
@@ -444,3 +569,4 @@ the `count` value based on user configuration. The template defines the base pat
 ---
 
 _This is a living document. Update as you discover new navigation patterns._
+

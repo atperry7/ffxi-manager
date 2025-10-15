@@ -137,70 +137,7 @@ namespace FFXIManager.Services.AutoLogin.Configuration
         /// These coordinates are relative to the PlayOnline window and are used
         /// for clicking buttons, fields, and other UI elements.
         /// </summary>
-        public static class Coordinates
-        {
-            /// <summary>
-            /// Member selection slot coordinates for each of the 4 available slots.
-            /// These coordinates target the clickable area of each member slot.
-            /// </summary>
-            public static class MemberSlots
-            {
-                /// <summary>Member slot 1 coordinates (top slot)</summary>
-                public static readonly Point Slot1 = new Point(840, 350);
-                /// <summary>Member slot 2 coordinates (second slot)</summary>
-                public static readonly Point Slot2 = new Point(840, 490);
-                /// <summary>Member slot 3 coordinates (third slot)</summary>
-                public static readonly Point Slot3 = new Point(840, 630);
-                /// <summary>Member slot 4 coordinates (bottom slot)</summary>
-                public static readonly Point Slot4 = new Point(840, 765);
-
-                /// <summary>
-                /// Gets the coordinate for a specific member slot number (1-4).
-                /// </summary>
-                /// <param name="slotNumber">Member slot number (1-4)</param>
-                /// <returns>Point coordinate for the specified slot</returns>
-                /// <exception cref="ArgumentException">Thrown if slot number is not between 1 and 4</exception>
-                public static Point GetSlotCoordinate(int slotNumber)
-                {
-                    return slotNumber switch
-                    {
-                        1 => Slot1,
-                        2 => Slot2,
-                        3 => Slot3,
-                        4 => Slot4,
-                        _ => throw new ArgumentException($"Invalid member slot: {slotNumber}. Must be between 1 and 4.", nameof(slotNumber))
-                    };
-                }
-            }
-
-            /// <summary>
-            /// Login screen interaction coordinates for authentication flow.
-            /// </summary>
-            public static class LoginScreen
-            {
-                /// <summary>Login button coordinates on login information screen</summary>
-                public static readonly Point LoginButton = new Point(305, 415);
-                /// <summary>Password field coordinates on connection screen</summary>
-                public static readonly Point PasswordField = new Point(1034, 520);
-                /// <summary>Virtual keyboard password field coordinates</summary>
-                public static readonly Point VirtualKeyboardPasswordField = new Point(740, 390);
-                /// <summary>OTP field coordinates on connection screen</summary>
-                public static readonly Point OTPField = new Point(1034, 579);
-            }
-
-            /// <summary>
-            /// PlayOnline navigation coordinates for game selection flow.
-            /// </summary>
-            public static class Navigation
-            {
-                /// <summary>Final Fantasy XI selection button coordinates on main screen</summary>
-                public static readonly Point FinalFantasyXIButton = new Point(300, 410);
-                /// <summary>Play button coordinates on game selection screen</summary>
-                public static readonly Point PlayButton = new Point(360, 240);
-                /// <summary>Final play confirmation button coordinates</summary>
-                public static readonly Point FinalPlayButton = new Point(495, 940);
-            }
-        }
+        // Coordinates removed: legacy absolute pixel positions have been eliminated in favor of template Hybrid navigation.
 
         /// <summary>
         /// Navigation counts for keyboard-based movement between fields on PlayOnline screens.

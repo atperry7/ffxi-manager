@@ -33,9 +33,6 @@
     },
     "postNavigationDelayMs": 2000
   },
-  "action": {
-    "type": "click",
-    "clickOffset": { "x": 445, "y": 705 },
-    "description": "Connect button to proceed after password/OTP entry"
-  }
+  "variants": [],
+  "properties": {}
 }

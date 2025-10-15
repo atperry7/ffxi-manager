@@ -8,7 +8,7 @@
   "tolerance": 5,
   "version": "2.0.0",
   "navigation": {
-    "type": "Keyboard",
+    "type": "Hybrid",
     "description": "Navigate to character slot and confirm selection",
     "sequence": [
       {
@@ -26,15 +26,8 @@
     ],
     "postNavigationDelayMs": 2000
   },
-  "action": {
-    "type": "keyboard",
-    "key": "Enter",
-    "clickOffset": { "x": 0, "y": 0 },
-    "parameters": {
-      "description": "Character slot selection (navigate with arrow keys, confirm with Enter)",
-      "navigationKey": "DownArrow"
-    }
-  },
+  "variants": [],
+  "properties": {},
   "detectionOptions": {
     "timeout": 30,
     "checkInterval": 1

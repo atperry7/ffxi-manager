@@ -8,7 +8,7 @@
   "tolerance": 5,
   "version": "2.0.0",
   "navigation": {
-    "type": "Keyboard",
+    "type": "Hybrid",
     "description": "Accept Terms of Service",
     "sequence": [
       {
@@ -20,14 +20,8 @@
     ],
     "postNavigationDelayMs": 2000
   },
-  "action": {
-    "type": "keyboard",
-    "key": "Enter",
-    "clickOffset": { "x": 0, "y": 0 },
-    "parameters": {
-      "description": "Accept Terms button (defaults to Enter key)"
-    }
-  },
+  "variants": [],
+  "properties": {},
   "detectionOptions": {
     "timeout": 60,
     "checkInterval": 1

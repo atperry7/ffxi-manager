@@ -1281,21 +1281,7 @@ namespace FFXIManager.Services.AutoLogin
 
 
 
-        /// <summary>
-        /// Gets the screen coordinates for a specific member slot using centralized configuration.
-        /// </summary>
-        /// <param name="slotNumber">Member slot number (1-4)</param>
-        /// <returns>Point coordinate for the specified slot</returns>
-        /// <exception cref="ArgumentException">Thrown if slot number is not between 1 and 4</exception>
-        /// <remarks>
-        /// This method is deprecated in favor of using PlayOnlineAuthConfiguration.Coordinates.MemberSlots.GetSlotCoordinate()
-        /// directly. Maintained for backward compatibility but should be replaced in refactoring.
-        /// </remarks>
-        [Obsolete("Use PlayOnlineAuthConfiguration.Coordinates.MemberSlots.GetSlotCoordinate() instead")]
-        private static Point GetMemberSlotCoordinates(int slotNumber)
-        {
-            return PlayOnlineAuthConfiguration.Coordinates.MemberSlots.GetSlotCoordinate(slotNumber);
-        }
+        
 
     }
 }

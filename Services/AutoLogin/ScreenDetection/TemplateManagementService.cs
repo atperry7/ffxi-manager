@@ -235,7 +235,9 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                     PropertyNameCaseInsensitive = true
                 };
                 options.Converters.Add(new JsonStringEnumConverter());
-                return JsonSerializer.Deserialize<FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata>(jsonContent, options);
+                var md = JsonSerializer.Deserialize<FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata>(jsonContent, options);
+                await LogDeprecatedMetadataAsync(templatePath, md);
+                return md;
             }
             catch (Exception ex)
             {
@@ -393,6 +395,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 };
                 options.Converters.Add(new JsonStringEnumConverter());
                 var metadata = JsonSerializer.Deserialize<FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata>(jsonContent, options);
+                await LogDeprecatedMetadataAsync(templatePath, metadata);
 
                 if (metadata == null)
                 {
@@ -418,7 +421,8 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                     Width = imageData.Value.width,
                     Height = imageData.Value.height,
                     Channels = imageData.Value.channels,
-                    ClickOffset = new System.Drawing.Point(metadata.Action?.ClickOffset?.X ?? 0, metadata.Action?.ClickOffset?.Y ?? 0),
+                    // Legacy action.clickOffset is deprecated; do not marshal into runtime template
+                    ClickOffset = new System.Drawing.Point(0, 0),
                     ConfidenceThreshold = metadata.ConfidenceThreshold,
                     PositionTolerance = metadata.Tolerance,
                     ApplicationName = GetApplicationFromPath(templatePath),
@@ -502,9 +506,11 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                             PropertyNameCaseInsensitive = true
                         };
                         options.Converters.Add(new JsonStringEnumConverter());
-                        var metadata = JsonSerializer.Deserialize<FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata>(json, options);
+                        var mdEnum = JsonSerializer.Deserialize<FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata>(json, options);
+                        // log fire-and-forget minimal
+                        _ = LogDeprecatedMetadataAsync(templatePath: jsonFile, metadata: mdEnum);
 
-                        if (metadata?.AssociatedStep != null && ParseLoginTaskStep(metadata.AssociatedStep) == step)
+                        if (mdEnum?.AssociatedStep != null && ParseLoginTaskStep(mdEnum.AssociatedStep) == step)
                         {
                             var relativePath = Path.GetRelativePath(_templatesBasePath, jsonFile);
                             var templatePath = Path.ChangeExtension(relativePath, null);
@@ -531,6 +537,104 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         {
             var parts = templatePath.Split('/');
             return parts.Length > 0 ? parts[0] : "Unknown";
+        }
+
+        public async Task<TemplateValidationReport> ValidateAllTemplatesAsync(CancellationToken cancellationToken = default)
+        {
+            var report = new TemplateValidationReport();
+            try
+            {
+                var jsonFiles = Directory.Exists(_templatesBasePath)
+                    ? Directory.GetFiles(_templatesBasePath, "*.json", SearchOption.AllDirectories)
+                    : Array.Empty<string>();
+
+                foreach (var jsonFile in jsonFiles)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    try
+                    {
+                        var json = await File.ReadAllTextAsync(jsonFile, cancellationToken);
+                        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                        options.Converters.Add(new JsonStringEnumConverter());
+                        var md = JsonSerializer.Deserialize<TemplateMetadata>(json, options);
+                        report.TotalTemplates++;
+
+                        if (md == null)
+                        {
+                            await _loggingService.LogWarningAsync($"[Template Validation] Failed to parse: {jsonFile}");
+                            continue;
+                        }
+
+                        if (md.Navigation == null)
+                        {
+                            await _loggingService.LogWarningAsync($"[Template Validation] Missing navigation block: {jsonFile}");
+                        }
+                        else
+                        {
+                            if (md.Navigation.Type != FFXIManager.Models.NavigationType.Hybrid)
+                            {
+                                report.NonHybrid++;
+                                await _loggingService.LogWarningAsync($"[Template Validation] Navigation.type is '{md.Navigation.Type}', expected 'Hybrid': {jsonFile}");
+                            }
+                            else
+                            {
+                                report.HybridConformant++;
+                            }
+                        }
+
+                        if (md.Action != null && (md.Action.ClickOffset?.X != 0 || md.Action.ClickOffset?.Y != 0))
+                        {
+                            report.DeprecatedActionOffsets++;
+                            await _loggingService.LogWarningAsync($"[Template Validation] Deprecated action.clickOffset present: {jsonFile}");
+                        }
+
+                        if (md.Properties != null && (md.Properties.ContainsKey("memberSlots") || md.Properties.ContainsKey("otpField")))
+                        {
+                            report.DeprecatedAbsoluteBlocks++;
+                            await _loggingService.LogWarningAsync($"[Template Validation] Deprecated absolute block (memberSlots/otpField): {jsonFile}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        await _loggingService.LogErrorAsync($"[Template Validation] Error validating {jsonFile}: {ex.Message}", ex);
+                    }
+                }
+
+                await _loggingService.LogInfoAsync($"[Template Validation] Total={report.TotalTemplates}, Hybrid={report.HybridConformant}, NonHybrid={report.NonHybrid}, DeprecatedActionOffsets={report.DeprecatedActionOffsets}, DeprecatedBlocks={report.DeprecatedAbsoluteBlocks}");
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync($"[Template Validation] Failed: {ex.Message}", ex);
+            }
+            return report;
+        }
+
+        private async Task LogDeprecatedMetadataAsync(string templatePath, TemplateMetadata? metadata)
+        {
+            try
+            {
+                if (metadata == null) return;
+
+                // action.clickOffset with absolute X/Y is legacy and should be removed
+                if (metadata.Action != null && (metadata.Action.ClickOffset?.X != 0 || metadata.Action.ClickOffset?.Y != 0))
+                {
+                    await _loggingService.LogWarningAsync($"[Template:{templatePath}] Deprecated 'action.clickOffset' detected. Please move to navigation.fallback.clickOffset and remove 'action'.");
+                }
+
+                // Known legacy fields sometimes embedded in Properties
+                if (metadata.Properties != null)
+                {
+                    if (metadata.Properties.ContainsKey("memberSlots") || metadata.Properties.ContainsKey("otpField"))
+                    {
+                        await _loggingService.LogWarningAsync($"[Template:{templatePath}] Deprecated absolute coordinate fields detected (memberSlots/otpField). Remove and rely on Hybrid navigation.");
+                    }
+                }
+            }
+            catch
+            {
+                // Best-effort; do not block on diagnostics
+            }
         }
 
         private static LoginTaskStep ParseLoginTaskStep(string stepName)

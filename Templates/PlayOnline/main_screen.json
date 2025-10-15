@@ -7,7 +7,7 @@
   "tolerance": 5,
   "version": "2.0.0",
   "navigation": {
-    "type": "Keyboard",
+    "type": "Hybrid",
     "description": "Navigate to FINAL FANTASY XI in menu and select",
     "sequence": [
       {
@@ -25,9 +25,6 @@
     ],
     "postNavigationDelayMs": 1000
   },
-  "action": {
-    "type": "click",
-    "clickOffset": { "x": 300, "y": 410 },
-    "description": "Final Fantasy XI button"
-  }
+  "variants": [],
+  "properties": {}
 }

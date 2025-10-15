@@ -79,6 +79,26 @@ namespace FFXIManager.ViewModels
         public ICommand AddStepCommand { get; }
         public ICommand RemoveStepCommand { get; }
 
+        // Window selection for live testing
+        public class WindowEntry
+        {
+            public IntPtr Handle { get; set; }
+            public int ProcessId { get; set; }
+            public string ProcessName { get; set; } = string.Empty;
+            public string Title { get; set; } = string.Empty;
+            public string Display => $"{ProcessName} — {Title} (PID {ProcessId})";
+        }
+
+        public ObservableCollection<WindowEntry> AvailableWindows { get; } = new();
+        private WindowEntry? _selectedWindow;
+        public WindowEntry? SelectedWindow
+        {
+            get => _selectedWindow;
+            set { _selectedWindow = value; OnPropertyChanged(); }
+        }
+
+        public ICommand RefreshWindowsCommand { get; }
+
         /// <summary>
         /// Supported navigation actions: keyboard keys and mouse clicks
         /// Keyboard actions are based on KeyboardNavigationStrategy.ParseConsoleKey
@@ -127,6 +147,7 @@ namespace FFXIManager.ViewModels
             SaveCommand = new RelayCommand(async () => await SaveAsync(), () => CanSave());
             AddStepCommand = new RelayCommand(() => AddStep());
             RemoveStepCommand = new RelayCommandWithParameter<KeyboardAction>(ka => RemoveStep(ka));
+            RefreshWindowsCommand = new RelayCommand(async () => await RefreshWindowsAsync());
 
             _ = LoadTemplatesAsync();
         }
@@ -145,6 +166,19 @@ namespace FFXIManager.ViewModels
         {
             if (string.IsNullOrEmpty(SelectedTemplate)) return;
             Metadata = await _templateService.GetTemplateMetadataAsync(SelectedTemplate!);
+
+            // Auto-select target app based on template path prefix
+            try
+            {
+                if (!string.IsNullOrEmpty(SelectedTemplate))
+                {
+                    var lower = SelectedTemplate!.ToLowerInvariant();
+                    if (lower.StartsWith("playonline/")) SelectedTarget = TargetApp.PlayOnline;
+                    else if (lower.StartsWith("windower/")) SelectedTarget = TargetApp.Windower;
+                    else if (lower.StartsWith("ffxi/")) SelectedTarget = TargetApp.FFXI;
+                }
+            }
+            catch { /* best-effort; ignore */ }
             if (Metadata?.Navigation == null)
             {
                 CurrentNavigation = new NavigationAction { Type = NavigationType.Hybrid };
@@ -163,9 +197,10 @@ namespace FFXIManager.ViewModels
                     Sequence = new ObservableCollection<KeyboardAction>(Metadata.Navigation.Sequence)
                 };
             }
+            await RefreshWindowsAsync();
         }
 
-        private bool CanTest() => !string.IsNullOrEmpty(SelectedTemplate) && CurrentNavigation != null;
+        private bool CanTest() => !string.IsNullOrEmpty(SelectedTemplate) && CurrentNavigation != null && SelectedWindow != null;
         private bool CanSave() => !string.IsNullOrEmpty(SelectedTemplate) && CurrentNavigation != null && HasUnsavedChanges;
 
         private async Task TestNavigationAsync()
@@ -174,15 +209,14 @@ namespace FFXIManager.ViewModels
 
             try
             {
-                // Live window picker based on selected target app
-                var hwnd = await GetTargetWindowHandleAsync();
-                if (hwnd == IntPtr.Zero)
+                if (SelectedWindow?.Handle == IntPtr.Zero || SelectedWindow == null)
                 {
                     Status = "No target window found (start the app first)";
                     return;
                 }
 
                 // Capture window and detect the selected template
+                var hwnd = SelectedWindow.Handle;
                 var screenshot = await _screenshots.CaptureWindowAsync(hwnd, CancellationToken.None);
                 if (screenshot == null)
                 {
@@ -212,8 +246,9 @@ namespace FFXIManager.ViewModels
             }
         }
 
-        private async Task<IntPtr> GetTargetWindowHandleAsync()
+        private async Task RefreshWindowsAsync()
         {
+            AvailableWindows.Clear();
             string[] names = SelectedTarget switch
             {
                 TargetApp.Windower => WindowerLaunchConfiguration.ProcessNames.WindowerVariations,
@@ -223,14 +258,22 @@ namespace FFXIManager.ViewModels
             };
 
             var procs = await _processes.GetProcessesByNamesAsync(names);
-            var p = procs.FirstOrDefault();
-            if (p == null) return IntPtr.Zero;
-            // Prefer main window then fallback to any visible window
-            var main = p.MainWindowHandle;
-            if (main != IntPtr.Zero) return main;
-            var windows = await _processes.GetProcessWindowsAsync(p.ProcessId);
-            var vis = windows.FirstOrDefault(w => w.IsVisible) ?? windows.FirstOrDefault();
-            return vis?.Handle ?? IntPtr.Zero;
+            foreach (var p in procs)
+            {
+                var windows = await _processes.GetProcessWindowsAsync(p.ProcessId);
+                foreach (var w in windows)
+                {
+                    AvailableWindows.Add(new WindowEntry
+                    {
+                        Handle = w.Handle,
+                        ProcessId = p.ProcessId,
+                        ProcessName = p.ProcessName,
+                        Title = string.IsNullOrWhiteSpace(w.Title) ? p.MainWindowTitle : w.Title
+                    });
+                }
+            }
+
+            Status = AvailableWindows.Count > 0 ? $"Found {AvailableWindows.Count} windows" : "No windows found; open the app then Refresh";
         }
 
         private async Task SaveAsync()

@@ -81,5 +81,23 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         /// <param name="navigation">Navigation action to persist</param>
         /// <returns>True if the update succeeded</returns>
         Task<bool> UpdateTemplateNavigationAsync(string templatePath, NavigationAction navigation);
+
+        /// <summary>
+        /// Validates all templates on disk for Hybrid conformance and deprecated fields.
+        /// Logs warnings for any issues and returns a summary report.
+        /// </summary>
+        Task<TemplateValidationReport> ValidateAllTemplatesAsync(System.Threading.CancellationToken cancellationToken = default);
+    }
+
+    /// <summary>
+    /// Summary report for template validation diagnostics.
+    /// </summary>
+    public class TemplateValidationReport
+    {
+        public int TotalTemplates { get; set; }
+        public int HybridConformant { get; set; }
+        public int NonHybrid { get; set; }
+        public int DeprecatedActionOffsets { get; set; }
+        public int DeprecatedAbsoluteBlocks { get; set; }
     }
 }
