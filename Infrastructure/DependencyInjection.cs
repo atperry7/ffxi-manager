@@ -57,6 +57,7 @@ namespace FFXIManager.Infrastructure
             // Screen detection services for AutoLogin
             services.AddSingleton<IScreenshotCaptureService, ScreenshotCaptureService>();
             services.AddSingleton<IImageProcessor, ImageProcessor>();
+            services.AddSingleton<IImageCropService, ImageCropService>();
             services.AddSingleton<ITemplateMatchingService, TemplateMatchingService>();
             services.AddSingleton<ITemplateManagementService, TemplateManagementService>();
             services.AddSingleton<IUIAutomationService, UIAutomationService>();

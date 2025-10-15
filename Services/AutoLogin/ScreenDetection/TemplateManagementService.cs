@@ -22,12 +22,14 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
     public class TemplateManagementService : ITemplateManagementService
     {
         private readonly ILoggingService _loggingService;
+        private readonly IImageCropService? _imageCropService;
         private readonly ConcurrentDictionary<string, UIElementTemplate> _templateCache = new();
         private readonly string _templatesBasePath;
 
-        public TemplateManagementService(ILoggingService loggingService)
+        public TemplateManagementService(ILoggingService loggingService, IImageCropService? imageCropService = null)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            _imageCropService = imageCropService; // Optional dependency
 
             // Set templates base path relative to application directory
             var appDir = AppDomain.CurrentDomain.BaseDirectory;
@@ -833,6 +835,64 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             catch (Exception ex)
             {
                 await _loggingService.LogErrorAsync($"Template image replacement failed: {ex.Message}", ex);
+                return false;
+            }
+        }
+
+        public async Task<bool> CropAndReplaceTemplateImageAsync(string templatePath, string newImagePath, Rectangle? cropRectangle)
+        {
+            try
+            {
+                // If no crop rectangle, just use the existing replace method
+                if (cropRectangle == null)
+                {
+                    return await ReplaceTemplateImageAsync(templatePath, newImagePath);
+                }
+
+                // Ensure crop service is available
+                if (_imageCropService == null)
+                {
+                    await _loggingService.LogWarningAsync("Image crop service not available, falling back to direct replacement");
+                    return await ReplaceTemplateImageAsync(templatePath, newImagePath);
+                }
+
+                // Create temporary file for cropped image
+                var tempPath = Path.Combine(Path.GetTempPath(), $"template_crop_{Guid.NewGuid()}.png");
+
+                try
+                {
+                    // Crop the image
+                    var cropSuccess = await _imageCropService.CropImageAsync(newImagePath, cropRectangle.Value, tempPath);
+                    if (!cropSuccess)
+                    {
+                        await _loggingService.LogWarningAsync("Failed to crop image");
+                        return false;
+                    }
+
+                    // Replace template with cropped image
+                    var result = await ReplaceTemplateImageAsync(templatePath, tempPath);
+
+                    return result;
+                }
+                finally
+                {
+                    // Clean up temporary file
+                    if (File.Exists(tempPath))
+                    {
+                        try
+                        {
+                            File.Delete(tempPath);
+                        }
+                        catch
+                        {
+                            // Best effort cleanup
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync($"Crop and replace template image failed: {ex.Message}", ex);
                 return false;
             }
         }

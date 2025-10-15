@@ -109,12 +109,56 @@
                         <RowDefinition Height="Auto"/>  <!-- Legend -->
                     </Grid.RowDefinitions>
 
-                    <!-- Header -->
-                    <TextBlock Grid.Row="0"
-                               Text="🖼️ Template Preview"
-                               FontWeight="SemiBold"
-                               FontSize="14"
-                               Margin="0,0,0,10"/>
+                    <!-- Header with Edit Mode Toggle -->
+                    <Grid Grid.Row="0" Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0"
+                                   Text="🖼️ Template Preview"
+                                   FontWeight="SemiBold"
+                                   FontSize="14"
+                                   VerticalAlignment="Center"/>
+
+                        <ToggleButton Grid.Column="1"
+                                      IsChecked="{Binding IsClickEditMode}"
+                                      Width="32" Height="32"
+                                      ToolTip="Toggle Click Point Edit Mode - Click on image to set click positions">
+                            <ToggleButton.Style>
+                                <Style TargetType="ToggleButton">
+                                    <Setter Property="Background" Value="#0078D4"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                    <Setter Property="BorderBrush" Value="#0078D4"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Setter Property="Cursor" Value="Hand"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border Background="{TemplateBinding Background}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        CornerRadius="16">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter Property="Background" Value="#107C10"/>
+                                            <Setter Property="BorderBrush" Value="#107C10"/>
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Opacity" Value="0.8"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ToggleButton.Style>
+                            <TextBlock Text="✏️" FontSize="14"/>
+                        </ToggleButton>
+                    </Grid>
 
                     <!-- Image with Overlay Canvas -->
                     <Border Grid.Row="1"
@@ -124,18 +168,22 @@
                             CornerRadius="6"
                             Margin="0,0,0,10">
                         <!-- Viewbox scales the entire Grid (image + markers) proportionally -->
-                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                        <Viewbox x:Name="TemplateViewbox" Stretch="Uniform" StretchDirection="DownOnly">
                             <!-- Grid with explicit dimensions matching template size for pixel-perfect alignment -->
-                            <Grid Width="{Binding TemplateImageWidth}"
+                            <Grid x:Name="TemplateGrid"
+                                  Width="{Binding TemplateImageWidth}"
                                   Height="{Binding TemplateImageHeight}">
                                 <!-- Template Image at native size (no stretching) -->
                                 <Image Source="{Binding TemplateImage}"
                                        Stretch="None"/>
 
                                 <!-- Canvas overlay with same dimensions for pixel-perfect marker positioning -->
-                                <Canvas Width="{Binding TemplateImageWidth}"
+                                <Canvas x:Name="TemplateCanvas"
+                                        Width="{Binding TemplateImageWidth}"
                                         Height="{Binding TemplateImageHeight}"
-                                        ClipToBounds="True">
+                                        ClipToBounds="True"
+                                        Background="Transparent"
+                                        MouseLeftButtonDown="TemplateCanvas_MouseLeftButtonDown">
                                     <!-- Click Markers -->
                                     <ItemsControl ItemsSource="{Binding ClickMarkers}">
                                         <ItemsControl.ItemsPanel>

@@ -108,6 +108,21 @@ namespace FFXIManager.ViewModels
         // Click markers for visualization
         public ObservableCollection<ClickMarker> ClickMarkers { get; } = new();
 
+        // Click point editing mode
+        private bool _isClickEditMode;
+        public bool IsClickEditMode
+        {
+            get => _isClickEditMode;
+            set
+            {
+                _isClickEditMode = value;
+                OnPropertyChanged();
+                UpdateStatus();
+            }
+        }
+
+        private int _currentEditingClickIndex = 0;
+
         public ICommand RefreshCommand { get; }
         public ICommand TestCommand { get; }
         public ICommand SaveCommand { get; }
@@ -516,7 +531,7 @@ namespace FFXIManager.ViewModels
         }
 
         /// <summary>
-        /// Replaces the template image with a new image file
+        /// Replaces the template image with a new image file, allowing region selection
         /// </summary>
         private async Task ReplaceTemplateImageAsync()
         {
@@ -539,7 +554,7 @@ namespace FFXIManager.ViewModels
             // Open file dialog
             var dialog = new OpenFileDialog
             {
-                Filter = "PNG Images (*.png)|*.png|All Files (*.*)|*.*",
+                Filter = "Image Files (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|All Files (*.*)|*.*",
                 Title = "Select New Template Image",
                 CheckFileExists = true
             };
@@ -553,17 +568,35 @@ namespace FFXIManager.ViewModels
                 if (!await ValidateTemplateImageAsync(dialog.FileName))
                 {
                     System.Windows.MessageBox.Show(
-                        "The selected image is not valid. Please ensure it is a valid PNG file with reasonable dimensions.",
+                        "The selected image is not valid. Please ensure it is a valid image file with reasonable dimensions.",
                         "Invalid Image",
                         System.Windows.MessageBoxButton.OK,
                         System.Windows.MessageBoxImage.Error);
                     return;
                 }
 
+                // Show crop dialog to select region
+                var cropViewModel = new ImageCropperDialogViewModel(dialog.FileName, _log);
+                var cropDialog = new Views.ImageCropperDialog(cropViewModel);
+
+                // Set owner to the current window (if available)
+                cropDialog.Owner = System.Windows.Application.Current.MainWindow;
+
+                var dialogResult = cropDialog.ShowDialog();
+
+                if (dialogResult != true)
+                {
+                    Status = "Image replacement cancelled";
+                    return;
+                }
+
                 Status = "Replacing template image...";
 
-                // Replace via service
-                var success = await _templateService.ReplaceTemplateImageAsync(SelectedTemplate!, dialog.FileName);
+                // Replace via service with crop rectangle
+                var success = await _templateService.CropAndReplaceTemplateImageAsync(
+                    SelectedTemplate!,
+                    dialog.FileName,
+                    cropViewModel.CropRectangle);
 
                 if (success)
                 {
@@ -572,7 +605,7 @@ namespace FFXIManager.ViewModels
                     Status = "Template image replaced successfully";
 
                     System.Windows.MessageBox.Show(
-                        "Template image has been replaced successfully. You can now test the new image with the existing navigation configuration.",
+                        "Template image has been replaced successfully. You can now test the new image with the existing navigation configuration, and update click points if needed.",
                         "Success",
                         System.Windows.MessageBoxButton.OK,
                         System.Windows.MessageBoxImage.Information);
@@ -631,6 +664,84 @@ namespace FFXIManager.ViewModels
             {
                 await _log.LogErrorAsync($"Failed to validate image: {ex.Message}", ex);
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Handles canvas click for setting click coordinates in edit mode
+        /// </summary>
+        public void HandleCanvasClick(double canvasX, double canvasY)
+        {
+            if (!IsClickEditMode || TemplateImageWidth == 0 || TemplateImageHeight == 0)
+                return;
+
+            // Convert canvas coordinates to relative coordinates (0.0-1.0)
+            var relativeX = canvasX / TemplateImageWidth;
+            var relativeY = canvasY / TemplateImageHeight;
+
+            // Clamp to valid range
+            relativeX = Math.Clamp(relativeX, 0.0, 1.0);
+            relativeY = Math.Clamp(relativeY, 0.0, 1.0);
+
+            // Find the next Click action in the sequence starting from current index
+            KeyboardAction? targetAction = null;
+            int searchIndex = _currentEditingClickIndex;
+
+            for (int i = 0; i < CurrentNavigation.Sequence.Count; i++)
+            {
+                var index = (searchIndex + i) % CurrentNavigation.Sequence.Count;
+                var action = CurrentNavigation.Sequence[index];
+
+                if (action.Action?.Equals("Click", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    targetAction = action;
+                    _currentEditingClickIndex = (index + 1) % CurrentNavigation.Sequence.Count;
+                    break;
+                }
+            }
+
+            if (targetAction != null)
+            {
+                targetAction.ClickX = relativeX;
+                targetAction.ClickY = relativeY;
+                HasUnsavedChanges = true;
+
+                Status = $"Updated click point: ({relativeX:F3}, {relativeY:F3}) - Click again to set next point";
+            }
+            else
+            {
+                Status = "No Click actions found in sequence - Add a Click action first";
+            }
+        }
+
+        /// <summary>
+        /// Updates the status message based on current mode
+        /// </summary>
+        private void UpdateStatus()
+        {
+            if (IsClickEditMode)
+            {
+                // Count Click actions
+                int clickCount = 0;
+                foreach (var action in CurrentNavigation.Sequence)
+                {
+                    if (action.Action?.Equals("Click", StringComparison.OrdinalIgnoreCase) == true)
+                        clickCount++;
+                }
+
+                if (clickCount > 0)
+                {
+                    Status = $"Click Edit Mode: Click on the image to set click points ({clickCount} Click action(s) available)";
+                    _currentEditingClickIndex = 0; // Reset to first click action
+                }
+                else
+                {
+                    Status = "Click Edit Mode: Add Click actions to the sequence first";
+                }
+            }
+            else
+            {
+                Status = "Click Edit Mode disabled";
             }
         }
 

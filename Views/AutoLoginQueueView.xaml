@@ -76,7 +76,7 @@
                 <!-- Queue Control Buttons -->
                 <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0">
                     <!-- Open Template Navigation Tuner -->
-                    <Button Content="Tune"
+                    <Button Content="🎯"
                             Style="{StaticResource CircularInfoButton}"
                             Command="{Binding OpenTemplateTunerCommand}"
                             ToolTip="Open Template Navigation Tuner"

@@ -96,6 +96,17 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         /// <param name="newImagePath">Full path to the new image file</param>
         /// <returns>True if replacement succeeded, false otherwise</returns>
         Task<bool> ReplaceTemplateImageAsync(string templatePath, string newImagePath);
+
+        /// <summary>
+        /// Crops and replaces the PNG image file for an existing template.
+        /// Allows selecting a specific region from a larger screenshot.
+        /// Backs up the original file and validates the new image before replacement.
+        /// </summary>
+        /// <param name="templatePath">Path to the template (e.g., "PlayOnline/login_information_screen")</param>
+        /// <param name="newImagePath">Full path to the new image file</param>
+        /// <param name="cropRectangle">Optional rectangle to crop from the source image. If null, uses full image.</param>
+        /// <returns>True if replacement succeeded, false otherwise</returns>
+        Task<bool> CropAndReplaceTemplateImageAsync(string templatePath, string newImagePath, System.Drawing.Rectangle? cropRectangle);
     }
 
     /// <summary>
