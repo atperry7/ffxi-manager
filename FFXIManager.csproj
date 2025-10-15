@@ -87,7 +87,6 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Assets\" />
-    <Folder Include="Templates\PlayOnline\" />
   </ItemGroup>
 
 </Project>

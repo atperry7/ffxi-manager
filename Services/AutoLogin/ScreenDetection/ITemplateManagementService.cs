@@ -87,6 +87,15 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         /// Logs warnings for any issues and returns a summary report.
         /// </summary>
         Task<TemplateValidationReport> ValidateAllTemplatesAsync(System.Threading.CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Replaces the PNG image file for an existing template.
+        /// Backs up the original file and validates the new image before replacement.
+        /// </summary>
+        /// <param name="templatePath">Path to the template (e.g., "PlayOnline/login_information_screen")</param>
+        /// <param name="newImagePath">Full path to the new image file</param>
+        /// <returns>True if replacement succeeded, false otherwise</returns>
+        Task<bool> ReplaceTemplateImageAsync(string templatePath, string newImagePath);
     }
 
     /// <summary>

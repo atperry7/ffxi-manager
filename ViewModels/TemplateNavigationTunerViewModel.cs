@@ -1,10 +1,14 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using Microsoft.Win32;
 using FFXIManager.Models;
 using FFXIManager.Services;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
@@ -28,7 +32,13 @@ namespace FFXIManager.ViewModels
         public string? SelectedTemplate
         {
             get => _selectedTemplate;
-            set { _selectedTemplate = value; OnPropertyChanged(); _ = LoadMetadataAsync(); }
+            set
+            {
+                _selectedTemplate = value;
+                OnPropertyChanged();
+                ((RelayCommand)ReplaceImageCommand).RaiseCanExecuteChanged();
+                _ = LoadMetadataAsync();
+            }
         }
 
         private TemplateMetadata? _metadata;
@@ -73,11 +83,37 @@ namespace FFXIManager.ViewModels
             set { _status = value; OnPropertyChanged(); }
         }
 
+        // Image display properties
+        private BitmapSource? _templateImage;
+        public BitmapSource? TemplateImage
+        {
+            get => _templateImage;
+            set { _templateImage = value; OnPropertyChanged(); }
+        }
+
+        private double _templateImageWidth;
+        public double TemplateImageWidth
+        {
+            get => _templateImageWidth;
+            set { _templateImageWidth = value; OnPropertyChanged(); }
+        }
+
+        private double _templateImageHeight;
+        public double TemplateImageHeight
+        {
+            get => _templateImageHeight;
+            set { _templateImageHeight = value; OnPropertyChanged(); }
+        }
+
+        // Click markers for visualization
+        public ObservableCollection<ClickMarker> ClickMarkers { get; } = new();
+
         public ICommand RefreshCommand { get; }
         public ICommand TestCommand { get; }
         public ICommand SaveCommand { get; }
         public ICommand AddStepCommand { get; }
         public ICommand RemoveStepCommand { get; }
+        public ICommand ReplaceImageCommand { get; }
 
         // Window selection for live testing
         public class WindowEntry
@@ -148,6 +184,7 @@ namespace FFXIManager.ViewModels
             AddStepCommand = new RelayCommand(() => AddStep());
             RemoveStepCommand = new RelayCommandWithParameter<KeyboardAction>(ka => RemoveStep(ka));
             RefreshWindowsCommand = new RelayCommand(async () => await RefreshWindowsAsync());
+            ReplaceImageCommand = new RelayCommand(async () => await ReplaceTemplateImageAsync(), () => !string.IsNullOrEmpty(SelectedTemplate));
 
             _ = LoadTemplatesAsync();
         }
@@ -197,6 +234,11 @@ namespace FFXIManager.ViewModels
                     Sequence = new ObservableCollection<KeyboardAction>(Metadata.Navigation.Sequence)
                 };
             }
+
+            // Load template image and update click markers
+            await LoadTemplateImageAsync();
+            UpdateClickMarkers();
+
             await RefreshWindowsAsync();
         }
 
@@ -368,6 +410,228 @@ namespace FFXIManager.ViewModels
         private void OnSequenceItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             HasUnsavedChanges = true;
+            // Update click markers when sequence changes
+            UpdateClickMarkers();
+        }
+
+        /// <summary>
+        /// Loads the template image from the template service and converts it to a WPF BitmapImage
+        /// </summary>
+        private async Task LoadTemplateImageAsync()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(SelectedTemplate))
+                {
+                    TemplateImage = null;
+                    TemplateImageWidth = 0;
+                    TemplateImageHeight = 0;
+                    return;
+                }
+
+                var template = await _templateService.LoadTemplateAsync(SelectedTemplate!);
+                if (template == null || template.ImageData == null || template.ImageData.Length == 0)
+                {
+                    TemplateImage = null;
+                    TemplateImageWidth = 0;
+                    TemplateImageHeight = 0;
+                    Status = "Failed to load template image";
+                    return;
+                }
+
+                // Convert BGR byte array to WPF BitmapSource
+                // template.ImageData is raw BGR pixel data (3 bytes per pixel)
+                var bitmap = BitmapSource.Create(
+                    template.Width,
+                    template.Height,
+                    96, // DPI X
+                    96, // DPI Y
+                    PixelFormats.Bgr24, // BGR 24-bit format
+                    null, // No palette
+                    template.ImageData,
+                    template.Width * 3 // Stride: width * bytes per pixel
+                );
+
+                bitmap.Freeze(); // Make it thread-safe and improve performance
+
+                TemplateImage = bitmap;
+                TemplateImageWidth = template.Width;
+                TemplateImageHeight = template.Height;
+
+                await _log.LogDebugAsync($"Loaded template image: {template.Width}x{template.Height}");
+            }
+            catch (Exception ex)
+            {
+                await _log.LogErrorAsync($"Failed to load template image: {ex.Message}", ex);
+                TemplateImage = null;
+                TemplateImageWidth = 0;
+                TemplateImageHeight = 0;
+                Status = $"Error loading image: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Updates the click markers collection based on the current navigation sequence
+        /// </summary>
+        private void UpdateClickMarkers()
+        {
+            ClickMarkers.Clear();
+
+            if (CurrentNavigation == null || TemplateImageWidth == 0 || TemplateImageHeight == 0)
+                return;
+
+            int stepIndex = 1;
+
+            // Add markers for each Click action in the sequence
+            foreach (var step in CurrentNavigation.Sequence)
+            {
+                if (step.Action?.Equals("Click", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    ClickMarkers.Add(new ClickMarker
+                    {
+                        X = step.ClickX * TemplateImageWidth,
+                        Y = step.ClickY * TemplateImageHeight,
+                        Label = stepIndex.ToString(),
+                        Description = step.Description ?? "Click action",
+                        MarkerColor = Brushes.DodgerBlue,
+                        StepIndex = stepIndex - 1
+                    });
+                }
+                stepIndex++;
+            }
+
+            // Add fallback marker if defined
+            if (CurrentNavigation.ClickOffset != null)
+            {
+                ClickMarkers.Add(new ClickMarker
+                {
+                    X = CurrentNavigation.ClickOffset.X * TemplateImageWidth,
+                    Y = CurrentNavigation.ClickOffset.Y * TemplateImageHeight,
+                    Label = "F",
+                    Description = CurrentNavigation.ClickOffset.Description ?? "Fallback click",
+                    MarkerColor = Brushes.OrangeRed,
+                    StepIndex = -1
+                });
+            }
+        }
+
+        /// <summary>
+        /// Replaces the template image with a new image file
+        /// </summary>
+        private async Task ReplaceTemplateImageAsync()
+        {
+            if (string.IsNullOrEmpty(SelectedTemplate))
+                return;
+
+            // Warn if there are unsaved navigation changes
+            if (HasUnsavedChanges)
+            {
+                var result = System.Windows.MessageBox.Show(
+                    "You have unsaved navigation changes. These changes will not be lost, but they are not yet saved to disk. Continue with image replacement?",
+                    "Unsaved Changes",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Question);
+
+                if (result != System.Windows.MessageBoxResult.Yes)
+                    return;
+            }
+
+            // Open file dialog
+            var dialog = new OpenFileDialog
+            {
+                Filter = "PNG Images (*.png)|*.png|All Files (*.*)|*.*",
+                Title = "Select New Template Image",
+                CheckFileExists = true
+            };
+
+            if (dialog.ShowDialog() != true)
+                return;
+
+            try
+            {
+                // Validate the new image
+                if (!await ValidateTemplateImageAsync(dialog.FileName))
+                {
+                    System.Windows.MessageBox.Show(
+                        "The selected image is not valid. Please ensure it is a valid PNG file with reasonable dimensions.",
+                        "Invalid Image",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Error);
+                    return;
+                }
+
+                Status = "Replacing template image...";
+
+                // Replace via service
+                var success = await _templateService.ReplaceTemplateImageAsync(SelectedTemplate!, dialog.FileName);
+
+                if (success)
+                {
+                    // Reload template to show new image
+                    await LoadMetadataAsync();
+                    Status = "Template image replaced successfully";
+
+                    System.Windows.MessageBox.Show(
+                        "Template image has been replaced successfully. You can now test the new image with the existing navigation configuration.",
+                        "Success",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information);
+                }
+                else
+                {
+                    Status = "Failed to replace template image";
+                    System.Windows.MessageBox.Show(
+                        "Failed to replace the template image. Check the logs for details.",
+                        "Error",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                await _log.LogErrorAsync($"Error replacing template image: {ex.Message}", ex);
+                Status = $"Error: {ex.Message}";
+                System.Windows.MessageBox.Show(
+                    $"An error occurred while replacing the image:\n{ex.Message}",
+                    "Error",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Validates a template image file
+        /// </summary>
+        private async Task<bool> ValidateTemplateImageAsync(string imagePath)
+        {
+            try
+            {
+                if (!File.Exists(imagePath))
+                    return false;
+
+                // Try to load the image
+                using var bitmap = new System.Drawing.Bitmap(imagePath);
+
+                // Check dimensions
+                if (bitmap.Width < 10 || bitmap.Height < 10)
+                {
+                    await _log.LogWarningAsync($"Image too small: {bitmap.Width}x{bitmap.Height}");
+                    return false;
+                }
+
+                if (bitmap.Width > 3840 || bitmap.Height > 2160)
+                {
+                    await _log.LogWarningAsync($"Image too large: {bitmap.Width}x{bitmap.Height}");
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                await _log.LogErrorAsync($"Failed to validate image: {ex.Message}", ex);
+                return false;
+            }
         }
 
         private void OnPropertyChanged([CallerMemberName] string? name = null)

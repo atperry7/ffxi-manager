@@ -653,15 +653,6 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 Name = template.Name,
                 TemplatePath = template.TemplatePath,
                 AssociatedStep = template.AssociatedStep.ToString(),
-                Action = new FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata.ActionConfig
-                {
-                    Type = "click",
-                    ClickOffset = new FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata.ClickOffset
-                    {
-                        X = template.ClickOffset.X,
-                        Y = template.ClickOffset.Y
-                    }
-                },
                 ConfidenceThreshold = template.ConfidenceThreshold,
                 Tolerance = template.PositionTolerance,
                 Version = template.Version
@@ -732,6 +723,117 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             finally
             {
                 bitmap.UnlockBits(bmpData);
+            }
+        }
+
+        public async Task<bool> ReplaceTemplateImageAsync(string templatePath, string newImagePath)
+        {
+            try
+            {
+                // Validate inputs
+                if (string.IsNullOrEmpty(templatePath) || string.IsNullOrEmpty(newImagePath))
+                {
+                    await _loggingService.LogWarningAsync("Invalid parameters for template image replacement");
+                    return false;
+                }
+
+                // Verify new image file exists
+                if (!File.Exists(newImagePath))
+                {
+                    await _loggingService.LogWarningAsync($"New image file not found: {newImagePath}");
+                    return false;
+                }
+
+                // Get the template file path
+                var basePath = GetTemplateFilePath(templatePath);
+                var pngPath = Path.ChangeExtension(basePath, ".png");
+
+                if (!File.Exists(pngPath))
+                {
+                    await _loggingService.LogWarningAsync($"Template PNG not found: {pngPath}");
+                    return false;
+                }
+
+                // Validate the new image
+                try
+                {
+                    using var testImage = new Bitmap(newImagePath);
+
+                    // Check reasonable dimensions
+                    if (testImage.Width < 10 || testImage.Height < 10)
+                    {
+                        await _loggingService.LogWarningAsync($"Image too small: {testImage.Width}x{testImage.Height}");
+                        return false;
+                    }
+
+                    if (testImage.Width > 3840 || testImage.Height > 2160)
+                    {
+                        await _loggingService.LogWarningAsync($"Image too large: {testImage.Width}x{testImage.Height}");
+                        return false;
+                    }
+
+                    await _loggingService.LogInfoAsync($"Validated new image: {testImage.Width}x{testImage.Height}, Format: {testImage.PixelFormat}");
+                }
+                catch (Exception ex)
+                {
+                    await _loggingService.LogErrorAsync($"Failed to validate image file: {ex.Message}", ex);
+                    return false;
+                }
+
+                // Create backup of existing file
+                var backupPath = pngPath + ".backup";
+                File.Copy(pngPath, backupPath, true);
+                await _loggingService.LogInfoAsync($"Backed up original template to: {backupPath}");
+
+                try
+                {
+                    // Copy new image to template location
+                    File.Copy(newImagePath, pngPath, true);
+                    await _loggingService.LogInfoAsync($"Replaced template image: {pngPath}");
+
+                    // Clear cache to force reload
+                    _templateCache.TryRemove(templatePath, out _);
+
+                    // Verify the template still loads correctly
+                    var template = await LoadTemplateAsync(templatePath, CancellationToken.None);
+                    if (template == null || !template.IsValid())
+                    {
+                        // Rollback on failure
+                        await _loggingService.LogWarningAsync("New template failed validation, rolling back");
+                        File.Copy(backupPath, pngPath, true);
+                        _templateCache.TryRemove(templatePath, out _);
+                        return false;
+                    }
+
+                    await _loggingService.LogInfoAsync($"Template image replacement successful: {templatePath}");
+
+                    // Delete backup on success
+                    if (File.Exists(backupPath))
+                    {
+                        File.Delete(backupPath);
+                    }
+
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    // Rollback on any error
+                    await _loggingService.LogErrorAsync($"Error replacing template image, rolling back: {ex.Message}", ex);
+
+                    if (File.Exists(backupPath))
+                    {
+                        File.Copy(backupPath, pngPath, true);
+                        File.Delete(backupPath);
+                    }
+
+                    _templateCache.TryRemove(templatePath, out _);
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync($"Template image replacement failed: {ex.Message}", ex);
+                return false;
             }
         }
 

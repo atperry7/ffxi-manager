@@ -23,76 +23,233 @@
     </Window.Resources>
 
     <Grid Margin="15">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="300" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>  <!-- Template Selection Header -->
+            <RowDefinition Height="*"/>     <!-- Main Content -->
         </Grid.RowDefinitions>
 
-        <!-- Left Panel: Templates List -->
-        <Border Grid.Column="0"
+        <!-- ROW 0: Template Selection & Info Header -->
+        <Border Grid.Row="0"
                 Background="{DynamicResource SurfaceBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="12"
-                Margin="0,0,10,0">
+                Margin="0,0,0,10">
             <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>  <!-- Dropdown & Buttons -->
+                    <RowDefinition Height="Auto"/>  <!-- Info Bar -->
+                </Grid.RowDefinitions>
+
+                <!-- Selection Row -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                    <TextBlock Text="📁 Template:"
+                               VerticalAlignment="Center"
+                               Width="90"
+                               FontWeight="SemiBold"/>
+                    <ComboBox Width="500"
+                              ItemsSource="{Binding Templates}"
+                              SelectedItem="{Binding SelectedTemplate}"
+                              Margin="0,0,10,0"/>
+                    <Button Content="🔄"
+                            Command="{Binding RefreshCommand}"
+                            Style="{StaticResource CircularInfoButton}"
+                            Width="32" Height="32"
+                            ToolTip="Refresh Template List"
+                            Margin="0,0,5,0"/>
+                    <Button Content="📁"
+                            Command="{Binding ReplaceImageCommand}"
+                            Style="{StaticResource CircularWarningButton}"
+                            Width="32" Height="32"
+                            ToolTip="Replace Template Image"/>
+                </StackPanel>
+
+                <!-- Info Row -->
+                <StackPanel Grid.Row="1" Orientation="Horizontal">
+                    <TextBlock Text="📊 Info:"
+                               Width="90"
+                               VerticalAlignment="Center"
+                               FontWeight="SemiBold"/>
+                    <TextBlock VerticalAlignment="Center"
+                               Foreground="{DynamicResource SecondaryTextBrush}">
+                        <Run Text="{Binding Metadata.Name, Mode=OneWay}"/>
+                        <Run Text=" | "/>
+                        <Run Text="{Binding TemplateImageWidth, StringFormat='W:{0:F0}', Mode=OneWay}"/>
+                        <Run Text="×"/>
+                        <Run Text="{Binding TemplateImageHeight, StringFormat='H:{0:F0}', Mode=OneWay}"/>
+                        <Run Text=" | Confidence: "/>
+                        <Run Text="{Binding Metadata.ConfidenceThreshold, StringFormat='P0', Mode=OneWay}"/>
+                        <Run Text=" | Version: "/>
+                        <Run Text="{Binding Metadata.Version, Mode=OneWay}"/>
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ROW 1: Main Content (2 columns) -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*"/>  <!-- Image Preview: 40% -->
+                <ColumnDefinition Width="3*"/>  <!-- Navigation Config: 60% -->
+            </Grid.ColumnDefinitions>
+
+            <!-- LEFT COLUMN: Template Image Preview with Click Overlays -->
+            <Border Grid.Column="0"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="12"
+                    Margin="0,0,10,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>  <!-- Header -->
+                        <RowDefinition Height="*"/>     <!-- Image -->
+                        <RowDefinition Height="Auto"/>  <!-- Legend -->
+                    </Grid.RowDefinitions>
+
+                    <!-- Header -->
+                    <TextBlock Grid.Row="0"
+                               Text="🖼️ Template Preview"
+                               FontWeight="SemiBold"
+                               FontSize="14"
+                               Margin="0,0,0,10"/>
+
+                    <!-- Image with Overlay Canvas -->
+                    <Border Grid.Row="1"
+                            Background="{DynamicResource CardBackgroundBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Margin="0,0,0,10">
+                        <!-- Viewbox scales the entire Grid (image + markers) proportionally -->
+                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                            <!-- Grid with explicit dimensions matching template size for pixel-perfect alignment -->
+                            <Grid Width="{Binding TemplateImageWidth}"
+                                  Height="{Binding TemplateImageHeight}">
+                                <!-- Template Image at native size (no stretching) -->
+                                <Image Source="{Binding TemplateImage}"
+                                       Stretch="None"/>
+
+                                <!-- Canvas overlay with same dimensions for pixel-perfect marker positioning -->
+                                <Canvas Width="{Binding TemplateImageWidth}"
+                                        Height="{Binding TemplateImageHeight}"
+                                        ClipToBounds="True">
+                                    <!-- Click Markers -->
+                                    <ItemsControl ItemsSource="{Binding ClickMarkers}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <Canvas/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemContainerStyle>
+                                            <Style TargetType="ContentPresenter">
+                                                <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                                <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                            </Style>
+                                        </ItemsControl.ItemContainerStyle>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid>
+                                                    <!-- Outer Glow -->
+                                                    <Ellipse Width="24" Height="24"
+                                                             Fill="{Binding MarkerColor}"
+                                                             Opacity="0.3"
+                                                             Margin="-12,-12,0,0"/>
+
+                                                    <!-- Marker Circle -->
+                                                    <Ellipse Width="18" Height="18"
+                                                             Fill="{Binding MarkerColor}"
+                                                             Stroke="White"
+                                                             StrokeThickness="2"
+                                                             Margin="-9,-9,0,0"/>
+
+                                                    <!-- Label -->
+                                                    <TextBlock Text="{Binding Label}"
+                                                               Foreground="White"
+                                                               FontWeight="Bold"
+                                                               FontSize="10"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"
+                                                               Margin="-9,-9,0,0"
+                                                               Width="18"
+                                                               Height="18"
+                                                               TextAlignment="Center"/>
+
+                                                    <!-- Tooltip -->
+                                                    <Grid.ToolTip>
+                                                        <ToolTip>
+                                                            <StackPanel>
+                                                                <TextBlock Text="{Binding Description}" FontWeight="Bold"/>
+                                                                <TextBlock>
+                                                                    <Run Text="Position: ("/>
+                                                                    <Run Text="{Binding X, StringFormat='{}{0:F0}'}"/>
+                                                                    <Run Text=", "/>
+                                                                    <Run Text="{Binding Y, StringFormat='{}{0:F0}'}"/>
+                                                                    <Run Text=")"/>
+                                                                </TextBlock>
+                                                            </StackPanel>
+                                                        </ToolTip>
+                                                    </Grid.ToolTip>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Canvas>
+                            </Grid>
+                        </Viewbox>
+                    </Border>
+
+                    <!-- Legend -->
+                    <Border Grid.Row="2"
+                            Background="{DynamicResource HeaderBackgroundBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="8">
+                        <StackPanel>
+                            <TextBlock Text="Click Points:"
+                                       FontWeight="SemiBold"
+                                       FontSize="12"
+                                       Margin="0,0,0,5"/>
+                            <ItemsControl ItemsSource="{Binding ClickMarkers}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="0,2">
+                                            <Ellipse Width="12" Height="12"
+                                                     Fill="{Binding MarkerColor}"
+                                                     Margin="0,0,6,0"/>
+                                            <TextBlock Foreground="{DynamicResource SecondaryTextBrush}">
+                                                <Run Text="{Binding Label}" FontWeight="Bold"/>
+                                                <Run Text=" - "/>
+                                                <Run Text="{Binding Description}"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- RIGHT COLUMN: Navigation Configuration -->
+            <Grid Grid.Column="1">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- Header -->
-                <TextBlock Grid.Row="0"
-                           Text="📁 Templates"
-                           FontWeight="SemiBold"
-                           FontSize="14"
-                           Margin="0,0,0,10"/>
-
-                <!-- Templates ListBox -->
-                <Border Grid.Row="1"
-                        Background="{DynamicResource CardBackgroundBrush}"
+                <!-- Top: Nav Config Header -->
+                <Border Grid.Row="0"
+                        Background="{DynamicResource SurfaceBrush}"
                         BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1"
-                        CornerRadius="6"
+                        CornerRadius="8"
+                        Padding="12"
                         Margin="0,0,0,10">
-                    <ListBox ItemsSource="{Binding Templates}"
-                             SelectedItem="{Binding SelectedTemplate}"
-                             BorderThickness="0"
-                             Background="Transparent"
-                             Foreground="{DynamicResource PrimaryTextBrush}"
-                             Padding="4"/>
-                </Border>
-
-                <!-- Refresh Button -->
-                <Button Grid.Row="2"
-                        Content="🔄 Refresh"
-                        Style="{StaticResource InfoButton}"
-                        Command="{Binding RefreshCommand}"
-                        HorizontalAlignment="Stretch"/>
-            </Grid>
-        </Border>
-
-        <!-- Right Panel: Configuration -->
-        <Grid Grid.Column="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-
-            <!-- Top: Navigation Configuration -->
-            <Border Grid.Row="0"
-                    Background="{DynamicResource SurfaceBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="12"
-                    Margin="0,0,0,10">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -301,7 +458,11 @@
                     </StackPanel>
                 </Grid>
             </Border>
+            <!-- Close Right Column Grid (Grid.Column="1") -->
+            </Grid>
+        <!-- Close Main Content Grid (Grid.Row="1") -->
         </Grid>
+    <!-- Close Outer Grid (Margin="15") -->
     </Grid>
 </Window>
 
