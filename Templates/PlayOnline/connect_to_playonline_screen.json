@@ -1,32 +1,15 @@
-{
-  "name": "PlayOnline Connect to PlayOnline Screen",
-  "templatePath": "PlayOnline/connect_to_playonline_screen",
-  "elementType": "input",
-  "associatedStep": "PasswordEntry",
-  "confidenceThreshold": 0.80,
-  "tolerance": 5,
-  "version": "2.0.0",
-  "navigation": {
-    "type": "Hybrid",
-    "description": "Navigate to password field using Tab",
-    "sequence": [
-      {
-        "action": "Tab",
-        "count": 2,
-        "delayMs": 100,
-        "description": "Tab to password field"
-      }
-    ],
-    "fallback": {
-      "type": "RelativeClick",
-      "clickOffset": {
-        "x": 0.5,
-        "y": 0.5,
-        "description": "Click center of password field"
-      }
-    },
-    "postNavigationDelayMs": 500
-  },
-  "variants": [],
-  "properties": {}
+﻿{
+    "name":  "PlayOnline Connect to PlayOnline Screen",
+    "templatePath":  "PlayOnline/connect_to_playonline_screen",
+    "elementType":  "input",
+    "associatedStep":  "PasswordEntry",
+    "confidenceThreshold":  0.80,
+    "tolerance":  5,
+    "version":  "2.0.0",
+    "variants":  [
+
+                 ],
+    "properties":  {
+
+                   }
 }

@@ -2,859 +2,286 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Development Commands
+## Project Overview
 
-### Build and Run
+**FFXI Manager** is a WPF desktop application (.NET 9) for managing multiple Final Fantasy XI accounts. It automates character login sequences, manages PlayOnline profile switching, provides global hotkey support for character window switching, and includes controller integration for seamless multi-boxing.
+
+# RULES TO FOLLOW
+- ALWAYS follow MVVM + DI + SOLID architecture principles.
+- DO NOT CREATE backwards compatibility unless request by the user. 
+- PROACTIVELY refactor when changes are needed and utilize powershell commands for mass updates when needed.
+- PREFER data-driven approaches (e.g., JSON workflows) over hardcoded logic.
+- ALWAYS use async/await for I/O operations and logging.
+- ALWAYS use IUiDispatcher for UI updates from background threads.
+- ALWAYS use ILoggingService for logging instead of direct Serilog calls.
+- ALWAYS register services in Infrastructure/DependencyInjection.cs.
+- Provide short and concise summaries when completing tasks.
+
+## Build Commands
+
+### Building
 ```bash
-# Build the solution
-dotnet build
+# Full solution build
+dotnet build FFXIManager.sln
+
+# Build main application only
+dotnet build FFXIManager.csproj
 
 # Build for release
-dotnet build --configuration Release
-
-# Run the application
-dotnet run --configuration Release
-
-# Clean build artifacts
-dotnet clean
+dotnet build FFXIManager.sln -c Release
 ```
 
-### Testing
+### MSBuild (Windows)
+If using MSBuild on WSL/Linux, use the Windows MSBuild path:
 ```bash
-# Run all tests
-dotnet test Testing/FFXIManager.Tests.csproj
-
-# Run tests with specific configuration
-dotnet test Testing/FFXIManager.Tests.csproj --configuration Release
-
-# Build test project only
-dotnet build Testing/FFXIManager.Tests.csproj
-```
-
-### Publishing
-```bash
-# Publish for deployment
-dotnet publish -c Release -o ./publish
-
-# Create ZIP package (PowerShell)
-Compress-Archive -Path "./publish/*" -DestinationPath "FFXIManager-local.zip"
+"/mnt/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" FFXIManager.sln -verbosity:minimal
 ```
 
 ## Architecture Overview
 
-### Core Architecture Patterns
-- **MVVM Pattern**: Clean separation between Views (XAML), ViewModels (business logic), and Models (data)
-- **Dependency Injection**: All services registered in `Infrastructure/DependencyInjection.cs` using Microsoft.Extensions.DependencyInjection
-- **Service Layer**: Business logic separated into focused service interfaces with implementations
-- **Interface-based Design**: All major components have interfaces for testability and maintainability
+### Architectural Pattern: MVVM + DI + SOLID
 
-### Key Architectural Components
+The application follows **Model-View-ViewModel (MVVM)** architecture with heavy use of **Dependency Injection** (Microsoft.Extensions.DependencyInjection) and **SOLID principles**. All services are registered in `Infrastructure/DependencyInjection.cs`.
 
-#### Dependency Injection Container
-- Main registration in `Infrastructure/DependencyInjection.cs:AddAppServices()`
-- Services registered as Singletons for application-wide state management
-- Clear separation of concerns: Core services, UI/Threading, Process/Monitoring, App logic
+**Key Directories:**
+- **Models/** - Domain models and data structures
+- **ViewModels/** - MVVM ViewModels, all inherit from `ViewModelBase`
+- **Views/** - WPF XAML views
+- **Services/** - Business logic services (registered as singletons/transients)
+- **Infrastructure/** - Core infrastructure (DI, process management, UI dispatching)
 
-#### Service Layer Organization
-- **Core Services**: Settings, Configuration, Logging, Caching, Notifications, Validation
-- **UI/Threading**: WpfUiDispatcher for thread-safe UI updates, WindowEventTracker
-- **Process/Monitoring**: Process utilities, unified monitoring, PlayOnline monitoring
-- **Application Logic**: External applications, status messages, character ordering, hotkeys
+### Critical Architecture: Auto-Login System
 
-#### ViewModel Architecture
-- `MainViewModel` acts as coordinator, injecting dependencies into specialized ViewModels
-- Specialized ViewModels: `ProfileManagementViewModel`, `ApplicationManagementViewModel`, `PlayOnlineMonitorViewModel`
-- Base class `ViewModelBase` provides common MVVM functionality
-- Clear dependency injection pattern with null checks
+The auto-login system is the crown jewel of this application. It went through a major refactoring to support **data-driven workflows** instead of hardcoded logic.
 
-#### Service Interface Patterns
-All services follow consistent interface patterns:
-- Interfaces prefixed with `I` (e.g., `ISettingsService`, `IProfileService`)
-- Services focused on single responsibility
-- Clear separation between interfaces and implementations
+#### Workflow System Architecture
 
-### Technology Stack
-- **.NET 9** with Windows-specific features
-- **WPF** for UI with XAML views
-- **Serilog** for comprehensive logging with multiple sinks (Console, File, Async)
-- **SharpDX.DirectInput** for controller support
-- **System.Management** for system-level operations
-- **Microsoft.Extensions** for hosting and dependency injection
+**Key Concept**: Login flows are now defined in JSON workflow files (`workflows/` directory) rather than being hardcoded. Users can customize workflows without modifying code.
 
-### Project Structure
-- `Services/`: Business logic services with interface-based design
-- `ViewModels/`: MVVM ViewModels with Base classes
-- `Views/`: WPF XAML views and code-behind
-- `Infrastructure/`: Cross-cutting concerns (DI, threading, process management)
-- `Configuration/`: Application configuration services
-- `Testing/`: MSTest-based test project
+**Core Components:**
 
-### Auto-Login Module
-- Located in `Services/AutoLogin/` with Application layer
-- Uses event-driven architecture with EventBus pattern
-- Implements comprehensive security validation framework
-- Includes integration testing with quickstart validation
+1. **WorkflowDefinition** (`Models/AutoLogin/WorkflowDefinition.cs`)
+   - JSON-serializable workflow with steps, conditions, navigation
+   - Supports conditional execution (e.g., "Account.IsOTPEnabled")
+   - Validates step definitions and dependencies
 
-#### Auto-Login Handler Architecture (Refactored)
-The Auto-Login handlers follow a **service-oriented architecture** with clear separation of concerns:
+2. **WorkflowTaskBuilder** (`Services/AutoLogin/WorkflowTaskBuilder.cs`)
+   - Converts workflow definitions into executable `AutoLoginSubtask` sequences
+   - Evaluates conditions based on account properties
+   - Bridges workflow JSON � executable task infrastructure
 
-**Handler Pattern**:
-- Handlers inherit from `BaseLoginTaskHandler` for common infrastructure
-- Handlers orchestrate workflows by delegating to specialized services
-- Each handler focuses on coordination rather than implementation details
-- Target: Methods should be <80 lines following SOLID principles
+3. **DynamicWorkflowHandler** (`Services/AutoLogin/DynamicWorkflowHandler.cs`)
+   - Executes workflow steps dynamically using template detection + navigation
+   - Resolution-independent (uses hybrid navigation)
+   - Fallback handler when no specialized handler claims a subtask
 
-**Service Extraction Pattern**:
-- **Navigation Services**: Handle UI navigation and screen transitions
-  - Example: `PlayOnlineNavigationService` - Manages PlayOnline → FFXI navigation flow
-  - Reusable across handlers that need similar navigation patterns
+4. **WorkflowService** (`Services/AutoLogin/WorkflowService.cs`)
+   - Loads/saves workflows from filesystem
+   - Manages default workflows vs user-customized workflows
+   - Handles workflow CRUD operations
 
-- **Authentication Services**: Handle credential validation and secure operations
-  - Example: `PlayOnlineAuthenticationService` - Password/OTP validation and retrieval
-  - Provides security-conscious logging without exposing sensitive data
-
-- **Specialized Services**: Domain-specific operations extracted into focused services
-  - Screen detection, template matching, UI automation
-  - Process management, window handling, monitoring
-
-**Key Refactoring (PlayOnlineAuthHandler)**:
-- **Before**: 1288 lines with complex 200+ line methods
-- **After**: ~1000 lines with focused <80 line methods
-- **Extracted**: ~550 lines into 2 specialized services
-- **Result**: 22% reduction in handler size, dramatically improved maintainability
-
-**Refactored Handlers**:
-- ✅ `PlayOnlineAuthHandler` - Refactored with service extraction pattern
-- 🔄 `WindowerLaunchHandler` - Candidate for similar refactoring
-- 🔄 `FFXIGameHandler` - Candidate for similar refactoring
-- 🔄 `POLProxyLaunchHandler` - Candidate for similar refactoring
-
-See [Handler Refactoring Guide](#handler-refactoring-guide) below for applying these patterns to other handlers.
-
-## Development Guidelines
-
-### Code Conventions
-- Follow `.editorconfig` settings: 4-space indentation, PascalCase for public members
-- Use file-scoped namespaces (`csharp_style_namespace_declarations = file_scoped`)
-- Prefer explicit types over `var` except when type is apparent
-- Enable nullable reference types project-wide
-
-### Service Development
-- Always create interface first, then implementation
-- Register services in `Infrastructure/DependencyInjection.cs`
-- Follow constructor injection pattern with null checks
-- Use `ILogger<T>` for logging within services
-
-### Testing
-- Use MSTest framework (`MSTest.TestFramework`, `MSTest.TestAdapter`)
-- Test project targets same framework as main project (net9.0-windows)
-- Comprehensive security testing framework in place for auto-login features
-
-### Version Management
-- Version controlled in `FFXIManager.csproj` (currently 1.3.1-beta)
-- Do not manually bump version numbers - handled by release workflow
-- Strong name signing enabled with `ffximanager.snk`
-
-### Build Configuration
-- .NET Analyzers enabled with latest analysis level
-- Warnings treated as errors
-- Automatic exclusion of Testing files from main build
-- Application manifests and configuration files copied to output
-
-## Handler Refactoring Guide
-
-This guide documents the proven patterns for refactoring Auto-Login handlers, based on the successful `PlayOnlineAuthHandler` refactoring.
-
-### When to Refactor a Handler
-
-Refactor when a handler exhibits these characteristics:
-- **Size**: File exceeds 800 lines
-- **Method Complexity**: Methods exceed 80 lines
-- **Responsibilities**: Handler does too many things (navigation + authentication + validation + ...)
-- **Reusability**: Logic could be shared with other handlers
-- **Testability**: Difficult to test in isolation
-
-### Refactoring Process Overview
-
-**Phase 1: Analysis** (Identify extraction candidates)
-**Phase 2: Service Creation** (Extract cohesive functionality)
-**Phase 3: Integration** (Update handler to use services)
-**Phase 4: Verification** (Build, test, validate)
-
-### Phase 1: Analysis
-
-#### Step 1.1: Read and Understand the Handler
-```bash
-# Read the entire handler to understand its responsibilities
-Read Services/AutoLogin/YourHandler.cs
+**Workflow Execution Flow:**
+```
+1. User adds character to queue � AutoLoginQueueService
+2. Queue starts � QueueExecutionOrchestrator orchestrates execution
+3. For each queue item � AutoLoginTaskExecutor builds tasks
+4. Tasks are built via WorkflowTaskBuilder (converts workflow JSON � subtasks)
+5. Subtasks executed by handlers (DynamicWorkflowHandler or specialized handlers)
+6. Each step: Detect screen (template matching) � Navigate (keyboard/click)
+7. Progress updated � UI reflects current state
 ```
 
-Look for:
-- Distinct logical sections (authentication, navigation, validation)
-- Repeated patterns across methods
-- Long methods (>80 lines) that do multiple things
-- Code that could be reused by other handlers
+#### Auto-Login Service Composition
 
-#### Step 1.2: Identify Service Boundaries
+The auto-login queue system follows **Single Responsibility Principle** with focused services:
 
-**Good Service Candidates**:
-- **Navigation Logic**: Screen detection, UI interaction, window transitions
-  - Example: All methods that navigate between screens
-  - Pattern: Methods with "Navigate", "Wait", "Detect" in their names
+- **AutoLoginQueueService** - Coordinating facade, composes all queue services
+- **QueueCollectionManager** - Manages ObservableCollection of queue items
+- **QueueStateMachine** - Manages execution state (Idle/Running/Paused/etc.)
+- **QueuePersistenceService** - Saves/loads queue state to disk
+- **QueueStatisticsService** - Calculates queue statistics (completion rates, timing)
+- **QueueExecutionOrchestrator** - Orchestrates queue execution loop
+- **AutoLoginTaskExecutor** - Executes individual login tasks with handlers
 
-- **Authentication Logic**: Credential validation, password/OTP operations
-  - Example: Password retrieval, OTP generation, validation methods
-  - Pattern: Methods that interact with `IWindowsCredentialsService` or `IOTPService`
+#### Handler System
 
-- **Screen Transition Logic**: Window handle management, process transitions
-  - Example: Methods that manage window handles across process boundaries
-  - Pattern: Methods that track PIDs, detect window changes
+Login handlers inherit from `BaseLoginTaskHandler` and implement `ILoginTaskHandler`:
 
-- **Validation Logic**: Configuration checks, requirement validation
-  - Example: Methods that validate account settings, prerequisites
-  - Pattern: Methods that start with "Validate" or check configuration
+**Active Handlers:**
+- `DynamicWorkflowHandler` - **ONLY handler** - Executes ALL workflow-defined steps:
+  - UI navigation (PlayOnline auth, FFXI character selection)
+  - Application launches (POL Proxy, Windower, any external app)
+  - Template detection + navigation execution
+  - Two-phase launch verification: process detection + UI readiness confirmation
 
-**Service Naming Convention**:
-- Navigation: `{Context}NavigationService` (e.g., `PlayOnlineNavigationService`)
-- Authentication: `{Context}AuthenticationService` (e.g., `PlayOnlineAuthenticationService`)
-- Screen Transition: `{Context}TransitionService` (e.g., `WindowTransitionService`)
-- Validation: `{Context}ValidationService` (e.g., `AccountValidationService`)
+**Handler Resolution:**
+- `LoginTaskHandlerResolver` - Routes all subtasks to DynamicWorkflowHandler
+- No specialized handlers - 100% workflow-driven architecture
+- Handler registered as singleton in DI container
 
-#### Step 1.3: Document Extraction Plan
+**Generic Application Launch Pattern:**
+- WorkflowStepDefinition with `StepType = "LaunchApplication"`
+- References external apps from ExternalApplicationData settings
+- Process detection via UnifiedMonitoringService (WMI watchers)
+- UI readiness confirmed via template matching
+- Optional post-launch navigation sequences
 
-Create a checklist:
-```markdown
-## Extraction Plan for {HandlerName}
+### Screen Detection & Template Matching
 
-### Services to Create:
-1. **{ServiceName1}** (~XXX lines)
-   - Method1
-   - Method2
-   - Method3
+The application uses **OpenCV (OpenCvSharp4)** for template matching to detect UI screens:
 
-2. **{ServiceName2}** (~XXX lines)
-   - Method1
-   - Method2
+**Services:**
+- **IScreenshotCaptureService** - Captures window screenshots
+- **ITemplateMatchingService** - Performs template matching (OpenCV)
+- **ITemplateManagementService** - Loads/manages template metadata
+- **IUIAutomationService** - Executes UI automation (keyboard/mouse)
 
-### Handler Changes:
-- Add service dependencies to constructor
-- Replace method calls with service calls
-- Remove extracted methods
-- Update documentation
+**Templates** (`Templates/` directory):
+- JSON files contain **detection metadata only**: name, templatePath, elementType, confidenceThreshold, tolerance, version
+- PNG images are the visual templates for matching
+- Organized by application: `PlayOnline/`, `FFXI/`, `Windower/`
+- **Navigation is NOT stored in template files** - all navigation is defined in workflow JSON files
 
-### Expected Results:
-- Handler: {Current} lines → ~{Target} lines
-- Extracted: ~{Total} lines into {Count} services
-- Reduction: {Percentage}%
+**Navigation System:**
+- **HybridNavigationStrategy** - Primary strategy: keyboard-first, click fallback
+- **KeyboardNavigationStrategy** - Pure keyboard navigation (Tab, Enter, etc.)
+- **RelativeClickNavigationStrategy** - Relative click coordinates (resolution-independent)
+- **Navigation sequences defined in workflow JSON files**, not in template metadata
+
+### Profile Management
+
+**ProfileService** (`Services/ProfileService.cs`):
+- Swaps PlayOnline `login_w.bin` files to switch accounts
+- Maintains backup of original profile before swapping
+- Profiles stored in `%APPDATA%/FFXIManager/profiles/`
+
+### Hotkey System
+
+**Global Hotkey Architecture:**
+- **GlobalHotkeyManager** - Registers Windows low-level keyboard hooks
+- **HotkeyActivationService** - Ultra-fast character window activation
+- **HotkeyMappingService** - Maps hotkey IDs to characters
+- **ControllerInputService** - Integrates Xbox/PlayStation controllers via DirectInput
+
+**Hotkey Flow:**
+```
+1. User presses Win+F1 � GlobalHotkeyManager detects
+2. HotkeyPressed event fired with hotkey ID
+3. App.xaml.cs handler calls HotkeyActivationService.ActivateCharacterByHotkeyAsync()
+4. Service uses HotkeyMappingService to resolve character
+5. UnifiedMonitoringService activates character window
 ```
 
-### Phase 2: Service Creation
-
-#### Step 2.1: Create Service Interface
-
-**Location**: `Services/AutoLogin/{ServiceName}/I{ServiceName}.cs` or `Services/AutoLogin/I{ServiceName}.cs`
-
-**Template**:
-```csharp
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Models;
-
-namespace FFXIManager.Services.AutoLogin
-{
-    /// <summary>
-    /// Interface for {service purpose}.
-    /// {Brief description of what this service does}
-    /// </summary>
-    public interface I{ServiceName}
-    {
-        /// <summary>
-        /// {Method description}
-        /// </summary>
-        /// <param name="paramName">Description</param>
-        /// <returns>Description of return value</returns>
-        Task<ReturnType> MethodNameAsync(ParamType paramName, CancellationToken cancellationToken);
-    }
-}
-```
-
-**Best Practices**:
-- Keep interfaces focused (Single Responsibility)
-- Use async methods with CancellationToken support
-- Document all parameters and return values
-- Consider what other handlers might need from this service
-
-#### Step 2.2: Create Service Implementation
-
-**Location**: Same directory as interface
-
-**Template**:
-```csharp
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Models;
-
-namespace FFXIManager.Services.AutoLogin
-{
-    /// <summary>
-    /// Service responsible for {primary responsibility}.
-    /// {Detailed description of service purpose and capabilities}
-    ///
-    /// This service wraps:
-    /// - {Dependency1}: For {purpose}
-    /// - {Dependency2}: For {purpose}
-    ///
-    /// Key features:
-    /// - {Feature 1}
-    /// - {Feature 2}
-    /// </summary>
-    public class {ServiceName} : I{ServiceName}
-    {
-        private readonly IDependency1 _dependency1;
-        private readonly IDependency2 _dependency2;
-        private readonly ILoggingService _loggingService;
-
-        public {ServiceName}(
-            IDependency1 dependency1,
-            IDependency2 dependency2,
-            ILoggingService loggingService)
-        {
-            _dependency1 = dependency1 ?? throw new ArgumentNullException(nameof(dependency1));
-            _dependency2 = dependency2 ?? throw new ArgumentNullException(nameof(dependency2));
-            _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
-        }
-
-        // Implement interface methods here
-        // Copy extracted methods from handler
-        // Make them async if needed
-        // Add comprehensive logging
-        // Keep methods focused (<80 lines)
-    }
-}
-```
-
-**Service Implementation Checklist**:
-- ✅ All dependencies injected via constructor
-- ✅ Null checks for all dependencies
-- ✅ Comprehensive XML documentation
-- ✅ Security-conscious logging (mask sensitive data)
-- ✅ Methods are focused and <80 lines
-- ✅ Async/await pattern used correctly
-- ✅ CancellationToken support throughout
-- ✅ Proper exception handling
-
-#### Step 2.3: Copy and Adapt Methods
-
-**Extraction Process**:
-1. **Copy method signature** from handler to service
-2. **Update visibility** to public (was private in handler)
-3. **Add to interface** if it should be publicly accessible
-4. **Adapt parameters**:
-   - Remove handler-specific parameters (e.g., subtask if not needed)
-   - Keep essential parameters (window handles, accounts, cancellation tokens)
-   - Consider whether subtask is needed for progress reporting
-5. **Update logging**:
-   - Use service's `_loggingService` instance
-   - Add contextual information
-   - Ensure security (mask passwords, OTP codes)
-6. **Remove handler-specific calls**:
-   - Replace base class methods with direct service calls if needed
-   - Ensure service remains independent of handler
-
-**Example - Before (Handler)**:
-```csharp
-private async Task<string> GenerateSecureOTPCodeAsync(
-    AutoLoginSubtask subtask,
-    AutoLoginQueueItem queueItem,
-    string accountName,
-    CancellationToken cancellationToken)
-{
-    await UpdateProgressWithPhaseAsync(subtask, "authentication", 50, "Generating OTP");
-
-    var otpCode = await _otpService.GenerateOTPCodeAsync(
-        queueItem.Profile?.FilePath ?? string.Empty,
-        queueItem.Account.Id);
-
-    if (string.IsNullOrEmpty(otpCode))
-    {
-        throw new InvalidOperationException($"Could not generate OTP code for {accountName}");
-    }
-
-    // SECURITY: Mask OTP in logs
-    await _loggingService.LogDebugAsync($"Generated OTP: {otpCode.Substring(0, 2)}****");
-
-    return otpCode;
-}
-```
-
-**Example - After (Service)**:
-```csharp
-public async Task<string?> GenerateSecureOTPCodeAsync(
-    PlayOnlineMemberAccount account,
-    string profileFilePath)
-{
-    if (account == null)
-        throw new ArgumentNullException(nameof(account));
-
-    if (!account.IsOTPEnabled)
-    {
-        await _loggingService.LogWarningAsync($"OTP generation requested but not enabled for: {account.AccountName}");
-        return null;
-    }
-
-    var otpCode = await _otpService.GenerateOTPCodeAsync(profileFilePath, account.Id);
-
-    if (string.IsNullOrEmpty(otpCode))
-    {
-        await _loggingService.LogWarningAsync($"Could not generate OTP code for: {account.AccountName}");
-        return null;
-    }
-
-    // SECURITY: Log OTP generation without exposing full code
-    var maskedCode = otpCode.Length >= 2 ? $"{otpCode.Substring(0, 2)}****" : "****";
-    await _loggingService.LogDebugAsync($"Generated OTP for {account.AccountName}: {maskedCode} (Length: {otpCode.Length})");
-
-    return otpCode;
-}
-```
-
-**Key Changes**:
-- ✅ Removed `subtask` parameter (progress reporting stays in handler)
-- ✅ Simplified parameters to essentials
-- ✅ Added null checks and validation
-- ✅ Enhanced logging with more context
-- ✅ Made public for service interface
-- ✅ Improved error handling
-
-### Phase 3: Integration
-
-#### Step 3.1: Register Services in DI Container
-
-**Location**: `Infrastructure/DependencyInjection.cs`
-
-**Process**:
-1. Add using statement for service namespace
-2. Register service in `AddAppServices()` method
-3. Use appropriate lifetime (typically Singleton for stateless services)
-
-**Example**:
-```csharp
-// At top of file
-using FFXIManager.Services.AutoLogin.Navigation;
-
-// In AddAppServices() method, in logical grouping
-// AutoLogin support services (refactored for SOLID principles)
-services.AddSingleton<IPlayOnlineNavigationService, Services.AutoLogin.Navigation.PlayOnlineNavigationService>();
-services.AddSingleton<IPlayOnlineAuthenticationService, PlayOnlineAuthenticationService>();
-services.AddSingleton<IYourNewService, YourNewService>();
-```
-
-**Service Lifetime Guidelines**:
-- **Singleton**: Stateless services, shared across application (most AutoLogin services)
-- **Scoped**: Request/operation-scoped state (rare in AutoLogin)
-- **Transient**: New instance per request (avoid for services)
-
-#### Step 3.2: Update Handler Constructor
-
-**Process**:
-1. Add private readonly fields for new services
-2. Add parameters to constructor
-3. Add null checks and assignment
-
-**Example**:
-```csharp
-public class YourHandler : BaseLoginTaskHandler
-{
-    // Existing dependencies...
-    private readonly ILoggingService _loggingService;
-    private readonly IUIAutomationService _automationService;
-
-    // NEW: Add service fields
-    private readonly IYourNavigationService _navigationService;
-    private readonly IYourAuthenticationService _authenticationService;
-
-    public YourHandler(
-        ILoggingService loggingService,
-        IScreenshotCaptureService screenshotService,
-        ITemplateMatchingService templateService,
-        ITemplateManagementService templateManagementService,
-        IUIAutomationService automationService,
-        // NEW: Add service parameters
-        IYourNavigationService navigationService,
-        IYourAuthenticationService authenticationService)
-        : base(loggingService, screenshotService, templateService, templateManagementService)
-    {
-        _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
-        // NEW: Add null checks and assignment
-        _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
-        _authenticationService = authenticationService ?? throw new ArgumentNullException(nameof(authenticationService));
-    }
-}
-```
-
-#### Step 3.3: Replace Method Calls
-
-**Process**:
-1. Find all calls to extracted methods
-2. Replace with service calls
-3. Update parameters as needed
-4. Handle return values appropriately
-
-**Example - Before**:
-```csharp
-// OLD: Direct method call
-var password = await RetrieveSecurePasswordAsync(subtask, queueItem, windowHandle, accountName, cancellationToken);
-```
-
-**Example - After**:
-```csharp
-// NEW: Service call
-var password = await _authenticationService.RetrieveSecurePasswordAsync(
-    queueItem.Account!,
-    queueItem.Profile?.FilePath ?? string.Empty);
-```
-
-**Common Patterns**:
-- **Progress Reporting**: Keep in handler, service focuses on logic
-- **Error Handling**: Service returns null/throws, handler logs/reports
-- **Context Management**: Handler manages context, service performs operations
-
-#### Step 3.4: Remove Extracted Methods
-
-**Process**:
-1. Verify all calls to extracted methods have been replaced
-2. Delete the extracted method definitions from handler
-3. Update handler documentation to reflect new architecture
-
-**Verification**:
-```bash
-# Search for any remaining calls to extracted methods
-# Should return no results
-Grep "OldMethodName" Services/AutoLogin/YourHandler.cs
-```
-
-#### Step 3.5: Update Handler Documentation
-
-Update class-level documentation:
-```csharp
-/// <summary>
-/// Handles {primary responsibility} for the AutoLogin process.
-/// Orchestrates {workflow description} by delegating to specialized services.
-///
-/// **Refactoring Improvements:**
-/// - Extracted navigation logic to {NavigationService}
-/// - Extracted authentication logic to {AuthenticationService}
-/// - Methods decomposed for single responsibility
-/// - Improved testability and maintainability
-/// </summary>
-/// <remarks>
-/// **Dependencies:**
-/// - {NavigationService}: {Purpose}
-/// - {AuthenticationService}: {Purpose}
-/// - {OtherService}: {Purpose}
-///
-/// **Architecture:**
-/// Handler focuses on orchestration and progress reporting.
-/// Business logic delegated to specialized, testable services.
-/// Follows SOLID principles with clear separation of concerns.
-/// </remarks>
-```
-
-### Phase 4: Verification
-
-#### Step 4.1: Build Verification
-
-```bash
-# Clean build
-dotnet clean
-
-# Build with minimal verbosity
-dotnet build --verbosity minimal
-```
-
-**Expected Result**: ✅ Build successful with 0 errors
-
-**Common Issues**:
-- **Missing using statements**: Add namespace imports
-- **Null reference warnings**: Add null checks or null-forgiving operators where appropriate
-- **Type mismatches**: Verify method signatures match between handler and service
-
-#### Step 4.2: Code Review Checklist
-
-**Handler Review**:
-- ✅ File size reduced significantly (aim for >20% reduction)
-- ✅ All methods <80 lines
-- ✅ Clear orchestration logic, minimal implementation
-- ✅ Proper service dependency injection
-- ✅ Updated documentation
-
-**Service Review**:
-- ✅ Single, focused responsibility
-- ✅ All dependencies injected
-- ✅ Comprehensive logging
-- ✅ Security-conscious (no credential exposure)
-- ✅ Proper error handling
-- ✅ Methods <80 lines
-
-**DI Registration Review**:
-- ✅ All services registered
-- ✅ Correct lifetimes (Singleton for stateless)
-- ✅ Proper using statements
-- ✅ Services in logical grouping
-
-#### Step 4.3: Integration Testing
-
-**Test Scenarios**:
-1. **Happy Path**: Normal flow works end-to-end
-2. **Error Handling**: Failures are caught and logged appropriately
-3. **Cancellation**: CancellationToken properly respected
-4. **Edge Cases**: Null values, missing config, timeouts handled
-
-**Testing Approach**:
-```markdown
-## Integration Test Plan
-
-### Test 1: Normal Flow
-- Setup: Valid configuration, credentials available
-- Expected: Handler completes successfully, all phases execute
-- Verify: Logs show service calls, progress reporting works
-
-### Test 2: Missing Credentials
-- Setup: Account without stored password
-- Expected: Validation fails gracefully with clear error
-- Verify: AuthenticationService logs warning, handler reports error
-
-### Test 3: Cancellation
-- Setup: Start operation, cancel during execution
-- Expected: Operation cancels cleanly
-- Verify: No orphaned processes, proper cleanup
-
-### Test 4: Service Failure
-- Setup: Simulate service failure (bad template, timeout)
-- Expected: Handler catches exception, logs error, reports failure
-- Verify: Error message is user-friendly, includes troubleshooting info
-```
-
-#### Step 4.4: Performance Verification
-
-**Metrics to Check**:
-- Execution time should be similar or improved
-- Memory usage should be comparable
-- No new memory leaks introduced
-
-**Simple Performance Test**:
-```csharp
-// Time the operation before and after refactoring
-var stopwatch = Stopwatch.StartNew();
-await handler.ExecuteAsync(subtask, queueItem, context, cancellationToken);
-stopwatch.Stop();
-_loggingService.LogInfoAsync($"Execution time: {stopwatch.ElapsedMilliseconds}ms");
-```
-
-### Common Patterns and Best Practices
-
-#### Pattern 1: Phase-Based Method Extraction
-
-**Before** - One large method:
-```csharp
-private async Task ExecuteLargeWorkflowAsync(...) // 200 lines
-{
-    // Phase 1: Validation (30 lines)
-    // Phase 2: Navigation (50 lines)
-    // Phase 3: Authentication (60 lines)
-    // Phase 4: Confirmation (40 lines)
-    // Phase 5: Cleanup (20 lines)
-}
-```
-
-**After** - Multiple focused methods:
-```csharp
-private async Task ExecuteWorkflowAsync(...) // 20 lines
-{
-    // Phase 1: Validation
-    await ValidateConfigurationAsync(...);
-
-    // Phase 2: Navigation
-    var windowHandle = await _navigationService.NavigateToTargetAsync(...);
-
-    // Phase 3: Authentication
-    await _authenticationService.AuthenticateAsync(...);
-
-    // Phase 4: Confirmation
-    await ConfirmCompletionAsync(...);
-
-    // Phase 5: Cleanup
-    await CleanupResourcesAsync(...);
-}
-
-// Each phase method is <30 lines, focused on single concern
-```
-
-#### Pattern 2: Service Method Composition
-
-Services can call other services:
-```csharp
-public class NavigationService : INavigationService
-{
-    private readonly IScreenDetectionService _screenDetection;
-    private readonly IUIAutomationService _automation;
-
-    public async Task<IntPtr> NavigateToScreenAsync(...)
-    {
-        // Use screen detection service
-        var match = await _screenDetection.DetectScreenAsync(...);
-
-        // Use automation service
-        await _automation.ClickAsync(...);
-
-        return newWindowHandle;
-    }
-}
-```
-
-#### Pattern 3: Progress Reporting Delegation
-
-Handler keeps progress reporting responsibility:
-```csharp
-// In Handler
-private async Task ExecutePhaseAsync(AutoLoginSubtask subtask, ...)
-{
-    // Handler reports progress
-    await UpdateProgressWithPhaseAsync(subtask, "authentication", 25, "Starting authentication");
-
-    // Service does the work
-    var result = await _authenticationService.AuthenticateAsync(...);
-
-    // Handler reports completion
-    await UpdateProgressWithPhaseAsync(subtask, "authentication", 50, "Authentication completed");
-
-    return result;
-}
-```
-
-#### Pattern 4: Security-Conscious Logging
-
-Always mask sensitive data in logs:
-```csharp
-// BAD - Exposes password
-await _loggingService.LogDebugAsync($"Password: {password}");
-
-// GOOD - Masks sensitive data
-await _loggingService.LogDebugAsync($"Password retrieved: Length={password.Length} characters");
-
-// BAD - Exposes full OTP
-await _loggingService.LogDebugAsync($"OTP: {otpCode}");
-
-// GOOD - Partial mask with metadata
-var maskedOtp = otpCode.Length >= 2 ? $"{otpCode.Substring(0, 2)}****" : "****";
-await _loggingService.LogDebugAsync($"OTP generated: {maskedOtp} (Length: {otpCode.Length})");
-```
-
-### Refactoring Checklist Template
-
-Use this checklist for each handler refactoring:
-
-```markdown
-## Refactoring Checklist: {HandlerName}
-
-### Pre-Refactoring
-- [ ] Handler analyzed and understood
-- [ ] Service boundaries identified
-- [ ] Extraction plan documented
-- [ ] Expected results defined
-
-### Service Creation
-- [ ] Interface created with documentation
-- [ ] Implementation created with dependencies
-- [ ] Methods extracted and adapted
-- [ ] Logging added (security-conscious)
-- [ ] All methods <80 lines
-- [ ] Unit tests created (optional but recommended)
-
-### Integration
-- [ ] Services registered in DependencyInjection.cs
-- [ ] Using statements added
-- [ ] Handler constructor updated
-- [ ] Service fields added with null checks
-- [ ] Method calls replaced with service calls
-- [ ] Extracted methods removed from handler
-- [ ] Handler documentation updated
-
-### Verification
-- [ ] Build successful (0 errors)
-- [ ] All methods <80 lines
-- [ ] File size reduced >20%
-- [ ] Integration tests pass
-- [ ] Normal flow works
-- [ ] Error handling works
-- [ ] Cancellation works
-- [ ] Performance acceptable
-
-### Documentation
-- [ ] CLAUDE.md updated
-- [ ] Service documentation complete
-- [ ] Handler documentation complete
-- [ ] Architecture diagrams updated (if applicable)
-```
-
-### Success Metrics
-
-After refactoring, you should see:
-
-**Quantitative**:
-- Handler file size reduced by >20%
-- All methods <80 lines
-- Extracted code >400 lines into focused services
-- Build time unchanged or improved
-- Test coverage maintained or improved
-
-**Qualitative**:
-- Code is more readable and maintainable
-- Service responsibilities are clear
-- Handler orchestration is obvious
-- Testing is easier (services can be mocked)
-- Reusability improved (services usable by other handlers)
-- SOLID principles adhered to
-
-### Next Handler Candidates
-
-**Priority Order** (based on complexity and reuse potential):
-
-1. **WindowerLaunchHandler** (~700 lines)
-   - Extract: Windower process management service
-   - Extract: Addon configuration service
-   - Benefit: Process management reusable by other handlers
-
-2. **FFXIGameHandler** (~600 lines)
-   - Extract: FFXI navigation service
-   - Extract: Character selection service
-   - Benefit: Game-specific logic isolated for testing
-
-3. **POLProxyLaunchHandler** (~500 lines)
-   - Extract: POL Proxy detection service (may merge with existing)
-   - Extract: Proxy configuration service
-   - Benefit: Proxy logic reusable, clearer flow
-
-### Resources
-
-**Reference Implementations**:
-- `Services/AutoLogin/PlayOnlineAuthHandler.cs` - Refactored handler example
-- `Services/AutoLogin/Navigation/PlayOnlineNavigationService.cs` - Navigation service example
-- `Services/AutoLogin/PlayOnlineAuthenticationService.cs` - Authentication service example
-- `Infrastructure/DependencyInjection.cs` - Service registration example
-
-**Patterns to Follow**:
-- `WindowerLaunchHandler.cs` - Well-structured handler (pre-refactoring baseline)
-- `BaseLoginTaskHandler.cs` - Base class infrastructure
-
-**Key Files**:
-- Handler location: `Services/AutoLogin/`
-- Service location: `Services/AutoLogin/` or `Services/AutoLogin/{Context}/`
-- DI registration: `Infrastructure/DependencyInjection.cs`
-- Models: `Models/` (for shared types)
-
----
-
-**Remember**: The goal is not just to reduce lines of code, but to improve **maintainability**, **testability**, and **reusability** while adhering to **SOLID principles**. Each extracted service should have a clear, single responsibility and be usable in isolation.
+### Character Monitoring
+
+**UnifiedMonitoringService** - Centralized service for monitoring FFXI windows:
+- Tracks all active FFXI character windows
+- Provides fast window activation (used by hotkeys)
+- Polls process list for character discovery
+
+**PlayOnlineMonitorService** - Monitors PlayOnline/FFXI processes:
+- Detects new launches
+- Tracks character names and window handles
+- Provides character list for UI
+
+## Important Development Notes
+
+### Workflow-First Architecture
+
+**CRITICAL PRINCIPLE**: All auto-login UI navigation is defined in workflow JSON files, not in code or template files.
+
+**Template Files** (`Templates/` directory):
+- Contain **detection metadata ONLY** (confidenceThreshold, tolerance, version)
+- **DO NOT add navigation to template JSON files** - navigation belongs in workflows
+- Templates are purely for screen detection, not navigation logic
+
+**Workflow Files** (`workflows/` directory):
+- Define complete login sequences with steps, navigation, timing, retries
+- All navigation is **hybrid** (keyboard-first with click fallback)
+- Support conditional execution (e.g., "Account.IsOTPEnabled")
+- Example: `workflows/defaults/playonline-standard.json`
+
+### Adding New Auto-Login Functionality
+
+**Workflow-first approach** (99% of cases):
+1. Edit or create workflow JSON in `workflows/` directory
+2. Add new step with TemplatePath and Navigation sequence
+3. Test with real login flow
+4. **DO NOT create new handlers or services** - use DynamicWorkflowHandler
+
+**Specialized handler** (rare cases only):
+- Only needed for process launch logic (e.g., launching applications)
+- All UI navigation should use workflow system, not specialized handlers
+
+Logs are written to:
+- `%APPDATA%/FFXIManager/logs/log-YYYYMMDD.json` (JSON format)
+- Console output during development
+
+### Service Registration Pattern
+
+All services registered in `Infrastructure/DependencyInjection.cs`:
+- Use `AddSingleton<IInterface, Implementation>()` for stateful services
+- Use `AddTransient<T>()` for ViewModels and dialogs
+- ViewModels should inject services via constructor
+
+## Common Development Tasks
+
+### Adding a New Service
+
+1. Create interface in `Services/` (e.g., `IMyService.cs`)
+2. Create implementation (e.g., `MyService.cs`)
+3. Register in `Infrastructure/DependencyInjection.cs`:
+   ```csharp
+   services.AddSingleton<IMyService, MyService>();
+   ```
+4. Inject via constructor in consumers:
+   ```csharp
+   public MyViewModel(IMyService myService)
+   {
+       _myService = myService;
+   }
+   ```
+
+## Configuration Files
+
+- **appsettings.json** - Serilog configuration, app settings
+- **settings.json** - User settings (`%APPDATA%/FFXIManager/settings.json`)
+- **queue_state.json** - Auto-login queue persistence
+- **workflows/*.json** - Workflow definitions
+
+## Security & Safety
+
+- **Memory Safety**: Application does NOT modify game memory or inject code
+- **File Operations**: Only swaps PlayOnline configuration files (`login_w.bin`)
+- **Input Handling**: Uses Windows API (SendInput) for keyboard/mouse automation
+- **Credentials**: Can optionally use Windows Credential Manager for secure storage
+
+## Project History
+
+**Branch**: data-driven-auto-login-test
+
+**Recent Major Refactorings:**
+
+1. **100% Workflow-Driven Architecture - Phase 2** (Latest)
+   - Removed `POLProxyLaunchHandler` and `WindowerLaunchHandler`
+   - Removed 4 configuration classes (POLProxyLaunchConfiguration, WindowerLaunchConfiguration, etc.)
+   - Simplified `LoginTaskStep` enum from 8 values to 1 (only `None` remains, marked obsolete)
+   - Extended `DynamicWorkflowHandler` to handle generic application launches
+   - Added `StepType` property to `WorkflowStepDefinition` ("NavigateUI" vs "LaunchApplication")
+   - Generic launch pattern: ExternalApplicationService + UnifiedMonitoringService + template confirmation
+   - **Result**: DynamicWorkflowHandler is now the ONLY handler - handles ALL UI navigation AND application launches
+
+2. **Complete Migration to Workflow-First Architecture - Phase 1**
+   - Removed `PlayOnlineAuthHandler` and `FFXIGameHandler` (~1,800 lines of code)
+   - Removed 12 specialized services (authentication, navigation, screen detection)
+   - Stripped navigation from all template JSON files (14 templates updated)
+   - Consolidated all login logic into workflow JSON definitions
+   - Simplified `LoginTaskHandlerResolver` to first-match resolution
+   - Created `SharedAutoLoginConfiguration` for minimal shared constants
+   - **Result**: Single workflow JSON file (`playonline-standard.json`) defines entire login flow
+
+3. Extracted SOLID-compliant services from monolithic queue service
+
+4. Implemented data-driven workflow system (JSON-based login flows)
+
+5. Migrated from absolute coordinates to hybrid navigation (resolution-independent)

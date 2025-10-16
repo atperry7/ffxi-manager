@@ -466,8 +466,9 @@ namespace FFXIManager.Models
         #region Factory Methods
 
         /// <summary>
-        /// Creates a subtask from a LoginTaskStep
+        /// DEPRECATED: Creates a subtask from a LoginTaskStep (legacy system)
         /// </summary>
+        [System.Obsolete("Use WorkflowTaskBuilder to create subtasks from workflow definitions instead")]
         public static AutoLoginSubtask FromLoginTaskStep(LoginTaskStep step)
         {
             return new AutoLoginSubtask
@@ -476,45 +477,19 @@ namespace FFXIManager.Models
                 Name = step.GetShortDisplayName(),
                 Description = step.GetDisplayName(),
                 EstimatedDurationSeconds = step.GetEstimatedDurationSeconds(),
-                IsSkippable = step == LoginTaskStep.OTPEntry || step == LoginTaskStep.LaunchPOLProxy, // OTP and POL Proxy might not be required
+                IsSkippable = false,
                 ExecutionOrder = (int)step
             };
         }
 
         /// <summary>
-        /// Creates a collection of subtasks from the main login task steps
+        /// DEPRECATED: Creates a collection of subtasks from the main login task steps (legacy system)
         /// </summary>
+        [System.Obsolete("Use WorkflowTaskBuilder to create subtasks from workflow definitions instead")]
         public static List<AutoLoginSubtask> CreateStandardLoginSubtasks()
         {
-            var subtasks = new List<AutoLoginSubtask>();
-            var mainSteps = LoginTaskStepExtensions.GetMainSteps();
-
-            foreach (var step in mainSteps)
-            {
-                subtasks.Add(FromLoginTaskStep(step));
-
-                // Add POL Proxy sub-tasks if this is the LaunchPOLProxy step
-                if (step == LoginTaskStep.LaunchPOLProxy)
-                {
-                    var polProxySubTasks = LoginTaskStepExtensions.GetPOLProxySubTasks();
-                    foreach (var subStep in polProxySubTasks)
-                    {
-                        subtasks.Add(FromLoginTaskStep(subStep));
-                    }
-                }
-
-                // Add Windower sub-tasks if this is the LaunchWindower step
-                if (step == LoginTaskStep.LaunchWindower)
-                {
-                    var windowerSubTasks = LoginTaskStepExtensions.GetWindowerSubTasks();
-                    foreach (var subStep in windowerSubTasks)
-                    {
-                        subtasks.Add(FromLoginTaskStep(subStep));
-                    }
-                }
-            }
-
-            return subtasks;
+            // Legacy method - returns empty list since workflows now handle everything
+            return new List<AutoLoginSubtask>();
         }
 
         #endregion

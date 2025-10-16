@@ -69,25 +69,13 @@ namespace FFXIManager.Infrastructure
             // AutoLogin support services (refactored for SOLID principles)
             services.AddSingleton<IWorkflowService, WorkflowService>();
             services.AddSingleton<WorkflowTaskBuilder>(); // Builds subtasks from workflows
-            services.AddSingleton<IPlayOnlineNavigationService, Services.AutoLogin.Navigation.PlayOnlineNavigationService>();
-            services.AddSingleton<IPlayOnlineAuthenticationService, PlayOnlineAuthenticationService>();
 
-            // FFXI-specific support services (refactored for SOLID principles)
-            services.AddSingleton<IFFXIScreenDetectionService, Services.AutoLogin.ScreenDetection.FFXIScreenDetectionService>();
-            services.AddSingleton<IFFXIProcessDiscoveryService, FFXIProcessDiscoveryService>();
-            services.AddSingleton<IWindowHandleManagementService, WindowHandleManagementService>();
-            services.AddSingleton<ICharacterNavigationService, Services.AutoLogin.Navigation.CharacterNavigationService>();
-
-            // Windower-specific support services (refactored for SOLID principles)
+            // Process launch services
             services.AddSingleton<IProcessLaunchService, ProcessLaunchService>();
             services.AddSingleton<IMonitorPositioningService, MonitorPositioningService>();
 
-            // Auto-login handlers
-            services.AddSingleton<ILoginTaskHandler, POLProxyLaunchHandler>();
-            services.AddSingleton<ILoginTaskHandler, WindowerLaunchHandler>();
-            services.AddSingleton<ILoginTaskHandler, PlayOnlineAuthHandler>();
-            services.AddSingleton<ILoginTaskHandler, FFXIGameHandler>();
-            services.AddSingleton<ILoginTaskHandler, DynamicWorkflowHandler>(); // Dynamic handler for data-driven workflows
+            // Auto-login handler (100% workflow-driven)
+            services.AddSingleton<ILoginTaskHandler, DynamicWorkflowHandler>(); // Single handler for all UI navigation and application launches
 
             // Diagnostics UI (Template Navigation Tuner)
             services.AddTransient<FFXIManager.Views.TemplateNavigationTuner>();

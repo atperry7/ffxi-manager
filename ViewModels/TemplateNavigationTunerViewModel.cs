@@ -312,9 +312,9 @@ namespace FFXIManager.ViewModels
             AvailableWindows.Clear();
             string[] names = SelectedTarget switch
             {
-                TargetApp.Windower => WindowerLaunchConfiguration.ProcessNames.WindowerVariations,
-                TargetApp.PlayOnline => new[] { PlayOnlineAuthConfiguration.ProcessNames.PlayOnline },
-                TargetApp.FFXI => new[] { PlayOnlineAuthConfiguration.ProcessNames.FFXIMain },
+                TargetApp.Windower => new[] { "windower", "edenxi" }, // Common Windower variants
+                TargetApp.PlayOnline => new[] { SharedAutoLoginConfiguration.ProcessNames.PlayOnline },
+                TargetApp.FFXI => new[] { SharedAutoLoginConfiguration.ProcessNames.FFXIMain },
                 _ => Array.Empty<string>()
             };
 

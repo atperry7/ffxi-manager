@@ -269,27 +269,10 @@ namespace FFXIManager.Models
         };
 
         /// <summary>
-        /// Current step display text
+        /// Current step display text (DEPRECATED - use CurrentTaskDisplay instead)
         /// </summary>
-        public string CurrentStepDisplay => CurrentStep switch
-        {
-            LoginTaskStep.None => "Waiting",
-            LoginTaskStep.LaunchPOLProxy => "Launching POL Proxy",
-            LoginTaskStep.CheckPOLProxyStatus => "Checking POL Proxy",
-            LoginTaskStep.WaitForPOLProxyStart => "Starting POL Proxy",
-            LoginTaskStep.LaunchWindower => "Launching Windower",
-            LoginTaskStep.WaitForWindowerStart => "Waiting for Windower",
-            LoginTaskStep.VerifyWindowerLoaded => "Verifying Windower",
-            LoginTaskStep.ClickLaunchButton => "Clicking Launch",
-            LoginTaskStep.MemberSelection => "Selecting Member",
-            LoginTaskStep.PasswordEntry => "Entering Password",
-            LoginTaskStep.OTPEntry => "Entering OTP",
-            LoginTaskStep.TermsAcceptance => "Accepting Terms",
-            LoginTaskStep.CharacterSelection => "Selecting Character",
-            LoginTaskStep.CharacterSlotPick => "Picking Slot",
-            LoginTaskStep.ConfirmLogin => "Confirming Login",
-            _ => "Unknown Step"
-        };
+        [System.Obsolete("Use CurrentTaskDisplay instead - all login steps are now workflow-driven")]
+        public string CurrentStepDisplay => "Waiting";
 
         /// <summary>
         /// Overall progress percentage (0-100) - Uses task progress if available, falls back to step progress

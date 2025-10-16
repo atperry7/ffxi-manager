@@ -1,29 +1,20 @@
-{
-  "name": "FFXI Character Confirmation",
-  "templatePath": "FFXI/ffxi_character_confirmation",
-  "elementType": "screen",
-  "associatedStep": "ConfirmLogin",
-  "description": "FFXI character confirmation screen before entering game world",
-  "confidenceThreshold": 0.45,
-  "tolerance": 5,
-  "version": "2.0.0",
-  "navigation": {
-    "type": "Hybrid",
-    "description": "Confirm character and enter game world",
-    "sequence": [
-      {
-        "action": "Enter",
-        "count": 1,
-        "delayMs": 500,
-        "description": "Confirm and enter game world"
-      }
-    ],
-    "postNavigationDelayMs": 3000
-  },
-  "variants": [],
-  "properties": {},
-  "detectionOptions": {
-    "timeout": 30,
-    "checkInterval": 1
-  }
+﻿{
+    "name":  "FFXI Character Confirmation",
+    "templatePath":  "FFXI/ffxi_character_confirmation",
+    "elementType":  "screen",
+    "associatedStep":  "ConfirmLogin",
+    "description":  "FFXI character confirmation screen before entering game world",
+    "confidenceThreshold":  0.45,
+    "tolerance":  5,
+    "version":  "2.0.0",
+    "variants":  [
+
+                 ],
+    "properties":  {
+
+                   },
+    "detectionOptions":  {
+                             "timeout":  30,
+                             "checkInterval":  1
+                         }
 }

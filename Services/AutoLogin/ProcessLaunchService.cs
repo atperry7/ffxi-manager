@@ -84,7 +84,7 @@ namespace FFXIManager.Services.AutoLogin
                 var progressPercent = baseProgress + (int)((elapsed.TotalSeconds / timeout.TotalSeconds) * rangeSize);
                 subtask.UpdateProgress(Math.Min(85, progressPercent), "Verifying launched process");
 
-                await Task.Delay(WindowerLaunchConfiguration.PollingIntervals.ProcessStartupCheck, cancellationToken);
+                await Task.Delay(500, cancellationToken); // Poll every 500ms for process detection
             }
 
             await _loggingService.LogWarningAsync($"[PROCESS_LAUNCH] Could not verify process startup within {timeout.TotalSeconds}s");

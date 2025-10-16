@@ -150,6 +150,45 @@ namespace FFXIManager.Models.AutoLogin
         public int MaxRetryAttempts { get; set; } = 3;
 
         /// <summary>
+        /// Step type that determines execution behavior.
+        /// - "NavigateUI": Standard UI navigation with template detection (default)
+        /// - "LaunchApplication": Generic application launch with process detection + template confirmation
+        /// </summary>
+        public string StepType { get; set; } = "NavigateUI";
+
+        /// <summary>
+        /// Name of the external application to launch (for LaunchApplication steps).
+        /// Must match an entry in ExternalApplicationData settings.
+        /// Example: "POL Proxy", "Windower"
+        /// </summary>
+        public string? ApplicationName { get; set; }
+
+        /// <summary>
+        /// For LaunchApplication steps: Skip step if application is not configured in settings.
+        /// If false, workflow fails if application is not found.
+        /// </summary>
+        public bool AllowSkipIfNotConfigured { get; set; } = true;
+
+        /// <summary>
+        /// For LaunchApplication steps: Skip step if application is already running.
+        /// If false, application will be relaunched even if already running.
+        /// </summary>
+        public bool AllowSkipIfRunning { get; set; } = false;
+
+        /// <summary>
+        /// Number of retry attempts for template detection.
+        /// Used when waiting for application UI to be ready or screen to appear.
+        /// Default is 30.
+        /// </summary>
+        public int? RetryAttempts { get; set; }
+
+        /// <summary>
+        /// Delay in milliseconds between template detection retry attempts.
+        /// Default is 500ms.
+        /// </summary>
+        public int? RetryDelayMs { get; set; }
+
+        /// <summary>
         /// Additional metadata for extensibility.
         /// Can store custom properties without modifying the model.
         /// </summary>
@@ -224,6 +263,12 @@ namespace FFXIManager.Models.AutoLogin
                 Navigation = Navigation,
                 LegacyTaskStep = LegacyTaskStep,
                 MaxRetryAttempts = MaxRetryAttempts,
+                StepType = StepType,
+                ApplicationName = ApplicationName,
+                AllowSkipIfNotConfigured = AllowSkipIfNotConfigured,
+                AllowSkipIfRunning = AllowSkipIfRunning,
+                RetryAttempts = RetryAttempts,
+                RetryDelayMs = RetryDelayMs,
                 Metadata = new Dictionary<string, object>(Metadata)
             };
         }
