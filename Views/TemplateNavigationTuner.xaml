@@ -62,7 +62,13 @@
                             Command="{Binding ReplaceImageCommand}"
                             Style="{StaticResource CircularWarningButton}"
                             Width="32" Height="32"
-                            ToolTip="Replace Template Image"/>
+                            ToolTip="Replace Template Image"
+                            Margin="0,0,5,0"/>
+                    <Button Content="⚙️"
+                            Command="{Binding OpenWorkflowEditorCommand}"
+                            Style="{StaticResource CircularSuccessButton}"
+                            Width="32" Height="32"
+                            ToolTip="Open Workflow Editor - Create and manage data-driven login workflows"/>
                 </StackPanel>
 
                 <!-- Info Row -->

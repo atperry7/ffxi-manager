@@ -505,7 +505,7 @@ namespace FFXIManager.ViewModels
         public ICommand RetryFailedCommand { get; private set; } = null!;
         public ICommand ResetQueueCommand { get; private set; } = null!;
         public ICommand RefreshAccountsCommand { get; private set; } = null!;
-        public ICommand OpenTemplateTunerCommand { get; private set; } = null!;
+        public ICommand OpenWorkflowEditorCommand { get; private set; } = null!;
 
         // Parameter-based commands
         public ICommand RemoveItemParameterCommand { get; private set; } = null!;
@@ -566,8 +566,8 @@ namespace FFXIManager.ViewModels
             RefreshAccountsCommand = new RelayCommand(
                 async () => await RefreshAvailableAccountsAsync());
 
-            OpenTemplateTunerCommand = new RelayCommand(
-                () => OpenTemplateTuner());
+            OpenWorkflowEditorCommand = new RelayCommand(
+                () => OpenWorkflowEditor());
 
             // Parameter-based commands
             RemoveItemParameterCommand = new RelayCommandWithParameter<AutoLoginQueueItem>(
@@ -1031,11 +1031,11 @@ namespace FFXIManager.ViewModels
 
         #endregion
 
-        private void OpenTemplateTuner()
+        private void OpenWorkflowEditor()
         {
             try
             {
-                var window = _serviceProvider.GetService(typeof(FFXIManager.Views.TemplateNavigationTuner)) as System.Windows.Window;
+                var window = _serviceProvider.GetService(typeof(FFXIManager.Views.WorkflowEditor)) as System.Windows.Window;
                 if (window != null)
                 {
                     window.Owner = System.Windows.Application.Current?.MainWindow;
@@ -1043,12 +1043,12 @@ namespace FFXIManager.ViewModels
                 }
                 else
                 {
-                    _ = _loggingService.LogWarningAsync("TemplateNavigationTuner window could not be created");
+                    _ = _loggingService.LogWarningAsync("WorkflowEditor window could not be created");
                 }
             }
             catch (Exception ex)
             {
-                _ = _loggingService.LogErrorAsync("Failed to open Template Navigation Tuner", ex);
+                _ = _loggingService.LogErrorAsync("Failed to open Workflow Editor", ex);
             }
         }
 

@@ -223,7 +223,30 @@ namespace FFXIManager
 
                 // Ensure PlayOnline monitoring is started regardless of UI windows
                 services.GetRequiredService<IPlayOnlineMonitorService>().StartMonitoring();
-                
+
+                // **WORKFLOW SYSTEM**: Initialize workflow service to ensure default workflows exist
+                try
+                {
+                    var workflowService = services.GetRequiredService<FFXIManager.Services.AutoLogin.IWorkflowService>();
+                    // Eagerly request default workflow to trigger initialization
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var defaultWorkflow = await workflowService.GetDefaultWorkflowAsync();
+                            await services.GetRequiredService<ILoggingService>().LogInfoAsync($"Workflow system initialized with default workflow: {defaultWorkflow.Name}");
+                        }
+                        catch (Exception ex)
+                        {
+                            await services.GetRequiredService<ILoggingService>().LogErrorAsync("Failed to initialize workflow system", ex, "App");
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _ = services.GetRequiredService<ILoggingService>().LogErrorAsync("Error accessing workflow service", ex, "App");
+                }
+
                 // Connect the character ordering service to the monitor and wait for completion
                 if (services.GetRequiredService<ICharacterOrderingService>() is CharacterOrderingService orderingService)
                 {

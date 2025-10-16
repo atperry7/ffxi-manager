@@ -17,10 +17,11 @@ namespace FFXIManager.Views
             IUIAutomationService automation,
             IScreenshotCaptureService screenshots,
             ILoggingService log,
-            FFXIManager.Infrastructure.IProcessManagementService processes)
+            FFXIManager.Infrastructure.IProcessManagementService processes,
+            IServiceProvider serviceProvider)
         {
             InitializeComponent();
-            this.DataContext = new TemplateNavigationTunerViewModel(templateService, matchingService, automation, screenshots, log, processes);
+            this.DataContext = new TemplateNavigationTunerViewModel(templateService, matchingService, automation, screenshots, log, processes, serviceProvider);
 
             // Ensure cleanup on window closing
             Closing += TemplateNavigationTuner_Closing;

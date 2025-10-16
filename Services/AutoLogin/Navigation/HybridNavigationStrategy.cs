@@ -68,7 +68,6 @@ namespace FFXIManager.Services.AutoLogin.Navigation
                         // Execute click action - create a NavigationAction with the click step in the sequence
                         var clickAction = new NavigationAction
                         {
-                            Type = NavigationType.RelativeClick,
                             PostNavigationDelayMs = step.DelayMs
                         };
                         clickAction.Sequence.Add(step);
@@ -92,7 +91,6 @@ namespace FFXIManager.Services.AutoLogin.Navigation
                         // Execute keyboard action
                         var keyAction = new NavigationAction
                         {
-                            Type = NavigationType.Keyboard,
                             PostNavigationDelayMs = 0
                         };
                         keyAction.Sequence.Add(step);

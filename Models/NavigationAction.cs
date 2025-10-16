@@ -6,25 +6,25 @@ using System.Runtime.CompilerServices;
 namespace FFXIManager.Models
 {
     /// <summary>
-    /// Defines the type of navigation action to perform for UI interaction.
+    /// DEPRECATED: Legacy navigation type enum. No longer used in sequence-based navigation.
+    /// The Sequence property now allows mixing keyboard and click actions in any order.
+    /// Kept for backward compatibility only.
     /// </summary>
+    [Obsolete("NavigationType is deprecated. Use Sequence property to define mixed keyboard/click actions instead.")]
     public enum NavigationType
     {
         /// <summary>
-        /// Navigation using keyboard input (Tab, Arrow keys, Enter, etc.)
-        /// Resolution and DPI independent.
+        /// Legacy: Keyboard-only navigation
         /// </summary>
         Keyboard,
 
         /// <summary>
-        /// Navigation using mouse clicks with relative positioning.
-        /// Coordinates are scaled based on window dimensions and template match location.
+        /// Legacy: Click-only navigation
         /// </summary>
         RelativeClick,
 
         /// <summary>
-        /// Hybrid approach: Try keyboard first, fallback to relative click if keyboard fails.
-        /// Provides best reliability across different configurations.
+        /// Legacy: Hybrid fallback approach (no longer needed with sequence-based navigation)
         /// </summary>
         Hybrid
     }
@@ -130,9 +130,19 @@ namespace FFXIManager.Models
     }
 
     /// <summary>
-    /// Defines a complete navigation action for UI interaction.
-    /// Supports keyboard sequences, relative clicking, and hybrid approaches.
+    /// Defines a complete navigation action for UI interaction using a sequence-based approach.
+    /// Each action in the Sequence can be either keyboard input or mouse clicks, allowing
+    /// flexible navigation patterns like: Tab → Click → Tab → Enter.
     /// </summary>
+    /// <remarks>
+    /// **SEQUENCE-BASED NAVIGATION:**
+    /// Navigation is defined as an ordered sequence of actions (KeyboardAction objects).
+    /// Each action specifies whether it's a keyboard input (Tab, Enter, etc.) or a Click,
+    /// along with parameters like repeat count, delays, and click coordinates.
+    ///
+    /// This approach replaces the old NavigationType enum pattern and provides much more
+    /// flexibility since you can mix keyboard and clicks in any order within a single sequence.
+    /// </remarks>
     public class NavigationAction : INotifyPropertyChanged
     {
         private NavigationType _type = NavigationType.Keyboard;
@@ -140,8 +150,11 @@ namespace FFXIManager.Models
         private string? _description;
 
         /// <summary>
-        /// The type of navigation to perform
+        /// DEPRECATED: Legacy navigation type property. No longer used.
+        /// Kept for backward compatibility with existing workflow JSON files.
+        /// Use the Sequence property to define navigation behavior instead.
         /// </summary>
+        [Obsolete("Type property is deprecated. Define navigation using the Sequence property instead.")]
         public NavigationType Type
         {
             get => _type;
@@ -149,8 +162,13 @@ namespace FFXIManager.Models
         }
 
         /// <summary>
-        /// Sequence of keyboard and click actions to execute in order.
+        /// **PRIMARY NAVIGATION DEFINITION**: Ordered sequence of keyboard and click actions.
         /// Mix keyboard actions (Tab, Enter, etc.) with Click actions for flexible navigation.
+        ///
+        /// Examples:
+        /// - [Tab, Tab, Enter] - Pure keyboard navigation
+        /// - [Click(0.5, 0.5)] - Single click at center
+        /// - [Tab, Click(0.3, 0.7), Enter] - Mixed keyboard and click
         /// </summary>
         public ObservableCollection<KeyboardAction> Sequence { get; set; } = new();
 

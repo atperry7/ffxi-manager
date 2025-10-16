@@ -33,12 +33,15 @@ namespace FFXIManager.Services.AutoLogin
     }
 
     /// <summary>
-    /// Default implementation of the login task handler resolver
+    /// Default implementation of the login task handler resolver.
+    /// **WORKFLOW-FIRST ARCHITECTURE**: Prioritizes data-driven DynamicWorkflowHandler,
+    /// then falls back to specialized handlers for backward compatibility.
     /// </summary>
     public class LoginTaskHandlerResolver : ILoginTaskHandlerResolver
     {
         private readonly List<ILoginTaskHandler> _handlers;
         private readonly ILoggingService _loggingService;
+        private readonly ILoginTaskHandler? _dynamicHandler;
 
         public LoginTaskHandlerResolver(
             IEnumerable<ILoginTaskHandler> handlers,
@@ -47,11 +50,15 @@ namespace FFXIManager.Services.AutoLogin
             _handlers = new List<ILoginTaskHandler>(handlers ?? throw new ArgumentNullException(nameof(handlers)));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
 
+            // Separate DynamicWorkflowHandler for priority execution
+            _dynamicHandler = _handlers.FirstOrDefault(h => h is DynamicWorkflowHandler);
+
             // Log registered handlers on startup
-            _loggingService.LogInfoAsync($"LoginTaskHandlerResolver initialized with {_handlers.Count} handlers");
+            _loggingService.LogInfoAsync($"LoginTaskHandlerResolver initialized with {_handlers.Count} handlers (workflow-first mode)");
             foreach (var handler in _handlers)
             {
-                _loggingService.LogDebugAsync($"Registered handler: {handler.GetType().Name} for task step: {handler.TaskStep}");
+                var isDynamic = handler is DynamicWorkflowHandler;
+                _loggingService.LogDebugAsync($"Registered handler: {handler.GetType().Name} for task step: {handler.TaskStep}{(isDynamic ? " (PRIMARY: workflow-based execution)" : " (FALLBACK: legacy handler)")}");
             }
         }
 
@@ -63,20 +70,29 @@ namespace FFXIManager.Services.AutoLogin
                 return null;
             }
 
-            _loggingService.LogDebugAsync($"Resolving handler for subtask: {subtask.TaskStep}");
+            _loggingService.LogDebugAsync($"Resolving handler for subtask: {subtask.Name} (TaskStep: {subtask.TaskStep}, HasWorkflowStep: {subtask.WorkflowStep != null})");
 
-            var handler = _handlers.FirstOrDefault(h => h.CanHandle(subtask));
-
-            if (handler != null)
+            // **PHASE 1: WORKFLOW-FIRST** - Try DynamicWorkflowHandler for data-driven execution
+            if (_dynamicHandler != null && _dynamicHandler.CanHandle(subtask))
             {
-                _loggingService.LogDebugAsync($"Resolved handler: {handler.GetType().Name} for subtask: {subtask.TaskStep}");
-            }
-            else
-            {
-                _loggingService.LogWarningAsync($"No handler found for subtask: {subtask.TaskStep}. Available handlers: {string.Join(", ", _handlers.Select(h => h.GetType().Name))}");
+                _loggingService.LogInfoAsync($"✓ Using WORKFLOW-BASED handler for subtask: {subtask.Name}");
+                return _dynamicHandler;
             }
 
-            return handler;
+            // **PHASE 2: LEGACY FALLBACK** - Try specialized handlers for backward compatibility
+            var specializedHandler = _handlers
+                .Where(h => h is not DynamicWorkflowHandler)
+                .FirstOrDefault(h => h.CanHandle(subtask));
+
+            if (specializedHandler != null)
+            {
+                _loggingService.LogInfoAsync($"⚠ Using LEGACY specialized handler: {specializedHandler.GetType().Name} for subtask: {subtask.Name}");
+                return specializedHandler;
+            }
+
+            // **PHASE 3: NO HANDLER** - This should rarely happen now that workflows are primary
+            _loggingService.LogWarningAsync($"❌ No handler found for subtask: {subtask.Name} (TaskStep: {subtask.TaskStep}). Available handlers: {string.Join(", ", _handlers.Select(h => h.GetType().Name))}");
+            return null;
         }
 
         public IEnumerable<ILoginTaskHandler> GetAllHandlers()

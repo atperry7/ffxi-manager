@@ -1,0 +1,189 @@
+{
+  "WorkflowId": "a8f5c3d2-e1b4-4a7f-9c8b-2d3e4f5a6b7c",
+  "Name": "PlayOnline Standard",
+  "Description": "Default workflow for logging into PlayOnline and FFXI. Suitable for most users with standard configurations.",
+  "Version": "1.0.0",
+  "IsDefault": true,
+  "IsReadOnly": true,
+  "CreatedDate": "2025-01-15T00:00:00Z",
+  "LastModifiedDate": "2025-01-15T00:00:00Z",
+  "Author": "FFXIManager",
+  "Tags": [
+    "playonline",
+    "standard",
+    "default"
+  ],
+  "Steps": [
+    {
+      "StepId": "member_selection",
+      "DisplayName": "Member Selection",
+      "Description": "Select the member account from the PlayOnline member list",
+      "Order": 0,
+      "TemplatePath": "",
+      "IsEnabled": true,
+      "IsOptional": false,
+      "Condition": null,
+      "EstimatedDurationSeconds": 5,
+      "MaxRetryAttempts": 3,
+      "FallbackTemplatePaths": [],
+      "Navigation": {
+        "Description": "Navigate to member selection and press Enter",
+        "PostNavigationDelayMs": 500,
+        "Sequence": [
+          {
+            "Action": "Tab",
+            "Count": 1,
+            "DelayMs": 200,
+            "Description": "Navigate to member list"
+          },
+          {
+            "Action": "Enter",
+            "Count": 1,
+            "DelayMs": 100,
+            "Description": "Select member"
+          }
+        ]
+      },
+      "LegacyTaskStep": null,
+      "Metadata": {}
+    },
+    {
+      "StepId": "password_entry",
+      "DisplayName": "Password Entry",
+      "Description": "Enter the member account password",
+      "Order": 1,
+      "TemplatePath": "",
+      "IsEnabled": true,
+      "IsOptional": false,
+      "Condition": null,
+      "EstimatedDurationSeconds": 3,
+      "MaxRetryAttempts": 3,
+      "FallbackTemplatePaths": [],
+      "Navigation": {
+        "Description": "Enter password and confirm",
+        "PostNavigationDelayMs": 500,
+        "Sequence": [
+          {
+            "Action": "TypePassword",
+            "Count": 1,
+            "DelayMs": 100,
+            "Description": "Type account password"
+          },
+          {
+            "Action": "Enter",
+            "Count": 1,
+            "DelayMs": 100,
+            "Description": "Submit password"
+          }
+        ]
+      },
+      "LegacyTaskStep": null,
+      "Metadata": {}
+    },
+    {
+      "StepId": "otp_entry",
+      "DisplayName": "OTP Entry",
+      "Description": "Enter the one-time password (if OTP is enabled)",
+      "Order": 2,
+      "TemplatePath": "",
+      "IsEnabled": true,
+      "IsOptional": false,
+      "Condition": "Account.IsOTPEnabled",
+      "EstimatedDurationSeconds": 3,
+      "MaxRetryAttempts": 3,
+      "FallbackTemplatePaths": [],
+      "Navigation": {
+        "Description": "Enter OTP code and confirm",
+        "PostNavigationDelayMs": 500,
+        "Sequence": [
+          {
+            "Action": "TypeOTP",
+            "Count": 1,
+            "DelayMs": 100,
+            "Description": "Type OTP code"
+          },
+          {
+            "Action": "Enter",
+            "Count": 1,
+            "DelayMs": 100,
+            "Description": "Submit OTP"
+          }
+        ]
+      },
+      "LegacyTaskStep": null,
+      "Metadata": {}
+    },
+    {
+      "StepId": "game_selection",
+      "DisplayName": "Game Selection",
+      "Description": "Select Final Fantasy XI from the game list",
+      "Order": 3,
+      "TemplatePath": "",
+      "IsEnabled": true,
+      "IsOptional": false,
+      "Condition": null,
+      "EstimatedDurationSeconds": 5,
+      "MaxRetryAttempts": 3,
+      "FallbackTemplatePaths": [],
+      "Navigation": {
+        "Description": "Navigate to and select FFXI",
+        "PostNavigationDelayMs": 1000,
+        "Sequence": [
+          {
+            "Action": "Tab",
+            "Count": 1,
+            "DelayMs": 200,
+            "Description": "Navigate to game list"
+          },
+          {
+            "Action": "Enter",
+            "Count": 1,
+            "DelayMs": 100,
+            "Description": "Select FFXI"
+          }
+        ]
+      },
+      "LegacyTaskStep": null,
+      "Metadata": {}
+    },
+    {
+      "StepId": "character_selection",
+      "DisplayName": "Character Selection",
+      "Description": "Select the character from the character list",
+      "Order": 4,
+      "TemplatePath": "",
+      "IsEnabled": true,
+      "IsOptional": false,
+      "Condition": null,
+      "EstimatedDurationSeconds": 8,
+      "MaxRetryAttempts": 3,
+      "FallbackTemplatePaths": [],
+      "Navigation": {
+        "Description": "Navigate to and select character",
+        "PostNavigationDelayMs": 2000,
+        "Sequence": [
+          {
+            "Action": "Down",
+            "Count": 1,
+            "DelayMs": 200,
+            "Description": "Navigate to first character"
+          },
+          {
+            "Action": "Enter",
+            "Count": 1,
+            "DelayMs": 100,
+            "Description": "Select character"
+          }
+        ]
+      },
+      "LegacyTaskStep": null,
+      "Metadata": {}
+    }
+  ],
+  "Metadata": {
+    "RequiredSlots": "1",
+    "Category": "Standard",
+    "SupportedResolutions": "All",
+    "Notes": "This is the default workflow suitable for most PlayOnline configurations. Can be cloned and customized for specific needs."
+  }
+}

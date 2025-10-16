@@ -67,6 +67,8 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<IAutoLoginContextService, AutoLoginContextService>();
 
             // AutoLogin support services (refactored for SOLID principles)
+            services.AddSingleton<IWorkflowService, WorkflowService>();
+            services.AddSingleton<WorkflowTaskBuilder>(); // Builds subtasks from workflows
             services.AddSingleton<IPlayOnlineNavigationService, Services.AutoLogin.Navigation.PlayOnlineNavigationService>();
             services.AddSingleton<IPlayOnlineAuthenticationService, PlayOnlineAuthenticationService>();
 
@@ -85,6 +87,7 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<ILoginTaskHandler, WindowerLaunchHandler>();
             services.AddSingleton<ILoginTaskHandler, PlayOnlineAuthHandler>();
             services.AddSingleton<ILoginTaskHandler, FFXIGameHandler>();
+            services.AddSingleton<ILoginTaskHandler, DynamicWorkflowHandler>(); // Dynamic handler for data-driven workflows
 
             // Diagnostics UI (Template Navigation Tuner)
             services.AddTransient<FFXIManager.Views.TemplateNavigationTuner>();
@@ -130,6 +133,10 @@ namespace FFXIManager.Infrastructure
             services.AddTransient<CharacterMonitorWindowViewModel>();
             services.AddTransient<EmbeddedCharacterMonitorViewModel>();
             services.AddSingleton<AutoLoginQueueViewModel>();
+            services.AddTransient<WorkflowEditorViewModel>();
+            services.AddTransient<FFXIManager.Views.WorkflowEditor>();
+            services.AddTransient<TemplateViewerDialogViewModel>();
+            services.AddTransient<FFXIManager.Views.TemplateViewerDialog>();
 
             // Hotkey plumbing
             services.AddSingleton<IGlobalHotkeyService, LowLevelHotkeyService>();

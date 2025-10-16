@@ -82,6 +82,19 @@
       <TargetPath>Resources\Templates\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
     </Content>
   </ItemGroup>
+
+  <!-- Copy default workflows to output directory -->
+  <ItemGroup>
+    <Content Include="workflows\**\*.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <TargetPath>workflows\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+    </Content>
+    <Content Include="workflows\**\*.md">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <TargetPath>workflows\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+    </Content>
+  </ItemGroup>
+
   <ItemGroup>
     <None Remove="nul" />
   </ItemGroup>

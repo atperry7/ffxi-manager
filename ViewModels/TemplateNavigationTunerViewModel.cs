@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
 using FFXIManager.Models;
 using FFXIManager.Services;
@@ -25,6 +26,7 @@ namespace FFXIManager.ViewModels
         private readonly IScreenshotCaptureService _screenshots;
         private readonly ILoggingService _log;
         private readonly IProcessManagementService _processes;
+        private readonly IServiceProvider _serviceProvider;
 
         public ObservableCollection<string> Templates { get; } = new();
 
@@ -129,6 +131,7 @@ namespace FFXIManager.ViewModels
         public ICommand AddStepCommand { get; }
         public ICommand RemoveStepCommand { get; }
         public ICommand ReplaceImageCommand { get; }
+        public ICommand OpenWorkflowEditorCommand { get; }
 
         // Window selection for live testing
         public class WindowEntry
@@ -184,7 +187,8 @@ namespace FFXIManager.ViewModels
             IUIAutomationService automation,
             IScreenshotCaptureService screenshots,
             ILoggingService log,
-            IProcessManagementService processes)
+            IProcessManagementService processes,
+            IServiceProvider serviceProvider)
         {
             _templateService = templateService;
             _matchingService = matchingService;
@@ -192,6 +196,7 @@ namespace FFXIManager.ViewModels
             _screenshots = screenshots;
             _log = log;
             _processes = processes;
+            _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
 
             RefreshCommand = new RelayCommand(async () => await LoadTemplatesAsync());
             TestCommand = new RelayCommand(async () => await TestNavigationAsync(), () => CanTest());
@@ -200,6 +205,7 @@ namespace FFXIManager.ViewModels
             RemoveStepCommand = new RelayCommandWithParameter<KeyboardAction>(ka => RemoveStep(ka));
             RefreshWindowsCommand = new RelayCommand(async () => await RefreshWindowsAsync());
             ReplaceImageCommand = new RelayCommand(async () => await ReplaceTemplateImageAsync(), () => !string.IsNullOrEmpty(SelectedTemplate));
+            OpenWorkflowEditorCommand = new RelayCommand(() => OpenWorkflowEditor());
 
             _ = LoadTemplatesAsync();
         }
@@ -726,6 +732,26 @@ namespace FFXIManager.ViewModels
             else
             {
                 Status = "Click Edit Mode disabled";
+            }
+        }
+
+        /// <summary>
+        /// Opens the Workflow Editor window for creating and managing data-driven workflows
+        /// </summary>
+        private void OpenWorkflowEditor()
+        {
+            try
+            {
+                // Resolve WorkflowEditor window from DI container
+                var workflowEditor = _serviceProvider.GetRequiredService<Views.WorkflowEditor>();
+                workflowEditor.Show();
+
+                Status = "Workflow Editor opened";
+            }
+            catch (Exception ex)
+            {
+                Status = $"Failed to open Workflow Editor: {ex.Message}";
+                _ = _log.LogErrorAsync("Failed to open Workflow Editor", ex);
             }
         }
 

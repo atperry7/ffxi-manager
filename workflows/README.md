@@ -1,0 +1,167 @@
+# FFXIManager Workflows
+
+This directory contains workflow definitions for the FFXIManager auto-login system.
+
+## Directory Structure
+
+```
+workflows/
+├── defaults/          # Default workflows provided by FFXIManager (read-only)
+│   └── playonline-standard.json
+└── README.md         # This file
+```
+
+## Default Workflows
+
+Default workflows are located in the `defaults/` subdirectory and are:
+- **Read-only**: Cannot be modified directly by users
+- **Version-controlled**: Included in the FFXIManager repository
+- **Restorable**: Users can restore defaults if they make mistakes
+- **Cloneable**: Users can clone them to create custom variations
+
+On application startup, default workflows are copied to:
+```
+%APPDATA%/FFXIManager/workflows/defaults/
+```
+
+## Workflow File Format
+
+Workflows are defined as JSON files with the following structure:
+
+```json
+{
+  "WorkflowId": "unique-guid-here",
+  "Name": "Workflow Name",
+  "Description": "Detailed description of what this workflow does",
+  "Version": "1.0.0",
+  "IsDefault": false,
+  "IsReadOnly": false,
+  "CreatedDate": "2025-01-15T00:00:00Z",
+  "LastModifiedDate": "2025-01-15T00:00:00Z",
+  "Author": "Your Name",
+  "Tags": ["tag1", "tag2"],
+  "Steps": [
+    {
+      "StepId": "step_identifier",
+      "DisplayName": "Step Display Name",
+      "Description": "What this step does",
+      "Order": 0,
+      "TemplatePath": "Application/template_name",
+      "IsEnabled": true,
+      "IsOptional": false,
+      "Condition": "Account.IsOTPEnabled",
+      "EstimatedDurationSeconds": 5,
+      "MaxRetryAttempts": 3,
+      "Navigation": {
+        "Description": "Navigation description",
+        "PostNavigationDelayMs": 500,
+        "Sequence": [
+          {
+            "Action": "Tab",
+            "Count": 1,
+            "DelayMs": 200,
+            "Description": "Navigate to field"
+          },
+          {
+            "Action": "Enter",
+            "Count": 1,
+            "DelayMs": 100,
+            "Description": "Submit"
+          }
+        ]
+      }
+    }
+  ],
+  "Metadata": {
+    "CustomKey": "CustomValue"
+  }
+}
+```
+
+## Navigation Actions
+
+### Keyboard Actions
+- `Tab` - Press Tab key to navigate
+- `Enter` - Press Enter key
+- `Escape` - Press Escape key
+- `Up` / `Down` / `Left` / `Right` - Arrow keys
+- `Space` - Press spacebar
+- `TypePassword` - Type the account password (special action)
+- `TypeOTP` - Type the OTP code (special action)
+
+### Click Actions
+```json
+{
+  "Action": "Click",
+  "ClickX": 0.5,
+  "ClickY": 0.3,
+  "DelayMs": 100,
+  "Description": "Click on button"
+}
+```
+- `ClickX` and `ClickY` are relative coordinates (0.0 to 1.0)
+- `0.5, 0.5` represents the center of the window
+
+## Conditional Execution
+
+Steps can be conditionally executed using the `Condition` property:
+
+- `Account.IsOTPEnabled` - Execute only if OTP is enabled
+- `!Account.IsOTPEnabled` - Execute only if OTP is NOT enabled
+- `Account.UseWindower` - Execute only if using Windower
+- Leave empty or null for unconditional execution
+
+## Creating Custom Workflows
+
+1. **Clone a Default Workflow**:
+   - Open FFXIManager
+   - Go to Workflow Editor
+   - Select a default workflow
+   - Click "Clone"
+   - Customize the cloned workflow
+
+2. **Or Create from Scratch**:
+   - Click "Create New Workflow"
+   - Add steps one by one
+   - Define navigation sequences
+   - Attach templates for screen detection
+   - Save your workflow
+
+3. **Export/Import**:
+   - Export: Save your custom workflow to share with others
+   - Import: Load workflows created by the community
+
+## Template Paths
+
+Template paths follow the format: `Application/template_name`
+
+Examples:
+- `PlayOnline/member_selection`
+- `PlayOnline/password_entry_screen`
+- `FFXI/character_list`
+
+Templates are stored in:
+```
+%APPDATA%/FFXIManager/templates/
+```
+
+## Best Practices
+
+1. **Version Your Workflows**: Update the `Version` field when making changes
+2. **Use Descriptive Names**: Make it clear what the workflow accomplishes
+3. **Add Tags**: Use tags for easy filtering and categorization
+4. **Document Conditions**: Explain when conditional steps execute
+5. **Test Thoroughly**: Verify workflows work across different scenarios
+6. **Set Realistic Durations**: Estimate `EstimatedDurationSeconds` accurately
+7. **Keep Steps Atomic**: Each step should do one thing well
+
+## Troubleshooting
+
+- **Workflow Not Loading**: Check JSON syntax with a validator
+- **Step Not Executing**: Verify `IsEnabled` is true and condition is met
+- **Navigation Fails**: Check delays between actions (increase if needed)
+- **Template Not Found**: Verify template path and ensure template exists
+
+## Version History
+
+- **1.0.0** (2025-01-15): Initial workflow system release

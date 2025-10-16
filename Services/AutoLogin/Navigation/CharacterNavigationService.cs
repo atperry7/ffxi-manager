@@ -62,7 +62,6 @@ namespace FFXIManager.Services.AutoLogin.Navigation
             // Create programmatic navigation action with dynamic count
             var slotNavigation = new NavigationAction
             {
-                Type = NavigationType.Keyboard,
                 PostNavigationDelayMs = (int)FFXIGameConfiguration.Delays.NavigationStep.TotalMilliseconds
             };
             slotNavigation.Sequence.Add(new KeyboardAction
@@ -110,7 +109,6 @@ namespace FFXIManager.Services.AutoLogin.Navigation
             // Create programmatic navigation action for slot selection
             var selectionAction = new NavigationAction
             {
-                Type = NavigationType.Keyboard,
                 PostNavigationDelayMs = (int)FFXIGameConfiguration.Delays.CharacterLoading.TotalMilliseconds
             };
             selectionAction.Sequence.Add(new KeyboardAction
@@ -140,8 +138,8 @@ namespace FFXIManager.Services.AutoLogin.Navigation
         }
 
         /// <summary>
-        /// Executes a programmatic navigation action using the UI automation service.
-        /// This mimics the pattern from BaseLoginTaskHandler.ExecuteNavigationActionAsync.
+        /// Executes a navigation action using the UI automation service.
+        /// Processes the action sequence (keyboard and/or click actions) in order.
         /// </summary>
         private async Task<bool> ExecuteNavigationActionAsync(
             AutoLoginSubtask subtask,
@@ -150,12 +148,6 @@ namespace FFXIManager.Services.AutoLogin.Navigation
             TemplateMatchResult? templateMatch,
             CancellationToken cancellationToken)
         {
-            if (action.Type != NavigationType.Keyboard)
-            {
-                await _loggingService.LogWarningAsync($"Unsupported navigation type: {action.Type}");
-                return false;
-            }
-
             try
             {
                 // Ensure window focus before keyboard input

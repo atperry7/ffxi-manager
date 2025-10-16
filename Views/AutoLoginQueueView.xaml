@@ -75,11 +75,11 @@
 
                 <!-- Queue Control Buttons -->
                 <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0">
-                    <!-- Open Template Navigation Tuner -->
-                    <Button Content="🎯"
+                    <!-- Open Workflow Editor -->
+                    <Button Content="⚙️"
                             Style="{StaticResource CircularInfoButton}"
-                            Command="{Binding OpenTemplateTunerCommand}"
-                            ToolTip="Open Template Navigation Tuner"
+                            Command="{Binding OpenWorkflowEditorCommand}"
+                            ToolTip="Open Workflow Editor - Customize auto-login workflows"
                             Margin="0,0,10,0"/>
                     <Button Content="▶️"
                             Style="{StaticResource CircularPrimaryButton}"

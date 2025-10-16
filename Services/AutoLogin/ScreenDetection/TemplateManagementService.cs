@@ -31,9 +31,13 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _imageCropService = imageCropService; // Optional dependency
 
-            // Set templates base path relative to application directory
-            var appDir = AppDomain.CurrentDomain.BaseDirectory;
-            _templatesBasePath = Path.Combine(appDir, "Resources", "Templates");
+            // Set templates base path in user's APPDATA directory (for user-customizable templates)
+            var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var appDirectory = Path.Combine(appDataPath, "FFXIManager");
+            _templatesBasePath = Path.Combine(appDirectory, "templates");
+
+            // Ensure templates directory exists
+            Directory.CreateDirectory(_templatesBasePath);
 
             // Clear cache on startup to force fresh template loading with fixes
             _templateCache.Clear();

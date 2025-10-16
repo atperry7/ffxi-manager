@@ -33,9 +33,15 @@ namespace FFXIManager.Models
         public string Description { get; set; } = string.Empty;
 
         /// <summary>
-        /// The login task step this subtask represents
+        /// The login task step this subtask represents (legacy system).
         /// </summary>
         public LoginTaskStep TaskStep { get; set; } = LoginTaskStep.None;
+
+        /// <summary>
+        /// The workflow step definition this subtask represents (data-driven system).
+        /// When present, enables dynamic execution via DynamicWorkflowHandler.
+        /// </summary>
+        public AutoLogin.WorkflowStepDefinition? WorkflowStep { get; set; }
 
         /// <summary>
         /// Order of execution within the parent task
