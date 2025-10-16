@@ -231,6 +231,8 @@ namespace FFXIManager.Services.AutoLogin
             // This is the KEY innovation - confirms app is fully loaded and interactive
             await UpdateProgressWithPhaseAsync(subtask, "launch", 70, $"Waiting for {app.Name} UI");
 
+            TemplateMatchResult? capturedTemplateMatch = null; // Capture template match for navigation
+
             if (string.IsNullOrWhiteSpace(stepDef.TemplatePath))
             {
                 await _loggingService.LogWarningAsync($"[APP-LAUNCH] No template path configured for {stepDef.ApplicationName} - skipping UI readiness check");
@@ -284,6 +286,7 @@ namespace FFXIManager.Services.AutoLogin
                                 if (templateMatch != null && templateMatch.Confidence >= threshold)
                                 {
                                     detected = true;
+                                    capturedTemplateMatch = templateMatch; // Capture for navigation use
                                     await _loggingService.LogInfoAsync($"[APP-LAUNCH] UI ready - template detected on attempt {attempt}/{retryAttempts} (confidence: {templateMatch.Confidence:P}, threshold: {threshold:P})");
                                     break;
                                 }
@@ -343,12 +346,12 @@ namespace FFXIManager.Services.AutoLogin
                     await _loggingService.LogWarningAsync($"[APP-LAUNCH] Could not find window handle for {app.Name}: {ex.Message}");
                 }
 
-                // Execute navigation sequence
+                // Execute navigation sequence with captured template match
                 var success = await ExecuteNavigationActionAsync(
                     subtask,
                     stepDef.Navigation,
                     windowHandle,
-                    null, // No template match needed for launch navigation
+                    capturedTemplateMatch, // Pass captured template match for relative click navigation
                     _automationService,
                     cancellationToken);
 
