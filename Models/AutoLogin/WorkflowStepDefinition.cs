@@ -143,32 +143,6 @@ namespace FFXIManager.Models.AutoLogin
         public int MaxRetryAttempts { get; set; } = 3;
 
         /// <summary>
-        /// Step type that determines execution behavior.
-        /// - "NavigateUI": Standard UI navigation with template detection (default)
-        /// - "LaunchApplication": Generic application launch with process detection + template confirmation
-        /// </summary>
-        public string StepType { get; set; } = "NavigateUI";
-
-        /// <summary>
-        /// Name of the external application to launch (for LaunchApplication steps).
-        /// Must match an entry in ExternalApplicationData settings.
-        /// Example: "POL Proxy", "Windower"
-        /// </summary>
-        public string? ApplicationName { get; set; }
-
-        /// <summary>
-        /// For LaunchApplication steps: Skip step if application is not configured in settings.
-        /// If false, workflow fails if application is not found.
-        /// </summary>
-        public bool AllowSkipIfNotConfigured { get; set; } = true;
-
-        /// <summary>
-        /// For LaunchApplication steps: Skip step if application is already running.
-        /// If false, application will be relaunched even if already running.
-        /// </summary>
-        public bool AllowSkipIfRunning { get; set; } = false;
-
-        /// <summary>
         /// Number of retry attempts for template detection.
         /// Used when waiting for application UI to be ready or screen to appear.
         /// Default is 30.
@@ -180,6 +154,19 @@ namespace FFXIManager.Models.AutoLogin
         /// Default is 500ms.
         /// </summary>
         public int? RetryDelayMs { get; set; }
+
+        /// <summary>
+        /// Number of retry attempts for screenshot capture within each detection attempt.
+        /// If null, automatically calculated as Max(MaxRetryAttempts / 3, 5).
+        /// Increase this if screenshot capture is unreliable (e.g., slow window rendering).
+        /// Default: null (auto-calculated)
+        /// </summary>
+        /// <remarks>
+        /// This provides fine-grained control over transient screenshot capture failures
+        /// separate from template detection attempts. Each detection attempt will retry
+        /// screenshot capture this many times before failing.
+        /// </remarks>
+        public int? ScreenshotRetryCount { get; set; }
 
         /// <summary>
         /// Confidence threshold for template matching (0.0 to 1.0).
@@ -242,10 +229,12 @@ namespace FFXIManager.Models.AutoLogin
             if (string.IsNullOrWhiteSpace(DisplayName))
                 errors.Add("DisplayName is required");
 
-            // For NavigateUI steps: require either TemplatePath or Navigation (or both)
-            // For LaunchApplication steps: process detection alone is sufficient (allow no template and no navigation)
-            if (StepType == "NavigateUI" && string.IsNullOrWhiteSpace(TemplatePath) && Navigation == null)
-                errors.Add("NavigateUI steps must have either TemplatePath (for detection) or Navigation (for interaction) or both");
+            // Validate that at least one of the following is present:
+            // - TemplatePath (for screen detection)
+            // - Navigation (for UI interaction)
+            // This allows pure detection steps, pure action steps, or combined detection+action steps
+            if (string.IsNullOrWhiteSpace(TemplatePath) && (Navigation == null || Navigation.Sequence == null || Navigation.Sequence.Count == 0))
+                errors.Add("Workflow steps must have either TemplatePath (for detection) or Navigation sequence (for actions) or both");
 
             if (Order < 0)
                 errors.Add("Order must be non-negative");
@@ -278,12 +267,9 @@ namespace FFXIManager.Models.AutoLogin
                 FallbackTemplatePaths = new List<string>(FallbackTemplatePaths),
                 Navigation = Navigation,
                 MaxRetryAttempts = MaxRetryAttempts,
-                StepType = StepType,
-                ApplicationName = ApplicationName,
-                AllowSkipIfNotConfigured = AllowSkipIfNotConfigured,
-                AllowSkipIfRunning = AllowSkipIfRunning,
                 RetryAttempts = RetryAttempts,
                 RetryDelayMs = RetryDelayMs,
+                ScreenshotRetryCount = ScreenshotRetryCount,
                 ConfidenceThreshold = ConfidenceThreshold,
                 Tolerance = Tolerance,
                 Metadata = new Dictionary<string, object>(Metadata)

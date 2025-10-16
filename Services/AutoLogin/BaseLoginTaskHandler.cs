@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using FFXIManager.Models;
@@ -20,6 +21,16 @@ namespace FFXIManager.Services.AutoLogin
         protected readonly IScreenshotCaptureService _screenshotService;
         protected readonly ITemplateMatchingService _templateService;
         protected readonly ITemplateManagementService _templateManagementService;
+
+        #region Win32 API for Window Validation
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        #endregion
 
         protected BaseLoginTaskHandler(
             ILoggingService loggingService,
@@ -318,6 +329,31 @@ namespace FFXIManager.Services.AutoLogin
         }
 
         /// <summary>
+        /// Validates that a window handle is still valid and visible.
+        /// Used to detect stale window handles that have been closed or destroyed.
+        /// </summary>
+        /// <param name="windowHandle">Window handle to validate</param>
+        /// <returns>True if window is valid and visible, false otherwise</returns>
+        protected async Task<bool> IsWindowHandleValidAsync(IntPtr windowHandle)
+        {
+            if (windowHandle == IntPtr.Zero)
+                return false;
+
+            var isValid = IsWindow(windowHandle);
+            var isVisible = isValid && IsWindowVisible(windowHandle);
+
+            await _loggingService.LogDebugAsync($"Window validation - Handle: 0x{windowHandle.ToInt64():X}, IsWindow: {isValid}, IsVisible: {isVisible}");
+
+            if (!isValid || !isVisible)
+            {
+                await _loggingService.LogWarningAsync($"Window validation failed - Handle: 0x{windowHandle.ToInt64():X}, IsWindow: {isValid}, IsVisible: {isVisible}");
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// Standardized screen detection method using ScreenDetectionOptions configuration.
         /// This is the PREFERRED method for all screen detection operations across all handlers.
         /// </summary>
@@ -345,10 +381,11 @@ namespace FFXIManager.Services.AutoLogin
             // Use confidence threshold from workflow step definition (not from template metadata)
             await _loggingService.LogInfoAsync($"Using workflow-defined confidence threshold: {confidenceThreshold:P} for {screenDescription}");
 
-            var maxAttempts = (int)(options.Timeout.TotalSeconds / options.CheckInterval.TotalSeconds);
+            // Use MaxAttempts if provided, otherwise calculate from timeout
+            var maxAttempts = options.MaxAttempts ?? (int)(options.Timeout.TotalSeconds / options.CheckInterval.TotalSeconds);
             var startTime = DateTime.UtcNow;
 
-            await _loggingService.LogInfoAsync($"Starting {screenDescription} detection (timeout: {options.Timeout.TotalSeconds}s)");
+            await _loggingService.LogInfoAsync($"Starting {screenDescription} detection - MaxAttempts: {maxAttempts}, ScreenshotRetries: {options.ScreenshotRetryCount}, Timeout: {options.Timeout.TotalSeconds}s");
 
             // Determine phase based on screen description for better user messaging
             var phase = GetDetectionPhase(screenDescription);
@@ -366,7 +403,7 @@ namespace FFXIManager.Services.AutoLogin
 
                 subtask.UpdateProgressWithPhase(phase, progress, userFriendlyMessage);
 
-                var screenshot = await CaptureScreenshotWithLogging(windowHandle, screenDescription, cancellationToken);
+                var screenshot = await CaptureScreenshotWithLogging(windowHandle, screenDescription, cancellationToken, options.ScreenshotRetryCount);
                 var match = await _templateService.FindElementAsync(screenshot, templatePath, cancellationToken);
 
                 await _loggingService.LogDebugAsync($"{screenDescription} detection attempt {attempt}/{maxAttempts}: confidence={match.Confidence:P}, threshold={confidenceThreshold:P}");
@@ -399,7 +436,7 @@ namespace FFXIManager.Services.AutoLogin
             }
 
             // Final attempt for diagnosis
-            var finalScreenshot = await CaptureScreenshotWithLogging(windowHandle, $"final {screenDescription}", cancellationToken);
+            var finalScreenshot = await CaptureScreenshotWithLogging(windowHandle, $"final {screenDescription}", cancellationToken, options.ScreenshotRetryCount);
             var finalMatch = await _templateService.FindElementAsync(finalScreenshot, templatePath, cancellationToken);
 
             await _loggingService.LogWarningAsync($"{screenDescription} detection timed out after {options.Timeout.TotalSeconds}s. Final confidence: {finalMatch.Confidence:P}");
@@ -410,12 +447,19 @@ namespace FFXIManager.Services.AutoLogin
         /// <summary>
         /// Finds window handle for a process with standardized retry logic and progress reporting.
         /// </summary>
+        /// <param name="subtask">Subtask for progress reporting</param>
+        /// <param name="processName">Name of the process to find</param>
+        /// <param name="windowTitleFilter">Optional window title filter</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <param name="maxAttempts">Maximum number of retry attempts</param>
+        /// <param name="processId">Optional process ID to filter by specific instance</param>
         protected async Task<IntPtr> FindWindowHandleAsync(
             AutoLoginSubtask subtask,
             string processName,
             string windowTitleFilter,
             CancellationToken cancellationToken,
-            int maxAttempts = 15)
+            int maxAttempts = 15,
+            int? processId = null)
         {
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
@@ -436,12 +480,19 @@ namespace FFXIManager.Services.AutoLogin
                         if (process.HasExited || process.MainWindowHandle == IntPtr.Zero)
                             continue;
 
+                        // If PID filter is specified, skip processes that don't match
+                        if (processId.HasValue && process.Id != processId.Value)
+                        {
+                            await _loggingService.LogDebugAsync($"Skipping {processName} process (PID: {process.Id}) - looking for PID: {processId.Value}");
+                            continue;
+                        }
+
                         var windowTitle = process.MainWindowTitle;
                         if (string.IsNullOrEmpty(windowTitleFilter) ||
                             windowTitle.Contains(windowTitleFilter, StringComparison.OrdinalIgnoreCase))
                         {
                             await UpdateProgressWithPhaseAsync(subtask, "startup", 90, $"Found {processName} window: {windowTitle}");
-                            await _loggingService.LogInfoAsync($"Found {processName} window after {attempt} attempts - Handle: 0x{process.MainWindowHandle.ToInt64():X}, Title: '{windowTitle}', PID: {process.Id}");
+                            await _loggingService.LogInfoAsync($"Found {processName} window after {attempt} attempts - Handle: 0x{process.MainWindowHandle.ToInt64():X}, Title: '{windowTitle}', PID: {process.Id}{(processId.HasValue ? " (PID-filtered)" : "")}");
                             return process.MainWindowHandle;
                         }
                     }

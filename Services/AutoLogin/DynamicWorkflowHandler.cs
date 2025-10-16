@@ -29,6 +29,8 @@ namespace FFXIManager.Services.AutoLogin
     {
         private readonly IUIAutomationService _automationService;
         private readonly IExternalApplicationService _externalApplicationService;
+        private readonly IPlayOnlineMonitorService _polMonitorService;
+        private readonly IWorkflowActionExecutorFactory _actionExecutorFactory;
 
         public DynamicWorkflowHandler(
             ILoggingService loggingService,
@@ -36,11 +38,15 @@ namespace FFXIManager.Services.AutoLogin
             ITemplateMatchingService templateService,
             ITemplateManagementService templateManagementService,
             IUIAutomationService automationService,
-            IExternalApplicationService externalApplicationService)
+            IExternalApplicationService externalApplicationService,
+            IPlayOnlineMonitorService polMonitorService,
+            IWorkflowActionExecutorFactory actionExecutorFactory)
             : base(loggingService, screenshotService, templateService, templateManagementService)
         {
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
             _externalApplicationService = externalApplicationService ?? throw new ArgumentNullException(nameof(externalApplicationService));
+            _polMonitorService = polMonitorService ?? throw new ArgumentNullException(nameof(polMonitorService));
+            _actionExecutorFactory = actionExecutorFactory ?? throw new ArgumentNullException(nameof(actionExecutorFactory));
         }
 
         /// <summary>
@@ -55,7 +61,7 @@ namespace FFXIManager.Services.AutoLogin
 
         /// <summary>
         /// Executes a workflow step dynamically based on its definition.
-        /// Routes to appropriate handler based on StepType.
+        /// Uses unified action executor pattern - no routing based on StepType.
         /// </summary>
         protected override async Task ExecuteHandlerLogicAsync(
             AutoLoginSubtask subtask,
@@ -65,20 +71,10 @@ namespace FFXIManager.Services.AutoLogin
         {
             var stepDef = subtask.WorkflowStep!;
 
-            await _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] Executing step: {stepDef.DisplayName} (Type: {stepDef.StepType}, StepId: {stepDef.StepId})");
+            await _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] Executing step: {stepDef.DisplayName} (StepId: {stepDef.StepId})");
 
-            // Route based on step type
-            switch (stepDef.StepType)
-            {
-                case "LaunchApplication":
-                    await ExecuteLaunchApplicationStepAsync(subtask, queueItem, context, cancellationToken);
-                    break;
-
-                case "NavigateUI":
-                default:
-                    await ExecuteNavigationStepAsync(subtask, queueItem, context, cancellationToken);
-                    break;
-            }
+            // ALL workflow steps now use the unified navigation/action execution flow
+            await ExecuteNavigationStepAsync(subtask, queueItem, context, cancellationToken);
 
             await _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] Completed step: {stepDef.DisplayName}");
         }
@@ -121,256 +117,6 @@ namespace FFXIManager.Services.AutoLogin
         }
 
         /// <summary>
-        /// Executes a generic application launch workflow step.
-        /// Leverages ExternalApplicationService + UnifiedMonitoringService for detection,
-        /// then uses template matching to confirm app is ready for interaction.
-        /// </summary>
-        private async Task ExecuteLaunchApplicationStepAsync(
-            AutoLoginSubtask subtask,
-            AutoLoginQueueItem queueItem,
-            IAutoLoginContext context,
-            CancellationToken cancellationToken)
-        {
-            var stepDef = subtask.WorkflowStep!;
-
-            await _loggingService.LogInfoAsync($"[APP-LAUNCH] Starting {stepDef.ApplicationName} launch sequence");
-
-            // Phase 1: Find application from settings (simple name lookup)
-            await UpdateProgressWithPhaseAsync(subtask, "launch", 10, $"Finding {stepDef.ApplicationName}");
-
-            var apps = await _externalApplicationService.GetApplicationsAsync();
-            var app = apps.FirstOrDefault(a =>
-                a.Name.Equals(stepDef.ApplicationName, StringComparison.OrdinalIgnoreCase));
-
-            if (app == null)
-            {
-                var message = $"{stepDef.ApplicationName} not configured in External Applications settings";
-
-                if (stepDef.AllowSkipIfNotConfigured)
-                {
-                    await _loggingService.LogInfoAsync($"[APP-LAUNCH] {message} - skipping step");
-                    subtask.Skip(message);
-                    return;
-                }
-
-                await _loggingService.LogErrorAsync($"[APP-LAUNCH] {message} - step marked as required");
-                throw new InvalidOperationException($"Required application not found: {stepDef.ApplicationName}. Please configure it in External Applications settings.");
-            }
-
-            await _loggingService.LogInfoAsync($"[APP-LAUNCH] Found application: {app.Name} at {app.ExecutablePath}");
-
-            // Phase 2: Check if already running (UnifiedMonitoringService provides real-time status)
-            await UpdateProgressWithPhaseAsync(subtask, "launch", 20, $"Checking {app.Name} status");
-
-            if (app.IsRunning)
-            {
-                await _loggingService.LogInfoAsync($"[APP-LAUNCH] {app.Name} is already running (PIDs: {string.Join(", ", app.ProcessIds)})");
-
-                if (stepDef.AllowSkipIfRunning)
-                {
-                    await _loggingService.LogInfoAsync($"[APP-LAUNCH] Skipping launch - app already running");
-                    subtask.Skip($"{app.Name} already running");
-
-                    // Store process ID in context for potential later use
-                    context.SetData($"{stepDef.StepId}_ProcessId", app.ProcessIds.First());
-                    context.SetData($"{stepDef.StepId}_Skipped", true);
-                    return;
-                }
-
-                await _loggingService.LogInfoAsync($"[APP-LAUNCH] AllowSkipIfRunning=false - will relaunch");
-            }
-
-            // Phase 3: Launch application (ExternalApplicationService handles everything)
-            await UpdateProgressWithPhaseAsync(subtask, "launch", 30, $"Launching {app.Name}");
-
-            var launched = await _externalApplicationService.LaunchApplicationAsync(app);
-
-            if (!launched)
-            {
-                var message = $"Failed to launch {app.Name}. Check executable path and permissions.";
-                await _loggingService.LogErrorAsync($"[APP-LAUNCH] {message}");
-                throw new InvalidOperationException(message);
-            }
-
-            await _loggingService.LogInfoAsync($"[APP-LAUNCH] {app.Name} launch initiated successfully");
-
-            // Phase 4: Wait for process detection (UnifiedMonitoringService via WMI watcher provides automatic detection)
-            await UpdateProgressWithPhaseAsync(subtask, "launch", 50, $"Waiting for {app.Name} process");
-
-            var timeoutEnd = DateTime.UtcNow.AddSeconds(30);
-            var processDetected = false;
-
-            while (DateTime.UtcNow < timeoutEnd && !cancellationToken.IsCancellationRequested)
-            {
-                // Refresh application status
-                await _externalApplicationService.RefreshApplicationStatusAsync(app);
-
-                if (app.IsRunning)
-                {
-                    processDetected = true;
-                    break;
-                }
-
-                await Task.Delay(500, cancellationToken);
-            }
-
-            if (!processDetected)
-            {
-                var message = $"{app.Name} process did not start within 30 seconds";
-                await _loggingService.LogErrorAsync($"[APP-LAUNCH] {message}");
-                throw new TimeoutException(message);
-            }
-
-            var processId = app.ProcessIds.First();
-            await _loggingService.LogInfoAsync($"[APP-LAUNCH] {app.Name} process detected (PID: {processId})");
-
-            // Store process ID in context for later use
-            context.SetData($"{stepDef.StepId}_ProcessId", processId);
-
-            // Phase 5: TEMPLATE DETECTION - wait for app UI to be READY
-            // This is the KEY innovation - confirms app is fully loaded and interactive
-            await UpdateProgressWithPhaseAsync(subtask, "launch", 70, $"Waiting for {app.Name} UI");
-
-            TemplateMatchResult? capturedTemplateMatch = null; // Capture template match for navigation
-
-            if (string.IsNullOrWhiteSpace(stepDef.TemplatePath))
-            {
-                await _loggingService.LogWarningAsync($"[APP-LAUNCH] No template path configured for {stepDef.ApplicationName} - skipping UI readiness check");
-            }
-            else
-            {
-                await _loggingService.LogInfoAsync($"[APP-LAUNCH] Detecting UI readiness using template: {stepDef.TemplatePath}");
-
-                try
-                {
-                    var retryAttempts = stepDef.RetryAttempts ?? 30;
-                    var retryDelay = stepDef.RetryDelayMs ?? 500;
-
-                    await _loggingService.LogDebugAsync($"[APP-LAUNCH] Template detection config: {retryAttempts} attempts x {retryDelay}ms");
-
-                    // Simple retry loop for template detection
-                    bool detected = false;
-                    for (int attempt = 1; attempt <= retryAttempts && !detected; attempt++)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-
-                        try
-                        {
-                            // Get window handle for template detection
-                            var windowHandle = IntPtr.Zero;
-                            try
-                            {
-                                var processName = System.IO.Path.GetFileNameWithoutExtension(app.ExecutablePath);
-                                windowHandle = await FindWindowHandleAsync(
-                                    subtask,
-                                    processName,
-                                    string.Empty,
-                                    cancellationToken,
-                                    maxAttempts: 3);
-                            }
-                            catch
-                            {
-                                // Window not ready yet, will retry
-                                continue;
-                            }
-
-                            // Try to detect the template
-                            var screenshot = await _screenshotService.CaptureWindowAsync(windowHandle, cancellationToken);
-                            if (screenshot != null)
-                            {
-                                var templateMatch = await _templateService.FindElementAsync(screenshot, stepDef.TemplatePath, cancellationToken);
-
-                                // Use confidence threshold from workflow step definition (not template metadata)
-                                var threshold = stepDef.ConfidenceThreshold;
-
-                                if (templateMatch != null && templateMatch.Confidence >= threshold)
-                                {
-                                    detected = true;
-                                    capturedTemplateMatch = templateMatch; // Capture for navigation use
-                                    await _loggingService.LogInfoAsync($"[APP-LAUNCH] UI ready - template detected on attempt {attempt}/{retryAttempts} (confidence: {templateMatch.Confidence:P}, threshold: {threshold:P})");
-                                    break;
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            await _loggingService.LogDebugAsync($"[APP-LAUNCH] Template detection attempt {attempt}/{retryAttempts} failed: {ex.Message}");
-                        }
-
-                        if (attempt < retryAttempts)
-                        {
-                            await Task.Delay(retryDelay, cancellationToken);
-                        }
-                    }
-
-                    if (!detected)
-                    {
-                        var message = $"{app.Name} UI not ready - template '{stepDef.TemplatePath}' not detected after {retryAttempts} attempts";
-                        await _loggingService.LogErrorAsync($"[APP-LAUNCH] {message}");
-                        throw new TimeoutException(message);
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    await _loggingService.LogErrorAsync($"[APP-LAUNCH] Error during template detection", ex);
-                    throw;
-                }
-            }
-
-            // Phase 6: Execute navigation (e.g., click Launch Arrow in Windower)
-            if (stepDef.Navigation != null)
-            {
-                await UpdateProgressWithPhaseAsync(subtask, "launch", 90, $"Interacting with {app.Name}");
-                await _loggingService.LogInfoAsync($"[APP-LAUNCH] Executing post-launch navigation for {app.Name}");
-
-                // Get window handle for the launched application
-                var windowHandle = IntPtr.Zero;
-                try
-                {
-                    var processName = System.IO.Path.GetFileNameWithoutExtension(app.ExecutablePath);
-                    windowHandle = await FindWindowHandleAsync(
-                        subtask,
-                        processName,
-                        string.Empty,
-                        cancellationToken,
-                        maxAttempts: 10);
-
-                    await _loggingService.LogDebugAsync($"[APP-LAUNCH] Found window handle for {app.Name}: 0x{windowHandle.ToInt64():X}");
-                }
-                catch (Exception ex)
-                {
-                    await _loggingService.LogWarningAsync($"[APP-LAUNCH] Could not find window handle for {app.Name}: {ex.Message}");
-                }
-
-                // Execute navigation sequence with captured template match
-                var success = await ExecuteNavigationActionAsync(
-                    subtask,
-                    stepDef.Navigation,
-                    windowHandle,
-                    capturedTemplateMatch, // Pass captured template match for relative click navigation
-                    _automationService,
-                    cancellationToken);
-
-                if (!success)
-                {
-                    await _loggingService.LogWarningAsync($"[APP-LAUNCH] Navigation partially failed for {app.Name}, but continuing");
-                }
-                else
-                {
-                    await _loggingService.LogInfoAsync($"[APP-LAUNCH] Navigation completed successfully for {app.Name}");
-                }
-            }
-
-            // Phase 7: Complete
-            await UpdateProgressWithPhaseAsync(subtask, "launch", 100, $"{app.Name} ready");
-            await _loggingService.LogInfoAsync($"[APP-LAUNCH] {app.Name} launch sequence completed successfully");
-        }
-
-        /// <summary>
         /// Validates that the workflow step definition is complete and valid.
         /// </summary>
         private void ValidateWorkflowStep(WorkflowStepDefinition stepDef)
@@ -388,41 +134,49 @@ namespace FFXIManager.Services.AutoLogin
         }
 
         /// <summary>
-        /// Gets window handle from context, or attempts to discover it.
+        /// Gets window handle using PlayOnlineMonitorService with optional PID hint from context.
+        /// Leverages existing monitoring infrastructure for robust window discovery and validation.
         /// </summary>
+        /// <remarks>
+        /// Architecture:
+        /// 1. Extract PID hint from launch step context (if available)
+        /// 2. Delegate to PlayOnlineMonitorService which:
+        ///    - Uses cached character data for fast lookup
+        ///    - Validates window is still alive
+        ///    - Falls back to other valid windows if hint is stale
+        /// 3. System stays flexible and leverages existing monitoring
+        /// </remarks>
         private async Task<IntPtr> GetOrDiscoverWindowHandleAsync(
             AutoLoginSubtask subtask,
             AutoLoginQueueItem queueItem,
             IAutoLoginContext context,
             CancellationToken cancellationToken)
         {
-            // Try to get window handle from context first
-            var windowHandle = context.GetValueData<IntPtr>("POLWindowHandle");
+            await _loggingService.LogDebugAsync("[WINDOW-DISCOVERY] Requesting valid POL window from PlayOnlineMonitorService");
+
+            // Extract PID hint from context (from launch step if available)
+            int? preferredProcessId = null;
+            var launchStepPid = context.GetValueData<int>("launch_windower_ProcessId");
+            if (launchStepPid > 0)
+            {
+                preferredProcessId = launchStepPid;
+                await _loggingService.LogInfoAsync($"[WINDOW-DISCOVERY] Providing PID hint from launch step: {preferredProcessId}");
+            }
+            else
+            {
+                await _loggingService.LogDebugAsync("[WINDOW-DISCOVERY] No PID hint available - PlayOnlineMonitorService will use best match");
+            }
+
+            // Delegate to PlayOnlineMonitorService - it knows the truth about which windows are valid
+            var windowHandle = await _polMonitorService.GetValidPlayOnlineWindowAsync(preferredProcessId);
 
             if (windowHandle == IntPtr.Zero)
             {
-                await _loggingService.LogDebugAsync("Window handle not in context, attempting to discover");
-
-                // Try to find pol.exe window
-                try
-                {
-                    windowHandle = await FindWindowHandleAsync(
-                        subtask,
-                        "pol",
-                        string.Empty,
-                        cancellationToken,
-                        maxAttempts: 10);
-
-                    // Store for future steps
-                    context.SetData("POLWindowHandle", windowHandle);
-                }
-                catch (Exception ex)
-                {
-                    await _loggingService.LogWarningAsync($"Could not find POL window handle: {ex.Message}");
-                    throw new InvalidOperationException("Could not find PlayOnline window. Ensure PlayOnline is running.", ex);
-                }
+                await _loggingService.LogWarningAsync("[WINDOW-DISCOVERY] PlayOnlineMonitorService could not find valid POL window");
+                throw new InvalidOperationException("Could not find valid PlayOnline window. Ensure PlayOnline is running.");
             }
 
+            await _loggingService.LogInfoAsync($"[WINDOW-DISCOVERY] Using valid POL window from monitoring service: 0x{windowHandle.ToInt64():X}");
             return windowHandle;
         }
 
@@ -447,8 +201,12 @@ namespace FFXIManager.Services.AutoLogin
                 var options = new ScreenDetectionOptions
                 {
                     Timeout = TimeSpan.FromSeconds(Math.Max(stepDef.EstimatedDurationSeconds, 30)),
-                    CheckInterval = TimeSpan.FromSeconds(1)
+                    CheckInterval = TimeSpan.FromSeconds(1),
+                    MaxAttempts = stepDef.MaxRetryAttempts > 0 ? stepDef.MaxRetryAttempts : null,
+                    ScreenshotRetryCount = stepDef.ScreenshotRetryCount ?? Math.Max(stepDef.MaxRetryAttempts / 3, 5) // Use workflow value or auto-calculate
                 };
+
+                await _loggingService.LogInfoAsync($"Detection config - MaxAttempts: {options.MaxAttempts?.ToString() ?? "auto"}, ScreenshotRetries: {options.ScreenshotRetryCount}");
 
                 return await WaitForScreenDetectionAsync(
                     subtask,
@@ -474,7 +232,9 @@ namespace FFXIManager.Services.AutoLogin
                         var options = new ScreenDetectionOptions
                         {
                             Timeout = TimeSpan.FromSeconds(15),
-                            CheckInterval = TimeSpan.FromSeconds(1)
+                            CheckInterval = TimeSpan.FromSeconds(1),
+                            MaxAttempts = Math.Max(stepDef.MaxRetryAttempts / 2, 5), // Use half attempts for fallback
+                            ScreenshotRetryCount = stepDef.ScreenshotRetryCount ?? Math.Max(stepDef.MaxRetryAttempts / 3, 5) // Use workflow value or auto-calculate
                         };
 
                         return await WaitForScreenDetectionAsync(
@@ -500,8 +260,8 @@ namespace FFXIManager.Services.AutoLogin
         }
 
         /// <summary>
-        /// Executes navigation for the workflow step.
-        /// Navigation must be defined in the workflow step definition.
+        /// Executes navigation for the workflow step using the unified action executor pattern.
+        /// Each action in the sequence is routed to the appropriate executor.
         /// </summary>
         private async Task<bool> ExecuteNavigationAsync(
             AutoLoginSubtask subtask,
@@ -514,29 +274,64 @@ namespace FFXIManager.Services.AutoLogin
             var navigation = stepDef.Navigation;
 
             // If no navigation defined, this is a detection-only step
-            if (navigation == null)
+            if (navigation == null || navigation.Sequence == null || navigation.Sequence.Count == 0)
             {
                 await _loggingService.LogInfoAsync($"No navigation configured for step '{stepDef.DisplayName}' - detection only");
                 return true;
             }
 
-            // Execute the navigation action
-            await _loggingService.LogDebugAsync($"Executing navigation: Type={navigation.Type}, Sequence Length={navigation.Sequence?.Count ?? 0}");
+            // Execute each action in the sequence using the appropriate executor
+            await _loggingService.LogInfoAsync($"[NAVIGATION] Executing {navigation.Sequence.Count} action(s) for step: {stepDef.DisplayName}");
 
-            var success = await ExecuteNavigationActionAsync(
-                subtask,
-                navigation,
-                windowHandle,
-                templateMatch,
-                _automationService,
-                cancellationToken);
-
-            if (!success)
+            // Build execution context
+            var context = new WorkflowActionContext
             {
-                throw new InvalidOperationException($"Navigation failed for step '{stepDef.DisplayName}'");
+                WindowHandle = windowHandle,
+                TemplateMatch = templateMatch,
+                Subtask = subtask,
+                QueueItem = null, // Can be passed if needed
+                AutoLoginContext = null, // Can be passed if needed
+                WorkflowStep = stepDef
+            };
+
+            for (int i = 0; i < navigation.Sequence.Count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var action = navigation.Sequence[i];
+                await _loggingService.LogDebugAsync($"[NAVIGATION] Action {i + 1}/{navigation.Sequence.Count}: {action.Action}");
+
+                try
+                {
+                    // Get appropriate executor for this action
+                    var executor = _actionExecutorFactory.GetExecutor(action.Action);
+
+                    // Execute the action
+                    var success = await executor.ExecuteAsync(action, context, cancellationToken);
+
+                    if (!success)
+                    {
+                        await _loggingService.LogErrorAsync($"[NAVIGATION] Action {action.Action} failed at position {i + 1}");
+                        throw new InvalidOperationException($"Navigation action '{action.Action}' failed for step '{stepDef.DisplayName}'");
+                    }
+
+                    await _loggingService.LogDebugAsync($"[NAVIGATION] Action {action.Action} completed successfully");
+                }
+                catch (Exception ex)
+                {
+                    await _loggingService.LogErrorAsync($"[NAVIGATION] Failed to execute action {action.Action} at position {i + 1}", ex);
+                    throw;
+                }
             }
 
-            await _loggingService.LogDebugAsync($"Navigation completed successfully for step: {stepDef.DisplayName}");
+            // Post-navigation delay (if configured in navigation action)
+            if (navigation.PostNavigationDelayMs > 0)
+            {
+                await _loggingService.LogDebugAsync($"[NAVIGATION] Post-navigation delay: {navigation.PostNavigationDelayMs}ms");
+                await Task.Delay(navigation.PostNavigationDelayMs, cancellationToken);
+            }
+
+            await _loggingService.LogInfoAsync($"[NAVIGATION] All actions completed successfully for step: {stepDef.DisplayName}");
             return true;
         }
 

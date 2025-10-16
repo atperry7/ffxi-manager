@@ -30,7 +30,8 @@ namespace FFXIManager.Models
     }
 
     /// <summary>
-    /// Defines a single navigation action within a sequence (keyboard or mouse click).
+    /// Defines a single navigation action within a sequence (keyboard, mouse, or workflow action).
+    /// Supports both traditional navigation actions (Tab, Click) and workflow-level actions (Launch, Wait).
     /// </summary>
     public class KeyboardAction : INotifyPropertyChanged
     {
@@ -42,9 +43,16 @@ namespace FFXIManager.Models
         private double _clickY = 0.5;
 
         /// <summary>
-        /// The navigation action to perform (Tab, Enter, Click, etc.)
-        /// For keyboard: Tab, Enter, DownArrow, UpArrow, LeftArrow, RightArrow, Escape, Spacebar, Home, End, PageUp, PageDown
-        /// For mouse: Click (uses ClickX and ClickY coordinates)
+        /// The action to perform. Supports both navigation and workflow actions:
+        ///
+        /// **Navigation Actions:**
+        /// - Keyboard: Tab, Enter, DownArrow, UpArrow, LeftArrow, RightArrow, Escape, Spacebar, Home, End, PageUp, PageDown
+        /// - Mouse: Click (uses ClickX and ClickY coordinates)
+        ///
+        /// **Workflow Actions:**
+        /// - Launch: Launch an external application (requires Parameters["ApplicationName"])
+        /// - Wait: Pause execution (uses DelayMs)
+        /// - Screenshot: Capture a screenshot (optional, for debugging)
         /// </summary>
         public string Action
         {
@@ -99,11 +107,57 @@ namespace FFXIManager.Models
             set { _clickY = value; OnPropertyChanged(); }
         }
 
+        /// <summary>
+        /// Flexible parameters for action-specific configuration.
+        /// Enables extensible action system without modifying the model for each new action type.
+        ///
+        /// **Launch Action Parameters:**
+        /// - ApplicationName (string): Name of external application (must match ExternalApplicationData entry)
+        /// - AllowSkipIfRunning (bool): Skip if application is already running (default: false)
+        /// - AllowSkipIfNotConfigured (bool): Skip if application not in settings (default: true)
+        /// - RetryAttempts (int): Number of retry attempts for UI detection (default: 30)
+        /// - RetryDelayMs (int): Delay between retries (default: 500)
+        ///
+        /// **Future Actions:**
+        /// - Screenshot parameters (path, format, etc.)
+        /// - Conditional logic parameters
+        /// - Custom validation parameters
+        /// </summary>
+        public Dictionary<string, object> Parameters { get; set; } = new();
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        /// <summary>
+        /// Gets a parameter value with type casting, returning default if not found
+        /// </summary>
+        public T GetParameter<T>(string key, T defaultValue = default!)
+        {
+            if (Parameters.TryGetValue(key, out var value))
+            {
+                try
+                {
+                    return (T)Convert.ChangeType(value, typeof(T));
+                }
+                catch
+                {
+                    return defaultValue;
+                }
+            }
+            return defaultValue;
+        }
+
+        /// <summary>
+        /// Sets a parameter value
+        /// </summary>
+        public void SetParameter(string key, object value)
+        {
+            Parameters[key] = value;
+            OnPropertyChanged(nameof(Parameters));
         }
     }
 

@@ -36,6 +36,14 @@ namespace FFXIManager.Services
         Task RefreshCharactersAsync();
 
         /// <summary>
+        /// Gets a valid PlayOnline window handle with optional PID preference.
+        /// Uses cached character data and validates window is still alive.
+        /// </summary>
+        /// <param name="preferredProcessId">Optional PID hint from launch step</param>
+        /// <returns>Valid window handle or IntPtr.Zero if none found</returns>
+        Task<IntPtr> GetValidPlayOnlineWindowAsync(int? preferredProcessId = null);
+
+        /// <summary>
         /// Activates the window for a specific character
         /// </summary>
         Task<bool> ActivateCharacterWindowAsync(PlayOnlineCharacter character, System.Threading.CancellationToken cancellationToken = default);

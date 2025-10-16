@@ -78,6 +78,13 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<ILoginTaskHandler, DynamicWorkflowHandler>(); // Single handler for all UI navigation and application launches
             services.AddSingleton<ILoginTaskHandlerResolver, LoginTaskHandlerResolver>();
 
+            // Workflow action executors (Strategy Pattern for extensible actions)
+            services.AddSingleton<IWorkflowActionExecutor, FFXIManager.Services.AutoLogin.ActionExecutors.LaunchActionExecutor>();
+            services.AddSingleton<IWorkflowActionExecutor, FFXIManager.Services.AutoLogin.ActionExecutors.KeyboardActionExecutor>();
+            services.AddSingleton<IWorkflowActionExecutor, FFXIManager.Services.AutoLogin.ActionExecutors.ClickActionExecutor>();
+            services.AddSingleton<IWorkflowActionExecutor, FFXIManager.Services.AutoLogin.ActionExecutors.WaitActionExecutor>();
+            services.AddSingleton<IWorkflowActionExecutorFactory, WorkflowActionExecutorFactory>();
+
             // Auto-login queue services (refactored for SOLID principles)
             services.AddSingleton<IQueueCollectionManager, QueueCollectionManager>();
             services.AddSingleton<IQueueStateMachine, QueueStateMachine>();

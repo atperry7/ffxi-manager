@@ -24,6 +24,18 @@ public class ScreenDetectionOptions
     public float ConfidenceThreshold { get; set; } = 0.80f;
 
     /// <summary>
+    /// Maximum number of detection attempts. If null, calculated from Timeout / CheckInterval.
+    /// Use this to override timeout-based attempt calculation with workflow-specified value.
+    /// </summary>
+    public int? MaxAttempts { get; set; } = null;
+
+    /// <summary>
+    /// Number of retries for screenshot capture within each detection attempt.
+    /// Default is 5 retries (6 total attempts per detection) to handle transient window capture issues.
+    /// </summary>
+    public int ScreenshotRetryCount { get; set; } = 5;
+
+    /// <summary>
     /// Default options: 30-second timeout, 1-second intervals, 80% confidence.
     /// </summary>
     public static ScreenDetectionOptions Default => new();

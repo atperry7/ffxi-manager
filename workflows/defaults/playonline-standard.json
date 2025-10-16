@@ -20,19 +20,28 @@
       "DisplayName": "Launch POL Proxy",
       "Description": "Launch POL Proxy application if configured (optional step)",
       "Order": 0,
-      "StepType": "LaunchApplication",
-      "ApplicationName": "POL Proxy",
       "TemplatePath": "",
       "IsEnabled": true,
       "IsOptional": true,
-      "AllowSkipIfNotConfigured": true,
-      "AllowSkipIfRunning": true,
-      "RetryAttempts": 20,
-      "RetryDelayMs": 500,
       "EstimatedDurationSeconds": 10,
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
-      "Navigation": null,
+      "Navigation": {
+        "Description": "Launch POL Proxy application",
+        "Sequence": [
+          {
+            "Action": "Launch",
+            "Parameters": {
+              "ApplicationName": "POL Proxy",
+              "AllowSkipIfNotConfigured": true,
+              "AllowSkipIfRunning": true,
+              "RetryAttempts": 20,
+              "RetryDelayMs": 500
+            }
+          }
+        ],
+        "PostNavigationDelayMs": 0
+      },
       "Metadata": {
         "Purpose": "Generic application launch - leverages ExternalApplicationService + template detection"
       }
@@ -42,21 +51,29 @@
       "DisplayName": "Launch Windower",
       "Description": "Launch Windower application and click the Launch Arrow to start PlayOnline",
       "Order": 1,
-      "StepType": "LaunchApplication",
-      "ApplicationName": "Windower",
       "TemplatePath": "launch_arrow",
       "IsEnabled": true,
       "IsOptional": false,
-      "AllowSkipIfNotConfigured": false,
-      "AllowSkipIfRunning": false,
-      "RetryAttempts": 30,
-      "RetryDelayMs": 500,
       "EstimatedDurationSeconds": 15,
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Navigation": {
-        "Description": "Click the Launch Arrow button to start PlayOnline",
+        "Description": "Launch Windower and click the Launch Arrow button to start PlayOnline",
         "Sequence": [
+          {
+            "Action": "Launch",
+            "Parameters": {
+              "ApplicationName": "Windower",
+              "AllowSkipIfNotConfigured": false,
+              "AllowSkipIfRunning": false,
+              "RetryAttempts": 30,
+              "RetryDelayMs": 500,
+              "TemplatePath": "launch_arrow",
+              "ConfidenceThreshold": 0.8
+            }
+          },
           {
             "Action": "Click",
             "Count": 1,
@@ -81,8 +98,8 @@
       "IsEnabled": true,
       "IsOptional": false,
       "Condition": null,
-      "EstimatedDurationSeconds": 5,
-      "MaxRetryAttempts": 3,
+      "EstimatedDurationSeconds": 30,
+      "MaxRetryAttempts": 15,
       "FallbackTemplatePaths": [],
       "Navigation": {
         "Description": "Navigate to and select member slot using Tab+Enter",
