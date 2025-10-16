@@ -340,8 +340,13 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         {
             try
             {
-                // Template path is now just a filename (e.g., "member_selection_screen.png")
-                var pngPath = Path.Combine(_templatesBasePath, templatePath);
+                // Template path is now just a filename (e.g., "member_selection_screen" or "member_selection_screen.png")
+                // Ensure .png extension is present
+                var fileName = templatePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+                    ? templatePath
+                    : templatePath + ".png";
+
+                var pngPath = Path.Combine(_templatesBasePath, fileName);
 
                 if (!File.Exists(pngPath))
                 {
@@ -429,9 +434,13 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         
         private string GetTemplateFilePath(string templatePath)
         {
-            // Template paths are now simple filenames (e.g., "member_selection_screen.png")
-            // No need for directory traversal
-            return Path.Combine(_templatesBasePath, templatePath);
+            // Template paths are now simple filenames (e.g., "member_selection_screen" or "member_selection_screen.png")
+            // Ensure .png extension is present
+            var fileName = templatePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+                ? templatePath
+                : templatePath + ".png";
+
+            return Path.Combine(_templatesBasePath, fileName);
         }
 
         private static string GetApplicationFromPath(string templatePath)
