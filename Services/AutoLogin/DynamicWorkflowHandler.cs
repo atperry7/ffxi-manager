@@ -498,7 +498,7 @@ namespace FFXIManager.Services.AutoLogin
 
         /// <summary>
         /// Executes navigation for the workflow step.
-        /// Uses Navigation from step definition if defined, otherwise falls back to template's navigation.
+        /// Navigation must be defined in the workflow step definition.
         /// </summary>
         private async Task<bool> ExecuteNavigationAsync(
             AutoLoginSubtask subtask,
@@ -507,24 +507,8 @@ namespace FFXIManager.Services.AutoLogin
             TemplateMatchResult templateMatch,
             CancellationToken cancellationToken)
         {
-            NavigationAction? navigation = null;
-
-            // WORKFLOW-FIRST: Check if step has navigation defined (primary source)
-            if (stepDef.Navigation != null)
-            {
-                await _loggingService.LogDebugAsync($"Using step navigation for: {stepDef.DisplayName}");
-                navigation = stepDef.Navigation;
-            }
-            else
-            {
-                // FALLBACK: Load navigation from template metadata for backward compatibility
-                var templateMetadata = await _templateManagementService.GetTemplateMetadataAsync(stepDef.TemplatePath);
-                if (templateMetadata?.Navigation != null)
-                {
-                    await _loggingService.LogDebugAsync($"Using template navigation (fallback) for step: {stepDef.DisplayName}");
-                    navigation = templateMetadata.Navigation;
-                }
-            }
+            // Get navigation from step definition (100% workflow-driven)
+            var navigation = stepDef.Navigation;
 
             // If no navigation defined, this is a detection-only step
             if (navigation == null)

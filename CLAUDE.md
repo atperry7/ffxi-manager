@@ -262,7 +262,14 @@ All services registered in `Infrastructure/DependencyInjection.cs`:
 
 **Recent Major Refactorings:**
 
-1. **100% Workflow-Driven Architecture - Phase 2** (Latest)
+1. **100% Workflow-Driven Architecture - Phase 3** (Latest)
+   - Removed `TemplateNavigationTuner` UI tool (~800 lines) - obsolete after workflow-first migration
+   - Removed template navigation fallback from `DynamicWorkflowHandler`
+   - Templates now **detection-only** (PNG + confidence threshold) - no navigation metadata
+   - Workflows are now the **single source of truth** for all navigation
+   - **Result**: Clean architectural separation - Templates = Detection, Workflows = Navigation + Execution
+
+2. **100% Workflow-Driven Architecture - Phase 2**
    - Removed `POLProxyLaunchHandler` and `WindowerLaunchHandler`
    - Removed 4 configuration classes (POLProxyLaunchConfiguration, WindowerLaunchConfiguration, etc.)
    - Simplified `LoginTaskStep` enum from 8 values to 1 (only `None` remains, marked obsolete)
@@ -271,7 +278,7 @@ All services registered in `Infrastructure/DependencyInjection.cs`:
    - Generic launch pattern: ExternalApplicationService + UnifiedMonitoringService + template confirmation
    - **Result**: DynamicWorkflowHandler is now the ONLY handler - handles ALL UI navigation AND application launches
 
-2. **Complete Migration to Workflow-First Architecture - Phase 1**
+3. **Complete Migration to Workflow-First Architecture - Phase 1**
    - Removed `PlayOnlineAuthHandler` and `FFXIGameHandler` (~1,800 lines of code)
    - Removed 12 specialized services (authentication, navigation, screen detection)
    - Stripped navigation from all template JSON files (14 templates updated)

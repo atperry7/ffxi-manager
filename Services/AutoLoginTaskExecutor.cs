@@ -15,6 +15,8 @@ namespace FFXIManager.Services
         private readonly ILoggingService _loggingService;
         private readonly ILoginTaskHandlerResolver _handlerResolver;
         private readonly IAutoLoginContextService _contextService;
+        private readonly IWorkflowService _workflowService;
+        private readonly WorkflowTaskBuilder _workflowTaskBuilder;
         private readonly object _lockObject = new();
         private CancellationTokenSource? _currentTaskCancellationTokenSource;
         private AutoLoginQueueItem? _currentQueueItem;
@@ -24,11 +26,15 @@ namespace FFXIManager.Services
         public AutoLoginTaskExecutor(
             ILoggingService loggingService,
             ILoginTaskHandlerResolver handlerResolver,
-            IAutoLoginContextService contextService)
+            IAutoLoginContextService contextService,
+            IWorkflowService workflowService,
+            WorkflowTaskBuilder workflowTaskBuilder)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _handlerResolver = handlerResolver ?? throw new ArgumentNullException(nameof(handlerResolver));
             _contextService = contextService ?? throw new ArgumentNullException(nameof(contextService));
+            _workflowService = workflowService ?? throw new ArgumentNullException(nameof(workflowService));
+            _workflowTaskBuilder = workflowTaskBuilder ?? throw new ArgumentNullException(nameof(workflowTaskBuilder));
 
             // Default configuration - increased to accommodate extended detection operations
             SubtaskTimeoutSeconds = 90; // Increased from 30s to allow for Extended (60s) + buffer
@@ -99,7 +105,7 @@ namespace FFXIManager.Services
         private async Task ExecuteTaskInternalAsync(AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
         {
             // Create or get the task
-            var task = queueItem.Task ?? CreateStandardLoginTask();
+            var task = queueItem.Task ?? await CreateWorkflowDrivenTaskAsync(queueItem, cancellationToken);
             queueItem.Task = task;
             _currentTask = task;
 
@@ -297,9 +303,10 @@ namespace FFXIManager.Services
 
 
         /// <summary>
-        /// Creates a standard auto-login task with all required subtasks
+        /// Creates a workflow-driven auto-login task with subtasks built from the workflow definition.
+        /// This is the new approach that replaces the obsolete CreateStandardLoginTask method.
         /// </summary>
-        private AutoLoginTask CreateStandardLoginTask()
+        private async Task<AutoLoginTask> CreateWorkflowDrivenTaskAsync(AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
         {
             var task = new AutoLoginTask
             {
@@ -307,8 +314,17 @@ namespace FFXIManager.Services
                 Description = "Complete auto-login sequence for Final Fantasy XI"
             };
 
-            // Add all standard login subtasks
-            var subtasks = AutoLoginSubtask.CreateStandardLoginSubtasks();
+            // Load the workflow for this account (falls back to default workflow)
+            var workflow = await _workflowService.GetWorkflowForAccountAsync(queueItem.Account, cancellationToken);
+
+            await _loggingService.LogInfoAsync($"Using workflow '{workflow.Name}' for {queueItem.DisplayName}");
+
+            // Build subtasks from the workflow
+            var subtasks = await _workflowTaskBuilder.BuildSubtasksAsync(workflow, queueItem.Account, cancellationToken);
+
+            await _loggingService.LogInfoAsync($"Built {subtasks.Count} subtasks from workflow '{workflow.Name}' for {queueItem.DisplayName}");
+
+            // Add workflow-generated subtasks to the task
             foreach (var subtask in subtasks)
             {
                 task.AddSubtask(subtask);

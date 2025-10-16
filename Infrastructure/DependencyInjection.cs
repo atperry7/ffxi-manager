@@ -76,9 +76,6 @@ namespace FFXIManager.Infrastructure
 
             // Auto-login handler (100% workflow-driven)
             services.AddSingleton<ILoginTaskHandler, DynamicWorkflowHandler>(); // Single handler for all UI navigation and application launches
-
-            // Diagnostics UI (Template Navigation Tuner)
-            services.AddTransient<FFXIManager.Views.TemplateNavigationTuner>();
             services.AddSingleton<ILoginTaskHandlerResolver, LoginTaskHandlerResolver>();
 
             // Auto-login queue services (refactored for SOLID principles)

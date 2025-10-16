@@ -56,7 +56,6 @@
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Type": "Hybrid",
         "Description": "Click the Launch Arrow button to start PlayOnline",
         "Sequence": [
           {
@@ -88,7 +87,6 @@
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Type": "Hybrid",
         "Description": "Navigate to and select member slot using Tab+Enter",
         "Sequence": [
           {
@@ -105,7 +103,6 @@
           }
         ],
         "Fallback": {
-          "Type": "RelativeClick",
           "ClickOffset": {
             "X": 0.5,
             "Y": 0.2
@@ -130,7 +127,6 @@
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Type": "Hybrid",
         "Description": "Navigate to and click Log In button",
         "Sequence": [
           {
@@ -141,7 +137,6 @@
           }
         ],
         "Fallback": {
-          "Type": "RelativeClick",
           "ClickOffset": {
             "X": 0.5,
             "Y": 0.5
@@ -166,7 +161,6 @@
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Type": "Hybrid",
         "Description": "Focus password field on connection screen",
         "Sequence": [
           {
@@ -194,7 +188,6 @@
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Type": "Hybrid",
         "Description": "Activate virtual keyboard password field (explicit click)",
         "Sequence": [
           {
@@ -226,7 +219,6 @@
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Type": "Hybrid",
         "Description": "Confirm password using circle button",
         "Sequence": [
           {
@@ -237,7 +229,6 @@
           }
         ],
         "Fallback": {
-          "Type": "RelativeClick",
           "ClickOffset": {
             "X": 0.5,
             "Y": 0.5
@@ -262,7 +253,6 @@
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Type": "Keyboard",
         "Description": "Tab to OTP field and enter code",
         "Sequence": [
           {
@@ -292,7 +282,6 @@
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Type": "Hybrid",
         "Description": "Activate Connect button",
         "Sequence": [
           {
@@ -303,7 +292,6 @@
           }
         ],
         "Fallback": {
-          "Type": "RelativeClick",
           "ClickOffset": {
             "X": 0.5,
             "Y": 0.5
@@ -328,7 +316,6 @@
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Type": "Hybrid",
         "Description": "Navigate to Final Fantasy XI in game list",
         "Sequence": [
           {
@@ -362,7 +349,6 @@
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Type": "Hybrid",
         "Description": "Confirm play selection",
         "Sequence": [
           {
@@ -373,7 +359,6 @@
           }
         ],
         "Fallback": {
-          "Type": "RelativeClick",
           "ClickOffset": {
             "X": 0.5,
             "Y": 0.5
@@ -398,7 +383,6 @@
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Type": "Keyboard",
         "Description": "Accept terms with Enter key",
         "Sequence": [
           {
@@ -426,7 +410,6 @@
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Type": "Keyboard",
         "Description": "Select Character menu option",
         "Sequence": [
           {
@@ -454,7 +437,6 @@
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Type": "Keyboard",
         "Description": "Navigate to character slot and confirm selection (slot number determines arrow count)",
         "Sequence": [
           {
@@ -490,7 +472,6 @@
       "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Type": "Keyboard",
         "Description": "Final confirmation to enter game world",
         "Sequence": [
           {
