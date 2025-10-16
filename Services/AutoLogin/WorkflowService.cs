@@ -437,6 +437,30 @@ namespace FFXIManager.Services.AutoLogin
                     await _loggingService.LogDebugAsync($"Restored default workflow: {fileName}");
                 }
 
+                // Also restore template PNG files
+                var templatesSource = Path.Combine(defaultWorkflowsSource, "templates");
+                if (Directory.Exists(templatesSource))
+                {
+                    var templatesDestination = Path.Combine(defaultWorkflowsDestination, "templates");
+                    Directory.CreateDirectory(templatesDestination);
+
+                    var templateFiles = Directory.GetFiles(templatesSource, "*.png");
+                    foreach (var templateFile in templateFiles)
+                    {
+                        var fileName = Path.GetFileName(templateFile);
+                        var destFile = Path.Combine(templatesDestination, fileName);
+
+                        // Force copy/overwrite
+                        File.Copy(templateFile, destFile, overwrite: true);
+                        await _loggingService.LogDebugAsync($"Restored template: {fileName}");
+                    }
+
+                    if (templateFiles.Length > 0)
+                    {
+                        await _loggingService.LogInfoAsync($"Restored {templateFiles.Length} workflow template(s)");
+                    }
+                }
+
                 // Clear cache to force reload
                 await _cacheLock.WaitAsync(cancellationToken);
                 try
@@ -501,6 +525,40 @@ namespace FFXIManager.Services.AutoLogin
                         copiedCount++;
                         await _loggingService.LogDebugAsync($"Copied default workflow: {fileName}");
                     }
+                }
+
+                // Copy template PNG files from workflows/defaults/templates/ to APPDATA
+                var templatesSource = Path.Combine(defaultWorkflowsSource, "templates");
+                if (Directory.Exists(templatesSource))
+                {
+                    var templatesDestination = Path.Combine(defaultWorkflowsDestination, "templates");
+                    Directory.CreateDirectory(templatesDestination);
+
+                    var templateFiles = Directory.GetFiles(templatesSource, "*.png");
+                    int templatesCopied = 0;
+
+                    foreach (var templateFile in templateFiles)
+                    {
+                        var fileName = Path.GetFileName(templateFile);
+                        var destFile = Path.Combine(templatesDestination, fileName);
+
+                        // Copy if doesn't exist, or if source is newer
+                        if (!File.Exists(destFile) || File.GetLastWriteTimeUtc(templateFile) > File.GetLastWriteTimeUtc(destFile))
+                        {
+                            File.Copy(templateFile, destFile, overwrite: true);
+                            templatesCopied++;
+                            await _loggingService.LogDebugAsync($"Copied template: {fileName}");
+                        }
+                    }
+
+                    if (templatesCopied > 0)
+                    {
+                        await _loggingService.LogInfoAsync($"Initialized {templatesCopied} workflow template(s)");
+                    }
+                }
+                else
+                {
+                    await _loggingService.LogWarningAsync($"Templates directory not found: {templatesSource}");
                 }
 
                 if (copiedCount > 0)
