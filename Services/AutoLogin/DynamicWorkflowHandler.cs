@@ -44,11 +44,6 @@ namespace FFXIManager.Services.AutoLogin
         }
 
         /// <summary>
-        /// This handler doesn't claim any specific LoginTaskStep - it's a dynamic fallback.
-        /// </summary>
-        public override LoginTaskStep TaskStep => LoginTaskStep.None;
-
-        /// <summary>
         /// Can handle any subtask that has a WorkflowStepDefinition.
         /// This allows the handler to execute user-defined workflow steps.
         /// </summary>
@@ -282,13 +277,14 @@ namespace FFXIManager.Services.AutoLogin
                             if (screenshot != null)
                             {
                                 var templateMatch = await _templateService.FindElementAsync(screenshot, stepDef.TemplatePath, cancellationToken);
-                                var metadata = await _templateManagementService.GetTemplateMetadataAsync(stepDef.TemplatePath);
-                                var threshold = metadata?.ConfidenceThreshold ?? 0.8;
+
+                                // Use confidence threshold from workflow step definition (not template metadata)
+                                var threshold = stepDef.ConfidenceThreshold;
 
                                 if (templateMatch != null && templateMatch.Confidence >= threshold)
                                 {
                                     detected = true;
-                                    await _loggingService.LogInfoAsync($"[APP-LAUNCH] UI ready - template detected on attempt {attempt}/{retryAttempts} (confidence: {templateMatch.Confidence:P})");
+                                    await _loggingService.LogInfoAsync($"[APP-LAUNCH] UI ready - template detected on attempt {attempt}/{retryAttempts} (confidence: {templateMatch.Confidence:P}, threshold: {threshold:P})");
                                     break;
                                 }
                             }
@@ -456,6 +452,8 @@ namespace FFXIManager.Services.AutoLogin
                     primaryTemplate,
                     windowHandle,
                     description,
+                    stepDef.ConfidenceThreshold,
+                    stepDef.Tolerance,
                     cancellationToken,
                     options);
             }
@@ -481,6 +479,8 @@ namespace FFXIManager.Services.AutoLogin
                             fallbackTemplate,
                             windowHandle,
                             $"{description} (fallback)",
+                            stepDef.ConfidenceThreshold,
+                            stepDef.Tolerance,
                             cancellationToken,
                             options);
                     }

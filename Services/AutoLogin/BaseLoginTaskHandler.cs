@@ -33,12 +33,11 @@ namespace FFXIManager.Services.AutoLogin
             _templateManagementService = templateManagementService ?? throw new ArgumentNullException(nameof(templateManagementService));
         }
 
-        public abstract LoginTaskStep TaskStep { get; }
         public abstract bool CanHandle(AutoLoginSubtask subtask);
 
         public async Task ExecuteAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
         {
-            await _loggingService.LogDebugAsync($"Starting execution of {subtask.TaskStep} for {queueItem.DisplayName}");
+            await _loggingService.LogDebugAsync($"Starting execution of '{subtask.Name}' for {queueItem.DisplayName}");
 
             try
             {
@@ -48,16 +47,16 @@ namespace FFXIManager.Services.AutoLogin
                 // Execute the handler-specific logic with common patterns applied
                 await ExecuteHandlerLogicAsync(subtask, queueItem, context, cancellationToken);
 
-                await _loggingService.LogDebugAsync($"Successfully completed {subtask.TaskStep} for {queueItem.DisplayName}");
+                await _loggingService.LogDebugAsync($"Successfully completed '{subtask.Name}' for {queueItem.DisplayName}");
             }
             catch (OperationCanceledException)
             {
-                await _loggingService.LogDebugAsync($"Execution of {subtask.TaskStep} was cancelled for {queueItem.DisplayName}");
+                await _loggingService.LogDebugAsync($"Execution of '{subtask.Name}' was cancelled for {queueItem.DisplayName}");
                 throw;
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync($"Failed to execute {subtask.TaskStep} for {queueItem.DisplayName}", ex);
+                await _loggingService.LogErrorAsync($"Failed to execute '{subtask.Name}' for {queueItem.DisplayName}", ex);
                 throw;
             }
         }
@@ -80,7 +79,7 @@ namespace FFXIManager.Services.AutoLogin
                 throw new ArgumentNullException(nameof(queueItem));
 
             if (queueItem.Account == null)
-                throw new InvalidOperationException($"Account information is required for {subtask.TaskStep}");
+                throw new InvalidOperationException($"Account information is required for '{subtask.Name}'");
         }
 
         /// <summary>
@@ -322,26 +321,29 @@ namespace FFXIManager.Services.AutoLogin
         /// Standardized screen detection method using ScreenDetectionOptions configuration.
         /// This is the PREFERRED method for all screen detection operations across all handlers.
         /// </summary>
+        /// <param name="subtask">The subtask for progress reporting</param>
+        /// <param name="templatePath">Path to the template PNG file (e.g., "member_selection_screen.png")</param>
+        /// <param name="windowHandle">Window handle to capture</param>
+        /// <param name="screenDescription">User-friendly description of the screen</param>
+        /// <param name="confidenceThreshold">Confidence threshold from workflow step definition</param>
+        /// <param name="tolerance">Position tolerance from workflow step definition</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <param name="options">Detection options (timeout, check interval)</param>
+        /// <returns>Template match result if detected</returns>
         protected async Task<TemplateMatchResult> WaitForScreenDetectionAsync(
             AutoLoginSubtask subtask,
             string templatePath,
             IntPtr windowHandle,
             string screenDescription,
+            float confidenceThreshold,
+            int tolerance,
             CancellationToken cancellationToken,
             ScreenDetectionOptions? options = null)
         {
             options ??= ScreenDetectionOptions.Default;
 
-            // Load template metadata to get the configured confidence threshold
-            var templateMetadata = await _templateManagementService.GetTemplateMetadataAsync(templatePath);
-            if (templateMetadata == null)
-            {
-                throw new InvalidOperationException($"Template metadata not found for: {templatePath}");
-            }
-
-            // Use template's configured confidence threshold instead of options default
-            var confidenceThreshold = templateMetadata.ConfidenceThreshold;
-            await _loggingService.LogInfoAsync($"Using template confidence threshold: {confidenceThreshold:P} for {screenDescription}");
+            // Use confidence threshold from workflow step definition (not from template metadata)
+            await _loggingService.LogInfoAsync($"Using workflow-defined confidence threshold: {confidenceThreshold:P} for {screenDescription}");
 
             var maxAttempts = (int)(options.Timeout.TotalSeconds / options.CheckInterval.TotalSeconds);
             var startTime = DateTime.UtcNow;

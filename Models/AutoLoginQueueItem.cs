@@ -12,8 +12,6 @@ namespace FFXIManager.Models
     {
         private int _position;
         private AutoLoginQueueStatus _status = AutoLoginQueueStatus.Pending;
-        private LoginTaskStep _currentStep = LoginTaskStep.None;
-        private int _currentStepProgress;
         private string _statusMessage = string.Empty;
         private DateTime? _startTime;
         private DateTime? _endTime;
@@ -105,37 +103,6 @@ namespace FFXIManager.Models
         }
 
         /// <summary>
-        /// Current login task step being executed
-        /// </summary>
-        public LoginTaskStep CurrentStep
-        {
-            get => _currentStep;
-            set
-            {
-                if (SetProperty(ref _currentStep, value))
-                {
-                    OnPropertyChanged(nameof(CurrentStepDisplay));
-                    OnPropertyChanged(nameof(OverallProgress));
-                }
-            }
-        }
-
-        /// <summary>
-        /// Progress of current step (0-100)
-        /// </summary>
-        public int CurrentStepProgress
-        {
-            get => _currentStepProgress;
-            set
-            {
-                if (SetProperty(ref _currentStepProgress, value))
-                {
-                    OnPropertyChanged(nameof(OverallProgress));
-                }
-            }
-        }
-
-        /// <summary>
         /// Current status message
         /// </summary>
         public string StatusMessage
@@ -188,11 +155,6 @@ namespace FFXIManager.Models
                 }
             }
         }
-
-        /// <summary>
-        /// List of completed login steps (legacy - maintained for backward compatibility)
-        /// </summary>
-        public List<LoginTaskStep> CompletedSteps { get; set; } = new();
 
         /// <summary>
         /// The auto-login task associated with this queue item
@@ -269,13 +231,7 @@ namespace FFXIManager.Models
         };
 
         /// <summary>
-        /// Current step display text (DEPRECATED - use CurrentTaskDisplay instead)
-        /// </summary>
-        [System.Obsolete("Use CurrentTaskDisplay instead - all login steps are now workflow-driven")]
-        public string CurrentStepDisplay => "Waiting";
-
-        /// <summary>
-        /// Overall progress percentage (0-100) - Uses task progress if available, falls back to step progress
+        /// Overall progress percentage (0-100) - Uses task-based progress tracking
         /// </summary>
         public int OverallProgress
         {
@@ -284,18 +240,8 @@ namespace FFXIManager.Models
                 if (Status == AutoLoginQueueStatus.Completed) return 100;
                 if (Status == AutoLoginQueueStatus.Failed || Status == AutoLoginQueueStatus.Cancelled) return 0;
 
-                // Use task progress if available (new architecture)
-                if (Task != null)
-                {
-                    return Task.Progress;
-                }
-
-                // Fall back to legacy step-based progress
-                var totalSteps = Enum.GetValues<LoginTaskStep>().Length - 1; // Exclude None
-                var completedSteps = CompletedSteps.Count;
-                var currentStepProgress = CurrentStepProgress / 100.0;
-
-                return (int)((completedSteps + currentStepProgress) / totalSteps * 100);
+                // Use task progress (workflow-driven architecture)
+                return Task?.Progress ?? 0;
             }
         }
 
@@ -307,7 +253,7 @@ namespace FFXIManager.Models
         /// <summary>
         /// Current task display text
         /// </summary>
-        public string CurrentTaskDisplay => Task?.StatusMessage ?? CurrentStepDisplay;
+        public string CurrentTaskDisplay => Task?.StatusMessage ?? "Waiting";
 
         /// <summary>
         /// Current subtask display text
@@ -363,18 +309,6 @@ namespace FFXIManager.Models
         }
 
         /// <summary>
-        /// Marks a step as completed
-        /// </summary>
-        public void CompleteStep(LoginTaskStep step)
-        {
-            if (!CompletedSteps.Contains(step))
-            {
-                CompletedSteps.Add(step);
-                OnPropertyChanged(nameof(OverallProgress));
-            }
-        }
-
-        /// <summary>
         /// Refreshes duration display for real-time updates
         /// </summary>
         public void RefreshDurationDisplay()
@@ -389,13 +323,10 @@ namespace FFXIManager.Models
         public void Reset()
         {
             Status = AutoLoginQueueStatus.Pending;
-            CurrentStep = LoginTaskStep.None;
-            CurrentStepProgress = 0;
             StatusMessage = string.Empty;
             StartTime = null;
             EndTime = null;
             ErrorMessage = string.Empty;
-            CompletedSteps.Clear();
 
             // Reset task if available
             Task?.Reset();

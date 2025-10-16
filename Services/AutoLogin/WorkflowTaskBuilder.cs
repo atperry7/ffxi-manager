@@ -10,20 +10,18 @@ namespace FFXIManager.Services.AutoLogin
 {
     /// <summary>
     /// Builds AutoLoginSubtasks from WorkflowDefinition.
-    /// Replaces the static subtask creation logic with data-driven workflow-based generation.
+    /// Converts data-driven workflow definitions into executable subtask sequences.
     /// </summary>
     /// <remarks>
     /// **Responsibilities:**
     /// - Convert workflow definitions to executable subtask sequences
     /// - Evaluate conditional steps based on account properties
-    /// - Support both legacy LoginTaskStep and modern WorkflowStepDefinition
-    /// - Maintain backward compatibility with existing handlers
+    /// - Link subtasks to workflow steps for execution by DynamicWorkflowHandler
     ///
     /// **Design:**
-    /// This builder acts as an adapter between the data-driven workflow system
-    /// and the existing task execution infrastructure. It bridges the gap by
-    /// creating subtasks that can be handled by both legacy handlers (via TaskStep)
-    /// and the new DynamicWorkflowHandler (via WorkflowStep).
+    /// This builder bridges the data-driven workflow system and the task execution
+    /// infrastructure by creating subtasks with embedded WorkflowStepDefinition references
+    /// that enable dynamic execution via DynamicWorkflowHandler.
     /// </remarks>
     public class WorkflowTaskBuilder
     {
@@ -98,8 +96,7 @@ namespace FFXIManager.Services.AutoLogin
                 EstimatedDurationSeconds = step.EstimatedDurationSeconds,
                 IsSkippable = step.IsOptional,
                 MaxRetryAttempts = step.MaxRetryAttempts,
-                WorkflowStep = step, // Link to workflow step for DynamicWorkflowHandler
-                TaskStep = step.LegacyTaskStep ?? LoginTaskStep.None // Support legacy handlers
+                WorkflowStep = step // Link to workflow step for DynamicWorkflowHandler
             };
 
             return subtask;
@@ -212,16 +209,6 @@ namespace FFXIManager.Services.AutoLogin
             }
 
             return false;
-        }
-
-        /// <summary>
-        /// Builds subtasks using the legacy static method (for backward compatibility).
-        /// This is used when no workflow is assigned to an account.
-        /// </summary>
-        public List<AutoLoginSubtask> BuildLegacySubtasks()
-        {
-            _loggingService.LogDebugAsync("Building legacy subtasks using static method").Wait();
-            return AutoLoginSubtask.CreateStandardLoginSubtasks();
         }
 
         /// <summary>

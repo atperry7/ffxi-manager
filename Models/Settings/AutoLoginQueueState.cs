@@ -70,16 +70,6 @@ namespace FFXIManager.Models.Settings
         public AutoLoginQueueStatus Status { get; set; }
 
         /// <summary>
-        /// Current step when saved
-        /// </summary>
-        public LoginTaskStep CurrentStep { get; set; }
-
-        /// <summary>
-        /// Completed steps when saved
-        /// </summary>
-        public List<LoginTaskStep> CompletedSteps { get; set; } = new();
-
-        /// <summary>
         /// Start time if the item was started
         /// </summary>
         public DateTime? StartTime { get; set; }
@@ -111,8 +101,6 @@ namespace FFXIManager.Models.Settings
                 ProfilePath = item.Profile.FilePath,
                 Position = item.Position,
                 Status = item.Status,
-                CurrentStep = item.CurrentStep,
-                CompletedSteps = new List<LoginTaskStep>(item.CompletedSteps),
                 StartTime = item.StartTime,
                 EndTime = item.EndTime,
                 ErrorMessage = item.ErrorMessage,
@@ -170,11 +158,6 @@ namespace FFXIManager.Models.Settings
         /// Most common failure reasons
         /// </summary>
         public Dictionary<string, int> FailureReasons { get; set; } = new();
-
-        /// <summary>
-        /// Average time per login step
-        /// </summary>
-        public Dictionary<LoginTaskStep, TimeSpan> AverageStepTimes { get; set; } = new();
 
         /// <summary>
         /// Updates statistics with a completed queue item

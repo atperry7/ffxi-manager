@@ -112,11 +112,6 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         /// </summary>
         public UIElementTemplate ToTemplate(byte[] imageData, int width, int height)
         {
-            if (!Enum.TryParse<LoginTaskStep>(AssociatedStep, out var step))
-            {
-                step = LoginTaskStep.None;
-            }
-
             if (!Enum.TryParse<UIActionType>(Action.Type, true, out var actionType))
             {
                 actionType = UIActionType.Click;
@@ -129,7 +124,6 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 ImageData = imageData,
                 Width = width,
                 Height = height,
-                AssociatedStep = step,
                 ClickOffset = Action.ClickOffset.ToPoint(),
                 ConfidenceThreshold = ConfidenceThreshold,
                 PositionTolerance = Tolerance,

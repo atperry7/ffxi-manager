@@ -252,10 +252,10 @@ namespace FFXIManager.Services
             var handler = _handlerResolver.GetHandler(subtask);
             if (handler == null)
             {
-                throw new InvalidOperationException($"No handler registered for subtask: {subtask.TaskStep}. Please ensure all task steps have corresponding handlers registered in DependencyInjection.");
+                throw new InvalidOperationException($"No handler registered for subtask: {subtask.Name}. Please ensure all handlers are registered in DependencyInjection.");
             }
 
-            _ = _loggingService.LogDebugAsync($"Executing subtask {subtask.TaskStep} using handler: {handler.GetType().Name} for {queueItem.DisplayName}");
+            _ = _loggingService.LogDebugAsync($"Executing subtask '{subtask.Name}' using handler: {handler.GetType().Name} for {queueItem.DisplayName}");
 
             // Set up progress monitoring that respects pause state
             var lastProgress = 0;
@@ -295,7 +295,7 @@ namespace FFXIManager.Services
                 catch (Exception ex)
                 {
                     // Handler threw an exception, let it bubble up
-                    _ = _loggingService.LogErrorAsync($"Handler {handler.GetType().Name} failed for subtask {subtask.TaskStep}", ex);
+                    _ = _loggingService.LogErrorAsync($"Handler {handler.GetType().Name} failed for subtask '{subtask.Name}'", ex);
                     throw;
                 }
             }

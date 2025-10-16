@@ -31,25 +31,28 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _imageCropService = imageCropService; // Optional dependency
 
-            // Set templates base path in user's APPDATA directory (for user-customizable templates)
+            // Set templates base path to workflow directory (centralized with workflow definitions)
             var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             var appDirectory = Path.Combine(appDataPath, "FFXIManager");
-            _templatesBasePath = Path.Combine(appDirectory, "templates");
+            _templatesBasePath = Path.Combine(appDirectory, "workflows", "defaults", "templates");
 
             // Ensure templates directory exists
             Directory.CreateDirectory(_templatesBasePath);
 
             // Clear cache on startup to force fresh template loading with fixes
             _templateCache.Clear();
-            _loggingService.LogInfoAsync("[DEBUG] Template cache cleared on startup - will force fresh loading");
+            _loggingService.LogInfoAsync("[DEBUG] Template cache cleared on startup - will force fresh loading from workflows directory");
         }
 
-        public async Task<UIElementTemplate?> LoadTemplateAsync(string templatePath, CancellationToken cancellationToken = default)
+        public async Task<UIElementTemplate?> LoadTemplateAsync(string templatePath, float confidenceThreshold = 0.8f, int tolerance = 5, CancellationToken cancellationToken = default)
         {
             try
             {
+                // Create cache key that includes metadata since different steps may use same template with different thresholds
+                var cacheKey = $"{templatePath}_{confidenceThreshold}_{tolerance}";
+
                 // Check cache first
-                if (_templateCache.TryGetValue(templatePath, out var cachedTemplate))
+                if (_templateCache.TryGetValue(cacheKey, out var cachedTemplate))
                 {
                     await _loggingService.LogInfoAsync($"[DEBUG] Template loaded from cache: {templatePath}");
                     return cachedTemplate;
@@ -57,11 +60,11 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
                 await _loggingService.LogInfoAsync($"[DEBUG] Template not in cache, loading from disk: {templatePath}");
 
-                // Load from disk
-                var template = await LoadTemplateFromDiskAsync(templatePath, cancellationToken);
+                // Load from disk with metadata
+                var template = await LoadTemplateFromDiskAsync(templatePath, confidenceThreshold, tolerance, cancellationToken);
                 if (template != null && template.IsValid())
                 {
-                    _templateCache.TryAdd(templatePath, template);
+                    _templateCache.TryAdd(cacheKey, template);
                 }
 
                 return template;
@@ -71,34 +74,6 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 await _loggingService.LogErrorAsync($"Failed to load template '{templatePath}': {ex.Message}", ex);
                 return null;
             }
-        }
-
-        public async Task<IList<UIElementTemplate>> LoadTemplatesForStepAsync(LoginTaskStep step, CancellationToken cancellationToken = default)
-        {
-            var templates = new List<UIElementTemplate>();
-
-            try
-            {
-                // Scan templates directory for files associated with this step
-                var templateFiles = await FindTemplateFilesForStepAsync(step, cancellationToken);
-
-                foreach (var templateFile in templateFiles)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    var template = await LoadTemplateAsync(templateFile, cancellationToken);
-                    if (template != null)
-                    {
-                        templates.Add(template);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync($"Failed to load templates for step {step}: {ex.Message}", ex);
-            }
-
-            return templates;
         }
 
         public async Task<bool> ValidateTemplateAsync(UIElementTemplate template, CancellationToken cancellationToken = default)
@@ -134,14 +109,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                     Directory.CreateDirectory(templateDir);
                 }
 
-                // Save JSON metadata
-                var jsonPath = Path.ChangeExtension(templatePath, ".json");
-                var json = JsonSerializer.Serialize(CreateTemplateMetadata(template), new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
-
-                await File.WriteAllTextAsync(jsonPath, json, cancellationToken);
+                // Note: JSON metadata is no longer saved - all metadata is now in workflow step definitions (workflow-first architecture)
 
                 // Save PNG image
                 var pngPath = Path.ChangeExtension(templatePath, ".png");
@@ -166,12 +134,8 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
         public async Task<UIElementTemplate?> LoadTemplateAsync(string templatePath)
         {
-            return await LoadTemplateAsync(templatePath, CancellationToken.None);
-        }
-
-        public async Task<IList<UIElementTemplate>> LoadTemplatesForStepAsync(LoginTaskStep step)
-        {
-            return await LoadTemplatesForStepAsync(step, CancellationToken.None);
+            // Use default metadata values for backward compatibility
+            return await LoadTemplateAsync(templatePath, 0.8f, 5, CancellationToken.None);
         }
 
         public async Task<IList<UIElementTemplate>> LoadTemplatesForApplicationAsync(string applicationName)
@@ -261,13 +225,9 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                     return Enumerable.Empty<string>();
                 }
 
-                var jsonFiles = Directory.GetFiles(_templatesBasePath, "*.json", SearchOption.AllDirectories);
-                return jsonFiles.Select(jsonFile =>
-                {
-                    var relativePath = Path.GetRelativePath(_templatesBasePath, jsonFile);
-                    var templatePath = Path.ChangeExtension(relativePath, null);
-                    return templatePath.Replace(Path.DirectorySeparatorChar, '/');
-                });
+                // Scan for PNG files directly (no JSON metadata files)
+                var pngFiles = Directory.GetFiles(_templatesBasePath, "*.png", SearchOption.TopDirectoryOnly);
+                return pngFiles.Select(pngFile => Path.GetFileName(pngFile));
             }
             catch
             {
@@ -358,16 +318,13 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
                 await Task.Run(() =>
                 {
-                    var jsonFiles = Directory.GetFiles(_templatesBasePath, "*.json", SearchOption.AllDirectories);
+                    // Scan for PNG files directly (no JSON metadata files)
+                    var pngFiles = Directory.GetFiles(_templatesBasePath, "*.png", SearchOption.TopDirectoryOnly);
 
-                    foreach (var jsonFile in jsonFiles)
+                    foreach (var pngFile in pngFiles)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-
-                        var relativePath = Path.GetRelativePath(_templatesBasePath, jsonFile);
-                        var templatePath = Path.ChangeExtension(relativePath, null);
-                        templatePath = templatePath.Replace(Path.DirectorySeparatorChar, '/');
-                        paths.Add(templatePath);
+                        paths.Add(Path.GetFileName(pngFile));
                     }
                 }, cancellationToken);
             }
@@ -379,36 +336,20 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             return paths;
         }
 
-        private async Task<UIElementTemplate?> LoadTemplateFromDiskAsync(string templatePath, CancellationToken cancellationToken)
+        private async Task<UIElementTemplate?> LoadTemplateFromDiskAsync(string templatePath, float confidenceThreshold, int tolerance, CancellationToken cancellationToken)
         {
             try
             {
-                var basePath = GetTemplateFilePath(templatePath);
-                var jsonPath = Path.ChangeExtension(basePath, ".json");
-                var pngPath = Path.ChangeExtension(basePath, ".png");
+                // Template path is now just a filename (e.g., "member_selection_screen.png")
+                var pngPath = Path.Combine(_templatesBasePath, templatePath);
 
-                if (!File.Exists(jsonPath) || !File.Exists(pngPath))
+                if (!File.Exists(pngPath))
                 {
-                    await _loggingService.LogWarningAsync($"Template files not found: {templatePath}");
+                    await _loggingService.LogWarningAsync($"Template PNG not found: {pngPath}");
                     return null;
                 }
 
-                // Load JSON metadata
-                var jsonContent = await File.ReadAllTextAsync(jsonPath, cancellationToken);
-                var options = new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                };
-                options.Converters.Add(new JsonStringEnumConverter());
-                var metadata = JsonSerializer.Deserialize<FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata>(jsonContent, options);
-                await LogDeprecatedMetadataAsync(templatePath, metadata);
-
-                if (metadata == null)
-                {
-                    return null;
-                }
-
-                // Load PNG image
+                // Load PNG image (no JSON metadata needed - all metadata comes from workflow step)
                 var imageData = await LoadTemplateImageAsync(pngPath, cancellationToken);
                 if (imageData == null)
                 {
@@ -418,26 +359,24 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
                 await _loggingService.LogInfoAsync($"[DEBUG] Loaded image: {pngPath}, Size: {imageData.Value.width}x{imageData.Value.height}, Data length: {imageData.Value.data.Length}");
 
-                // Create template
+                // Create template with metadata from workflow step (not from JSON file)
                 var template = new UIElementTemplate
                 {
-                    Name = metadata.Name ?? Path.GetFileNameWithoutExtension(templatePath),
+                    Name = Path.GetFileNameWithoutExtension(templatePath),
                     TemplatePath = templatePath,
                     ImageData = imageData.Value.data,
                     Width = imageData.Value.width,
                     Height = imageData.Value.height,
                     Channels = imageData.Value.channels,
-                    // Legacy action.clickOffset is deprecated; do not marshal into runtime template
                     ClickOffset = new System.Drawing.Point(0, 0),
-                    ConfidenceThreshold = metadata.ConfidenceThreshold,
-                    PositionTolerance = metadata.Tolerance,
-                    ApplicationName = GetApplicationFromPath(templatePath),
-                    Version = metadata.Version ?? "1.0.0",
-                    AssociatedStep = ParseLoginTaskStep(metadata.AssociatedStep),
-                    Metadata = jsonContent
+                    ConfidenceThreshold = confidenceThreshold,
+                    PositionTolerance = tolerance,
+                    ApplicationName = "Unknown", // No longer needed with workflow-first architecture
+                    Version = "2.0.0", // Workflow-first architecture version
+                    Metadata = string.Empty
                 };
 
-                await _loggingService.LogInfoAsync($"[DEBUG] Created template: Name={template.Name}, Path={template.TemplatePath}, Valid={template.IsValid()}, ImageData.Length={template.ImageData?.Length ?? 0}, W={template.Width}, H={template.Height}");
+                await _loggingService.LogInfoAsync($"[DEBUG] Created template: Name={template.Name}, Path={template.TemplatePath}, Valid={template.IsValid()}, Threshold={confidenceThreshold}, Tolerance={tolerance}, ImageData.Length={template.ImageData?.Length ?? 0}, W={template.Width}, H={template.Height}");
 
                 return template;
             }
@@ -487,56 +426,12 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             }
         }
 
-        private async Task<IList<string>> FindTemplateFilesForStepAsync(LoginTaskStep step, CancellationToken cancellationToken)
-        {
-            var files = new List<string>();
-
-            if (!Directory.Exists(_templatesBasePath))
-            {
-                return files;
-            }
-
-            await Task.Run(() =>
-            {
-                var jsonFiles = Directory.GetFiles(_templatesBasePath, "*.json", SearchOption.AllDirectories);
-
-                foreach (var jsonFile in jsonFiles)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    try
-                    {
-                        var json = File.ReadAllText(jsonFile);
-                        var options = new JsonSerializerOptions
-                        {
-                            PropertyNameCaseInsensitive = true
-                        };
-                        options.Converters.Add(new JsonStringEnumConverter());
-                        var mdEnum = JsonSerializer.Deserialize<FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata>(json, options);
-                        // log fire-and-forget minimal
-                        _ = LogDeprecatedMetadataAsync(templatePath: jsonFile, metadata: mdEnum);
-
-                        if (mdEnum?.AssociatedStep != null && ParseLoginTaskStep(mdEnum.AssociatedStep) == step)
-                        {
-                            var relativePath = Path.GetRelativePath(_templatesBasePath, jsonFile);
-                            var templatePath = Path.ChangeExtension(relativePath, null);
-                            templatePath = templatePath.Replace(Path.DirectorySeparatorChar, '/');
-                            files.Add(templatePath);
-                        }
-                    }
-                    catch
-                    {
-                        // Skip invalid files
-                    }
-                }
-            }, cancellationToken);
-
-            return files;
-        }
-
+        
         private string GetTemplateFilePath(string templatePath)
         {
-            return Path.Combine(_templatesBasePath, templatePath.Replace('/', Path.DirectorySeparatorChar));
+            // Template paths are now simple filenames (e.g., "member_selection_screen.png")
+            // No need for directory traversal
+            return Path.Combine(_templatesBasePath, templatePath);
         }
 
         private static string GetApplicationFromPath(string templatePath)
@@ -643,28 +538,8 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             }
         }
 
-        private static LoginTaskStep ParseLoginTaskStep(string stepName)
-        {
-            if (Enum.TryParse<LoginTaskStep>(stepName, true, out var step))
-            {
-                return step;
-            }
-            return LoginTaskStep.None;
-        }
-
-        private static FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata CreateTemplateMetadata(UIElementTemplate template)
-        {
-            return new FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata
-            {
-                Name = template.Name,
-                TemplatePath = template.TemplatePath,
-                AssociatedStep = template.AssociatedStep.ToString(),
-                ConfidenceThreshold = template.ConfidenceThreshold,
-                Tolerance = template.PositionTolerance,
-                Version = template.Version
-            };
-        }
-
+        
+        
         private async Task<byte[]> ConvertBitmapToByteArrayAsync(Bitmap bitmap)
         {
             var bmpData = bitmap.LockBits(
@@ -800,8 +675,8 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                     // Clear cache to force reload
                     _templateCache.TryRemove(templatePath, out _);
 
-                    // Verify the template still loads correctly
-                    var template = await LoadTemplateAsync(templatePath, CancellationToken.None);
+                    // Verify the template still loads correctly (use default metadata for validation)
+                    var template = await LoadTemplateAsync(templatePath);
                     if (template == null || !template.IsValid())
                     {
                         // Rollback on failure

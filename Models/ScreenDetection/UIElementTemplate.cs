@@ -45,11 +45,6 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         public int Channels { get; set; } = 3;
 
         /// <summary>
-        /// Associated login task step
-        /// </summary>
-        public LoginTaskStep AssociatedStep { get; set; } = LoginTaskStep.None;
-
-        /// <summary>
         /// Click offset from template center (for click actions)
         /// </summary>
         public Point ClickOffset { get; set; } = Point.Empty;

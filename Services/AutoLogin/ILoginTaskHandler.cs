@@ -10,15 +10,10 @@ namespace FFXIManager.Services.AutoLogin
 {
     /// <summary>
     /// Base interface for all auto-login task handlers.
-    /// Each handler implements the automation logic for specific task categories.
+    /// Each handler implements the automation logic for workflow-driven subtasks.
     /// </summary>
     public interface ILoginTaskHandler
     {
-        /// <summary>
-        /// The task step this handler is responsible for
-        /// </summary>
-        LoginTaskStep TaskStep { get; }
-
         /// <summary>
         /// Whether this handler can execute the specified subtask
         /// </summary>

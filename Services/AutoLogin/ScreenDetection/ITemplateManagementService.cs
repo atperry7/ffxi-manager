@@ -12,16 +12,19 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         /// <summary>
         /// Loads a template by its path
         /// </summary>
-        /// <param name="templatePath">Path to the template (e.g., "Windower/launch_arrow")</param>
+        /// <param name="templatePath">Path to the template PNG file (e.g., "launch_arrow.png")</param>
+        /// <param name="confidenceThreshold">Confidence threshold for template matching (0.0 to 1.0)</param>
+        /// <param name="tolerance">Position tolerance in pixels</param>
+        /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>The loaded UI element template</returns>
-        Task<UIElementTemplate?> LoadTemplateAsync(string templatePath);
+        Task<UIElementTemplate?> LoadTemplateAsync(string templatePath, float confidenceThreshold = 0.8f, int tolerance = 5, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Loads all templates for a specific login task step
+        /// Loads a template by its path with default metadata
         /// </summary>
-        /// <param name="step">The login task step</param>
-        /// <returns>Collection of templates for the step</returns>
-        Task<IList<UIElementTemplate>> LoadTemplatesForStepAsync(LoginTaskStep step);
+        /// <param name="templatePath">Path to the template PNG file (e.g., "launch_arrow.png")</param>
+        /// <returns>The loaded UI element template</returns>
+        Task<UIElementTemplate?> LoadTemplateAsync(string templatePath);
 
         /// <summary>
         /// Loads all templates for a specific application

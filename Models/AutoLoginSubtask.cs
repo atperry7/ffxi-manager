@@ -33,11 +33,6 @@ namespace FFXIManager.Models
         public string Description { get; set; } = string.Empty;
 
         /// <summary>
-        /// The login task step this subtask represents (legacy system).
-        /// </summary>
-        public LoginTaskStep TaskStep { get; set; } = LoginTaskStep.None;
-
-        /// <summary>
         /// The workflow step definition this subtask represents (data-driven system).
         /// When present, enables dynamic execution via DynamicWorkflowHandler.
         /// </summary>
@@ -459,37 +454,6 @@ namespace FFXIManager.Models
         {
             OnPropertyChanged(nameof(Duration));
             OnPropertyChanged(nameof(DurationDisplay));
-        }
-
-        #endregion
-
-        #region Factory Methods
-
-        /// <summary>
-        /// DEPRECATED: Creates a subtask from a LoginTaskStep (legacy system)
-        /// </summary>
-        [System.Obsolete("Use WorkflowTaskBuilder to create subtasks from workflow definitions instead")]
-        public static AutoLoginSubtask FromLoginTaskStep(LoginTaskStep step)
-        {
-            return new AutoLoginSubtask
-            {
-                TaskStep = step,
-                Name = step.GetShortDisplayName(),
-                Description = step.GetDisplayName(),
-                EstimatedDurationSeconds = step.GetEstimatedDurationSeconds(),
-                IsSkippable = false,
-                ExecutionOrder = (int)step
-            };
-        }
-
-        /// <summary>
-        /// DEPRECATED: Creates a collection of subtasks from the main login task steps (legacy system)
-        /// </summary>
-        [System.Obsolete("Use WorkflowTaskBuilder to create subtasks from workflow definitions instead")]
-        public static List<AutoLoginSubtask> CreateStandardLoginSubtasks()
-        {
-            // Legacy method - returns empty list since workflows now handle everything
-            return new List<AutoLoginSubtask>();
         }
 
         #endregion

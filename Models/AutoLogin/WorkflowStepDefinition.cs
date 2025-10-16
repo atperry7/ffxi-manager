@@ -137,13 +137,6 @@ namespace FFXIManager.Models.AutoLogin
         public NavigationAction? Navigation { get; set; }
 
         /// <summary>
-        /// Associated LoginTaskStep for backward compatibility with existing handlers.
-        /// If specified, existing specialized handlers can claim this step.
-        /// If null, step uses DynamicWorkflowHandler.
-        /// </summary>
-        public LoginTaskStep? LegacyTaskStep { get; set; }
-
-        /// <summary>
         /// Maximum number of retry attempts for this step if it fails.
         /// Default is 3. Set to 0 to disable retries.
         /// </summary>
@@ -187,6 +180,29 @@ namespace FFXIManager.Models.AutoLogin
         /// Default is 500ms.
         /// </summary>
         public int? RetryDelayMs { get; set; }
+
+        /// <summary>
+        /// Confidence threshold for template matching (0.0 to 1.0).
+        /// Determines how closely the screenshot must match the template to be considered a match.
+        /// Higher values require more precise matches, lower values are more lenient.
+        /// Default: 0.8 (80% confidence)
+        /// </summary>
+        /// <remarks>
+        /// This property replaces the need for separate template JSON metadata files.
+        /// All template matching configuration is now centralized in the workflow step definition.
+        /// </remarks>
+        public float ConfidenceThreshold { get; set; } = 0.8f;
+
+        /// <summary>
+        /// Position tolerance in pixels for template matching.
+        /// Allows for minor UI element position variations between screenshots.
+        /// Default: 5 pixels
+        /// </summary>
+        /// <remarks>
+        /// This property replaces the need for separate template JSON metadata files.
+        /// All template matching configuration is now centralized in the workflow step definition.
+        /// </remarks>
+        public int Tolerance { get; set; } = 5;
 
         /// <summary>
         /// Additional metadata for extensibility.
@@ -261,7 +277,6 @@ namespace FFXIManager.Models.AutoLogin
                 EstimatedDurationSeconds = EstimatedDurationSeconds,
                 FallbackTemplatePaths = new List<string>(FallbackTemplatePaths),
                 Navigation = Navigation,
-                LegacyTaskStep = LegacyTaskStep,
                 MaxRetryAttempts = MaxRetryAttempts,
                 StepType = StepType,
                 ApplicationName = ApplicationName,
@@ -269,6 +284,8 @@ namespace FFXIManager.Models.AutoLogin
                 AllowSkipIfRunning = AllowSkipIfRunning,
                 RetryAttempts = RetryAttempts,
                 RetryDelayMs = RetryDelayMs,
+                ConfidenceThreshold = ConfidenceThreshold,
+                Tolerance = Tolerance,
                 Metadata = new Dictionary<string, object>(Metadata)
             };
         }

@@ -86,9 +86,10 @@ The auto-login system is the crown jewel of this application. It went through a 
 2. Queue starts � QueueExecutionOrchestrator orchestrates execution
 3. For each queue item � AutoLoginTaskExecutor builds tasks
 4. Tasks are built via WorkflowTaskBuilder (converts workflow JSON � subtasks)
-5. Subtasks executed by handlers (DynamicWorkflowHandler or specialized handlers)
+5. Subtasks executed by DynamicWorkflowHandler (100% workflow-driven)
 6. Each step: Detect screen (template matching) � Navigate (keyboard/click)
-7. Progress updated � UI reflects current state
+7. Progress tracked via AutoLoginTask and AutoLoginSubtask models
+8. UI reflects current task/subtask state in real-time
 ```
 
 #### Auto-Login Service Composition
@@ -136,11 +137,12 @@ The application uses **OpenCV (OpenCvSharp4)** for template matching to detect U
 - **ITemplateManagementService** - Loads/manages template metadata
 - **IUIAutomationService** - Executes UI automation (keyboard/mouse)
 
-**Templates** (`Templates/` directory):
-- JSON files contain **detection metadata only**: name, templatePath, elementType, confidenceThreshold, tolerance, version
-- PNG images are the visual templates for matching
-- Organized by application: `PlayOnline/`, `FFXI/`, `Windower/`
-- **Navigation is NOT stored in template files** - all navigation is defined in workflow JSON files
+**Templates** (`workflows/defaults/templates/` directory):
+- PNG images are the visual templates for template matching (OpenCV)
+- **No JSON metadata files** - all metadata (confidenceThreshold, tolerance) is defined in workflow step definitions
+- Flat directory structure (not organized by application subdirectories)
+- Templates are **detection-only** - all navigation is defined in workflow JSON files
+- Example: `member_selection_screen.png`, `login_information_screen.png`
 
 **Navigation System:**
 - **HybridNavigationStrategy** - Primary strategy: keyboard-first, click fallback
@@ -188,15 +190,16 @@ The application uses **OpenCV (OpenCvSharp4)** for template matching to detect U
 
 ### Workflow-First Architecture
 
-**CRITICAL PRINCIPLE**: All auto-login UI navigation is defined in workflow JSON files, not in code or template files.
+**CRITICAL PRINCIPLE**: Workflows are the single source of truth for all auto-login configuration including navigation, timing, and template metadata.
 
-**Template Files** (`Templates/` directory):
-- Contain **detection metadata ONLY** (confidenceThreshold, tolerance, version)
-- **DO NOT add navigation to template JSON files** - navigation belongs in workflows
-- Templates are purely for screen detection, not navigation logic
+**Template PNG Files** (`workflows/defaults/templates/` directory):
+- Pure PNG images for OpenCV template matching - no metadata files
+- Used exclusively for screen detection
+- All template configuration (confidenceThreshold, tolerance) is defined in workflow step definitions
 
 **Workflow Files** (`workflows/` directory):
-- Define complete login sequences with steps, navigation, timing, retries
+- Define complete login sequences with steps, navigation, timing, retries, and template metadata
+- Each step includes: TemplatePath (PNG filename), ConfidenceThreshold, Tolerance, Navigation sequence
 - All navigation is **hybrid** (keyboard-first with click fallback)
 - Support conditional execution (e.g., "Account.IsOTPEnabled")
 - Example: `workflows/defaults/playonline-standard.json`
@@ -262,14 +265,35 @@ All services registered in `Infrastructure/DependencyInjection.cs`:
 
 **Recent Major Refactorings:**
 
-1. **100% Workflow-Driven Architecture - Phase 3** (Latest)
+1. **Complete LoginTaskStep Enum Removal - Phase 5** (Latest)
+   - Deleted `LoginTaskStep` enum entirely (was obsolete with only `None` value)
+   - Removed all step-based progress tracking from `AutoLoginQueueItem` (CurrentStep, CompletedSteps, CompleteStep)
+   - Removed TaskStep property from `AutoLoginSubtask` and legacy factory methods
+   - Removed AssociatedStep from `UIElementTemplate`
+   - Deleted `ScreenState.cs` (unused legacy file ~174 lines)
+   - Removed LoadTemplatesForStepAsync from `ITemplateManagementService`
+   - Removed LegacyTaskStep from `WorkflowStepDefinition`
+   - Removed TaskStep from `ILoginTaskHandler` interface and `BaseLoginTaskHandler`
+   - Updated handler resolution to use workflow step presence, not enum matching
+   - Cleaned up 60+ obsolete warnings across 17 files
+   - **Result**: 100% task-based progress tracking - no enum-based step identification. Progress flows through AutoLoginTask → AutoLoginSubtask → UI in real-time.
+
+2. **Template Metadata Migration to Workflows - Phase 4**
+   - Moved template PNG files from `Templates/` to `workflows/defaults/templates/` (flat structure)
+   - Removed all template JSON metadata files (14 files)
+   - Added `ConfidenceThreshold` and `Tolerance` properties to `WorkflowStepDefinition`
+   - Updated workflow JSON to include all template metadata in step definitions
+   - Templates are now pure PNG files - all configuration lives in workflows
+   - **Result**: Workflows are now the absolute single source of truth for all login configuration
+
+3. **100% Workflow-Driven Architecture - Phase 3**
    - Removed `TemplateNavigationTuner` UI tool (~800 lines) - obsolete after workflow-first migration
    - Removed template navigation fallback from `DynamicWorkflowHandler`
    - Templates now **detection-only** (PNG + confidence threshold) - no navigation metadata
    - Workflows are now the **single source of truth** for all navigation
    - **Result**: Clean architectural separation - Templates = Detection, Workflows = Navigation + Execution
 
-2. **100% Workflow-Driven Architecture - Phase 2**
+4. **100% Workflow-Driven Architecture - Phase 2**
    - Removed `POLProxyLaunchHandler` and `WindowerLaunchHandler`
    - Removed 4 configuration classes (POLProxyLaunchConfiguration, WindowerLaunchConfiguration, etc.)
    - Simplified `LoginTaskStep` enum from 8 values to 1 (only `None` remains, marked obsolete)
@@ -278,7 +302,7 @@ All services registered in `Infrastructure/DependencyInjection.cs`:
    - Generic launch pattern: ExternalApplicationService + UnifiedMonitoringService + template confirmation
    - **Result**: DynamicWorkflowHandler is now the ONLY handler - handles ALL UI navigation AND application launches
 
-3. **Complete Migration to Workflow-First Architecture - Phase 1**
+5. **Complete Migration to Workflow-First Architecture - Phase 1**
    - Removed `PlayOnlineAuthHandler` and `FFXIGameHandler` (~1,800 lines of code)
    - Removed 12 specialized services (authentication, navigation, screen detection)
    - Stripped navigation from all template JSON files (14 templates updated)
@@ -287,8 +311,8 @@ All services registered in `Infrastructure/DependencyInjection.cs`:
    - Created `SharedAutoLoginConfiguration` for minimal shared constants
    - **Result**: Single workflow JSON file (`playonline-standard.json`) defines entire login flow
 
-3. Extracted SOLID-compliant services from monolithic queue service
+6. Extracted SOLID-compliant services from monolithic queue service
 
-4. Implemented data-driven workflow system (JSON-based login flows)
+7. Implemented data-driven workflow system (JSON-based login flows)
 
-5. Migrated from absolute coordinates to hybrid navigation (resolution-independent)
+8. Migrated from absolute coordinates to hybrid navigation (resolution-independent)

@@ -102,8 +102,6 @@ namespace FFXIManager.Services
                             Profile = profile,
                             Position = serializedItem.Position,
                             Status = restoredStatus,
-                            CurrentStep = restoredStatus == AutoLoginQueueStatus.Completed ? serializedItem.CurrentStep : LoginTaskStep.None,
-                            CompletedSteps = restoredStatus == AutoLoginQueueStatus.Completed ? new List<LoginTaskStep>(serializedItem.CompletedSteps) : new List<LoginTaskStep>(),
                             StartTime = restoredStatus == AutoLoginQueueStatus.Completed ? serializedItem.StartTime : null,
                             EndTime = restoredStatus == AutoLoginQueueStatus.Completed ? serializedItem.EndTime : null,
                             ErrorMessage = restoredStatus == AutoLoginQueueStatus.Completed ? (serializedItem.ErrorMessage ?? string.Empty) : string.Empty,

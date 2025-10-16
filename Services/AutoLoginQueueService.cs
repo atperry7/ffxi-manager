@@ -358,17 +358,13 @@ namespace FFXIManager.Services
         {
             _ = _loggingService.LogDebugAsync($"Subtask started: {e.Subtask.Name} for {e.QueueItem.DisplayName}");
 
-            // Update legacy queue item properties for backward compatibility
-            e.QueueItem.CurrentStep = e.Subtask.TaskStep;
+            // Update queue item status message
             e.QueueItem.StatusMessage = e.Subtask.StatusMessage;
         }
 
         private void OnTaskExecutorSubtaskCompleted(object? sender, AutoLoginSubtaskEventArgs e)
         {
             _ = _loggingService.LogDebugAsync($"Subtask completed: {e.Subtask.Name} for {e.QueueItem.DisplayName}");
-
-            // Update legacy completed steps for backward compatibility
-            e.QueueItem.CompleteStep(e.Subtask.TaskStep);
         }
 
         private void OnTaskExecutorSubtaskFailed(object? sender, AutoLoginSubtaskEventArgs e)
@@ -379,9 +375,6 @@ namespace FFXIManager.Services
         private void OnTaskExecutorSubtaskProgressUpdated(object? sender, AutoLoginSubtaskEventArgs e)
         {
             _ = _loggingService.LogDebugAsync($"Subtask progress: {e.Subtask.Name} - {e.Subtask.Progress}% for {e.QueueItem.DisplayName}");
-
-            // Update legacy queue item progress for backward compatibility
-            e.QueueItem.CurrentStepProgress = e.Subtask.Progress;
 
             // Notify UI of progress update
             ItemProgressUpdated?.Invoke(this, new AutoLoginQueueItemEventArgs(e.QueueItem, $"{e.Subtask.Name}: {e.Subtask.Progress}%"));

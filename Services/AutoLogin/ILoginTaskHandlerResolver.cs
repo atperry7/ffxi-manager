@@ -67,7 +67,7 @@ namespace FFXIManager.Services.AutoLogin
                 return null;
             }
 
-            _loggingService.LogDebugAsync($"Resolving handler for subtask: {subtask.Name} (TaskStep: {subtask.TaskStep}, HasWorkflowStep: {subtask.WorkflowStep != null})");
+            _loggingService.LogDebugAsync($"Resolving handler for subtask: {subtask.Name} (HasWorkflowStep: {subtask.WorkflowStep != null})");
 
             // Find first handler that can handle this subtask
             var handler = _handlers.FirstOrDefault(h => h.CanHandle(subtask));
@@ -80,7 +80,7 @@ namespace FFXIManager.Services.AutoLogin
             }
 
             // No handler found
-            _loggingService.LogWarningAsync($"❌ No handler found for subtask: {subtask.Name} (TaskStep: {subtask.TaskStep}). Available handlers: {string.Join(", ", _handlers.Select(h => h.GetType().Name))}");
+            _loggingService.LogWarningAsync($"❌ No handler found for subtask: {subtask.Name}. Available handlers: {string.Join(", ", _handlers.Select(h => h.GetType().Name))}");
             return null;
         }
 
