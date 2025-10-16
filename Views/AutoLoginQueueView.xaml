@@ -237,7 +237,7 @@
                                        FontWeight="Bold"
                                        Foreground="{DynamicResource AccentBrush}"
                                        HorizontalAlignment="Right"/>
-                            <TextBlock Text="{Binding CurrentItem.CurrentStepDisplay, Mode=OneWay}"
+                            <TextBlock Text="{Binding CurrentItem.CurrentTaskDisplay, Mode=OneWay}"
                                        FontSize="11"
                                        Foreground="{DynamicResource SecondaryTextBrush}"
                                        HorizontalAlignment="Right"/>
@@ -268,9 +268,9 @@
                            TextAlignment="Center"
                            Visibility="{Binding CurrentItem, Converter={StaticResource NullToInverseVisibilityConverter}}"/>
 
-                <!-- Active Step Progress -->
+                <!-- Active Task Progress -->
                 <ProgressBar Grid.Row="3"
-                             Value="{Binding CurrentItem.CurrentStepProgress, Mode=OneWay}"
+                             Value="{Binding CurrentItem.OverallProgress, Mode=OneWay}"
                              Maximum="100"
                              Height="12"
                              Style="{StaticResource ActiveProgressBarStyle}"
