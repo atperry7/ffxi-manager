@@ -9,15 +9,16 @@ using FFXIManager.Services.AutoLogin.ScreenDetection;
 namespace FFXIManager.Services.AutoLogin.Navigation
 {
     /// <summary>
-    /// Implements a hybrid navigation strategy that attempts keyboard navigation first,
-    /// then falls back to relative click navigation if keyboard fails.
-    /// This provides the best reliability across different configurations and UI states.
+    /// Implements a hybrid navigation strategy that executes sequences containing both
+    /// keyboard and click actions. Each step in the sequence is executed in order,
+    /// providing flexible, resolution-independent navigation.
     /// </summary>
     /// <remarks>
     /// The hybrid approach:
-    /// 1. Attempts keyboard navigation (resolution/DPI independent, preferred)
-    /// 2. Falls back to relative clicking if keyboard fails (still resolution/DPI aware)
+    /// 1. Executes mixed sequences of keyboard actions (Tab, Enter, etc.) and click actions
+    /// 2. Each action type is delegated to the appropriate specialized strategy
     /// 3. Provides comprehensive logging for troubleshooting
+    /// 4. Supports resolution/DPI independence through relative click coordinates
     /// </remarks>
     public class HybridNavigationStrategy : INavigationStrategy
     {
@@ -25,7 +26,7 @@ namespace FFXIManager.Services.AutoLogin.Navigation
         private readonly RelativeClickNavigationStrategy _clickStrategy;
         private readonly ILoggingService _loggingService;
 
-        public string StrategyName => "Hybrid Navigation (Keyboard → Click)";
+        public string StrategyName => "Hybrid Navigation (Sequence-Based)";
 
         public HybridNavigationStrategy(
             IUIAutomationService automationService,
@@ -47,139 +48,97 @@ namespace FFXIManager.Services.AutoLogin.Navigation
         {
             await _loggingService.LogInfoAsync($"[{StrategyName}] Starting hybrid navigation");
 
-            // If the sequence mixes keyboard and click steps, execute step-by-step
-            if (action.Sequence != null && action.Sequence.Any(s => IsClickStep(s)))
+            // Validate that we have a sequence to execute
+            if (action.Sequence == null || action.Sequence.Count == 0)
             {
-                try
-                {
-                    for (int i = 0; i < action.Sequence.Count; i++)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        var step = action.Sequence[i];
-
-                        if (IsClickStep(step))
-                        {
-                            var clickAction = new NavigationAction
-                            {
-                                Type = NavigationType.RelativeClick,
-                                ClickOffset = new RelativeClickOffset { X = step.ClickX, Y = step.ClickY, Description = step.Description },
-                                PostNavigationDelayMs = step.DelayMs
-                            };
-
-                            var ok = await _clickStrategy.ExecuteAsync(windowHandle, clickAction, templateMatch, cancellationToken);
-                            if (!ok)
-                            {
-                                await _loggingService.LogWarningAsync($"[{StrategyName}] Click step failed at index {i}");
-                                throw new InvalidOperationException("Click step failed");
-                            }
-                        }
-                        else
-                        {
-                            var keyAction = new NavigationAction { Type = NavigationType.Keyboard, PostNavigationDelayMs = 0 };
-                            keyAction.Sequence.Add(step);
-                            var ok = await _keyboardStrategy.ExecuteAsync(windowHandle, keyAction, templateMatch, cancellationToken);
-                            if (!ok)
-                            {
-                                await _loggingService.LogWarningAsync($"[{StrategyName}] Keyboard step failed at index {i}");
-                                throw new InvalidOperationException("Keyboard step failed");
-                            }
-                        }
-                    }
-
-                    if (action.PostNavigationDelayMs > 0)
-                        await Task.Delay(action.PostNavigationDelayMs, cancellationToken);
-
-                    await _loggingService.LogInfoAsync($"[{StrategyName}] Mixed sequence executed successfully");
-                    return true;
-                }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception ex)
-                {
-                    await _loggingService.LogWarningAsync($"[{StrategyName}] Mixed sequence failed, attempting fallback: {ex.Message}");
-                }
+                await _loggingService.LogErrorAsync($"[{StrategyName}] No navigation sequence defined");
+                return false;
             }
 
-            // Phase 1: Attempt keyboard navigation
-            bool keyboardSuccess = false;
-            if (action.Sequence != null && action.Sequence.Count > 0)
+            try
             {
-                await _loggingService.LogInfoAsync($"[{StrategyName}] Phase 1: Attempting keyboard navigation");
-
-                try
+                // Execute each step in the sequence
+                for (int i = 0; i < action.Sequence.Count; i++)
                 {
-                    keyboardSuccess = await _keyboardStrategy.ExecuteAsync(
-                        windowHandle,
-                        action,
-                        templateMatch,
-                        cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var step = action.Sequence[i];
 
-                    if (keyboardSuccess)
+                    if (IsClickStep(step))
                     {
-                        await _loggingService.LogInfoAsync($"[{StrategyName}] ✓ Keyboard navigation succeeded");
-                        return true;
+                        // Execute click action - create a NavigationAction with the click step in the sequence
+                        var clickAction = new NavigationAction
+                        {
+                            Type = NavigationType.RelativeClick,
+                            PostNavigationDelayMs = step.DelayMs
+                        };
+                        clickAction.Sequence.Add(step);
+
+                        await _loggingService.LogDebugAsync($"[{StrategyName}] Step {i + 1}/{action.Sequence.Count}: Click at ({step.ClickX:P0}, {step.ClickY:P0}) - {step.Description ?? "no description"}");
+
+                        bool clickSuccess = await _clickStrategy.ExecuteAsync(
+                            windowHandle,
+                            clickAction,
+                            templateMatch,
+                            cancellationToken);
+
+                        if (!clickSuccess)
+                        {
+                            await _loggingService.LogErrorAsync($"[{StrategyName}] Click step {i + 1} failed");
+                            return false;
+                        }
                     }
                     else
                     {
-                        await _loggingService.LogWarningAsync($"[{StrategyName}] ✗ Keyboard navigation failed, attempting fallback");
+                        // Execute keyboard action
+                        var keyAction = new NavigationAction
+                        {
+                            Type = NavigationType.Keyboard,
+                            PostNavigationDelayMs = 0
+                        };
+                        keyAction.Sequence.Add(step);
+
+                        await _loggingService.LogDebugAsync($"[{StrategyName}] Step {i + 1}/{action.Sequence.Count}: Keyboard '{step.Action}' x{step.Count} - {step.Description ?? "no description"}");
+
+                        bool keySuccess = await _keyboardStrategy.ExecuteAsync(
+                            windowHandle,
+                            keyAction,
+                            templateMatch,
+                            cancellationToken);
+
+                        if (!keySuccess)
+                        {
+                            await _loggingService.LogErrorAsync($"[{StrategyName}] Keyboard step {i + 1} failed");
+                            return false;
+                        }
                     }
                 }
-                catch (OperationCanceledException)
+
+                // Apply post-navigation delay if specified
+                if (action.PostNavigationDelayMs > 0)
                 {
-                    throw;
+                    await _loggingService.LogDebugAsync($"[{StrategyName}] Applying post-navigation delay: {action.PostNavigationDelayMs}ms");
+                    await Task.Delay(action.PostNavigationDelayMs, cancellationToken);
                 }
-                catch (Exception ex)
-                {
-                    await _loggingService.LogWarningAsync($"[{StrategyName}] Keyboard navigation threw exception, attempting fallback: {ex.Message}");
-                }
+
+                await _loggingService.LogInfoAsync($"[{StrategyName}] ✓ Navigation sequence completed successfully ({action.Sequence.Count} steps)");
+                return true;
             }
-            else
+            catch (OperationCanceledException)
             {
-                await _loggingService.LogDebugAsync($"[{StrategyName}] No keyboard sequence defined, skipping to click fallback");
+                await _loggingService.LogWarningAsync($"[{StrategyName}] Navigation cancelled");
+                throw;
             }
-
-            // Phase 2: Fallback to click navigation
-            if (action.ClickOffset != null || action.Fallback != null)
+            catch (Exception ex)
             {
-                await _loggingService.LogInfoAsync($"[{StrategyName}] Phase 2: Attempting click navigation fallback");
-
-                // Use explicit fallback action if defined, otherwise use the primary action's click offset
-                var clickAction = action.Fallback ?? action;
-
-                try
-                {
-                    bool clickSuccess = await _clickStrategy.ExecuteAsync(
-                        windowHandle,
-                        clickAction,
-                        templateMatch,
-                        cancellationToken);
-
-                    if (clickSuccess)
-                    {
-                        await _loggingService.LogInfoAsync($"[{StrategyName}] ✓ Click navigation fallback succeeded");
-                        return true;
-                    }
-                    else
-                    {
-                        await _loggingService.LogErrorAsync($"[{StrategyName}] ✗ Both keyboard and click navigation failed");
-                        return false;
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    await _loggingService.LogErrorAsync($"[{StrategyName}] Click navigation fallback failed", ex);
-                    return false;
-                }
+                await _loggingService.LogErrorAsync($"[{StrategyName}] Navigation sequence failed", ex);
+                return false;
             }
-
-            await _loggingService.LogErrorAsync($"[{StrategyName}] No fallback navigation defined");
-            return false;
         }
 
+        /// <summary>
+        /// Determines if a keyboard action is actually a click action
+        /// </summary>
         private static bool IsClickStep(KeyboardAction step)
-            => step.Action?.Trim().Equals("Click", System.StringComparison.OrdinalIgnoreCase) == true;
+            => step.Action?.Trim().Equals("Click", StringComparison.OrdinalIgnoreCase) == true;
     }
 }

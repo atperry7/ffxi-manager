@@ -238,14 +238,12 @@ namespace FFXIManager.ViewModels
             else
             {
                 // Create a shallow copy so edits don't mutate original until saved
-                // Always use Hybrid strategy - tries keyboard first, falls back to click if available
+                // Always use Hybrid strategy - executes sequence of keyboard and click actions
                 CurrentNavigation = new NavigationAction
                 {
                     Type = NavigationType.Hybrid,
                     PostNavigationDelayMs = Metadata.Navigation.PostNavigationDelayMs,
                     Description = Metadata.Navigation.Description,
-                    ClickOffset = Metadata.Navigation.ClickOffset,
-                    Fallback = Metadata.Navigation.Fallback,
                     Sequence = new ObservableCollection<KeyboardAction>(Metadata.Navigation.Sequence)
                 };
             }
@@ -513,20 +511,6 @@ namespace FFXIManager.ViewModels
                     });
                 }
                 stepIndex++;
-            }
-
-            // Add fallback marker if defined
-            if (CurrentNavigation.ClickOffset != null)
-            {
-                ClickMarkers.Add(new ClickMarker
-                {
-                    X = CurrentNavigation.ClickOffset.X * TemplateImageWidth,
-                    Y = CurrentNavigation.ClickOffset.Y * TemplateImageHeight,
-                    Label = "F",
-                    Description = CurrentNavigation.ClickOffset.Description ?? "Fallback click",
-                    MarkerColor = Brushes.OrangeRed,
-                    StepIndex = -1
-                });
             }
         }
 

@@ -41,7 +41,23 @@ namespace FFXIManager.Services.AutoLogin.Navigation
             TemplateMatchResult? templateMatch,
             CancellationToken cancellationToken)
         {
-            if (action.ClickOffset == null)
+            // Extract click offset from the action sequence (expecting a single Click step)
+            RelativeClickOffset? clickOffset = null;
+            if (action.Sequence != null && action.Sequence.Count > 0)
+            {
+                var clickStep = action.Sequence[0];
+                if (clickStep.Action?.Equals("Click", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    clickOffset = new RelativeClickOffset
+                    {
+                        X = clickStep.ClickX,
+                        Y = clickStep.ClickY,
+                        Description = clickStep.Description
+                    };
+                }
+            }
+
+            if (clickOffset == null)
             {
                 await _loggingService.LogWarningAsync($"[{StrategyName}] No click offset defined in navigation action");
                 return false;
@@ -56,10 +72,10 @@ namespace FFXIManager.Services.AutoLogin.Navigation
             try
             {
                 // Calculate absolute click point from relative offset
-                var clickPoint = CalculateAbsoluteClickPoint(templateMatch, action.ClickOffset);
+                var clickPoint = CalculateAbsoluteClickPoint(templateMatch, clickOffset);
 
                 await _loggingService.LogInfoAsync(
-                    $"[{StrategyName}] Clicking at relative offset ({action.ClickOffset.X:F2}, {action.ClickOffset.Y:F2}) " +
+                    $"[{StrategyName}] Clicking at relative offset ({clickOffset.X:F2}, {clickOffset.Y:F2}) " +
                     $"= absolute point ({clickPoint.X}, {clickPoint.Y})");
 
                 // Capture screenshot to convert window coordinates to screen coordinates

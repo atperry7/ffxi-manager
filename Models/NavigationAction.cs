@@ -149,20 +149,10 @@ namespace FFXIManager.Models
         }
 
         /// <summary>
-        /// Sequence of keyboard actions (used when Type is Keyboard or Hybrid)
+        /// Sequence of keyboard and click actions to execute in order.
+        /// Mix keyboard actions (Tab, Enter, etc.) with Click actions for flexible navigation.
         /// </summary>
         public ObservableCollection<KeyboardAction> Sequence { get; set; } = new();
-
-        /// <summary>
-        /// Relative click offset (used when Type is RelativeClick or as Hybrid fallback)
-        /// </summary>
-        public RelativeClickOffset? ClickOffset { get; set; }
-
-        /// <summary>
-        /// Optional fallback navigation action (used when primary navigation fails)
-        /// Typically used in Hybrid mode: try keyboard, fallback to click
-        /// </summary>
-        public NavigationAction? Fallback { get; set; }
 
         /// <summary>
         /// Human-readable description of this navigation action
