@@ -22,7 +22,7 @@
       "Order": 0,
       "StepType": "LaunchApplication",
       "ApplicationName": "POL Proxy",
-      "TemplatePath": "main_screen",
+      "TemplatePath": "",
       "IsEnabled": true,
       "IsOptional": true,
       "AllowSkipIfNotConfigured": true,
