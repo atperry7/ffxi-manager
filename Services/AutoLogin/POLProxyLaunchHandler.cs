@@ -37,6 +37,7 @@ namespace FFXIManager.Services.AutoLogin
     {
         private readonly IProcessUtilityService _processUtilityService;
         private readonly IExternalApplicationService _externalApplicationService;
+        private readonly IProcessLaunchService _processLaunchService;
 
         public POLProxyLaunchHandler(
             ILoggingService loggingService,
@@ -44,11 +45,13 @@ namespace FFXIManager.Services.AutoLogin
             ITemplateMatchingService templateService,
             ITemplateManagementService templateManagementService,
             IProcessUtilityService processUtilityService,
-            IExternalApplicationService externalApplicationService)
+            IExternalApplicationService externalApplicationService,
+            IProcessLaunchService processLaunchService)
             : base(loggingService, screenshotService, templateService, templateManagementService)
         {
             _processUtilityService = processUtilityService ?? throw new ArgumentNullException(nameof(processUtilityService));
             _externalApplicationService = externalApplicationService ?? throw new ArgumentNullException(nameof(externalApplicationService));
+            _processLaunchService = processLaunchService ?? throw new ArgumentNullException(nameof(processLaunchService));
         }
 
         public override LoginTaskStep TaskStep => LoginTaskStep.LaunchPOLProxy;
@@ -194,8 +197,13 @@ namespace FFXIManager.Services.AutoLogin
                 // Step 4: Process Startup Verification
                 await UpdateProgressWithPhaseAsync(subtask, "startup", POLProxyLaunchConfiguration.ProgressMilestones.ProcessStartupVerification,
                                                      "POL Proxy is starting up");
-                
-                int newProcessId = await GetLaunchedPOLProxyProcessId(polProxyApp, subtask, cancellationToken);
+
+                int newProcessId = await _processLaunchService.GetLaunchedProcessIdAsync(
+                    polProxyApp,
+                    subtask,
+                    POLProxyLaunchConfiguration.ProcessNames.POLProxyVariations,
+                    POLProxyLaunchConfiguration.Timeouts.ProcessStartup,
+                    cancellationToken);
                 
                 if (newProcessId == 0)
                 {
@@ -352,7 +360,12 @@ namespace FFXIManager.Services.AutoLogin
                 await UpdateProgressWithPhaseAsync(subtask, "startup", 25, "Monitoring POL Proxy startup");
 
                 // Verify process is still running and responsive
-                await WaitForPOLProxyResponsiveness(processId, subtask, cancellationToken);
+                await _processLaunchService.WaitForProcessResponsivenessAsync(
+                    processId,
+                    subtask,
+                    POLProxyLaunchConfiguration.Timeouts.ProcessResponsiveness,
+                    POLProxyLaunchConfiguration.PollingIntervals.ResponsivenessCheck,
+                    cancellationToken);
 
                 await UpdateProgressWithPhaseAsync(subtask, "startup", 100, "POL Proxy startup completed successfully");
                 await _loggingService.LogInfoAsync($"[FLOW] ExecuteWaitForPOLProxyStartAsync completed successfully");
@@ -370,121 +383,6 @@ namespace FFXIManager.Services.AutoLogin
                 await _loggingService.LogWarningAsync(errorMessage, ex);
                 subtask.Skip("POL Proxy startup error - continuing auto-login");
             }
-        }
-
-        /// <summary>
-        /// Waits for POL Proxy process to become responsive using base class retry mechanisms.
-        /// Monitors process health and responsiveness with timeout and progress reporting.
-        /// </summary>
-        /// <param name="processId">The process ID to monitor</param>
-        /// <param name="subtask">The subtask for progress reporting</param>
-        /// <param name="cancellationToken">Cancellation token for operation cancellation</param>
-        private async Task WaitForPOLProxyResponsiveness(int processId, AutoLoginSubtask subtask, CancellationToken cancellationToken)
-        {
-            await UpdateProgressWithPhaseAsync(subtask, "startup", 40, "Verifying POL Proxy responsiveness");
-
-            // Use base class retry mechanism for consistent error handling
-            await ExecuteWithRetryAsync(
-                async (ct) =>
-                {
-                    await _loggingService.LogDebugAsync($"[FLOW] WaitForPOLProxyResponsiveness - Checking process {processId} responsiveness...");
-
-                    // Check if process is still running
-                    if (!_processUtilityService.IsProcessRunning(processId))
-                    {
-                        throw new InvalidOperationException("POL Proxy process terminated unexpectedly");
-                    }
-
-                    // Get process info to check responsiveness with timeout
-                    var processInfo = await _processUtilityService.GetProcessInfoAsync(processId);
-                    if (processInfo?.IsResponding != true)
-                    {
-                        throw new InvalidOperationException("POL Proxy process not yet responsive");
-                    }
-
-                    await _loggingService.LogDebugAsync($"[FLOW] WaitForPOLProxyResponsiveness - Process {processId} is responsive");
-                    return true; // Success - process is responsive
-                },
-                "POL Proxy responsiveness check",
-                maxRetries: (int)(POLProxyLaunchConfiguration.Timeouts.ProcessResponsiveness.TotalSeconds / 
-                                 POLProxyLaunchConfiguration.PollingIntervals.ResponsivenessCheck.TotalSeconds),
-                baseDelayMs: (int)POLProxyLaunchConfiguration.PollingIntervals.ResponsivenessCheck.TotalMilliseconds,
-                cancellationToken);
-
-            await UpdateProgressWithPhaseAsync(subtask, "startup", 75, "POL Proxy is responsive and ready");
-        }
-
-        /// <summary>
-        /// Gets the process ID of the launched POL Proxy application and verifies it's running.
-        /// The ExternalApplicationService.LaunchApplicationAsync already adds the PID when launching,
-        /// so we can get it directly and verify it's still accessible and running.
-        /// </summary>
-        /// <param name="polProxyApp">The POL Proxy application that was just launched</param>
-        /// <param name="subtask">The subtask for progress reporting</param>
-        /// <param name="cancellationToken">Cancellation token for operation cancellation</param>
-        /// <returns>The process ID of the launched POL Proxy instance, or 0 if verification fails</returns>
-        /// <remarks>
-        /// This approach is more reliable than waiting for monitoring confirmation because:
-        /// 1. The LaunchApplicationAsync method already recorded the PID immediately
-        /// 2. We just need to verify the process is still running and accessible
-        /// 3. Avoids race conditions with the monitoring system's detection timing
-        /// 4. Faster response time for successful launches
-        /// </remarks>
-        private async Task<int> GetLaunchedPOLProxyProcessId(ExternalApplication polProxyApp, AutoLoginSubtask subtask, CancellationToken cancellationToken)
-        {
-            // First, check if the application already has process IDs from the launch
-            if (polProxyApp.ProcessIds.Any())
-            {
-                var launchedProcessId = polProxyApp.ProcessIds.First();
-                await _loggingService.LogInfoAsync($"[FLOW] Found launched POL Proxy process ID: {launchedProcessId}");
-                
-                // Verify the process is actually running and accessible
-                if (_processUtilityService.IsProcessRunning(launchedProcessId))
-                {
-                    await _loggingService.LogInfoAsync($"[FLOW] POL Proxy process {launchedProcessId} confirmed running");
-                    return launchedProcessId;
-                }
-                else
-                {
-                    await _loggingService.LogWarningAsync($"[FLOW] POL Proxy process {launchedProcessId} is not running or not accessible");
-                }
-            }
-            
-            // Fallback: Wait a short time for the process to appear in the application's process list
-            var timeout = DateTime.UtcNow.Add(POLProxyLaunchConfiguration.Timeouts.ProcessStartup);
-            
-            await _loggingService.LogInfoAsync($"[FLOW] Waiting for POL Proxy process to appear in application tracking...");
-            
-            while (DateTime.UtcNow < timeout && !cancellationToken.IsCancellationRequested)
-            {
-                // Refresh application status
-                await _externalApplicationService.RefreshApplicationStatusAsync(polProxyApp);
-                
-                if (polProxyApp.ProcessIds.Any())
-                {
-                    var detectedProcessId = polProxyApp.ProcessIds.First();
-                    
-                    // Verify the process is actually running
-                    if (_processUtilityService.IsProcessRunning(detectedProcessId))
-                    {
-                        await _loggingService.LogInfoAsync($"[FLOW] POL Proxy process {detectedProcessId} detected and confirmed running");
-                        return detectedProcessId;
-                    }
-                }
-                
-                // Update progress
-                var elapsed = DateTime.UtcNow - (timeout - POLProxyLaunchConfiguration.Timeouts.ProcessStartup);
-                var progressPercent = POLProxyLaunchConfiguration.ProgressMilestones.ProcessStartupVerification + 
-                    (int)((elapsed.TotalSeconds / POLProxyLaunchConfiguration.Timeouts.ProcessStartup.TotalSeconds) * 
-                    (POLProxyLaunchConfiguration.ProgressMilestones.PostLaunchStabilization - POLProxyLaunchConfiguration.ProgressMilestones.ProcessStartupVerification));
-                await UpdateProgressWithPhaseAsync(subtask, "startup", Math.Min(progressPercent, POLProxyLaunchConfiguration.ProgressMilestones.PostLaunchStabilization - 1),
-                    "Verifying POL Proxy startup");
-                
-                await Task.Delay(POLProxyLaunchConfiguration.PollingIntervals.ProcessStartupCheck, cancellationToken);
-            }
-            
-            await _loggingService.LogWarningAsync($"[FLOW] Could not verify POL Proxy process startup within {POLProxyLaunchConfiguration.Timeouts.ProcessStartup.TotalSeconds}s");
-            return 0; // Verification failed
         }
     }
 }

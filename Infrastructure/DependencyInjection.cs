@@ -70,6 +70,16 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<IPlayOnlineNavigationService, Services.AutoLogin.Navigation.PlayOnlineNavigationService>();
             services.AddSingleton<IPlayOnlineAuthenticationService, PlayOnlineAuthenticationService>();
 
+            // FFXI-specific support services (refactored for SOLID principles)
+            services.AddSingleton<IFFXIScreenDetectionService, Services.AutoLogin.ScreenDetection.FFXIScreenDetectionService>();
+            services.AddSingleton<IFFXIProcessDiscoveryService, FFXIProcessDiscoveryService>();
+            services.AddSingleton<IWindowHandleManagementService, WindowHandleManagementService>();
+            services.AddSingleton<ICharacterNavigationService, Services.AutoLogin.Navigation.CharacterNavigationService>();
+
+            // Windower-specific support services (refactored for SOLID principles)
+            services.AddSingleton<IProcessLaunchService, ProcessLaunchService>();
+            services.AddSingleton<IMonitorPositioningService, MonitorPositioningService>();
+
             // Auto-login handlers
             services.AddSingleton<ILoginTaskHandler, POLProxyLaunchHandler>();
             services.AddSingleton<ILoginTaskHandler, WindowerLaunchHandler>();

@@ -141,7 +141,7 @@ namespace FFXIManager.Services.AutoLogin
 
         /// <summary>
         /// Executes PlayOnline member selection by detecting the member screen,
-        /// validating the account configuration, and clicking the appropriate member slot.
+        /// validating the account configuration, and navigating to the appropriate member slot.
         /// </summary>
         /// <param name="subtask">Current subtask for progress reporting</param>
         /// <param name="queueItem">Queue item containing account and profile information</param>
@@ -155,13 +155,14 @@ namespace FFXIManager.Services.AutoLogin
         /// 2. Detects PlayOnline window and waits for startup completion
         /// 3. Waits for member selection screen with extended timeout (60 seconds)
         /// 4. Allows screen stabilization before interaction
-        /// 5. Clicks the configured member slot using centralized coordinates
+        /// 5. Navigates to the configured member slot using dynamic keyboard navigation (Tab count based on slot)
         /// 6. Waits for PlayOnline response and stores context for next steps
-        /// 
+        ///
         /// **Error Recovery:**
         /// - Validates member slot range (1-4) before attempting selection
         /// - Uses extended timeout for member selection screen (slower systems)
         /// - Includes screen stabilization delay for consistent UI interaction
+        /// - Dynamic Tab calculation ensures correct slot selection regardless of account configuration
         /// - Comprehensive logging for troubleshooting selection failures
         /// </remarks>
         private async Task ExecuteMemberSelectionAsync(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem, IAutoLoginContext context, CancellationToken cancellationToken)
@@ -284,8 +285,9 @@ namespace FFXIManager.Services.AutoLogin
         }
 
         /// <summary>
-        /// Performs the actual member slot selection using resolution-independent navigation.
-        /// Uses hybrid navigation (keyboard first, relative click fallback) from template metadata.
+        /// Performs the actual member slot selection using dynamic keyboard navigation.
+        /// Calculates the correct number of Tab presses based on the memberSlot parameter (1-4)
+        /// and uses hybrid navigation with keyboard-first approach.
         /// </summary>
         /// <param name="subtask">Current subtask for progress reporting</param>
         /// <param name="memberSlot">Member slot number to select (1-4)</param>
@@ -294,21 +296,62 @@ namespace FFXIManager.Services.AutoLogin
         /// <param name="accountName">Account name for logging</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <remarks>
-        /// Uses resolution/DPI-independent navigation from template metadata.
-        /// Supports keyboard navigation (Tab+Enter) with intelligent fallback to relative clicking.
+        /// Uses dynamic Tab count calculation: tabCount = memberSlot
+        /// - Slot 1: 1 tab (activate field) + Enter
+        /// - Slot 2: 2 tabs (activate + navigate to slot 2) + Enter
+        /// - Slot 3: 3 tabs (activate + navigate to slot 3) + Enter
+        /// - Slot 4: 4 tabs (activate + navigate to slot 4) + Enter
+        ///
+        /// The first Tab press activates the member selection field, subsequent Tabs navigate
+        /// between slots. This ensures the correct member slot is selected based on account
+        /// configuration rather than using a static template that always selects the same slot.
         /// </remarks>
         private async Task SelectMemberSlotAsync(AutoLoginSubtask subtask, int memberSlot, IntPtr windowHandle, TemplateMatchResult memberScreenMatch, string accountName, CancellationToken cancellationToken)
         {
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.PreparingSelection,
                                                 "Selecting character slot");
 
-            // Perform member slot selection using resolution-independent navigation
+            // Calculate Tab count based on member slot
+            // Slot 1: 1 tab (activate field) + Enter
+            // Slot 2: 2 tabs (activate field + navigate to slot 2) + Enter
+            // Slot 3: 3 tabs (activate field + navigate to slot 3) + Enter
+            // Slot 4: 4 tabs (activate field + navigate to slot 4) + Enter
+            var tabCount = memberSlot;
+            await _loggingService.LogInfoAsync($"[MEMBER_SLOT] Selecting slot {memberSlot} for {accountName} (Tab count: {tabCount})");
+
+            // Perform member slot selection using dynamic keyboard navigation
             await UpdateProgressWithPhaseAsync(subtask, "authentication", PlayOnlineAuthConfiguration.ProgressMilestones.MemberSelection.ClickingMember,
                                                 "Confirming character selection");
 
-            var navigationSuccess = await ExecuteNavigationFromTemplateAsync(
+            // Create dynamic navigation action with calculated Tab count
+            var memberSlotNavigation = new NavigationAction
+            {
+                Type = NavigationType.Hybrid,
+                Description = $"Navigate to member slot {memberSlot} using Tab+Enter",
+                PostNavigationDelayMs = (int)PlayOnlineAuthConfiguration.Delays.PlayOnlineResponse.TotalMilliseconds
+            };
+
+            // Add Tab sequence - always need at least 1 tab to activate the field
+            memberSlotNavigation.Sequence.Add(new KeyboardAction
+            {
+                Action = "Tab",
+                Count = tabCount,
+                DelayMs = 150,
+                Description = $"Tab {tabCount} time(s) to reach member slot {memberSlot}"
+            });
+
+            // Add Enter to confirm selection
+            memberSlotNavigation.Sequence.Add(new KeyboardAction
+            {
+                Action = "Enter",
+                Count = 1,
+                DelayMs = 500,
+                Description = $"Select member slot {memberSlot}"
+            });
+
+            var navigationSuccess = await ExecuteNavigationActionAsync(
                 subtask,
-                PlayOnlineAuthConfiguration.TemplatePaths.MemberSelectionScreen,
+                memberSlotNavigation,
                 windowHandle,
                 memberScreenMatch,
                 _automationService,
@@ -316,7 +359,7 @@ namespace FFXIManager.Services.AutoLogin
 
             if (!navigationSuccess)
             {
-                throw new InvalidOperationException($"Failed to navigate member slot selection for {accountName}");
+                throw new InvalidOperationException($"Failed to navigate to member slot {memberSlot} for {accountName}");
             }
 
             // Wait for PlayOnline response using configured delay

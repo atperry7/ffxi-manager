@@ -40,6 +40,8 @@ namespace FFXIManager.Services.AutoLogin
         private readonly IProcessUtilityService _processUtilityService;
         private readonly IExternalApplicationService _externalApplicationService;
         private readonly IUIAutomationService _automationService;
+        private readonly IProcessLaunchService _processLaunchService;
+        private readonly IMonitorPositioningService _monitorPositioningService;
 
         public WindowerLaunchHandler(
             ILoggingService loggingService,
@@ -48,12 +50,16 @@ namespace FFXIManager.Services.AutoLogin
             ITemplateManagementService templateManagementService,
             IProcessUtilityService processUtilityService,
             IExternalApplicationService externalApplicationService,
-            IUIAutomationService automationService)
+            IUIAutomationService automationService,
+            IProcessLaunchService processLaunchService,
+            IMonitorPositioningService monitorPositioningService)
             : base(loggingService, screenshotService, templateService, templateManagementService)
         {
             _processUtilityService = processUtilityService ?? throw new ArgumentNullException(nameof(processUtilityService));
             _externalApplicationService = externalApplicationService ?? throw new ArgumentNullException(nameof(externalApplicationService));
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
+            _processLaunchService = processLaunchService ?? throw new ArgumentNullException(nameof(processLaunchService));
+            _monitorPositioningService = monitorPositioningService ?? throw new ArgumentNullException(nameof(monitorPositioningService));
         }
 
         public override LoginTaskStep TaskStep => LoginTaskStep.LaunchWindower;
@@ -210,8 +216,13 @@ namespace FFXIManager.Services.AutoLogin
                 // Step 5: Process Detection using ExternalApplicationService Integration
                 // The LaunchApplicationAsync method already added the PID, so get it from the application
                 // But verify the process is actually running and accessible
-                int newProcessId = await GetLaunchedProcessId(windowerApp, subtask, cancellationToken);
-                
+                int newProcessId = await _processLaunchService.GetLaunchedProcessIdAsync(
+                    windowerApp,
+                    subtask,
+                    WindowerLaunchConfiguration.ProcessNames.WindowerVariations,
+                    WindowerLaunchConfiguration.Timeouts.ProcessStartup,
+                    cancellationToken);
+
                 if (newProcessId == 0)
                 {
                     subtask.Fail("Windower process did not start within timeout period");
@@ -223,7 +234,7 @@ namespace FFXIManager.Services.AutoLogin
                                                      "Windower application ready");
 
                 // Verify monitor positioning - ExternalApplicationService should have already positioned Windower on primary monitor
-                await VerifyWindowerMonitorPositionAsync(newProcessId, subtask);
+                await _monitorPositioningService.VerifyAndCorrectMonitorPositionAsync(newProcessId, "Windower", subtask);
 
                 // Get window handle for the process using base class method with retry logic
                 await GetWindowHandleForProcessWithRetry(context, newProcessId, subtask, cancellationToken);
@@ -255,10 +266,19 @@ namespace FFXIManager.Services.AutoLogin
 
             try
             {
-                var processId = ValidateAndGetProcessId(context, subtask);
-                if (processId == 0) return; // Validation failed, subtask already marked as failed
+                var processId = _processLaunchService.ValidateProcessIdFromContext(context, "ProcessId");
+                if (processId == 0)
+                {
+                    subtask.Fail("No Windower process ID available from previous step");
+                    return; // Validation failed
+                }
 
-                await WaitForProcessResponsiveness(processId, subtask, cancellationToken);
+                await _processLaunchService.WaitForProcessResponsivenessAsync(
+                    processId,
+                    subtask,
+                    WindowerLaunchConfiguration.Timeouts.ProcessResponsiveness,
+                    WindowerLaunchConfiguration.PollingIntervals.ProcessStartupCheck,
+                    cancellationToken);
                 await WaitForMainWindow(processId, context, subtask, cancellationToken);
 
                 await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.StartupComplete,
@@ -278,66 +298,6 @@ namespace FFXIManager.Services.AutoLogin
                 throw;
             }
         }
-
-        /// <summary>
-        /// Validates that a process ID is available in the context and returns it.
-        /// Updates subtask status if validation fails.
-        /// </summary>
-        /// <param name="context">The auto-login context containing process information</param>
-        /// <param name="subtask">The subtask to update if validation fails</param>
-        /// <returns>The process ID, or 0 if validation failed</returns>
-        private int ValidateAndGetProcessId(IAutoLoginContext context, AutoLoginSubtask subtask)
-        {
-            var processId = context.GetValueData<int>("ProcessId");
-            if (processId == 0)
-            {
-                subtask.Fail("No Windower process ID available from previous step");
-                return 0;
-            }
-            return processId;
-        }
-
-        /// <summary>
-        /// Waits for the Windower process to become responsive using base class retry mechanisms.
-        /// Monitors process health and responsiveness with timeout and progress reporting.
-        /// </summary>
-        /// <param name="processId">The process ID to monitor</param>
-        /// <param name="subtask">The subtask for progress reporting</param>
-        /// <param name="cancellationToken">Cancellation token for operation cancellation</param>
-        private async Task WaitForProcessResponsiveness(int processId, AutoLoginSubtask subtask, CancellationToken cancellationToken)
-        {
-            await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.ResponsivenessCheck,
-                                                "Loading Windower components");
-
-            // Use base class retry mechanism for consistent error handling
-            await ExecuteWithRetryAsync(
-                async (ct) =>
-                {
-                    await _loggingService.LogInfoAsync($"[FLOW] WaitForWindowerStart - Checking process {processId} responsiveness...");
-
-                    // Check if process is still running
-                    if (!_processUtilityService.IsProcessRunning(processId))
-                    {
-                        throw new InvalidOperationException("Windower process terminated unexpectedly");
-                    }
-
-                    // Get process info to check responsiveness with timeout
-                    var processInfo = await _processUtilityService.GetProcessInfoAsync(processId);
-                    if (processInfo?.IsResponding != true)
-                    {
-                        throw new InvalidOperationException("Process not yet responsive");
-                    }
-
-                    await _loggingService.LogInfoAsync($"[FLOW] WaitForWindowerStart - Process {processId} is responsive");
-                    return true; // Success - process is responsive
-                },
-                "process responsiveness check",
-                maxRetries: (int)(WindowerLaunchConfiguration.Timeouts.ProcessResponsiveness.TotalSeconds / 
-                                 WindowerLaunchConfiguration.PollingIntervals.ProcessStartupCheck.TotalSeconds),
-                baseDelayMs: (int)WindowerLaunchConfiguration.PollingIntervals.ProcessStartupCheck.TotalMilliseconds,
-                cancellationToken);
-        }
-
 
         /// <summary>
         /// Waits for the Windower main window to appear and be accessible.
@@ -511,7 +471,26 @@ namespace FFXIManager.Services.AutoLogin
 
                 // Wait for PlayOnline process to start
                 await Task.Delay(WindowerLaunchConfiguration.Timeouts.PostLaunchDelay, cancellationToken);
-                await WaitForPlayOnlineProcessAsync(subtask, cancellationToken);
+
+                var polProcessId = await _processLaunchService.WaitForProcessStartupAsync(
+                    new[] { WindowerLaunchConfiguration.ProcessNames.PlayOnline },
+                    subtask,
+                    WindowerLaunchConfiguration.Timeouts.PlayOnlineStartup,
+                    WindowerLaunchConfiguration.PollingIntervals.PlayOnlineDetectionCheck,
+                    cancellationToken);
+
+                if (polProcessId > 0)
+                {
+                    await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.PostLaunchWait,
+                                                         "PlayOnline is starting up");
+                    await _loggingService.LogDebugAsync($"PlayOnline process detected: PID {polProcessId}");
+                }
+                else
+                {
+                    // Even if we don't detect POL immediately, the click was successful
+                    await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.OperationComplete,
+                                                         "Transitioning to PlayOnline");
+                }
 
                 subtask.Complete();
             }
@@ -525,179 +504,6 @@ namespace FFXIManager.Services.AutoLogin
                 subtask.Fail($"Error clicking launch button: {ex.Message}");
                 await _loggingService.LogErrorAsync($"WindowerLaunchHandler.ExecuteClickLaunchButtonAsync failed", ex);
                 throw;
-            }
-        }
-
-        private async Task WaitForPlayOnlineProcessAsync(AutoLoginSubtask subtask, CancellationToken cancellationToken)
-        {
-            var timeout = DateTime.UtcNow.Add(WindowerLaunchConfiguration.Timeouts.PlayOnlineStartup);
-
-            while (DateTime.UtcNow < timeout && !cancellationToken.IsCancellationRequested)
-            {
-                var polProcesses = await _processUtilityService.GetProcessesByNamesAsync(new[] { WindowerLaunchConfiguration.ProcessNames.PlayOnline });
-                if (polProcesses.Any())
-                {
-                    var polProcess = polProcesses.First();
-                    await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.PostLaunchWait,
-                                                         "PlayOnline is starting up");
-                    await _loggingService.LogDebugAsync($"PlayOnline process detected: PID {polProcess.ProcessId}");
-                    return;
-                }
-
-                await Task.Delay(WindowerLaunchConfiguration.PollingIntervals.PlayOnlineDetectionCheck, cancellationToken);
-            }
-
-            // Even if we don't detect POL immediately, the click was successful
-            await UpdateProgressWithPhaseAsync(subtask, "windower", WindowerLaunchConfiguration.ProgressMilestones.OperationComplete,
-                                                "Transitioning to PlayOnline");
-        }
-
-        /// <summary>
-        /// Gets the process ID of the launched Windower application and verifies it's running.
-        /// The ExternalApplicationService.LaunchApplicationAsync already adds the PID when launching,
-        /// so we can get it directly and verify it's still accessible and running.
-        /// </summary>
-        /// <param name="windowerApp">The Windower application that was just launched</param>
-        /// <param name="subtask">The subtask for progress reporting</param>
-        /// <param name="cancellationToken">Cancellation token for operation cancellation</param>
-        /// <returns>The process ID of the launched Windower instance, or 0 if verification fails</returns>
-        /// <remarks>
-        /// This approach is more reliable than waiting for monitoring confirmation because:
-        /// 1. The LaunchApplicationAsync method already recorded the PID immediately
-        /// 2. We just need to verify the process is still running and accessible
-        /// 3. Avoids race conditions with the monitoring system's detection timing
-        /// 4. Faster response time for successful launches
-        /// </remarks>
-        private async Task<int> GetLaunchedProcessId(ExternalApplication windowerApp, AutoLoginSubtask subtask, CancellationToken cancellationToken)
-        {
-            // First, check if the application already has process IDs from the launch
-            if (windowerApp.ProcessIds.Any())
-            {
-                var launchedProcessId = windowerApp.ProcessIds.First();
-                await _loggingService.LogInfoAsync($"[FLOW] Found launched Windower process ID: {launchedProcessId}");
-                
-                // Verify the process is actually running and accessible
-                if (_processUtilityService.IsProcessRunning(launchedProcessId))
-                {
-                    await _loggingService.LogInfoAsync($"[FLOW] Windower process {launchedProcessId} confirmed running");
-                    return launchedProcessId;
-                }
-                else
-                {
-                    await _loggingService.LogWarningAsync($"[FLOW] Windower process {launchedProcessId} is not running or not accessible");
-                }
-            }
-            
-            // Fallback: Wait a short time for the process to appear in the application's process list
-            var timeout = DateTime.UtcNow.Add(WindowerLaunchConfiguration.Timeouts.ProcessStartup);
-            
-            await _loggingService.LogInfoAsync($"[FLOW] Waiting for Windower process to appear in application tracking...");
-            
-            while (DateTime.UtcNow < timeout && !cancellationToken.IsCancellationRequested)
-            {
-                // Refresh application status
-                await _externalApplicationService.RefreshApplicationStatusAsync(windowerApp);
-                
-                if (windowerApp.ProcessIds.Any())
-                {
-                    var detectedProcessId = windowerApp.ProcessIds.First();
-                    
-                    // Verify the process is actually running
-                    if (_processUtilityService.IsProcessRunning(detectedProcessId))
-                    {
-                        await _loggingService.LogInfoAsync($"[FLOW] Windower process {detectedProcessId} detected and confirmed running");
-                        return detectedProcessId;
-                    }
-                }
-                
-                // Update progress - use time-based monotonic progress within verification range (60-85%)
-                var elapsed = DateTime.UtcNow - (timeout - WindowerLaunchConfiguration.Timeouts.ProcessStartup);
-                var baseProgress = 60;
-                var rangeSize = 25;
-                var progressPercent = baseProgress + (int)((elapsed.TotalSeconds / WindowerLaunchConfiguration.Timeouts.ProcessStartup.TotalSeconds) * rangeSize);
-                await UpdateProgressWithPhaseAsync(subtask, "startup", Math.Min(85, progressPercent), "Verifying launched process");
-                
-                await Task.Delay(WindowerLaunchConfiguration.PollingIntervals.ProcessStartupCheck, cancellationToken);
-            }
-            
-            await _loggingService.LogWarningAsync($"[FLOW] Could not verify Windower process startup within {WindowerLaunchConfiguration.Timeouts.ProcessStartup.TotalSeconds}s");
-            return 0; // Verification failed
-        }
-
-        /// <summary>
-        /// Verifies that Windower is positioned on the primary monitor and provides detailed logging
-        /// </summary>
-        /// <param name="processId">The Windower process ID to verify</param>
-        /// <param name="subtask">The subtask for progress reporting</param>
-        private async Task VerifyWindowerMonitorPositionAsync(int processId, AutoLoginSubtask subtask)
-        {
-            try
-            {
-                await _loggingService.LogInfoAsync($"[MONITOR] Verifying Windower (PID: {processId}) is positioned on primary monitor");
-
-                // Wait briefly for window creation since process may have just started
-                await Task.Delay(1000);
-
-                var windows = await _processUtilityService.GetProcessWindowsAsync(processId);
-                if (windows.Count == 0)
-                {
-                    await _loggingService.LogWarningAsync($"[MONITOR] No windows found for Windower process {processId} - window may not be created yet");
-                    return;
-                }
-
-                // Find the main Windower window
-                var mainWindow = windows.FirstOrDefault(w => w.IsVisible && w.IsMainWindow) ?? windows.FirstOrDefault(w => w.IsVisible);
-                if (mainWindow == null)
-                {
-                    await _loggingService.LogWarningAsync($"[MONITOR] No visible Windower window found for process {processId}");
-                    return;
-                }
-
-                await _loggingService.LogInfoAsync($"[MONITOR] Found Windower window: '{mainWindow.Title}' (Handle: 0x{mainWindow.Handle.ToInt64():X})");
-
-                // Check monitor positioning
-                bool isOnPrimaryMonitor = _processUtilityService.IsWindowOnPrimaryMonitor(mainWindow.Handle);
-
-                if (isOnPrimaryMonitor)
-                {
-                    await _loggingService.LogInfoAsync($"[MONITOR] ✅ Windower window is correctly positioned on primary monitor");
-
-                    // Get additional monitor information for debugging
-                    var primaryBounds = _processUtilityService.GetPrimaryMonitorBounds();
-                    var windowBounds = _processUtilityService.GetWindowMonitorBounds(mainWindow.Handle);
-
-                    await _loggingService.LogDebugAsync($"[MONITOR] Primary monitor bounds: {primaryBounds}");
-                    await _loggingService.LogDebugAsync($"[MONITOR] Window monitor bounds: {windowBounds}");
-                }
-                else
-                {
-                    await _loggingService.LogWarningAsync($"[MONITOR] ⚠️ Windower window is NOT on primary monitor - this may cause click coordinate issues");
-
-                    // Get detailed positioning information for troubleshooting
-                    var primaryBounds = _processUtilityService.GetPrimaryMonitorBounds();
-                    var windowBounds = _processUtilityService.GetWindowMonitorBounds(mainWindow.Handle);
-
-                    await _loggingService.LogWarningAsync($"[MONITOR] Primary monitor bounds: {primaryBounds}");
-                    await _loggingService.LogWarningAsync($"[MONITOR] Window is on monitor with bounds: {windowBounds}");
-                    await _loggingService.LogWarningAsync($"[MONITOR] Auto-login clicks may fail - consider manually moving Windower to primary monitor");
-
-                    // Attempt to reposition the window
-                    await _loggingService.LogInfoAsync($"[MONITOR] Attempting to reposition Windower window to primary monitor");
-                    bool repositionSuccess = await _processUtilityService.MoveWindowToPrimaryMonitorAsync(mainWindow.Handle);
-
-                    if (repositionSuccess)
-                    {
-                        await _loggingService.LogInfoAsync($"[MONITOR] ✅ Successfully repositioned Windower to primary monitor");
-                    }
-                    else
-                    {
-                        await _loggingService.LogWarningAsync($"[MONITOR] ❌ Failed to reposition Windower - manual positioning may be required");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync($"[MONITOR] Error verifying Windower monitor position", ex);
             }
         }
     }
