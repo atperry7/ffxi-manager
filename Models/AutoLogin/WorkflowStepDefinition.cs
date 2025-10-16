@@ -242,10 +242,10 @@ namespace FFXIManager.Models.AutoLogin
             if (string.IsNullOrWhiteSpace(DisplayName))
                 errors.Add("DisplayName is required");
 
-            // TemplatePath is now optional - step can be navigation-only
-            // But if neither TemplatePath nor Navigation is specified, warn
-            if (string.IsNullOrWhiteSpace(TemplatePath) && Navigation == null)
-                errors.Add("Step must have either TemplatePath (for detection) or Navigation (for interaction) or both");
+            // For NavigateUI steps: require either TemplatePath or Navigation (or both)
+            // For LaunchApplication steps: process detection alone is sufficient (allow no template and no navigation)
+            if (StepType == "NavigateUI" && string.IsNullOrWhiteSpace(TemplatePath) && Navigation == null)
+                errors.Add("NavigateUI steps must have either TemplatePath (for detection) or Navigation (for interaction) or both");
 
             if (Order < 0)
                 errors.Add("Order must be non-negative");
