@@ -781,68 +781,8 @@
                                     </StackPanel>
                                 </Grid>
 
-                                <!-- Navigation Sequence Section -->
-                                <Separator Margin="0,16"
-                                           Background="{DynamicResource BorderBrush}"/>
+                                <!-- Navigation Sequence Section removed (legacy UI replaced by ActionSequenceEditor) -->
 
-                                <TextBlock Text="Navigation Sequence"
-                                           FontSize="16"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource PrimaryTextBrush}"
-                                           Margin="0,0,0,12"/>
-
-                                <TextBlock Text="Define a sequence of keyboard actions (Tab, Enter, etc.) and mouse clicks to interact with the UI. Mix keyboard and clicks in any order to navigate through the screen."
-                                           FontSize="11"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"
-                                           TextWrapping="Wrap"
-                                           Margin="0,0,0,12"/>
-
-                                <!-- Navigation Initialization Button -->
-                                <Button Content="🚀 Initialize Navigation"
-                                        Command="{Binding InitializeNavigationCommand}"
-                                        Width="200"
-                                        Height="32"
-                                        Margin="0,0,0,16"
-                                        HorizontalAlignment="Left"
-                                        Style="{StaticResource CircularPrimaryButton}"
-                                        ToolTip="Create a navigation sequence for this step"
-                                        Visibility="{Binding HasNavigationAction, Converter={StaticResource InverseBoolToVisConverter}}"/>
-
-                                <!-- Navigation Properties (visible when navigation exists) -->
-                                <StackPanel Visibility="{Binding HasNavigationAction, Converter={StaticResource BoolToVisConverter}}">
-                                    <Grid Margin="0,0,0,12">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="140"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
-
-                                        <!-- Post-Navigation Delay -->
-                                        <TextBlock Grid.Row="0" Grid.Column="0"
-                                                   Text="Post-Nav Delay (ms):"
-                                                   VerticalAlignment="Center"
-                                                   Foreground="{DynamicResource PrimaryTextBrush}"
-                                                   Margin="0,0,0,12"/>
-                                        <TextBox Grid.Row="0" Grid.Column="1"
-                                                 Text="{Binding SelectedStep.Navigation.PostNavigationDelayMs, UpdateSourceTrigger=PropertyChanged}"
-                                                 Margin="0,0,0,12"
-                                                 ToolTip="Delay in milliseconds after completing the navigation sequence"/>
-
-                                        <!-- Navigation Description -->
-                                        <TextBlock Grid.Row="1" Grid.Column="0"
-                                                   Text="Description:"
-                                                   VerticalAlignment="Top"
-                                                   Foreground="{DynamicResource PrimaryTextBrush}"/>
-                                        <TextBox Grid.Row="1" Grid.Column="1"
-                                                 Text="{Binding SelectedStep.Navigation.Description, UpdateSourceTrigger=PropertyChanged}"
-                                                 Height="40"
-                                                 TextWrapping="Wrap"
-                                                 AcceptsReturn="True"
-                                                 ToolTip="Human-readable description of this navigation action"/>
-                                    </Grid>
 
                                     <!-- Navigation Actions Master-Detail Editor -->
                                     <TextBlock Text="Actions Sequence"
@@ -980,9 +920,8 @@
                                                   Visibility="{Binding HasNavigationActionSelected, Converter={StaticResource BoolToVisConverter}}"
                                                   Background="{DynamicResource CardBackgroundBrush}"
                                                   BorderBrush="{DynamicResource BorderBrush}">
-                                            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="300">
-                                                <StackPanel>
-                                                    <!-- Common Properties (always visible) -->
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="300">
+                                            <StackPanel>
                                                     <TextBlock Text="Common Properties" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
                                                     <Grid Margin="0,0,0,12">
                                                         <Grid.ColumnDefinitions>
@@ -1214,11 +1153,10 @@
                                                             </Border>
                                                         </StackPanel>
                                                     </Border>
-                                                </StackPanel>
-                                            </ScrollViewer>
-                                        </GroupBox>
-                                    </Grid>
-                                </StackPanel>
+                                            </StackPanel>
+                                        </ScrollViewer>
+                                    </GroupBox>
+                                </Grid>
                             </StackPanel>
                         </ScrollViewer>
                     </Border>
@@ -1262,4 +1200,5 @@
             </StackPanel>
         </Border>
     </Grid>
+    
 </Window>

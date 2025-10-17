@@ -39,6 +39,7 @@ namespace FFXIManager.ViewModels
         private WorkflowStepDefinition? _selectedStep;
         private KeyboardAction? _selectedNavigationAction;
         private BitmapImage? _templateImageSource;
+        private BitmapImage? _actionTemplateImageSource;
         private bool _isLoading;
         private bool _hasUnsavedChanges;
         private bool _disposed;
@@ -217,6 +218,8 @@ namespace FFXIManager.ViewModels
                     OnPropertyChanged(nameof(HasNavigationActionSelected));
                     OnPropertyChanged(nameof(CanEditNavigationAction));
                     OnPropertyChanged(nameof(IsLaunchActionSelected));
+                    OnPropertyChanged(nameof(IsClickActionSelected));
+                    OnPropertyChanged(nameof(IsKeyboardActionSelected));
                     OnPropertyChanged(nameof(IsWaitActionSelected));
                     OnPropertyChanged(nameof(IsInputPasswordActionSelected));
                     OnPropertyChanged(nameof(IsInputOTPActionSelected));
@@ -227,6 +230,15 @@ namespace FFXIManager.ViewModels
                     OnPropertyChanged(nameof(LaunchAllowSkipIfRunning));
                     OnPropertyChanged(nameof(LaunchAllowSkipIfNotConfigured));
                     OnPropertyChanged(nameof(SlotNavigationMethod));
+                    OnPropertyChanged(nameof(ActionTemplatePath));
+                    OnPropertyChanged(nameof(ActionConfidenceThreshold));
+                    OnPropertyChanged(nameof(ActionTolerance));
+                    OnPropertyChanged(nameof(ActionRetryAttempts));
+                    OnPropertyChanged(nameof(ActionRetryDelayMs));
+                    OnPropertyChanged(nameof(ActionTimeoutSeconds));
+                    OnPropertyChanged(nameof(ActionRequireMatch));
+                    OnPropertyChanged(nameof(ActionTargetApplication));
+                    LoadActionTemplateImage();
                     UpdateCommandStates();
                 }
             }
@@ -288,6 +300,17 @@ namespace FFXIManager.ViewModels
         public bool IsSlotActionSelected => IsMemberSlotActionSelected || IsCharacterSlotActionSelected;
 
         /// <summary>
+        /// Whether the selected navigation action is a Click action
+        /// </summary>
+        public bool IsClickActionSelected => SelectedNavigationAction?.Action == "Click";
+
+        /// <summary>
+        /// Whether the selected navigation action is a Keyboard action (or a direct key like Tab/Enter)
+        /// </summary>
+        public bool IsKeyboardActionSelected => SelectedNavigationAction?.Action == "Keyboard"
+            || IsKeyboardKey(SelectedNavigationAction?.Action);
+
+        /// <summary>
         /// Navigation method for slot actions (from Parameters dictionary)
         /// </summary>
         public string SlotNavigationMethod
@@ -323,6 +346,140 @@ namespace FFXIManager.ViewModels
         /// Whether the selected step has a template image
         /// </summary>
         public bool HasTemplateImage => TemplateImageSource != null;
+
+        /// <summary>
+        /// Action-level template image source for thumbnail preview
+        /// </summary>
+        public BitmapImage? ActionTemplateImageSource
+        {
+            get => _actionTemplateImageSource;
+            set
+            {
+                if (SetProperty(ref _actionTemplateImageSource, value))
+                {
+                    OnPropertyChanged(nameof(HasActionTemplateImage));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Whether the selected action has a template image
+        /// </summary>
+        public bool HasActionTemplateImage => ActionTemplateImageSource != null;
+
+        // Common action-level template bindings
+        public string? ActionTemplatePath
+        {
+            get => SelectedNavigationAction?.GetParameter<string?>("TemplatePath", null);
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("TemplatePath", value ?? string.Empty);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                    LoadActionTemplateImage();
+                }
+            }
+        }
+
+        public float ActionConfidenceThreshold
+        {
+            get => SelectedNavigationAction?.GetParameter<float>("ConfidenceThreshold", 0.8f) ?? 0.8f;
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("ConfidenceThreshold", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        public int ActionTolerance
+        {
+            get => SelectedNavigationAction?.GetParameter<int>("Tolerance", 5) ?? 5;
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("Tolerance", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        public int ActionRetryAttempts
+        {
+            get => SelectedNavigationAction?.GetParameter<int>("RetryAttempts", 30) ?? 30;
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("RetryAttempts", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        public int ActionRetryDelayMs
+        {
+            get => SelectedNavigationAction?.GetParameter<int>("RetryDelayMs", 500) ?? 500;
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("RetryDelayMs", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        public int ActionTimeoutSeconds
+        {
+            get => SelectedNavigationAction?.GetParameter<int>("TimeoutSeconds", 30) ?? 30;
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("TimeoutSeconds", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        public bool ActionRequireMatch
+        {
+            get => SelectedNavigationAction?.GetParameter<bool>("RequireMatch", false) ?? false;
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("RequireMatch", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        public string? ActionTargetApplication
+        {
+            get => SelectedNavigationAction?.GetParameter<string?>("TargetApplication", null);
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("TargetApplication", value ?? string.Empty);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
 
         /// <summary>
         /// Application name for Launch actions (from Parameters dictionary)
@@ -407,6 +564,9 @@ namespace FFXIManager.ViewModels
         public ICommand SelectTemplateImageCommand { get; private set; } = null!;
         public ICommand ReplaceTemplateImageCommand { get; private set; } = null!;
         public ICommand ShowLargeTemplateImageCommand { get; private set; } = null!;
+        public ICommand SelectActionTemplateImageCommand { get; private set; } = null!;
+        public ICommand ReplaceActionTemplateImageCommand { get; private set; } = null!;
+        public ICommand ShowLargeActionTemplateImageCommand { get; private set; } = null!;
 
         private void InitializeCommands()
         {
@@ -497,6 +657,18 @@ namespace FFXIManager.ViewModels
             ShowLargeTemplateImageCommand = new RelayCommand(
                 async () => await ShowLargeTemplateImageAsync(),
                 () => HasTemplateImage);
+
+            SelectActionTemplateImageCommand = new RelayCommand(
+                async () => await SelectActionTemplateImageAsync(),
+                () => CanEditNavigationAction);
+
+            ReplaceActionTemplateImageCommand = new RelayCommand(
+                async () => await ReplaceActionTemplateImageAsync(),
+                () => CanEditNavigationAction && !string.IsNullOrEmpty(ActionTemplatePath));
+
+            ShowLargeActionTemplateImageCommand = new RelayCommand(
+                async () => await ShowLargeActionTemplateImageAsync(),
+                () => HasActionTemplateImage);
         }
 
         #endregion
@@ -1481,6 +1653,8 @@ namespace FFXIManager.ViewModels
             if (e.PropertyName == nameof(KeyboardAction.Action) && sender == SelectedNavigationAction)
             {
                 OnPropertyChanged(nameof(IsLaunchActionSelected));
+                OnPropertyChanged(nameof(IsClickActionSelected));
+                OnPropertyChanged(nameof(IsKeyboardActionSelected));
                 OnPropertyChanged(nameof(IsWaitActionSelected));
                 OnPropertyChanged(nameof(IsInputPasswordActionSelected));
                 OnPropertyChanged(nameof(IsInputOTPActionSelected));
@@ -1491,6 +1665,21 @@ namespace FFXIManager.ViewModels
                 OnPropertyChanged(nameof(LaunchAllowSkipIfRunning));
                 OnPropertyChanged(nameof(LaunchAllowSkipIfNotConfigured));
                 OnPropertyChanged(nameof(SlotNavigationMethod));
+                OnPropertyChanged(nameof(ActionTemplatePath));
+                OnPropertyChanged(nameof(ActionConfidenceThreshold));
+                OnPropertyChanged(nameof(ActionTolerance));
+                OnPropertyChanged(nameof(ActionRetryAttempts));
+                OnPropertyChanged(nameof(ActionRetryDelayMs));
+                OnPropertyChanged(nameof(ActionTimeoutSeconds));
+                OnPropertyChanged(nameof(ActionRequireMatch));
+                OnPropertyChanged(nameof(ActionTargetApplication));
+                LoadActionTemplateImage();
+            }
+
+            // Parameters changed may update template path, reload preview
+            if (e.PropertyName == nameof(KeyboardAction.Parameters) && sender == SelectedNavigationAction)
+            {
+                LoadActionTemplateImage();
             }
         }
 
@@ -1541,6 +1730,263 @@ namespace FFXIManager.ViewModels
                 _ = _loggingService.LogErrorAsync("Error loading template image", ex);
                 TemplateImageSource = null;
                 OnPropertyChanged(nameof(HasTemplateImage));
+            }
+        }
+
+        /// <summary>
+        /// Loads the action-level template image for the selected action
+        /// </summary>
+        private void LoadActionTemplateImage()
+        {
+            try
+            {
+                ActionTemplateImageSource = null;
+                OnPropertyChanged(nameof(HasActionTemplateImage));
+
+                if (SelectedNavigationAction == null)
+                    return;
+
+                var actionTemplate = SelectedNavigationAction.GetParameter<string>("TemplatePath", string.Empty);
+                if (string.IsNullOrWhiteSpace(actionTemplate))
+                    return;
+
+                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var templatesPath = System.IO.Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
+                var templateFileName = actionTemplate.EndsWith(".png") ? actionTemplate : $"{actionTemplate}.png";
+                var templateFilePath = System.IO.Path.Combine(templatesPath, templateFileName);
+
+                if (!System.IO.File.Exists(templateFilePath))
+                {
+                    _ = _loggingService.LogDebugAsync($"Action template file not found: {templateFilePath}");
+                    return;
+                }
+
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.UriSource = new Uri(templateFilePath, UriKind.Absolute);
+                bitmap.DecodePixelHeight = 100;
+                bitmap.EndInit();
+                bitmap.Freeze();
+
+                ActionTemplateImageSource = bitmap;
+                OnPropertyChanged(nameof(HasActionTemplateImage));
+            }
+            catch (Exception ex)
+            {
+                _ = _loggingService.LogErrorAsync("Error loading action template image", ex);
+                ActionTemplateImageSource = null;
+                OnPropertyChanged(nameof(HasActionTemplateImage));
+            }
+        }
+
+        private async Task ShowLargeActionTemplateImageAsync()
+        {
+            if (SelectedNavigationAction == null)
+                return;
+
+            try
+            {
+                var actionTemplate = SelectedNavigationAction.GetParameter<string>("TemplatePath", string.Empty);
+                if (string.IsNullOrWhiteSpace(actionTemplate)) return;
+
+                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var templatesPath = System.IO.Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
+                var templateFileName = actionTemplate.EndsWith(".png") ? actionTemplate : $"{actionTemplate}.png";
+                var templateFilePath = System.IO.Path.Combine(templatesPath, templateFileName);
+
+                if (!System.IO.File.Exists(templateFilePath))
+                {
+                    await _dialogService.ShowMessageDialogAsync("Template Not Found",
+                        $"Template file not found:\n{templateFilePath}");
+                    return;
+                }
+
+                var window = new System.Windows.Window
+                {
+                    Title = $"Action Template Preview: {SelectedNavigationAction.Action}",
+                    Width = 800,
+                    Height = 600,
+                    WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
+                    Owner = System.Windows.Application.Current?.MainWindow,
+                    Content = new System.Windows.Controls.Image
+                    {
+                        Source = new BitmapImage(new Uri(templateFilePath, UriKind.Absolute)),
+                        Stretch = System.Windows.Media.Stretch.Uniform
+                    }
+                };
+
+                window.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error showing action template", ex);
+            }
+        }
+
+        private async Task SelectActionTemplateImageAsync()
+        {
+            if (SelectedNavigationAction == null) return;
+
+            try
+            {
+                var dialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "Select Screenshot or Image for Action Template",
+                    Filter = "Image Files (*.png;*.jpg;*.bmp)|*.png;*.jpg;*.bmp|All Files (*.*)|*.*",
+                    Multiselect = false
+                };
+
+                if (dialog.ShowDialog() != true)
+                    return;
+
+                await _loggingService.LogInfoAsync($"Selected image file for action: {dialog.FileName}");
+
+                var cropViewModel = new ImageCropperDialogViewModel(dialog.FileName, _loggingService);
+                var cropDialog = new Views.ImageCropperDialog(cropViewModel)
+                {
+                    Owner = System.Windows.Application.Current.MainWindow
+                };
+
+                var dialogResult = cropDialog.ShowDialog();
+                if (dialogResult != true) return;
+
+                if (cropViewModel.CropRectangle == null)
+                {
+                    await _dialogService.ShowMessageDialogAsync("Invalid Selection", "No crop area was selected.");
+                    return;
+                }
+
+                var templateName = GenerateActionTemplateName();
+                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var templatesPath = System.IO.Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
+                System.IO.Directory.CreateDirectory(templatesPath);
+                var templateFilePath = System.IO.Path.Combine(templatesPath, $"{templateName}.png");
+
+                var imageCropService = _serviceProvider.GetService(typeof(IImageCropService)) as IImageCropService;
+                if (imageCropService == null)
+                {
+                    await _dialogService.ShowMessageDialogAsync("Service Error", "Image crop service not available.");
+                    return;
+                }
+
+                var success = await imageCropService.CropImageAsync(
+                    dialog.FileName,
+                    cropViewModel.CropRectangle.Value,
+                    templateFilePath);
+
+                if (success)
+                {
+                    SelectedNavigationAction.SetParameter("TemplatePath", templateName);
+                    LoadActionTemplateImage();
+                    HasUnsavedChanges = true;
+                }
+                else
+                {
+                    await _dialogService.ShowMessageDialogAsync("Template Creation Failed",
+                        "Failed to create template image.");
+                }
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error selecting action template image", ex);
+            }
+        }
+
+        private async Task ReplaceActionTemplateImageAsync()
+        {
+            if (SelectedNavigationAction == null)
+                return;
+
+            try
+            {
+                var actionTemplate = SelectedNavigationAction.GetParameter<string>("TemplatePath", string.Empty);
+                if (string.IsNullOrWhiteSpace(actionTemplate)) return;
+
+                var result = await _dialogService.ShowConfirmationDialogAsync(
+                    "Replace Action Template Image",
+                    $"Replace the template image for action '{SelectedNavigationAction.Action}'?\n\nThis will update: {actionTemplate}");
+
+                if (!result) return;
+
+                var dialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "Select New Image for Action Template",
+                    Filter = "Image Files (*.png;*.jpg;*.bmp)|*.png;*.jpg;*.bmp|All Files (*.*)|*.*",
+                    Multiselect = false
+                };
+
+                if (dialog.ShowDialog() != true) return;
+
+                var cropViewModel = new ImageCropperDialogViewModel(dialog.FileName, _loggingService);
+                var cropDialog = new Views.ImageCropperDialog(cropViewModel)
+                {
+                    Owner = System.Windows.Application.Current.MainWindow
+                };
+
+                var dialogResult = cropDialog.ShowDialog();
+                if (dialogResult != true) return;
+
+                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var templatesPath = System.IO.Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
+                var templateFileName = actionTemplate.EndsWith(".png") ? actionTemplate : $"{actionTemplate}.png";
+                var templateFilePath = System.IO.Path.Combine(templatesPath, templateFileName);
+
+                var success = await _templateService.CropAndReplaceTemplateImageAsync(
+                    actionTemplate,
+                    dialog.FileName,
+                    cropViewModel.CropRectangle);
+
+                if (success)
+                {
+                    LoadActionTemplateImage();
+                }
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error replacing action template image", ex);
+            }
+        }
+
+        private string GenerateActionTemplateName()
+        {
+            var stepId = SelectedStep?.StepId ?? "step";
+            int index = 0;
+            if (SelectedStep?.Navigation?.Sequence != null && SelectedNavigationAction != null)
+            {
+                index = SelectedStep.Navigation.Sequence.IndexOf(SelectedNavigationAction);
+            }
+            return $"action_{stepId}_{index}".ToLowerInvariant();
+        }
+
+        private static bool IsKeyboardKey(string? actionName)
+        {
+            if (string.IsNullOrWhiteSpace(actionName)) return false;
+            var a = actionName.ToLowerInvariant();
+            switch (a)
+            {
+                case "tab":
+                case "enter":
+                case "return":
+                case "escape":
+                case "esc":
+                case "space":
+                case "spacebar":
+                case "down":
+                case "downarrow":
+                case "up":
+                case "uparrow":
+                case "left":
+                case "leftarrow":
+                case "right":
+                case "rightarrow":
+                case "home":
+                case "end":
+                case "pageup":
+                case "pagedown":
+                    return true;
+                default:
+                    return false;
             }
         }
 
