@@ -1,9 +1,12 @@
 using System;
+using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FFXIManager.Models;
 using FFXIManager.Models.AutoLogin;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
+using FFXIManager.Infrastructure;
 
 namespace FFXIManager.Services.AutoLogin
 {
@@ -31,6 +34,7 @@ namespace FFXIManager.Services.AutoLogin
         private readonly IExternalApplicationService _externalApplicationService;
         private readonly IPlayOnlineMonitorService _polMonitorService;
         private readonly IWorkflowActionExecutorFactory _actionExecutorFactory;
+        private readonly IProcessUtilityService _processUtilityService;
 
         public DynamicWorkflowHandler(
             ILoggingService loggingService,
@@ -40,13 +44,15 @@ namespace FFXIManager.Services.AutoLogin
             IUIAutomationService automationService,
             IExternalApplicationService externalApplicationService,
             IPlayOnlineMonitorService polMonitorService,
-            IWorkflowActionExecutorFactory actionExecutorFactory)
+            IWorkflowActionExecutorFactory actionExecutorFactory,
+            IProcessUtilityService processUtilityService)
             : base(loggingService, screenshotService, templateService, templateManagementService)
         {
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
             _externalApplicationService = externalApplicationService ?? throw new ArgumentNullException(nameof(externalApplicationService));
             _polMonitorService = polMonitorService ?? throw new ArgumentNullException(nameof(polMonitorService));
             _actionExecutorFactory = actionExecutorFactory ?? throw new ArgumentNullException(nameof(actionExecutorFactory));
+            _processUtilityService = processUtilityService ?? throw new ArgumentNullException(nameof(processUtilityService));
         }
 
         /// <summary>
@@ -95,24 +101,30 @@ namespace FFXIManager.Services.AutoLogin
             await UpdateProgressWithPhaseAsync(subtask, "startup", 5, "Validating workflow step");
             ValidateWorkflowStep(stepDef);
 
-            // Phase 2: Get window handle from context or discover it
-            var windowHandle = await GetOrDiscoverWindowHandleAsync(subtask, queueItem, context, cancellationToken);
+            // Phase 2: Decide detection strategy
+            // If this is a detection-only step (no navigation), do traditional pre-detection.
+            // Otherwise, defer window discovery and detection to per-action execution to allow Launch-first flows.
+            bool hasNavigation = stepDef.Navigation != null && stepDef.Navigation.Sequence != null && stepDef.Navigation.Sequence.Count > 0;
 
-            // Phase 3: Detect screen using step-level template (if configured)
+            IntPtr windowHandle = IntPtr.Zero;
             TemplateMatchResult? templateMatch = null;
-            if (!string.IsNullOrWhiteSpace(stepDef.TemplatePath))
+
+            if (!hasNavigation && !string.IsNullOrWhiteSpace(stepDef.TemplatePath))
             {
+                await _loggingService.LogDebugAsync("[DYNAMIC-WORKFLOW] Detection-only step - performing pre-detection");
+                var targetApp = DetermineTargetApplicationForStep(stepDef);
+                windowHandle = await GetOrDiscoverWindowHandleForAppAsync(targetApp, context, cancellationToken);
                 await UpdateProgressWithPhaseAsync(subtask, "authentication", 20, $"Looking for {stepDef.DisplayName}");
                 templateMatch = await DetectScreenAsync(subtask, stepDef, windowHandle, cancellationToken);
             }
             else
             {
-                await _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] No step-level template configured for '{stepDef.DisplayName}' - skipping pre-detection");
+                await _loggingService.LogDebugAsync("[DYNAMIC-WORKFLOW] Action-driven step - deferring window discovery/detection to per-action execution");
             }
 
-            // Phase 4: Execute navigation (with or without template match)
+            // Phase 3: Execute navigation with on-demand discovery/detection
             await UpdateProgressWithPhaseAsync(subtask, "authentication", 60, $"Navigating {stepDef.DisplayName}");
-            await ExecuteNavigationAsync(subtask, stepDef, windowHandle, templateMatch, cancellationToken);
+            await ExecuteNavigationAsync(subtask, stepDef, queueItem, context, windowHandle, templateMatch, cancellationToken);
 
             // Phase 5: Post-navigation delay (if configured)
             if (stepDef.EstimatedDurationSeconds > 0)
@@ -122,6 +134,92 @@ namespace FFXIManager.Services.AutoLogin
             }
 
             await UpdateProgressWithPhaseAsync(subtask, "authentication", 100, $"{stepDef.DisplayName} completed");
+        }
+
+        /// <summary>
+        /// Determines whether the given workflow step requires a PlayOnline window handle.
+        /// Rules:
+        /// - If a step-level template is configured, a window is required for detection.
+        /// - If navigation contains UI-interacting actions (Click, CharacterSlot, MemberSlot, InputPassword, InputOTP), a window is required.
+        /// - Pure workflow actions (Launch, Wait, Screenshot) do not require a window.
+        /// - Keyboard actions can operate without a window (sent to foreground), but benefit from focus if available.
+        /// </summary>
+        private static bool StepRequiresWindow(WorkflowStepDefinition stepDef)
+        {
+            if (stepDef == null) return true; // Defensive: assume required
+
+            // Any step-level template implies we need a valid window for detection
+            if (!string.IsNullOrWhiteSpace(stepDef.TemplatePath))
+                return true;
+
+            var nav = stepDef.Navigation;
+            if (nav == null || nav.Sequence == null || nav.Sequence.Count == 0)
+                return false; // Detection-only with no template already handled above, but safe to say no window
+
+            foreach (var action in nav.Sequence)
+            {
+                var act = (action.Action ?? string.Empty).Trim();
+                if (string.IsNullOrEmpty(act)) continue;
+
+                var a = act.ToLowerInvariant();
+
+                // Actions that require window/template context
+                if (a == "click" || a == "characterslot" || a == "memberslot" || a == "inputpassword" || a == "inputotp")
+                    return true;
+
+                // Actions that do NOT require a window: launch/wait/screenshot/keyboard
+                if (a == "launch" || a == "wait" || a == "screenshot" || a == "keyboard")
+                    continue;
+
+                // Unknown actions: be conservative and require a window
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool ActionRequiresWindow(KeyboardAction action)
+        {
+            var a = (action.Action ?? string.Empty).Trim().ToLowerInvariant();
+            if (string.IsNullOrEmpty(a)) return false;
+
+            // Actions requiring a valid window handle
+            if (a == "click" || a == "characterslot" || a == "memberslot" || a == "inputpassword" || a == "inputotp")
+                return true;
+
+            // Keyboard/Launch/Wait generally do not require window upfront (keyboard may focus if handle provided)
+            return false;
+        }
+
+        private static bool IsKeyboardKey(string actionName)
+        {
+            if (string.IsNullOrWhiteSpace(actionName)) return false;
+            var a = actionName.ToLowerInvariant();
+            switch (a)
+            {
+                case "tab":
+                case "enter":
+                case "return":
+                case "escape":
+                case "esc":
+                case "space":
+                case "spacebar":
+                case "down":
+                case "downarrow":
+                case "up":
+                case "uparrow":
+                case "left":
+                case "leftarrow":
+                case "right":
+                case "rightarrow":
+                case "home":
+                case "end":
+                case "pageup":
+                case "pagedown":
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         /// <summary>
@@ -166,13 +264,27 @@ namespace FFXIManager.Services.AutoLogin
 
             // Extract PID hint from context (from launch step if available)
             int? preferredProcessId = null;
-            var launchStepPid = context.GetValueData<int>("launch_windower_ProcessId");
-            if (launchStepPid > 0)
+            // Try multiple well-known context keys that launch steps set
+            var candidateKeys = new[]
             {
-                preferredProcessId = launchStepPid;
-                await _loggingService.LogInfoAsync($"[WINDOW-DISCOVERY] Providing PID hint from launch step: {preferredProcessId}");
+                "launch_windower_ProcessId",
+                "launch_pol_proxy_ProcessId",
+                "launch_playonline_ProcessId",
+                "launch_ffxi_ProcessId"
+            };
+
+            foreach (var key in candidateKeys)
+            {
+                var pid = context.GetValueData<int>(key);
+                if (pid > 0)
+                {
+                    preferredProcessId = pid;
+                    await _loggingService.LogInfoAsync($"[WINDOW-DISCOVERY] Providing PID hint from context '{key}': {preferredProcessId}");
+                    break;
+                }
             }
-            else
+
+            if (!preferredProcessId.HasValue)
             {
                 await _loggingService.LogDebugAsync("[WINDOW-DISCOVERY] No PID hint available - PlayOnlineMonitorService will use best match");
             }
@@ -188,6 +300,121 @@ namespace FFXIManager.Services.AutoLogin
 
             await _loggingService.LogInfoAsync($"[WINDOW-DISCOVERY] Using valid POL window from monitoring service: 0x{windowHandle.ToInt64():X}");
             return windowHandle;
+        }
+
+        /// <summary>
+        /// Discovers a window handle for a target application name.
+        /// Uses PlayOnlineMonitorService for POL; ExternalApplicationService + ProcessUtility for others.
+        /// </summary>
+        private async Task<IntPtr> GetOrDiscoverWindowHandleForAppAsync(
+            string? applicationName,
+            IAutoLoginContext context,
+            CancellationToken cancellationToken)
+        {
+            var app = (applicationName ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(app))
+            {
+                // Default to PlayOnline if unspecified
+                return await GetOrDiscoverWindowHandleAsync(null!, null!, context, cancellationToken);
+            }
+
+            // Treat any variant of PlayOnline/FFXI as POL route
+            var a = app.ToLowerInvariant();
+            if (a.Contains("playonline") || a == "pol" || a.Contains("ffxi"))
+            {
+                return await GetOrDiscoverWindowHandleAsync(null!, null!, context, cancellationToken);
+            }
+
+            try
+            {
+                // Use ExternalApplicationService to find running PIDs
+                var apps = await _externalApplicationService.GetApplicationsAsync();
+                var target = apps.FirstOrDefault(x => x.Name.Equals(app, StringComparison.OrdinalIgnoreCase));
+                if (target == null || !target.IsRunning)
+                {
+                    await _loggingService.LogWarningAsync($"[WINDOW-DISCOVERY] Target application not running: {app}");
+                    return IntPtr.Zero;
+                }
+
+                // Try PID hint from context first
+                var hintKey = $"launch_{a.Replace(" ", "_")}_ProcessId";
+                var hintedPid = context.GetValueData<int>(hintKey);
+                if (hintedPid > 0 && target.ProcessIds.Contains(hintedPid))
+                {
+                    var windows = await _processUtilityService.GetProcessWindowsAsync(hintedPid);
+                    var handle = windows.FirstOrDefault()?.Handle ?? IntPtr.Zero;
+                    if (handle != IntPtr.Zero && _processUtilityService.IsWindowValid(handle))
+                    {
+                        await _loggingService.LogInfoAsync($"[WINDOW-DISCOVERY] Using window from hint PID {hintedPid} for {app}: 0x{handle.ToInt64():X}");
+                        return handle;
+                    }
+                }
+
+                // Fallback: try any PID
+                foreach (var pid in target.ProcessIds)
+                {
+                    var windows = await _processUtilityService.GetProcessWindowsAsync(pid);
+                    var handle = windows.FirstOrDefault()?.Handle ?? IntPtr.Zero;
+                    if (handle != IntPtr.Zero && _processUtilityService.IsWindowValid(handle))
+                    {
+                        await _loggingService.LogInfoAsync($"[WINDOW-DISCOVERY] Using discovered window for {app} (PID {pid}): 0x{handle.ToInt64():X}");
+                        return handle;
+                    }
+                }
+
+                await _loggingService.LogWarningAsync($"[WINDOW-DISCOVERY] No valid windows found for {app}");
+                return IntPtr.Zero;
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync($"[WINDOW-DISCOVERY] Error discovering window for {app}", ex);
+                return IntPtr.Zero;
+            }
+        }
+
+        private static string DetermineTargetApplicationForStep(WorkflowStepDefinition step)
+        {
+            // Prefer a Launch action's ApplicationName if present
+            var nav = step.Navigation;
+            if (nav?.Sequence != null)
+            {
+                var launch = nav.Sequence.FirstOrDefault(a => string.Equals(a.Action, "Launch", StringComparison.OrdinalIgnoreCase));
+                if (launch != null)
+                {
+                    var appName = launch.GetParameter<string>("ApplicationName", string.Empty);
+                    if (!string.IsNullOrWhiteSpace(appName)) return appName;
+                }
+            }
+
+            // Derive from step-level TemplatePath prefix: "App/template"
+            var tp = step.TemplatePath ?? string.Empty;
+            var idx = tp.IndexOf('/');
+            if (idx > 0) return tp.Substring(0, idx);
+
+            // Default
+            return "PlayOnline";
+        }
+
+        private static string DetermineTargetApplicationForAction(WorkflowStepDefinition step, NavigationAction navigation, int actionIndex)
+        {
+            // Explicit override on action
+            var current = navigation.Sequence[actionIndex];
+            var target = current.GetParameter<string>("TargetApplication", string.Empty);
+            if (!string.IsNullOrWhiteSpace(target)) return target;
+
+            // Use the most recent Launch action earlier in the sequence
+            for (int j = actionIndex; j >= 0; j--)
+            {
+                var a = navigation.Sequence[j];
+                if (string.Equals(a.Action, "Launch", StringComparison.OrdinalIgnoreCase))
+                {
+                    var app = a.GetParameter<string>("ApplicationName", string.Empty);
+                    if (!string.IsNullOrWhiteSpace(app)) return app;
+                }
+            }
+
+            // Derive from step-level TemplatePath prefix
+            return DetermineTargetApplicationForStep(step);
         }
 
         /// <summary>
@@ -208,11 +435,13 @@ namespace FFXIManager.Services.AutoLogin
             {
                 await _loggingService.LogDebugAsync($"Attempting detection with primary template: {primaryTemplate}");
 
+                var attempts = stepDef.RetryAttempts ?? 30;
+                var delayMs = stepDef.RetryDelayMs ?? 500;
                 var options = new ScreenDetectionOptions
                 {
-                    Timeout = TimeSpan.FromSeconds(Math.Max(stepDef.EstimatedDurationSeconds, 30)),
-                    CheckInterval = TimeSpan.FromSeconds(1),
-                    MaxAttempts = stepDef.MaxRetryAttempts > 0 ? stepDef.MaxRetryAttempts : null,
+                    Timeout = TimeSpan.FromSeconds(Math.Max(stepDef.EstimatedDurationSeconds, Math.Max(30, (attempts * (delayMs + 250)) / 1000))),
+                    CheckInterval = TimeSpan.FromMilliseconds(delayMs),
+                    MaxAttempts = attempts,
                     ScreenshotRetryCount = stepDef.ScreenshotRetryCount ?? Math.Max(stepDef.MaxRetryAttempts / 3, 5) // Use workflow value or auto-calculate
                 };
 
@@ -239,12 +468,14 @@ namespace FFXIManager.Services.AutoLogin
                     {
                         await _loggingService.LogDebugAsync($"Attempting detection with fallback template: {fallbackTemplate}");
 
+                        var attemptsFb = Math.Max((stepDef.RetryAttempts ?? 30) / 2, 5);
+                        var delayFb = stepDef.RetryDelayMs ?? 500;
                         var options = new ScreenDetectionOptions
                         {
-                            Timeout = TimeSpan.FromSeconds(15),
-                            CheckInterval = TimeSpan.FromSeconds(1),
-                            MaxAttempts = Math.Max(stepDef.MaxRetryAttempts / 2, 5), // Use half attempts for fallback
-                            ScreenshotRetryCount = stepDef.ScreenshotRetryCount ?? Math.Max(stepDef.MaxRetryAttempts / 3, 5) // Use workflow value or auto-calculate
+                            Timeout = TimeSpan.FromSeconds(Math.Max(15, (attemptsFb * (delayFb + 250)) / 1000)),
+                            CheckInterval = TimeSpan.FromMilliseconds(delayFb),
+                            MaxAttempts = attemptsFb,
+                            ScreenshotRetryCount = stepDef.ScreenshotRetryCount ?? Math.Max(stepDef.MaxRetryAttempts / 3, 5)
                         };
 
                         return await WaitForScreenDetectionAsync(
@@ -277,6 +508,8 @@ namespace FFXIManager.Services.AutoLogin
         private async Task<bool> ExecuteNavigationAsync(
             AutoLoginSubtask subtask,
             WorkflowStepDefinition stepDef,
+            AutoLoginQueueItem queueItem,
+            IAutoLoginContext autoLoginContext,
             IntPtr windowHandle,
             TemplateMatchResult? templateMatch,
             CancellationToken cancellationToken)
@@ -295,13 +528,13 @@ namespace FFXIManager.Services.AutoLogin
             await _loggingService.LogInfoAsync($"[NAVIGATION] Executing {navigation.Sequence.Count} action(s) for step: {stepDef.DisplayName}");
 
             // Build execution context
-            var context = new WorkflowActionContext
+            var actionContext = new WorkflowActionContext
             {
                 WindowHandle = windowHandle,
                 TemplateMatch = templateMatch,
                 Subtask = subtask,
-                QueueItem = null, // Can be passed if needed
-                AutoLoginContext = null, // Can be passed if needed
+                QueueItem = null, // Not needed currently
+                AutoLoginContext = autoLoginContext, // Provide context so actions (e.g., Launch) can persist data
                 WorkflowStep = stepDef
             };
 
@@ -312,13 +545,95 @@ namespace FFXIManager.Services.AutoLogin
                 var action = navigation.Sequence[i];
                 await _loggingService.LogDebugAsync($"[NAVIGATION] Action {i + 1}/{navigation.Sequence.Count}: {action.Action}");
 
+                // Determine target app for this action
+                var targetApp = DetermineTargetApplicationForAction(stepDef, navigation, i);
+
+                // On-demand window discovery for actions that require a window
+                if (ActionRequiresWindow(action))
+                {
+                    if (actionContext.WindowHandle == IntPtr.Zero)
+                    {
+                        await _loggingService.LogDebugAsync("[NAVIGATION] Acquiring window handle on-demand for UI action");
+                        var discovered = await GetOrDiscoverWindowHandleForAppAsync(targetApp, autoLoginContext, cancellationToken);
+                        if (discovered == IntPtr.Zero)
+                        {
+                            throw new InvalidOperationException("Could not acquire a valid window for UI interaction.");
+                        }
+                        actionContext.WindowHandle = discovered;
+                    }
+                }
+
+                // On-demand detection for actions that can accept action-level templates (e.g., Click)
+                if (string.Equals(action.Action, "Click", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (actionContext.TemplateMatch == null)
+                    {
+                        var actionTemplate = action.GetParameter<string>("TemplatePath", stepDef.TemplatePath);
+                        if (!string.IsNullOrWhiteSpace(actionTemplate) && actionContext.WindowHandle != IntPtr.Zero)
+                        {
+                            await _loggingService.LogDebugAsync($"[NAVIGATION] Performing action-level detection for Click using template: {actionTemplate}");
+
+                            // Build a temporary step to leverage existing DetectScreenAsync
+                            var tempStep = stepDef.Clone();
+                            tempStep.TemplatePath = actionTemplate;
+                            tempStep.ConfidenceThreshold = action.GetParameter<float>("ConfidenceThreshold", stepDef.ConfidenceThreshold);
+                            tempStep.Tolerance = action.GetParameter<int>("Tolerance", stepDef.Tolerance);
+                            tempStep.EstimatedDurationSeconds = Math.Max(1, action.GetParameter<int>("TimeoutSeconds", stepDef.EstimatedDurationSeconds));
+
+                            try
+                            {
+                                actionContext.TemplateMatch = await DetectScreenAsync(subtask, tempStep, actionContext.WindowHandle, cancellationToken);
+                            }
+                            catch (TimeoutException)
+                            {
+                                await _loggingService.LogWarningAsync($"[NAVIGATION] Action-level detection timed out for template '{actionTemplate}'");
+                                // Let executor decide how to proceed (Click executor requires a match and will fail gracefully)
+                            }
+                        }
+                    }
+                }
+
+                // Optional confirmation for keyboard actions
+                if (string.Equals(action.Action, "Keyboard", StringComparison.OrdinalIgnoreCase) || IsKeyboardKey(action.Action))
+                {
+                    var confirmTemplate = action.GetParameter<string>("TemplatePath", string.Empty);
+                    var requireMatch = action.GetParameter<bool>("RequireMatch", false);
+                    if (!string.IsNullOrWhiteSpace(confirmTemplate) && actionContext.WindowHandle != IntPtr.Zero)
+                    {
+                        await _loggingService.LogDebugAsync($"[NAVIGATION] Keyboard confirmation detection using template: {confirmTemplate}");
+
+                        var tempStep = stepDef.Clone();
+                        tempStep.TemplatePath = confirmTemplate;
+                        tempStep.ConfidenceThreshold = action.GetParameter<float>("ConfidenceThreshold", stepDef.ConfidenceThreshold);
+                        tempStep.Tolerance = action.GetParameter<int>("Tolerance", stepDef.Tolerance);
+                        tempStep.EstimatedDurationSeconds = Math.Max(1, action.GetParameter<int>("TimeoutSeconds", 3));
+
+                        try
+                        {
+                            var match = await DetectScreenAsync(subtask, tempStep, actionContext.WindowHandle, cancellationToken);
+                            actionContext.TemplateMatch = match;
+                        }
+                        catch (TimeoutException)
+                        {
+                            if (requireMatch)
+                            {
+                                throw new TimeoutException($"Keyboard confirmation template not found: {confirmTemplate}");
+                            }
+                            else
+                            {
+                                await _loggingService.LogInfoAsync($"[NAVIGATION] Confirmation template not found, proceeding: {confirmTemplate}");
+                            }
+                        }
+                    }
+                }
+
                 try
                 {
                     // Get appropriate executor for this action
                     var executor = _actionExecutorFactory.GetExecutor(action.Action);
 
                     // Execute the action
-                    var success = await executor.ExecuteAsync(action, context, cancellationToken);
+                    var success = await executor.ExecuteAsync(action, actionContext, cancellationToken);
 
                     if (!success)
                     {
@@ -327,6 +642,45 @@ namespace FFXIManager.Services.AutoLogin
                     }
 
                     await _loggingService.LogDebugAsync($"[NAVIGATION] Action {action.Action} completed successfully");
+
+                    // Post-Launch readiness detection if TemplatePath is provided on the action
+                    if (string.Equals(action.Action, "Launch", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var readinessTemplate = action.GetParameter<string>("TemplatePath", string.Empty);
+                        if (!string.IsNullOrWhiteSpace(readinessTemplate))
+                        {
+                            // Acquire window for the launched application
+                            var launchedApp = action.GetParameter<string>("ApplicationName", string.Empty);
+                            var handle = actionContext.WindowHandle;
+                            if (handle == IntPtr.Zero)
+                            {
+                                handle = await GetOrDiscoverWindowHandleForAppAsync(launchedApp, autoLoginContext, cancellationToken);
+                            }
+
+                            if (handle != IntPtr.Zero)
+                            {
+                                var tempStep = stepDef.Clone();
+                                tempStep.TemplatePath = readinessTemplate;
+                                tempStep.ConfidenceThreshold = action.GetParameter<float>("ConfidenceThreshold", stepDef.ConfidenceThreshold);
+                                tempStep.Tolerance = action.GetParameter<int>("Tolerance", stepDef.Tolerance);
+                                tempStep.RetryAttempts = action.GetParameter<int>("RetryAttempts", stepDef.RetryAttempts ?? 60);
+                                tempStep.RetryDelayMs = action.GetParameter<int>("RetryDelayMs", stepDef.RetryDelayMs ?? 500);
+                                tempStep.EstimatedDurationSeconds = Math.Max(1, action.GetParameter<int>("TimeoutSeconds", (tempStep.RetryAttempts ?? 60) * ((tempStep.RetryDelayMs ?? 500) / 1000 + 1)));
+
+                                try
+                                {
+                                    await _loggingService.LogInfoAsync($"[LAUNCH-READY] Waiting for readiness template: {readinessTemplate}");
+                                    var match = await DetectScreenAsync(subtask, tempStep, handle, cancellationToken);
+                                    actionContext.TemplateMatch = match;
+                                    await _loggingService.LogInfoAsync("[LAUNCH-READY] Application readiness confirmed by template");
+                                }
+                                catch (TimeoutException)
+                                {
+                                    throw new TimeoutException($"Launch readiness template not detected: {readinessTemplate}");
+                                }
+                            }
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {

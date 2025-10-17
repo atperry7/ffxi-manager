@@ -232,8 +232,11 @@ private async Task ExecuteNavigationStepAsync(...)
     // Phase 1: Validate step definition
     ValidateWorkflowStep(stepDef);
 
-    // Phase 2: Get window handle
-    var windowHandle = await GetOrDiscoverWindowHandleAsync(...);
+    // Phase 2: Conditionally get window handle (skip for Launch/Wait-only steps)
+    var requiresWindow = StepRequiresWindow(stepDef);
+    var windowHandle = requiresWindow
+        ? await GetOrDiscoverWindowHandleAsync(...)
+        : IntPtr.Zero;
 
     // Phase 3: Detect screen (if TemplatePath configured)
     TemplateMatchResult? templateMatch = null;

@@ -51,7 +51,7 @@
       "DisplayName": "Launch Windower",
       "Description": "Launch Windower application and click the Launch Arrow to start PlayOnline",
       "Order": 1,
-      "TemplatePath": "launch_arrow",
+      "TemplatePath": "",
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 15,
@@ -68,9 +68,9 @@
               "ApplicationName": "Windower",
               "AllowSkipIfNotConfigured": false,
               "AllowSkipIfRunning": false,
-              "RetryAttempts": 30,
+              "RetryAttempts": 60,
               "RetryDelayMs": 500,
-              "TemplatePath": "launch_arrow",
+              "TemplatePath": "Windower/launch_arrow",
               "ConfidenceThreshold": 0.8
             }
           },
@@ -80,7 +80,14 @@
             "DelayMs": 1000,
             "Description": "Click Launch Arrow",
             "ClickX": 0.5,
-            "ClickY": 0.5
+            "ClickY": 0.5,
+            "Parameters": {
+              "TemplatePath": "Windower/launch_arrow",
+              "ConfidenceThreshold": 0.8,
+              "RetryAttempts": 30,
+              "RetryDelayMs": 500,
+              "TargetApplication": "Windower"
+            }
           }
         ],
         "PostNavigationDelayMs": 3000

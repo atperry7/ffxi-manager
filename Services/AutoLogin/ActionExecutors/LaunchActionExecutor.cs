@@ -127,15 +127,15 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             await _loggingService.LogInfoAsync($"[LAUNCH] {app.Name} launch initiated successfully");
 
-            // Phase 4: Wait for process detection
+            // Phase 4: Wait for process detection (configurable)
             await UpdateProgressAsync(context, 50, $"Waiting for {app.Name} process");
 
-            var timeoutEnd = DateTime.UtcNow.AddSeconds(30);
+            var retryAttempts = Math.Max(1, action.GetParameter<int>("RetryAttempts", 60));
+            var retryDelayMs = Math.Max(100, action.GetParameter<int>("RetryDelayMs", 500));
             var processDetected = false;
 
-            while (DateTime.UtcNow < timeoutEnd && !cancellationToken.IsCancellationRequested)
+            for (int attempt = 0; attempt < retryAttempts && !cancellationToken.IsCancellationRequested; attempt++)
             {
-                // Refresh application status
                 await _externalApplicationService.RefreshApplicationStatusAsync(app);
 
                 if (app.IsRunning)
@@ -144,12 +144,12 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                     break;
                 }
 
-                await Task.Delay(500, cancellationToken);
+                await Task.Delay(retryDelayMs, cancellationToken);
             }
 
             if (!processDetected)
             {
-                var message = $"{app.Name} process did not start within 30 seconds";
+                var message = $"{app.Name} process not detected after {retryAttempts} attempts";
                 await _loggingService.LogErrorAsync($"[LAUNCH] {message}");
                 throw new TimeoutException(message);
             }
