@@ -26,10 +26,14 @@ namespace FFXIManager.Services.AutoLogin
     public class WorkflowTaskBuilder
     {
         private readonly ILoggingService _loggingService;
+        private readonly IExternalApplicationService _externalApplicationService;
 
-        public WorkflowTaskBuilder(ILoggingService loggingService)
+        public WorkflowTaskBuilder(
+            ILoggingService loggingService,
+            IExternalApplicationService externalApplicationService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            _externalApplicationService = externalApplicationService ?? throw new ArgumentNullException(nameof(externalApplicationService));
         }
 
         /// <summary>
@@ -61,7 +65,7 @@ namespace FFXIManager.Services.AutoLogin
             }
 
             // Get executable steps (respects IsEnabled and evaluates conditions)
-            var conditionEvaluator = CreateConditionEvaluator(account);
+            var conditionEvaluator = await CreateConditionEvaluatorAsync(account);
             var executableSteps = workflow.GetExecutableSteps(conditionEvaluator);
 
             await _loggingService.LogDebugAsync($"Workflow has {executableSteps.Count} executable steps (out of {workflow.Steps.Count} total)");
@@ -104,7 +108,7 @@ namespace FFXIManager.Services.AutoLogin
 
         /// <summary>
         /// Creates a condition evaluator function for the given account.
-        /// Evaluates conditional expressions in workflow steps.
+        /// Evaluates conditional expressions and application-based skip logic in workflow steps.
         /// </summary>
         /// <remarks>
         /// **Supported Condition Syntax:**
@@ -113,23 +117,45 @@ namespace FFXIManager.Services.AutoLogin
         /// - !Account.IsOTPEnabled
         /// - Account.Region == "NA"
         ///
-        /// Future enhancements could support more complex expressions via a parser.
+        /// **Application-Based Skip Logic:**
+        /// - Checks WorkflowStepDefinition.SkipIfApplicationRunning
+        /// - If specified application is running, step is skipped
         /// </remarks>
-        private Func<string?, bool> CreateConditionEvaluator(PlayOnlineMemberAccount account)
+        private async Task<Func<WorkflowStepDefinition, bool>> CreateConditionEvaluatorAsync(PlayOnlineMemberAccount account)
         {
-            return condition =>
+            // Load current application statuses
+            var applications = await _externalApplicationService.GetApplicationsAsync();
+            var runningAppNames = applications
+                .Where(app => app.IsRunning)
+                .Select(app => app.Name)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            await _loggingService.LogDebugAsync($"Running applications: {string.Join(", ", runningAppNames)}");
+
+            return step =>
             {
-                if (string.IsNullOrWhiteSpace(condition))
+                // First check SkipIfApplicationRunning
+                if (!string.IsNullOrWhiteSpace(step.SkipIfApplicationRunning))
+                {
+                    if (runningAppNames.Contains(step.SkipIfApplicationRunning))
+                    {
+                        _loggingService.LogInfoAsync($"Skipping step '{step.DisplayName}' because '{step.SkipIfApplicationRunning}' is running").Wait();
+                        return false; // Skip this step
+                    }
+                }
+
+                // Then check legacy Condition property
+                if (string.IsNullOrWhiteSpace(step.Condition))
                     return true; // No condition means always execute
 
                 try
                 {
-                    return EvaluateCondition(condition, account);
+                    return EvaluateCondition(step.Condition, account);
                 }
                 catch (Exception ex)
                 {
                     // Log warning but don't fail - default to executing the step
-                    _loggingService.LogWarningAsync($"Failed to evaluate condition '{condition}': {ex.Message}").Wait();
+                    _loggingService.LogWarningAsync($"Failed to evaluate condition '{step.Condition}': {ex.Message}").Wait();
                     return true;
                 }
             };
@@ -230,7 +256,7 @@ namespace FFXIManager.Services.AutoLogin
             }
 
             // Get executable steps for this account
-            var conditionEvaluator = CreateConditionEvaluator(account);
+            var conditionEvaluator = await CreateConditionEvaluatorAsync(account);
             var executableSteps = workflow.GetExecutableSteps(conditionEvaluator);
 
             // Check for required steps based on account configuration
@@ -262,9 +288,9 @@ namespace FFXIManager.Services.AutoLogin
         /// Estimates the total duration of a workflow for a given account.
         /// Considers only executable steps (respects conditions and enabled status).
         /// </summary>
-        public int EstimateWorkflowDuration(WorkflowDefinition workflow, PlayOnlineMemberAccount account)
+        public async Task<int> EstimateWorkflowDurationAsync(WorkflowDefinition workflow, PlayOnlineMemberAccount account)
         {
-            var conditionEvaluator = CreateConditionEvaluator(account);
+            var conditionEvaluator = await CreateConditionEvaluatorAsync(account);
             var executableSteps = workflow.GetExecutableSteps(conditionEvaluator);
 
             return executableSteps.Sum(s => s.EstimatedDurationSeconds);
@@ -278,13 +304,13 @@ namespace FFXIManager.Services.AutoLogin
             WorkflowDefinition workflow,
             PlayOnlineMemberAccount account)
         {
-            var conditionEvaluator = CreateConditionEvaluator(account);
+            var conditionEvaluator = await CreateConditionEvaluatorAsync(account);
             var executableSteps = workflow.GetExecutableSteps(conditionEvaluator);
 
             var summary = $"Workflow: {workflow.Name}\n";
             summary += $"Description: {workflow.Description}\n";
             summary += $"Steps to execute: {executableSteps.Count}\n";
-            summary += $"Estimated duration: ~{EstimateWorkflowDuration(workflow, account)} seconds\n\n";
+            summary += $"Estimated duration: ~{await EstimateWorkflowDurationAsync(workflow, account)} seconds\n\n";
             summary += "Steps:\n";
 
             for (int i = 0; i < executableSteps.Count; i++)

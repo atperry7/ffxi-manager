@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 
 namespace FFXIManager.Models
 {
@@ -115,8 +116,6 @@ namespace FFXIManager.Models
         /// - ApplicationName (string): Name of external application (must match ExternalApplicationData entry)
         /// - AllowSkipIfRunning (bool): Skip if application is already running (default: false)
         /// - AllowSkipIfNotConfigured (bool): Skip if application not in settings (default: true)
-        /// - RetryAttempts (int): Number of retry attempts for UI detection (default: 30)
-        /// - RetryDelayMs (int): Delay between retries (default: 500)
         ///
         /// **Future Actions:**
         /// - Screenshot parameters (path, format, etc.)
@@ -141,6 +140,28 @@ namespace FFXIManager.Models
             {
                 try
                 {
+                    // Handle System.Text.Json.JsonElement from deserialization
+                    if (value is System.Text.Json.JsonElement jsonElement)
+                    {
+                        if (typeof(T) == typeof(string))
+                        {
+                            var str = jsonElement.GetString();
+                            return str != null ? (T)(object)str : defaultValue;
+                        }
+                        else if (typeof(T) == typeof(int))
+                            return (T)(object)jsonElement.GetInt32();
+                        else if (typeof(T) == typeof(bool))
+                            return (T)(object)jsonElement.GetBoolean();
+                        else if (typeof(T) == typeof(double))
+                            return (T)(object)jsonElement.GetDouble();
+                        else
+                            return JsonSerializer.Deserialize<T>(jsonElement.GetRawText()) ?? defaultValue;
+                    }
+
+                    // Standard type conversion
+                    if (value is T typedValue)
+                        return typedValue;
+
                     return (T)Convert.ChangeType(value, typeof(T));
                 }
                 catch

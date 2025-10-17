@@ -4,8 +4,6 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FFXIManager.Views"
-        xmlns:workflowEditor="clr-namespace:FFXIManager.Views.WorkflowEditor"
-        xmlns:actionEditors="clr-namespace:FFXIManager.Views.WorkflowEditor.ActionEditors"
         xmlns:converters="clr-namespace:FFXIManager.Converters"
         mc:Ignorable="d"
         Title="Workflow Editor - Auto-Login Customization"
@@ -25,34 +23,6 @@
         <converters:IsClickActionToVisibilityConverter x:Key="IsClickActionToVisConverter"/>
         <converters:IsNotClickActionToVisibilityConverter x:Key="IsNotClickActionToVisConverter"/>
 
-        <!-- Action Converters for Master-Detail UI -->
-        <converters:ActionIconConverter x:Key="ActionIconConverter"/>
-        <converters:ActionSummaryConverter x:Key="ActionSummaryConverter"/>
-
-        <!-- Action Editor Data Templates -->
-        <DataTemplate x:Key="LaunchActionEditorTemplate">
-            <actionEditors:LaunchActionEditor/>
-        </DataTemplate>
-
-        <DataTemplate x:Key="KeyboardActionEditorTemplate">
-            <actionEditors:KeyboardActionEditor/>
-        </DataTemplate>
-
-        <DataTemplate x:Key="ClickActionEditorTemplate">
-            <actionEditors:ClickActionEditor/>
-        </DataTemplate>
-
-        <DataTemplate x:Key="WaitActionEditorTemplate">
-            <actionEditors:WaitActionEditor/>
-        </DataTemplate>
-
-        <!-- Action Editor Template Selector -->
-        <workflowEditor:ActionEditorTemplateSelector x:Key="ActionEditorTemplateSelector"
-                                            LaunchTemplate="{StaticResource LaunchActionEditorTemplate}"
-                                            KeyboardTemplate="{StaticResource KeyboardActionEditorTemplate}"
-                                            ClickTemplate="{StaticResource ClickActionEditorTemplate}"
-                                            WaitTemplate="{StaticResource WaitActionEditorTemplate}"/>
-
         <!-- Step Template Selector -->
         <DataTemplate x:Key="WorkflowStepTemplate">
             <Border BorderBrush="{DynamicResource BorderBrush}"
@@ -65,7 +35,7 @@
                     <Style TargetType="Border">
                         <Style.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="{DynamicResource HoverBrush}"/>
+                                <Setter Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
                             </Trigger>
                         </Style.Triggers>
                     </Style>
@@ -146,8 +116,13 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-                <StackPanel Grid.Column="0">
+                <!-- Title and Description -->
+                <StackPanel Grid.Column="0" Grid.Row="0" Grid.RowSpan="2" VerticalAlignment="Center">
                     <TextBlock Text="Workflow Editor"
                                FontSize="20"
                                FontWeight="SemiBold"
@@ -158,13 +133,44 @@
                                Margin="0,4,0,0"/>
                 </StackPanel>
 
+                <!-- Action Buttons -->
+                <StackPanel Grid.Column="1" Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4">
+                    <Button Content="💾"
+                            Command="{Binding SaveWorkflowCommand}"
+                            Width="36"
+                            Height="36"
+                            Margin="0,0,4,0"
+                            Style="{StaticResource CircularPrimaryButton}"
+                            ToolTip="Save all changes to the selected workflow"/>
+                    <Button Content="✅"
+                            Command="{Binding ValidateWorkflowCommand}"
+                            Width="36"
+                            Height="36"
+                            Margin="0,0,4,0"
+                            Style="{StaticResource CircularSecondaryButton}"
+                            ToolTip="Validate workflow structure and step configuration"/>
+                    <Button Content="🧪"
+                            Command="{Binding TestWorkflowCommand}"
+                            Width="36"
+                            Height="36"
+                            Margin="0,0,4,0"
+                            Style="{StaticResource CircularSecondaryButton}"
+                            ToolTip="Test the selected workflow with a dry run"/>
+                    <Button Content="🗑️"
+                            Command="{Binding DeleteWorkflowCommand}"
+                            Width="36"
+                            Height="36"
+                            Style="{StaticResource CircularDangerButton}"
+                            ToolTip="Permanently delete the selected workflow"/>
+                </StackPanel>
+
                 <!-- Unsaved Changes Indicator -->
-                <Border Grid.Column="1"
+                <Border Grid.Column="1" Grid.Row="1"
                         Background="{DynamicResource WarningBrush}"
                         CornerRadius="6"
-                        Padding="12,6"
+                        Padding="8,4"
                         Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BoolToVisConverter}}"
-                        VerticalAlignment="Center">
+                        HorizontalAlignment="Right">
                     <TextBlock Text="⚠ Unsaved Changes"
                                FontSize="12"
                                FontWeight="SemiBold"
@@ -201,7 +207,7 @@
                                         <Setter TargetName="Border" Property="BorderThickness" Value="1,2,1,0"/>
                                     </Trigger>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="Border" Property="Background" Value="{DynamicResource HoverBrush}"/>
+                                        <Setter TargetName="Border" Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -280,7 +286,7 @@
                                                                    FontWeight="Bold"
                                                                    Foreground="{DynamicResource PrimaryTextBrush}"/>
                                                     </Border>
-                                                    <Border Background="{DynamicResource ErrorBrush}"
+                                                    <Border Background="{DynamicResource DangerBrush}"
                                                             CornerRadius="4"
                                                             Padding="6,2"
                                                             Margin="8,0,0,0"
@@ -304,42 +310,51 @@
                                 </ListBox.ItemTemplate>
                             </ListBox>
 
-                            <!-- Workflow Actions -->
-                            <StackPanel Grid.Row="2" Orientation="Vertical" Margin="0,8,0,0">
-                                <Button Content="New Workflow"
-                                        Command="{Binding CreateNewWorkflowCommand}"
-                                        Height="32"
-                                        Margin="0,0,0,4"
-                                        Style="{StaticResource PrimaryButton}"/>
-                                <Button Content="Clone Selected"
-                                        Command="{Binding CloneWorkflowCommand}"
-                                        Height="32"
-                                        Margin="0,0,0,4"
-                                        Style="{StaticResource SecondaryButton}"/>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="4"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Button Grid.Column="0"
-                                            Content="Import"
+                            <!-- Workflow Actions Bar -->
+                            <Border Grid.Row="2"
+                                    Background="{DynamicResource SurfaceBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="0,1,0,0"
+                                    Padding="4"
+                                    Margin="0,8,0,0">
+                                <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Button Content="➕"
+                                            Command="{Binding CreateNewWorkflowCommand}"
+                                            Width="36"
+                                            Height="36"
+                                            Margin="2"
+                                            Style="{StaticResource CircularPrimaryButton}"
+                                            ToolTip="Create a new workflow from scratch"/>
+                                    <Button Content="📋"
+                                            Command="{Binding CloneWorkflowCommand}"
+                                            Width="36"
+                                            Height="36"
+                                            Margin="2"
+                                            Style="{StaticResource CircularSecondaryButton}"
+                                            ToolTip="Duplicate the selected workflow to create a customized version"/>
+                                    <Button Content="📥"
                                             Command="{Binding ImportWorkflowCommand}"
-                                            Height="32"
-                                            Style="{StaticResource SecondaryButton}"/>
-                                    <Button Grid.Column="2"
-                                            Content="Export"
+                                            Width="36"
+                                            Height="36"
+                                            Margin="2"
+                                            Style="{StaticResource CircularSecondaryButton}"
+                                            ToolTip="Import a workflow from a JSON file"/>
+                                    <Button Content="📤"
                                             Command="{Binding ExportWorkflowCommand}"
-                                            Height="32"
-                                            Style="{StaticResource SecondaryButton}"/>
-                                </Grid>
-                                <Button Content="Restore Defaults"
-                                        Command="{Binding RestoreDefaultsCommand}"
-                                        Height="32"
-                                        Margin="0,4,0,0"
-                                        Style="{StaticResource WarningButton}"
-                                        ToolTip="Restore default workflows from application directory"/>
-                            </StackPanel>
+                                            Width="36"
+                                            Height="36"
+                                            Margin="2"
+                                            Style="{StaticResource CircularSecondaryButton}"
+                                            ToolTip="Export the selected workflow to a JSON file"/>
+                                    <Button Content="🔄"
+                                            Command="{Binding RestoreDefaultsCommand}"
+                                            Width="36"
+                                            Height="36"
+                                            Margin="2"
+                                            Style="{StaticResource CircularWarningButton}"
+                                            ToolTip="Restore default workflows from application directory"/>
+                                </WrapPanel>
+                            </Border>
                         </Grid>
                     </Border>
 
@@ -449,32 +464,7 @@
                                           Margin="0,8,0,0"
                                           ToolTip="Mark this workflow as read-only to prevent accidental modifications"/>
 
-                                <!-- Action Buttons -->
-                                <StackPanel Orientation="Horizontal" Margin="0,24,0,0">
-                                    <Button Content="Save Changes"
-                                            Command="{Binding SaveWorkflowCommand}"
-                                            Width="120"
-                                            Height="36"
-                                            Margin="0,0,8,0"
-                                            Style="{StaticResource PrimaryButton}"/>
-                                    <Button Content="Validate"
-                                            Command="{Binding ValidateWorkflowCommand}"
-                                            Width="100"
-                                            Height="36"
-                                            Margin="0,0,8,0"
-                                            Style="{StaticResource SecondaryButton}"/>
-                                    <Button Content="Test Workflow"
-                                            Command="{Binding TestWorkflowCommand}"
-                                            Width="120"
-                                            Height="36"
-                                            Margin="0,0,8,0"
-                                            Style="{StaticResource SecondaryButton}"/>
-                                    <Button Content="Delete"
-                                            Command="{Binding DeleteWorkflowCommand}"
-                                            Width="80"
-                                            Height="36"
-                                            Style="{StaticResource DangerButton}"/>
-                                </StackPanel>
+
                             </StackPanel>
                         </ScrollViewer>
                     </Border>
@@ -519,36 +509,44 @@
                                      BorderThickness="0"
                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
 
-                            <!-- Step Actions -->
-                            <StackPanel Grid.Row="2" Orientation="Vertical" Margin="0,8,0,0">
-                                <Button Content="+ Add Step"
-                                        Command="{Binding AddStepCommand}"
-                                        Height="32"
-                                        Margin="0,0,0,4"
-                                        Style="{StaticResource PrimaryButton}"/>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="4"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Button Grid.Column="0"
-                                            Content="↑ Move Up"
+                            <!-- Step Actions Bar -->
+                            <Border Grid.Row="2"
+                                    Background="{DynamicResource SurfaceBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="0,1,0,0"
+                                    Padding="4"
+                                    Margin="0,8,0,0">
+                                <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Button Content="➕"
+                                            Command="{Binding AddStepCommand}"
+                                            Width="36"
+                                            Height="36"
+                                            Margin="2"
+                                            Style="{StaticResource CircularPrimaryButton}"
+                                            ToolTip="Add a new step to the workflow"/>
+                                    <Button Content="🗑️"
+                                            Command="{Binding RemoveStepCommand}"
+                                            Width="36"
+                                            Height="36"
+                                            Margin="2"
+                                            Style="{StaticResource CircularDangerButton}"
+                                            ToolTip="Permanently remove the selected step from the workflow"/>
+                                    <Button Content="↑"
                                             Command="{Binding MoveStepUpCommand}"
-                                            Height="32"
-                                            Style="{StaticResource SecondaryButton}"/>
-                                    <Button Grid.Column="2"
-                                            Content="↓ Move Down"
+                                            Width="36"
+                                            Height="36"
+                                            Margin="2"
+                                            Style="{StaticResource CircularSecondaryButton}"
+                                            ToolTip="Move the selected step up in execution order"/>
+                                    <Button Content="↓"
                                             Command="{Binding MoveStepDownCommand}"
-                                            Height="32"
-                                            Style="{StaticResource SecondaryButton}"/>
-                                </Grid>
-                                <Button Content="Remove Step"
-                                        Command="{Binding RemoveStepCommand}"
-                                        Height="32"
-                                        Margin="0,4,0,0"
-                                        Style="{StaticResource DangerButton}"/>
-                            </StackPanel>
+                                            Width="36"
+                                            Height="36"
+                                            Margin="2"
+                                            Style="{StaticResource CircularSecondaryButton}"
+                                            ToolTip="Move the selected step down in execution order"/>
+                                </WrapPanel>
+                            </Border>
                         </Grid>
                     </Border>
 
@@ -573,6 +571,7 @@
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
@@ -613,35 +612,70 @@
                                                VerticalAlignment="Top"
                                                Foreground="{DynamicResource PrimaryTextBrush}"
                                                Margin="0,8,0,12"/>
-                                    <StackPanel Grid.Row="2" Grid.Column="1" Margin="0,0,0,12">
-                                        <TextBox Text="{Binding SelectedStep.TemplatePath, UpdateSourceTrigger=PropertyChanged}"
-                                                 Margin="0,0,0,8"
-                                                 ToolTip="Path to template image file"/>
+                                    <Grid Grid.Row="2" Grid.Column="1" Margin="0,0,0,12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
 
-                                        <!-- Template Management Buttons -->
-                                        <StackPanel Orientation="Horizontal">
-                                            <Button Content="📷 Select Image"
-                                                    Command="{Binding SelectTemplateImageCommand}"
-                                                    Width="120"
-                                                    Height="28"
-                                                    Margin="0,0,4,0"
-                                                    Style="{StaticResource PrimaryButton}"
-                                                    ToolTip="Select a screenshot or image to create a template"/>
-                                            <Button Content="🔄 Replace"
-                                                    Command="{Binding ReplaceTemplateImageCommand}"
-                                                    Width="90"
-                                                    Height="28"
-                                                    Margin="0,0,4,0"
-                                                    Style="{StaticResource SecondaryButton}"
-                                                    ToolTip="Replace the existing template image"/>
-                                            <Button Content="👁 View"
-                                                    Command="{Binding ViewTemplateImageCommand}"
-                                                    Width="70"
-                                                    Height="28"
-                                                    Style="{StaticResource SecondaryButton}"
-                                                    ToolTip="View template information"/>
+                                        <!-- Left Side: Path and Buttons -->
+                                        <StackPanel Grid.Column="0">
+                                            <TextBox Text="{Binding SelectedStep.TemplatePath, UpdateSourceTrigger=PropertyChanged}"
+                                                     Margin="0,0,0,8"
+                                                     ToolTip="Path to template image file"/>
+
+                                            <!-- Template Management Buttons -->
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button Content="📷 Select Image"
+                                                        Command="{Binding SelectTemplateImageCommand}"
+                                                        Width="140"
+                                                        Height="28"
+                                                        Margin="0,0,4,0"
+                                                        Style="{StaticResource CircularPrimaryButton}"
+                                                        ToolTip="Select a screenshot or image to create a template"/>
+                                                <Button Content="🔄 Replace"
+                                                        Command="{Binding ReplaceTemplateImageCommand}"
+                                                        Width="100"
+                                                        Height="28"
+                                                        Style="{StaticResource CircularSecondaryButton}"
+                                                        ToolTip="Replace the existing template image"/>
+                                            </StackPanel>
                                         </StackPanel>
-                                    </StackPanel>
+
+                                        <!-- Right Side: Thumbnail Preview -->
+                                        <Border Grid.Column="1"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="4"
+                                                Margin="12,0,0,0"
+                                                Background="{DynamicResource CardBackgroundBrush}"
+                                                Visibility="{Binding HasTemplateImage, Converter={StaticResource BoolToVisConverter}}"
+                                                ToolTip="Click to view full size"
+                                                Cursor="Hand">
+                                            <Border.Effect>
+                                                <DropShadowEffect ShadowDepth="2" BlurRadius="8" Opacity="0.3" Color="Black"/>
+                                            </Border.Effect>
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <Image Source="{Binding TemplateImageSource}"
+                                                   Width="120"
+                                                   Height="100"
+                                                   Stretch="Uniform"
+                                                   Margin="4">
+                                                <Image.InputBindings>
+                                                    <MouseBinding Gesture="LeftClick"
+                                                                  Command="{Binding ShowLargeTemplateImageCommand}"/>
+                                                </Image.InputBindings>
+                                            </Image>
+                                        </Border>
+                                    </Grid>
 
                                     <!-- Duration -->
                                     <TextBlock Grid.Row="3" Grid.Column="0"
@@ -686,13 +720,33 @@
                                              Margin="0,0,0,12"
                                              ToolTip="Optional condition for step execution&#x0a;&#x0a;Examples:&#x0a;• Account.IsOTPEnabled - only if OTP is enabled&#x0a;• !Account.UseWindower - only if Windower is disabled&#x0a;• POLProxyDetected - only if POL Proxy is detected&#x0a;&#x0a;Leave empty to always execute"/>
 
-                                    <!-- Flags -->
+                                    <!-- Skip If Application Running -->
                                     <TextBlock Grid.Row="7" Grid.Column="0"
+                                               Text="Skip If Running:"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource PrimaryTextBrush}"
+                                               Margin="0,0,0,12"/>
+                                    <ComboBox Grid.Row="7" Grid.Column="1"
+                                              ItemsSource="{Binding AvailableApplications}"
+                                              SelectedValue="{Binding SelectedStep.SkipIfApplicationRunning, UpdateSourceTrigger=PropertyChanged}"
+                                              DisplayMemberPath="Name"
+                                              SelectedValuePath="Name"
+                                              Margin="0,0,0,12"
+                                              ToolTip="Skip this step if the selected application is already running&#x0a;&#x0a;Use Case: Skip PlayOnline navigation steps if POL Proxy is running&#x0a;&#x0a;Leave empty to never skip based on running applications">
+                                        <ComboBox.ItemContainerStyle>
+                                            <Style TargetType="ComboBoxItem">
+                                                <Setter Property="ToolTip" Value="{Binding ExecutablePath}"/>
+                                            </Style>
+                                        </ComboBox.ItemContainerStyle>
+                                    </ComboBox>
+
+                                    <!-- Flags -->
+                                    <TextBlock Grid.Row="8" Grid.Column="0"
                                                Text="Flags:"
                                                VerticalAlignment="Top"
                                                Foreground="{DynamicResource PrimaryTextBrush}"
                                                Margin="0,0,0,12"/>
-                                    <StackPanel Grid.Row="7" Grid.Column="1" Margin="0,0,0,12">
+                                    <StackPanel Grid.Row="8" Grid.Column="1" Margin="0,0,0,12">
                                         <CheckBox Content="Enabled"
                                                   IsChecked="{Binding SelectedStep.IsEnabled}"
                                                   Margin="0,0,0,4"
@@ -704,11 +758,11 @@
                                     </StackPanel>
 
                                     <!-- Step ID (Immutable) -->
-                                    <TextBlock Grid.Row="8" Grid.Column="0"
+                                    <TextBlock Grid.Row="9" Grid.Column="0"
                                                Text="Step ID:"
                                                VerticalAlignment="Center"
                                                Foreground="{DynamicResource PrimaryTextBrush}"/>
-                                    <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal">
+                                    <StackPanel Grid.Row="9" Grid.Column="1" Orientation="Horizontal">
                                         <TextBlock Text="{Binding SelectedStep.StepId}"
                                                    FontSize="11"
                                                    FontFamily="Consolas"
@@ -744,13 +798,14 @@
                                            Margin="0,0,0,12"/>
 
                                 <!-- Navigation Initialization Button -->
-                                <Button Content="Initialize Navigation"
+                                <Button Content="🚀 Initialize Navigation"
                                         Command="{Binding InitializeNavigationCommand}"
-                                        Width="180"
+                                        Width="200"
                                         Height="32"
                                         Margin="0,0,0,16"
                                         HorizontalAlignment="Left"
-                                        Style="{StaticResource PrimaryButton}"
+                                        Style="{StaticResource CircularPrimaryButton}"
+                                        ToolTip="Create a navigation sequence for this step"
                                         Visibility="{Binding HasNavigationAction, Converter={StaticResource InverseBoolToVisConverter}}"/>
 
                                 <!-- Navigation Properties (visible when navigation exists) -->
@@ -796,35 +851,275 @@
                                                Foreground="{DynamicResource PrimaryTextBrush}"
                                                Margin="0,0,0,12"/>
 
-                                    <Border BorderBrush="{DynamicResource BorderBrush}"
-                                            BorderThickness="1"
-                                            CornerRadius="6"
-                                            Margin="0,0,0,0"
-                                            Height="500"
-                                            Background="{DynamicResource SurfaceBrush}">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="250"/>
-                                                <ColumnDefinition Width="1"/>
-                                                <ColumnDefinition Width="*"/>
-                                            </Grid.ColumnDefinitions>
+                                    <!-- Navigation Actions DataGrid + Detail Panel -->
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
 
-                                            <!-- Master: Action List Panel -->
-                                            <workflowEditor:ActionListPanel Grid.Column="0"
-                                                                   DataContext="{Binding}"/>
+                                        <!-- Toolbar Buttons -->
+                                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                                            <Button Content="➕"
+                                                    Style="{StaticResource CircularPrimaryButton}"
+                                                    Command="{Binding AddNavigationActionCommand}"
+                                                    Width="32" Height="32"
+                                                    ToolTip="Add a new action to the sequence"
+                                                    Margin="0,0,4,0"/>
+                                            <Button Content="🗑️"
+                                                    Style="{StaticResource CircularDangerButton}"
+                                                    Command="{Binding RemoveNavigationActionCommand}"
+                                                    Width="32" Height="32"
+                                                    ToolTip="Remove the selected action"
+                                                    Margin="0,0,4,0"/>
+                                            <Button Content="↑"
+                                                    Style="{StaticResource CircularSecondaryButton}"
+                                                    Command="{Binding MoveNavigationActionUpCommand}"
+                                                    Width="32" Height="32"
+                                                    ToolTip="Move action up in sequence"
+                                                    Margin="0,0,4,0"/>
+                                            <Button Content="↓"
+                                                    Style="{StaticResource CircularSecondaryButton}"
+                                                    Command="{Binding MoveNavigationActionDownCommand}"
+                                                    Width="32" Height="32"
+                                                    ToolTip="Move action down in sequence"/>
+                                        </StackPanel>
 
-                                            <!-- Splitter -->
-                                            <Border Grid.Column="1" Background="{DynamicResource BorderBrush}"/>
+                                        <!-- DataGrid -->
+                                        <DataGrid Grid.Row="1"
+                                                  Style="{StaticResource DataGridBase}"
+                                                  ItemsSource="{Binding NavigationActions}"
+                                                  SelectedItem="{Binding SelectedNavigationAction, Mode=TwoWay}"
+                                                  AutoGenerateColumns="False"
+                                                  CanUserAddRows="False"
+                                                  CanUserDeleteRows="False"
+                                                  SelectionMode="Single"
+                                                  Height="250"
+                                                  Margin="0,0,0,12">
+                                            <DataGrid.Columns>
+                                                <!-- Type Column (editable ComboBox) -->
+                                                <DataGridComboBoxColumn Header="Type" Width="100">
+                                                    <DataGridComboBoxColumn.ElementStyle>
+                                                        <Style TargetType="ComboBox">
+                                                            <Setter Property="ItemsSource">
+                                                                <Setter.Value>
+                                                                    <x:Array Type="sys:String" xmlns:sys="clr-namespace:System;assembly=mscorlib">
+                                                                        <sys:String>Tab</sys:String>
+                                                                        <sys:String>Enter</sys:String>
+                                                                        <sys:String>Up</sys:String>
+                                                                        <sys:String>Down</sys:String>
+                                                                        <sys:String>Left</sys:String>
+                                                                        <sys:String>Right</sys:String>
+                                                                        <sys:String>Escape</sys:String>
+                                                                        <sys:String>Click</sys:String>
+                                                                        <sys:String>Launch</sys:String>
+                                                                        <sys:String>Wait</sys:String>
+                                                                    </x:Array>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                            <Setter Property="SelectedItem" Value="{Binding Action, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                        </Style>
+                                                    </DataGridComboBoxColumn.ElementStyle>
+                                                    <DataGridComboBoxColumn.EditingElementStyle>
+                                                        <Style TargetType="ComboBox">
+                                                            <Setter Property="ItemsSource">
+                                                                <Setter.Value>
+                                                                    <x:Array Type="sys:String" xmlns:sys="clr-namespace:System;assembly=mscorlib">
+                                                                        <sys:String>Tab</sys:String>
+                                                                        <sys:String>Enter</sys:String>
+                                                                        <sys:String>Up</sys:String>
+                                                                        <sys:String>Down</sys:String>
+                                                                        <sys:String>Left</sys:String>
+                                                                        <sys:String>Right</sys:String>
+                                                                        <sys:String>Escape</sys:String>
+                                                                        <sys:String>Click</sys:String>
+                                                                        <sys:String>Launch</sys:String>
+                                                                        <sys:String>Wait</sys:String>
+                                                                    </x:Array>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                            <Setter Property="SelectedItem" Value="{Binding Action, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                        </Style>
+                                                    </DataGridComboBoxColumn.EditingElementStyle>
+                                                </DataGridComboBoxColumn>
 
-                                            <!-- Detail: Action Editor -->
-                                            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto"
-                                                          Background="{DynamicResource BackgroundBrush}">
-                                                <ContentControl Content="{Binding SelectedNavigationAction}"
-                                                                ContentTemplateSelector="{StaticResource ActionEditorTemplateSelector}"
-                                                                Margin="10"/>
+                                                <!-- Description Column (editable) -->
+                                                <DataGridTextColumn Header="Description" Binding="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="120">
+                                                    <DataGridTextColumn.ElementStyle>
+                                                        <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextCellStyle}"/>
+                                                    </DataGridTextColumn.ElementStyle>
+                                                </DataGridTextColumn>
+
+                                                <!-- Count Column (editable) -->
+                                                <DataGridTextColumn Header="Count" Binding="{Binding Count, UpdateSourceTrigger=PropertyChanged}" Width="60">
+                                                    <DataGridTextColumn.ElementStyle>
+                                                        <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextCellStyle}"/>
+                                                    </DataGridTextColumn.ElementStyle>
+                                                </DataGridTextColumn>
+
+                                                <!-- Delay Column (editable) -->
+                                                <DataGridTextColumn Header="Delay (ms)" Binding="{Binding DelayMs, UpdateSourceTrigger=PropertyChanged}" Width="80">
+                                                    <DataGridTextColumn.ElementStyle>
+                                                        <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextCellStyle}"/>
+                                                    </DataGridTextColumn.ElementStyle>
+                                                </DataGridTextColumn>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+
+                                        <!-- Detail Panel (below grid for complex actions) -->
+                                        <GroupBox Grid.Row="2" Header="Action Properties" Padding="12"
+                                                  Visibility="{Binding HasNavigationActionSelected, Converter={StaticResource BoolToVisConverter}}"
+                                                  Background="{DynamicResource CardBackgroundBrush}"
+                                                  BorderBrush="{DynamicResource BorderBrush}">
+                                            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="300">
+                                                <StackPanel>
+                                                    <!-- Common Properties (always visible) -->
+                                                    <TextBlock Text="Common Properties" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
+                                                    <Grid Margin="0,0,0,12">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="120"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                        </Grid.RowDefinitions>
+
+                                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Action Type:" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                                                        <ComboBox Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"
+                                                                  SelectedValuePath="Content"
+                                                                  SelectedValue="{Binding SelectedNavigationAction.Action, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                                                            <ComboBoxItem Content="Tab"/>
+                                                            <ComboBoxItem Content="Enter"/>
+                                                            <ComboBoxItem Content="Up"/>
+                                                            <ComboBoxItem Content="Down"/>
+                                                            <ComboBoxItem Content="Left"/>
+                                                            <ComboBoxItem Content="Right"/>
+                                                            <ComboBoxItem Content="Escape"/>
+                                                            <ComboBoxItem Content="Click"/>
+                                                            <ComboBoxItem Content="Launch"/>
+                                                            <ComboBoxItem Content="Wait"/>
+                                                        </ComboBox>
+
+                                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Description:" VerticalAlignment="Top" Margin="0,0,0,8"/>
+                                                        <TextBox Grid.Row="1" Grid.Column="1"
+                                                                 Text="{Binding SelectedNavigationAction.Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                 Height="50" TextWrapping="Wrap" AcceptsReturn="True" Margin="0,0,0,8"/>
+
+                                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Repeat Count:" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                                                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SelectedNavigationAction.Count, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8"/>
+
+                                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Delay After (ms):" VerticalAlignment="Center"/>
+                                                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding SelectedNavigationAction.DelayMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    </Grid>
+
+                                                    <!-- Click Properties (visible only for Click actions) -->
+                                                    <Border Visibility="{Binding SelectedNavigationAction, Converter={StaticResource IsClickActionToVisConverter}}"
+                                                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12"
+                                                            Background="{DynamicResource SurfaceBrush}">
+                                                        <StackPanel>
+                                                            <TextBlock Text="Click Position" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
+                                                            <TextBlock Text="Coordinates are relative to the detected template (0.0 = left/top edge, 1.0 = right/bottom edge)"
+                                                                       FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                                                            <Grid Margin="0,0,0,8">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="60"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="80"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Grid.Column="0" Text="Click X:" VerticalAlignment="Center"/>
+                                                                <Slider Grid.Column="1" Minimum="0.0" Maximum="1.0" TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                                                        Value="{Binding SelectedNavigationAction.ClickX, Mode=TwoWay}" Margin="8,0"/>
+                                                                <TextBox Grid.Column="2" Text="{Binding SelectedNavigationAction.ClickX, StringFormat=F2, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                            </Grid>
+
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="60"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="80"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Grid.Column="0" Text="Click Y:" VerticalAlignment="Center"/>
+                                                                <Slider Grid.Column="1" Minimum="0.0" Maximum="1.0" TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                                                        Value="{Binding SelectedNavigationAction.ClickY, Mode=TwoWay}" Margin="8,0"/>
+                                                                <TextBox Grid.Column="2" Text="{Binding SelectedNavigationAction.ClickY, StringFormat=F2, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                            </Grid>
+
+                                                            <Border Background="{DynamicResource InfoBackgroundBrush}" BorderBrush="{DynamicResource InfoBorderBrush}"
+                                                                    BorderThickness="1" CornerRadius="3" Padding="8" Margin="0,8,0,0">
+                                                                <StackPanel>
+                                                                    <TextBlock FontSize="10" FontWeight="SemiBold" Margin="0,0,0,3" Foreground="{DynamicResource InfoTextBrush}">Common Positions:</TextBlock>
+                                                                    <TextBlock FontSize="10" Foreground="{DynamicResource InfoTextBrush}">• Center: X=0.5, Y=0.5</TextBlock>
+                                                                    <TextBlock FontSize="10" Foreground="{DynamicResource InfoTextBrush}">• Top-Left: X=0.0, Y=0.0</TextBlock>
+                                                                    <TextBlock FontSize="10" Foreground="{DynamicResource InfoTextBrush}">• Top-Right: X=1.0, Y=0.0</TextBlock>
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <!-- Launch Properties (visible only for Launch actions) -->
+                                                    <Border Visibility="{Binding IsLaunchActionSelected, Converter={StaticResource BoolToVisConverter}}"
+                                                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12"
+                                                            Background="{DynamicResource SurfaceBrush}">
+                                                        <StackPanel>
+                                                            <TextBlock Text="Application Launch Settings" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
+
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="140"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <Grid.RowDefinitions>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                </Grid.RowDefinitions>
+
+                                                                <!-- Application Name -->
+                                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Application:" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                                                                <ComboBox Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"
+                                                                          ItemsSource="{Binding AvailableApplications}"
+                                                                          DisplayMemberPath="Name"
+                                                                          SelectedValuePath="Name"
+                                                                          SelectedValue="{Binding LaunchApplicationName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                          ToolTip="Select the application to launch (configured in Settings)"/>
+
+                                                                <!-- Skip Options -->
+                                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Skip Options:" VerticalAlignment="Top" Margin="0,0,0,8"/>
+                                                                <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
+                                                                    <CheckBox Content="Skip if already running"
+                                                                              IsChecked="{Binding LaunchAllowSkipIfRunning, Mode=TwoWay}"
+                                                                              Margin="0,0,0,4"
+                                                                              ToolTip="Skip launching if process is already running"/>
+                                                                    <CheckBox Content="Skip if not configured"
+                                                                              IsChecked="{Binding LaunchAllowSkipIfNotConfigured, Mode=TwoWay}"
+                                                                              ToolTip="Skip without error if application is not in settings"/>
+                                                                </StackPanel>
+                                                            </Grid>
+
+                                                            <TextBlock Text="💡 Configure external applications in Settings → External Applications"
+                                                                       FontSize="10" FontStyle="Italic" Foreground="{DynamicResource SecondaryTextBrush}"
+                                                                       TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <!-- Wait Properties (visible only for Wait actions) -->
+                                                    <Border Visibility="{Binding IsWaitActionSelected, Converter={StaticResource BoolToVisConverter}}"
+                                                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8"
+                                                            Background="{DynamicResource SurfaceBrush}">
+                                                        <StackPanel>
+                                                            <TextBlock Text="Wait Duration" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
+                                                            <TextBlock Text="Use the 'Delay After (ms)' field above to set the wait duration."
+                                                                       FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </StackPanel>
                                             </ScrollViewer>
-                                        </Grid>
-                                    </Border>
+                                        </GroupBox>
+                                    </Grid>
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
@@ -840,25 +1135,16 @@
                 BorderThickness="0,1,0,0"
                 Padding="16,12"
                 Margin="0,16,0,0">
-            <Grid>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                    <TextBlock Text="💡 Tip: "
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource AccentBrush}"
-                               VerticalAlignment="Center"/>
-                    <TextBlock Text="Changes to workflows are saved automatically when you click 'Save Changes'. Test your workflows before using them in production."
-                               FontSize="12"
-                               Foreground="{DynamicResource SecondaryTextBrush}"
-                               VerticalAlignment="Center"/>
-                </StackPanel>
-
-                <Button Content="Close"
-                        Width="100"
-                        Height="32"
-                        HorizontalAlignment="Right"
-                        Click="CloseButton_Click"
-                        Style="{StaticResource SecondaryButton}"/>
-            </Grid>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                <TextBlock Text="💡 Tip: "
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource AccentBrush}"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="Changes to workflows are saved automatically when you click 'Save Changes'. Test your workflows before using them in production."
+                           FontSize="12"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
         </Border>
 
         <!-- Loading Overlay -->

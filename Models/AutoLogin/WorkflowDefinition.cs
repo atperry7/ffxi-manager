@@ -305,13 +305,13 @@ namespace FFXIManager.Models.AutoLogin
         /// <summary>
         /// Gets steps that should execute based on enabled status and conditions
         /// </summary>
-        /// <param name="conditionEvaluator">Function to evaluate conditional expressions</param>
+        /// <param name="conditionEvaluator">Function to evaluate conditional logic (receives full step for application-based checks)</param>
         /// <returns>Filtered list of executable steps</returns>
-        public List<WorkflowStepDefinition> GetExecutableSteps(Func<string?, bool>? conditionEvaluator = null)
+        public List<WorkflowStepDefinition> GetExecutableSteps(Func<WorkflowStepDefinition, bool>? conditionEvaluator = null)
         {
             return Steps
                 .Where(s => s.IsEnabled)
-                .Where(s => string.IsNullOrEmpty(s.Condition) || (conditionEvaluator?.Invoke(s.Condition) ?? true))
+                .Where(s => conditionEvaluator?.Invoke(s) ?? true)
                 .OrderBy(s => s.Order)
                 .ToList();
         }

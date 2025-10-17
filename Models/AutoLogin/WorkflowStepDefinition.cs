@@ -97,11 +97,30 @@ namespace FFXIManager.Models.AutoLogin
         /// Optional conditional expression that determines if this step should execute.
         /// Examples: "Account.IsOTPEnabled", "!Account.UseWindower"
         /// Null or empty means always execute (if enabled).
+        /// DEPRECATED: Use SkipIfApplicationRunning for application-based conditions.
         /// </summary>
+        [Obsolete("Use SkipIfApplicationRunning for application-based skip conditions")]
         public string? Condition
         {
             get => _condition;
             set => SetProperty(ref _condition, value);
+        }
+
+        private string? _skipIfApplicationRunning;
+
+        /// <summary>
+        /// Name of external application that, if running, causes this step to be skipped.
+        /// Uses same application names from External Applications settings (e.g., "POL Proxy", "Windower").
+        /// Null or empty means no application-based skip condition.
+        /// </summary>
+        /// <remarks>
+        /// Example: Steps for "Play Screen" navigation can be skipped if POL Proxy is running,
+        /// since POL Proxy bypasses the PlayOnline play screen.
+        /// </remarks>
+        public string? SkipIfApplicationRunning
+        {
+            get => _skipIfApplicationRunning;
+            set => SetProperty(ref _skipIfApplicationRunning, value);
         }
 
         /// <summary>
@@ -136,24 +155,43 @@ namespace FFXIManager.Models.AutoLogin
         /// </summary>
         public NavigationAction? Navigation { get; set; }
 
+        private int _maxRetryAttempts = 3;
+        private int? _retryAttempts;
+        private int? _retryDelayMs;
+        private int? _screenshotRetryCount;
+        private float _confidenceThreshold = 0.8f;
+        private int _tolerance = 5;
+
         /// <summary>
         /// Maximum number of retry attempts for this step if it fails.
         /// Default is 3. Set to 0 to disable retries.
         /// </summary>
-        public int MaxRetryAttempts { get; set; } = 3;
+        public int MaxRetryAttempts
+        {
+            get => _maxRetryAttempts;
+            set => SetProperty(ref _maxRetryAttempts, value);
+        }
 
         /// <summary>
         /// Number of retry attempts for template detection.
         /// Used when waiting for application UI to be ready or screen to appear.
         /// Default is 30.
         /// </summary>
-        public int? RetryAttempts { get; set; }
+        public int? RetryAttempts
+        {
+            get => _retryAttempts;
+            set => SetProperty(ref _retryAttempts, value);
+        }
 
         /// <summary>
         /// Delay in milliseconds between template detection retry attempts.
         /// Default is 500ms.
         /// </summary>
-        public int? RetryDelayMs { get; set; }
+        public int? RetryDelayMs
+        {
+            get => _retryDelayMs;
+            set => SetProperty(ref _retryDelayMs, value);
+        }
 
         /// <summary>
         /// Number of retry attempts for screenshot capture within each detection attempt.
@@ -166,7 +204,11 @@ namespace FFXIManager.Models.AutoLogin
         /// separate from template detection attempts. Each detection attempt will retry
         /// screenshot capture this many times before failing.
         /// </remarks>
-        public int? ScreenshotRetryCount { get; set; }
+        public int? ScreenshotRetryCount
+        {
+            get => _screenshotRetryCount;
+            set => SetProperty(ref _screenshotRetryCount, value);
+        }
 
         /// <summary>
         /// Confidence threshold for template matching (0.0 to 1.0).
@@ -178,7 +220,11 @@ namespace FFXIManager.Models.AutoLogin
         /// This property replaces the need for separate template JSON metadata files.
         /// All template matching configuration is now centralized in the workflow step definition.
         /// </remarks>
-        public float ConfidenceThreshold { get; set; } = 0.8f;
+        public float ConfidenceThreshold
+        {
+            get => _confidenceThreshold;
+            set => SetProperty(ref _confidenceThreshold, value);
+        }
 
         /// <summary>
         /// Position tolerance in pixels for template matching.
@@ -189,7 +235,11 @@ namespace FFXIManager.Models.AutoLogin
         /// This property replaces the need for separate template JSON metadata files.
         /// All template matching configuration is now centralized in the workflow step definition.
         /// </remarks>
-        public int Tolerance { get; set; } = 5;
+        public int Tolerance
+        {
+            get => _tolerance;
+            set => SetProperty(ref _tolerance, value);
+        }
 
         /// <summary>
         /// Additional metadata for extensibility.
@@ -263,6 +313,7 @@ namespace FFXIManager.Models.AutoLogin
                 IsEnabled = IsEnabled,
                 IsOptional = IsOptional,
                 Condition = Condition,
+                SkipIfApplicationRunning = SkipIfApplicationRunning,
                 EstimatedDurationSeconds = EstimatedDurationSeconds,
                 FallbackTemplatePaths = new List<string>(FallbackTemplatePaths),
                 Navigation = Navigation,

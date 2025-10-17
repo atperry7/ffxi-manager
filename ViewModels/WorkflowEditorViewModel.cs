@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using FFXIManager.Infrastructure;
 using FFXIManager.Models;
 using FFXIManager.Models.AutoLogin;
@@ -30,18 +31,23 @@ namespace FFXIManager.ViewModels
         private readonly ITemplateManagementService _templateService;
         private readonly IScreenshotCaptureService _screenshotService;
         private readonly IServiceProvider _serviceProvider;
+        private readonly IExternalApplicationService _externalApplicationService;
 
         private ObservableCollection<WorkflowDefinition> _workflows;
+        private ObservableCollection<ExternalApplication> _availableApplications;
         private WorkflowDefinition? _selectedWorkflow;
         private WorkflowStepDefinition? _selectedStep;
         private KeyboardAction? _selectedNavigationAction;
+        private BitmapImage? _templateImageSource;
         private bool _isLoading;
         private bool _hasUnsavedChanges;
         private bool _disposed;
         private CancellationTokenSource _cancellationTokenSource = new();
 
         // Event subscription tracking to prevent memory leaks
+        private WorkflowDefinition? _subscribedWorkflow;
         private WorkflowStepDefinition? _subscribedStep;
+        private NavigationAction? _subscribedNavigation;
         private ObservableCollection<KeyboardAction>? _subscribedSequence;
         private readonly List<KeyboardAction> _subscribedActions = new();
 
@@ -53,7 +59,8 @@ namespace FFXIManager.ViewModels
             WorkflowTaskBuilder taskBuilder,
             ITemplateManagementService templateService,
             IScreenshotCaptureService screenshotService,
-            IServiceProvider serviceProvider)
+            IServiceProvider serviceProvider,
+            IExternalApplicationService externalApplicationService)
         {
             _workflowService = workflowService ?? throw new ArgumentNullException(nameof(workflowService));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
@@ -63,8 +70,10 @@ namespace FFXIManager.ViewModels
             _templateService = templateService ?? throw new ArgumentNullException(nameof(templateService));
             _screenshotService = screenshotService ?? throw new ArgumentNullException(nameof(screenshotService));
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+            _externalApplicationService = externalApplicationService ?? throw new ArgumentNullException(nameof(externalApplicationService));
 
             _workflows = new ObservableCollection<WorkflowDefinition>();
+            _availableApplications = new ObservableCollection<ExternalApplication>();
 
             InitializeCommands();
             _ = LoadDataAsync();
@@ -91,10 +100,17 @@ namespace FFXIManager.ViewModels
             {
                 if (SetProperty(ref _selectedWorkflow, value))
                 {
+                    // Unsubscribe from previous workflow
+                    UnsubscribeFromWorkflowChanges();
+
                     SelectedStep = null;
                     OnPropertyChanged(nameof(HasWorkflowSelected));
                     OnPropertyChanged(nameof(CanEditWorkflow));
                     OnPropertyChanged(nameof(WorkflowSteps));
+
+                    // Subscribe to new workflow
+                    SubscribeToWorkflowChanges();
+
                     UpdateCommandStates();
                 }
             }
@@ -118,6 +134,9 @@ namespace FFXIManager.ViewModels
                     OnPropertyChanged(nameof(NavigationActions));
                     OnPropertyChanged(nameof(HasNavigationAction));
                     SelectedNavigationAction = null;
+
+                    // Load template image preview
+                    LoadTemplateImage();
 
                     // Subscribe to new step
                     SubscribeToStepChanges();
@@ -177,6 +196,15 @@ namespace FFXIManager.ViewModels
         public ObservableCollection<WorkflowStepDefinition>? WorkflowSteps => SelectedWorkflow?.Steps;
 
         /// <summary>
+        /// Available external applications for dropdown binding in step editor
+        /// </summary>
+        public ObservableCollection<ExternalApplication> AvailableApplications
+        {
+            get => _availableApplications;
+            set => SetProperty(ref _availableApplications, value);
+        }
+
+        /// <summary>
         /// Currently selected navigation action within the step's navigation sequence
         /// </summary>
         public KeyboardAction? SelectedNavigationAction
@@ -188,6 +216,11 @@ namespace FFXIManager.ViewModels
                 {
                     OnPropertyChanged(nameof(HasNavigationActionSelected));
                     OnPropertyChanged(nameof(CanEditNavigationAction));
+                    OnPropertyChanged(nameof(IsLaunchActionSelected));
+                    OnPropertyChanged(nameof(IsWaitActionSelected));
+                    OnPropertyChanged(nameof(LaunchApplicationName));
+                    OnPropertyChanged(nameof(LaunchAllowSkipIfRunning));
+                    OnPropertyChanged(nameof(LaunchAllowSkipIfNotConfigured));
                     UpdateCommandStates();
                 }
             }
@@ -212,6 +245,87 @@ namespace FFXIManager.ViewModels
         /// Whether the selected navigation action can be edited
         /// </summary>
         public bool CanEditNavigationAction => SelectedNavigationAction != null && CanEditStep;
+
+        /// <summary>
+        /// Whether the selected navigation action is a Launch action
+        /// </summary>
+        public bool IsLaunchActionSelected => SelectedNavigationAction?.Action == "Launch";
+
+        /// <summary>
+        /// Whether the selected navigation action is a Wait action
+        /// </summary>
+        public bool IsWaitActionSelected => SelectedNavigationAction?.Action == "Wait";
+
+        /// <summary>
+        /// Template image source for thumbnail preview
+        /// </summary>
+        public BitmapImage? TemplateImageSource
+        {
+            get => _templateImageSource;
+            set
+            {
+                if (SetProperty(ref _templateImageSource, value))
+                {
+                    OnPropertyChanged(nameof(HasTemplateImage));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Whether the selected step has a template image
+        /// </summary>
+        public bool HasTemplateImage => TemplateImageSource != null;
+
+        /// <summary>
+        /// Application name for Launch actions (from Parameters dictionary)
+        /// </summary>
+        public string? LaunchApplicationName
+        {
+            get => SelectedNavigationAction?.GetParameter<string?>("ApplicationName", null);
+            set
+            {
+                if (SelectedNavigationAction != null && value != null)
+                {
+                    SelectedNavigationAction.SetParameter("ApplicationName", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Skip if running flag for Launch actions (from Parameters dictionary)
+        /// </summary>
+        public bool LaunchAllowSkipIfRunning
+        {
+            get => SelectedNavigationAction?.GetParameter<bool>("AllowSkipIfRunning", false) ?? false;
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("AllowSkipIfRunning", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Skip if not configured flag for Launch actions (from Parameters dictionary)
+        /// </summary>
+        public bool LaunchAllowSkipIfNotConfigured
+        {
+            get => SelectedNavigationAction?.GetParameter<bool>("AllowSkipIfNotConfigured", true) ?? true;
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("AllowSkipIfNotConfigured", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
 
         #endregion
 
@@ -244,7 +358,7 @@ namespace FFXIManager.ViewModels
         // Template image management commands
         public ICommand SelectTemplateImageCommand { get; private set; } = null!;
         public ICommand ReplaceTemplateImageCommand { get; private set; } = null!;
-        public ICommand ViewTemplateImageCommand { get; private set; } = null!;
+        public ICommand ShowLargeTemplateImageCommand { get; private set; } = null!;
 
         private void InitializeCommands()
         {
@@ -332,9 +446,9 @@ namespace FFXIManager.ViewModels
                 async () => await ReplaceTemplateImageAsync(),
                 () => CanEditStep && !string.IsNullOrEmpty(SelectedStep?.TemplatePath));
 
-            ViewTemplateImageCommand = new RelayCommand(
-                async () => await ViewTemplateImageAsync(),
-                () => HasStepSelected && !string.IsNullOrEmpty(SelectedStep?.TemplatePath));
+            ShowLargeTemplateImageCommand = new RelayCommand(
+                async () => await ShowLargeTemplateImageAsync(),
+                () => HasTemplateImage);
         }
 
         #endregion
@@ -1053,44 +1167,6 @@ namespace FFXIManager.ViewModels
             }
         }
 
-        /// <summary>
-        /// Opens a dialog to view the current template image with click point visualization
-        /// </summary>
-        private async Task ViewTemplateImageAsync()
-        {
-            if (SelectedStep == null || string.IsNullOrEmpty(SelectedStep.TemplatePath))
-                return;
-
-            try
-            {
-                // Get the dialog and ViewModel from DI
-                var viewModel = _serviceProvider.GetService(typeof(TemplateViewerDialogViewModel)) as TemplateViewerDialogViewModel;
-                var dialog = _serviceProvider.GetService(typeof(FFXIManager.Views.TemplateViewerDialog)) as System.Windows.Window;
-
-                if (viewModel == null || dialog == null)
-                {
-                    await _dialogService.ShowMessageDialogAsync("Dialog Error",
-                        "Failed to create template viewer dialog");
-                    return;
-                }
-
-                // Load the template with click markers based on navigation sequence
-                await viewModel.LoadTemplateAsync(SelectedStep.TemplatePath, SelectedStep.Navigation?.Sequence);
-
-                // Show the dialog
-                dialog.Owner = System.Windows.Application.Current?.MainWindow;
-                dialog.ShowDialog();
-
-                await _loggingService.LogDebugAsync($"Template viewer closed for: {SelectedStep.TemplatePath}");
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync("Error viewing template image", ex);
-                await _dialogService.ShowMessageDialogAsync("View Failed",
-                    $"Failed to view template image: {ex.Message}");
-            }
-        }
-
         #endregion
 
         #region Helper Methods
@@ -1098,6 +1174,31 @@ namespace FFXIManager.ViewModels
         private async Task LoadDataAsync()
         {
             await LoadWorkflowsAsync();
+            await LoadAvailableApplicationsAsync();
+        }
+
+        private async Task LoadAvailableApplicationsAsync()
+        {
+            try
+            {
+                var applications = await _externalApplicationService.GetApplicationsAsync();
+
+                await _uiDispatcher.InvokeAsync(() =>
+                {
+                    AvailableApplications.Clear();
+                    foreach (var app in applications.OrderBy(a => a.Name))
+                    {
+                        AvailableApplications.Add(app);
+                    }
+                });
+
+                await _loggingService.LogDebugAsync($"Loaded {applications.Count} external applications for workflow editor");
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error loading external applications", ex);
+                // Don't show error to user - applications are optional for workflow editing
+            }
         }
 
         private void UpdateCommandStates()
@@ -1121,7 +1222,35 @@ namespace FFXIManager.ViewModels
             (ValidateWorkflowCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (SelectTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (ReplaceTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
-            (ViewTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (ShowLargeTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        }
+
+        /// <summary>
+        /// Subscribes to property changes on the currently selected workflow
+        /// </summary>
+        private void SubscribeToWorkflowChanges()
+        {
+            if (_selectedWorkflow == null) return;
+
+            // Subscribe to workflow property changes
+            if (_selectedWorkflow is INotifyPropertyChanged workflowNotifier)
+            {
+                workflowNotifier.PropertyChanged += OnWorkflowPropertyChanged;
+                _subscribedWorkflow = _selectedWorkflow;
+            }
+        }
+
+        /// <summary>
+        /// Unsubscribes from property changes on the previously selected workflow
+        /// </summary>
+        private void UnsubscribeFromWorkflowChanges()
+        {
+            // Unsubscribe from workflow property changes
+            if (_subscribedWorkflow is INotifyPropertyChanged workflowNotifier)
+            {
+                workflowNotifier.PropertyChanged -= OnWorkflowPropertyChanged;
+                _subscribedWorkflow = null;
+            }
         }
 
         /// <summary>
@@ -1138,6 +1267,13 @@ namespace FFXIManager.ViewModels
                 _subscribedStep = _selectedStep;
             }
 
+            // Subscribe to navigation property changes
+            if (_selectedStep.Navigation is INotifyPropertyChanged navigationNotifier)
+            {
+                navigationNotifier.PropertyChanged += OnNavigationPropertyChanged;
+                _subscribedNavigation = _selectedStep.Navigation;
+            }
+
             // Subscribe to navigation sequence changes
             SubscribeToNavigationSequenceChanges();
         }
@@ -1152,6 +1288,13 @@ namespace FFXIManager.ViewModels
             {
                 stepNotifier.PropertyChanged -= OnStepPropertyChanged;
                 _subscribedStep = null;
+            }
+
+            // Unsubscribe from navigation property changes
+            if (_subscribedNavigation is INotifyPropertyChanged navigationNotifier)
+            {
+                navigationNotifier.PropertyChanged -= OnNavigationPropertyChanged;
+                _subscribedNavigation = null;
             }
 
             // Unsubscribe from navigation sequence changes
@@ -1220,11 +1363,35 @@ namespace FFXIManager.ViewModels
         }
 
         /// <summary>
+        /// Event handler for workflow property changes
+        /// </summary>
+        private void OnWorkflowPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            // Any property change on the workflow means unsaved changes
+            HasUnsavedChanges = true;
+        }
+
+        /// <summary>
         /// Event handler for step property changes
         /// </summary>
         private void OnStepPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             // Any property change on the step means unsaved changes
+            HasUnsavedChanges = true;
+
+            // Reload template image if TemplatePath changed
+            if (e.PropertyName == nameof(WorkflowStepDefinition.TemplatePath))
+            {
+                LoadTemplateImage();
+            }
+        }
+
+        /// <summary>
+        /// Event handler for navigation property changes (Description, PostNavigationDelayMs)
+        /// </summary>
+        private void OnNavigationPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            // Any property change on navigation means unsaved changes
             HasUnsavedChanges = true;
         }
 
@@ -1261,6 +1428,118 @@ namespace FFXIManager.ViewModels
         {
             // Any property change on a navigation action means unsaved changes
             HasUnsavedChanges = true;
+
+            // If the Action property changed, notify the UI to update visibility of detail panels
+            if (e.PropertyName == nameof(KeyboardAction.Action) && sender == SelectedNavigationAction)
+            {
+                OnPropertyChanged(nameof(IsLaunchActionSelected));
+                OnPropertyChanged(nameof(IsWaitActionSelected));
+                OnPropertyChanged(nameof(LaunchApplicationName));
+                OnPropertyChanged(nameof(LaunchAllowSkipIfRunning));
+                OnPropertyChanged(nameof(LaunchAllowSkipIfNotConfigured));
+            }
+        }
+
+        /// <summary>
+        /// Loads the template image for the currently selected step
+        /// </summary>
+        private void LoadTemplateImage()
+        {
+            try
+            {
+                // Clear previous image
+                TemplateImageSource = null;
+                OnPropertyChanged(nameof(HasTemplateImage));
+
+                if (SelectedStep == null || string.IsNullOrWhiteSpace(SelectedStep.TemplatePath))
+                    return;
+
+                // Construct template file path
+                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var templatesPath = System.IO.Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
+                var templateFileName = SelectedStep.TemplatePath.EndsWith(".png")
+                    ? SelectedStep.TemplatePath
+                    : $"{SelectedStep.TemplatePath}.png";
+                var templateFilePath = System.IO.Path.Combine(templatesPath, templateFileName);
+
+                if (!System.IO.File.Exists(templateFilePath))
+                {
+                    _ = _loggingService.LogDebugAsync($"Template file not found: {templateFilePath}");
+                    return;
+                }
+
+                // Load image with BitmapCacheOption.OnLoad to avoid file locking
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.UriSource = new Uri(templateFilePath, UriKind.Absolute);
+                bitmap.DecodePixelHeight = 100; // Thumbnail height
+                bitmap.EndInit();
+                bitmap.Freeze(); // Make it thread-safe
+
+                TemplateImageSource = bitmap;
+                OnPropertyChanged(nameof(HasTemplateImage));
+
+                _ = _loggingService.LogDebugAsync($"Loaded template thumbnail: {templateFileName}");
+            }
+            catch (Exception ex)
+            {
+                _ = _loggingService.LogErrorAsync("Error loading template image", ex);
+                TemplateImageSource = null;
+                OnPropertyChanged(nameof(HasTemplateImage));
+            }
+        }
+
+        /// <summary>
+        /// Shows the template image in a large popup window
+        /// </summary>
+        private async Task ShowLargeTemplateImageAsync()
+        {
+            if (SelectedStep == null || string.IsNullOrWhiteSpace(SelectedStep.TemplatePath))
+                return;
+
+            try
+            {
+                // Construct template file path
+                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var templatesPath = System.IO.Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
+                var templateFileName = SelectedStep.TemplatePath.EndsWith(".png")
+                    ? SelectedStep.TemplatePath
+                    : $"{SelectedStep.TemplatePath}.png";
+                var templateFilePath = System.IO.Path.Combine(templatesPath, templateFileName);
+
+                if (!System.IO.File.Exists(templateFilePath))
+                {
+                    await _dialogService.ShowMessageDialogAsync("Template Not Found",
+                        $"Template file not found:\n{templateFilePath}");
+                    return;
+                }
+
+                // Create a simple window to display the image
+                var window = new System.Windows.Window
+                {
+                    Title = $"Template Preview: {SelectedStep.DisplayName}",
+                    Width = 800,
+                    Height = 600,
+                    WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
+                    Owner = System.Windows.Application.Current?.MainWindow,
+                    Content = new System.Windows.Controls.Image
+                    {
+                        Source = new BitmapImage(new Uri(templateFilePath, UriKind.Absolute)),
+                        Stretch = System.Windows.Media.Stretch.Uniform
+                    }
+                };
+
+                window.ShowDialog();
+
+                await _loggingService.LogDebugAsync($"Showed large template image: {templateFileName}");
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error showing large template image", ex);
+                await _dialogService.ShowMessageDialogAsync("Display Error",
+                    $"Failed to display template image: {ex.Message}");
+            }
         }
 
         #endregion
@@ -1273,6 +1552,7 @@ namespace FFXIManager.ViewModels
             _disposed = true;
 
             // Unsubscribe from all event handlers to prevent memory leaks
+            UnsubscribeFromWorkflowChanges();
             UnsubscribeFromStepChanges();
 
             _cancellationTokenSource?.Cancel();
