@@ -15,7 +15,7 @@ namespace FFXIManager.Services.AutoLogin
     /// <remarks>
     /// **Responsibilities:**
     /// - Convert workflow definitions to executable subtask sequences
-    /// - Evaluate conditional steps based on account properties
+    /// - Evaluate application-based skip logic (SkipIfApplicationRunning)
     /// - Link subtasks to workflow steps for execution by DynamicWorkflowHandler
     ///
     /// **Design:**
@@ -107,19 +107,13 @@ namespace FFXIManager.Services.AutoLogin
         }
 
         /// <summary>
-        /// Creates a condition evaluator function for the given account.
-        /// Evaluates conditional expressions and application-based skip logic in workflow steps.
+        /// Creates a condition evaluator function that checks application-based skip logic.
         /// </summary>
         /// <remarks>
-        /// **Supported Condition Syntax:**
-        /// - Account.IsOTPEnabled
-        /// - Account.UseWindower
-        /// - !Account.IsOTPEnabled
-        /// - Account.Region == "NA"
-        ///
         /// **Application-Based Skip Logic:**
         /// - Checks WorkflowStepDefinition.SkipIfApplicationRunning
         /// - If specified application is running, step is skipped
+        /// - Otherwise, step is always executed
         /// </remarks>
         private async Task<Func<WorkflowStepDefinition, bool>> CreateConditionEvaluatorAsync(PlayOnlineMemberAccount account)
         {
@@ -134,7 +128,7 @@ namespace FFXIManager.Services.AutoLogin
 
             return step =>
             {
-                // First check SkipIfApplicationRunning
+                // Check SkipIfApplicationRunning
                 if (!string.IsNullOrWhiteSpace(step.SkipIfApplicationRunning))
                 {
                     if (runningAppNames.Contains(step.SkipIfApplicationRunning))
@@ -144,97 +138,8 @@ namespace FFXIManager.Services.AutoLogin
                     }
                 }
 
-                // Then check legacy Condition property
-                if (string.IsNullOrWhiteSpace(step.Condition))
-                    return true; // No condition means always execute
-
-                try
-                {
-                    return EvaluateCondition(step.Condition, account);
-                }
-                catch (Exception ex)
-                {
-                    // Log warning but don't fail - default to executing the step
-                    _loggingService.LogWarningAsync($"Failed to evaluate condition '{step.Condition}': {ex.Message}").Wait();
-                    return true;
-                }
+                return true; // No skip condition, always execute
             };
-        }
-
-        /// <summary>
-        /// Evaluates a conditional expression against an account.
-        /// Simple property-based evaluation for Phase 2.
-        /// </summary>
-        /// <remarks>
-        /// **Supported Properties:**
-        /// - Account.IsOTPEnabled: bool
-        /// - Account.HasStoredPassword: bool
-        /// - Account.POLMemberSlot: int
-        /// - Account.FFXICharacterSlot: int
-        /// </remarks>
-        private bool EvaluateCondition(string condition, PlayOnlineMemberAccount account)
-        {
-            // Normalize condition
-            condition = condition.Trim();
-
-            // Handle negation
-            bool negate = false;
-            if (condition.StartsWith("!"))
-            {
-                negate = true;
-                condition = condition.Substring(1).Trim();
-            }
-
-            // Evaluate property-based conditions
-            bool result = condition switch
-            {
-                // Boolean properties
-                "Account.IsOTPEnabled" => account.IsOTPEnabled,
-                "Account.HasStoredPassword" => account.HasStoredPassword,
-
-                // Slot-based conditions
-                var c when c.StartsWith("Account.POLMemberSlot ==") => EvaluatePOLSlotCondition(c, account),
-                var c when c.StartsWith("Account.FFXICharacterSlot ==") => EvaluateFFXISlotCondition(c, account),
-
-                // Add more conditions as needed
-                _ => throw new NotSupportedException($"Unsupported condition: {condition}")
-            };
-
-            return negate ? !result : result;
-        }
-
-        /// <summary>
-        /// Evaluates POL member slot conditions (e.g., "Account.POLMemberSlot == 1")
-        /// </summary>
-        private bool EvaluatePOLSlotCondition(string condition, PlayOnlineMemberAccount account)
-        {
-            var parts = condition.Split("==", StringSplitOptions.TrimEntries);
-            if (parts.Length != 2)
-                return false;
-
-            if (int.TryParse(parts[1], out var expectedSlot))
-            {
-                return account.POLMemberSlot == expectedSlot;
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Evaluates FFXI character slot conditions (e.g., "Account.FFXICharacterSlot == 1")
-        /// </summary>
-        private bool EvaluateFFXISlotCondition(string condition, PlayOnlineMemberAccount account)
-        {
-            var parts = condition.Split("==", StringSplitOptions.TrimEntries);
-            if (parts.Length != 2)
-                return false;
-
-            if (int.TryParse(parts[1], out var expectedSlot))
-            {
-                return account.FFXICharacterSlot == expectedSlot;
-            }
-
-            return false;
         }
 
         /// <summary>

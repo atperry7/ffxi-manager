@@ -144,11 +144,11 @@ The application uses **OpenCV (OpenCvSharp4)** for template matching to detect U
 - Templates are **detection-only** - all navigation is defined in workflow JSON files
 - Example: `member_selection_screen.png`, `login_information_screen.png`
 
-**Navigation System:**
-- **HybridNavigationStrategy** - Primary strategy: keyboard-first, click fallback
-- **KeyboardNavigationStrategy** - Pure keyboard navigation (Tab, Enter, etc.)
-- **RelativeClickNavigationStrategy** - Relative click coordinates (resolution-independent)
-- **Navigation sequences defined in workflow JSON files**, not in template metadata
+**Action Executor Pattern:**
+- **Unified action executor system** - All workflow actions route through `WorkflowActionExecutorFactory`
+- **Strategy Pattern** - Each action type has dedicated executor (InputPassword, InputOTP, MemberSlot, CharacterSlot, Click, Keyboard, Launch, Wait)
+- **Resolution-independent** - Click actions use template-relative coordinates (0.0-1.0)
+- **Data-driven** - Navigation sequences defined in workflow JSON files, executed by action executors
 
 ### Profile Management
 

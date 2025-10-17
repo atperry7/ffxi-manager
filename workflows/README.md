@@ -4,37 +4,43 @@ This directory contains workflow definitions for the FFXIManager auto-login syst
 
 ## Directory Structure
 
+**Source (application directory - flat structure):**
 ```
 workflows/
-├── defaults/                 # Source defaults in application directory (read-only)
-│   ├── playonline-standard.json
-│   └── templates/           # Template PNG files
-│       └── *.png
-└── README.md                # This file
+├── playonline-standard.json  # Default workflow files (GUID-based filenames)
+├── templates/                # Template PNG files (shared by all workflows)
+│   └── *.png
+└── README.md                 # This file
 ```
 
-User workflows are stored in a flat structure:
+**User workflows (APPDATA - flat structure):**
 ```
 %APPDATA%/FFXIManager/workflows/
-├── {workflow-guid-1}.json   # Default workflow copied with GUID filename
+├── {workflow-guid-1}.json   # Default workflow (copied from application directory)
 ├── {workflow-guid-2}.json   # Custom workflow
 ├── ...
-└── templates/               # Shared templates for all workflows
+└── templates/               # Template PNG files (shared by all workflows)
     └── *.png
 ```
 
 ## Default Workflows
 
 Default workflows are:
-- **Provided**: Shipped with FFXIManager in `workflows/defaults/` (application directory)
+- **Provided**: Shipped with FFXIManager in `workflows/` (application directory - flat structure)
 - **Copied on startup**: Automatically copied to APPDATA using GUID-based filenames
 - **Restorable**: Users can restore defaults if they make mistakes
 - **Cloneable**: Users can clone them to create custom variations
-- **Modifiable**: Users can modify default workflows freely without duplicates
+- **Modifiable**: Users can modify default workflows freely
 
-On application startup, default workflows are copied to:
+**Flat Structure Benefits:**
+- Simple file organization - all workflows at root level
+- No nested subdirectories for easier navigation
+- Templates shared in `templates/` subfolder
+
+On application startup, default workflows are copied from:
 ```
-%APPDATA%/FFXIManager/workflows/{workflow-guid}.json
+<AppDir>/workflows/*.json → %APPDATA%/FFXIManager/workflows/{workflow-guid}.json
+<AppDir>/workflows/templates/*.png → %APPDATA%/FFXIManager/workflows/templates/*.png
 ```
 
 ## Workflow File Format
@@ -62,7 +68,6 @@ Workflows are defined as JSON files with the following structure:
       "TemplatePath": "Application/template_name",
       "IsEnabled": true,
       "IsOptional": false,
-      "Condition": "Account.IsOTPEnabled",
       "EstimatedDurationSeconds": 5,
       "MaxRetryAttempts": 3,
       "Navigation": {
@@ -115,15 +120,6 @@ Workflows are defined as JSON files with the following structure:
 - `ClickX` and `ClickY` are relative coordinates (0.0 to 1.0)
 - `0.5, 0.5` represents the center of the window
 
-## Conditional Execution
-
-Steps can be conditionally executed using the `Condition` property:
-
-- `Account.IsOTPEnabled` - Execute only if OTP is enabled
-- `!Account.IsOTPEnabled` - Execute only if OTP is NOT enabled
-- `Account.UseWindower` - Execute only if using Windower
-- Leave empty or null for unconditional execution
-
 ## Creating Custom Workflows
 
 1. **Clone a Default Workflow**:
@@ -165,15 +161,14 @@ Templates are shared by all workflows (default and custom) in a centralized loca
 1. **Version Your Workflows**: Update the `Version` field when making changes
 2. **Use Descriptive Names**: Make it clear what the workflow accomplishes
 3. **Add Tags**: Use tags for easy filtering and categorization
-4. **Document Conditions**: Explain when conditional steps execute
-5. **Test Thoroughly**: Verify workflows work across different scenarios
-6. **Set Realistic Durations**: Estimate `EstimatedDurationSeconds` accurately
-7. **Keep Steps Atomic**: Each step should do one thing well
+4. **Test Thoroughly**: Verify workflows work across different scenarios
+5. **Set Realistic Durations**: Estimate `EstimatedDurationSeconds` accurately
+6. **Keep Steps Atomic**: Each step should do one thing well
 
 ## Troubleshooting
 
 - **Workflow Not Loading**: Check JSON syntax with a validator
-- **Step Not Executing**: Verify `IsEnabled` is true and condition is met
+- **Step Not Executing**: Verify `IsEnabled` is true
 - **Navigation Fails**: Check delays between actions (increase if needed)
 - **Template Not Found**: Verify template path and ensure template exists
 

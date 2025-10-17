@@ -163,48 +163,10 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- Enhanced Profile Transition Indicator -->
-                <Border Grid.Row="0"
-                        Background="{DynamicResource InfoBrush}"
-                        CornerRadius="8"
-                        Padding="12,8"
-                        Margin="0,0,0,8"
-                        Visibility="{Binding ShowProfileTransition, Converter={StaticResource BoolToVisConverter}}"
-                        BorderBrush="{DynamicResource InfoBrush}"
-                        BorderThickness="1">
-                    <Border.Effect>
-                        <DropShadowEffect Color="Black" Direction="270" ShadowDepth="2"
-                                          Opacity="0.2" BlurRadius="4"/>
-                    </Border.Effect>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🔄" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0">
-                            <TextBlock.RenderTransform>
-                                <RotateTransform/>
-                            </TextBlock.RenderTransform>
-                            <TextBlock.Triggers>
-                                <EventTrigger RoutedEvent="TextBlock.Loaded">
-                                    <BeginStoryboard>
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.Angle"
-                                                           From="0" To="360" Duration="0:0:2"/>
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-                            </TextBlock.Triggers>
-                        </TextBlock>
-                        <TextBlock Text="{Binding ProfileTransitionMessage}"
-                                   Foreground="White"
-                                   FontWeight="SemiBold"
-                                   FontSize="13"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Border>
-
                 <!-- Enhanced Active Queue Item Info -->
-                <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}"
+                <Border Grid.Row="0" Background="{DynamicResource SurfaceBrush}"
                         CornerRadius="6" Padding="12,8" Margin="0,0,0,8"
                         BorderBrush="{DynamicResource InfoBrush}" BorderThickness="1"
                         Visibility="{Binding CurrentItem, Converter={StaticResource NullToVisibilityConverter}}">

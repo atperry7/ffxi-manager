@@ -298,22 +298,6 @@ namespace FFXIManager.Models
         }
 
         /// <summary>
-        /// Updates the progress of the subtask with optional user-friendly message override
-        /// </summary>
-        /// <param name="progress">Progress percentage (0-100)</param>
-        /// <param name="message">Optional status message</param>
-        [System.Obsolete("Use UpdateProgressWithPhase instead for consistent phase-based progress reporting", false)]
-        public void UpdateProgress(int progress, string? message = null)
-        {
-            Progress = progress;
-            if (!string.IsNullOrEmpty(message))
-            {
-                // Convert technical messages to user-friendly ones
-                StatusMessage = ConvertToUserFriendlyMessage(message);
-            }
-        }
-
-        /// <summary>
         /// Updates progress with phase-based context for better user understanding
         /// </summary>
         /// <param name="phase">Current operation phase</param>

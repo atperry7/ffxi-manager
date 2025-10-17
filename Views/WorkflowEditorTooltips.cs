@@ -36,7 +36,7 @@ namespace FFXIManager.Views
             ["Tolerance"] = "Position tolerance in pixels for template matching\nAllows template to shift slightly between screenshots\n\nDefault: 5 pixels\nIncrease if UI elements move slightly during animation",
 
             // Step Properties - Conditional Execution
-            ["Condition"] = "Optional condition for step execution\n\nExamples:\n• Account.IsOTPEnabled - only if OTP is enabled\n• !Account.UseWindower - only if Windower is disabled\n• POLProxyDetected - only if POL Proxy is detected\n\nLeave empty to always execute",
+            ["SkipIfApplicationRunning"] = "Skip this step if specified application is already running\n\nApplication name must match an entry in External Applications settings\n\nExamples:\n• POL Proxy - skip if POL Proxy is running\n• Windower - skip if Windower is running\n\nCommon use case: Skip PlayOnline play screen navigation if POL Proxy is running (POL Proxy bypasses the play screen)\n\nLeave empty for no application-based skip logic",
 
             // Step Properties - Flags
             ["IsEnabled"] = "Uncheck to skip this step entirely\nDisabled steps are never executed",
@@ -87,7 +87,6 @@ namespace FFXIManager.Views
             public static string ConfidenceThreshold => Get("ConfidenceThreshold");
             public static string Tolerance => Get("Tolerance");
             public static string TemplatePath => Get("TemplatePath");
-            public static string Condition => Get("Condition");
         }
     }
 }

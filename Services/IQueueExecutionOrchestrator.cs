@@ -104,11 +104,6 @@ namespace FFXIManager.Services
         event EventHandler<AutoLoginQueueItemEventArgs>? ItemFailed;
 
         /// <summary>
-        /// Raised when a queue item's progress updates
-        /// </summary>
-        event EventHandler<AutoLoginQueueItemEventArgs>? ItemProgressUpdated;
-
-        /// <summary>
         /// Raised when a profile is swapped during queue execution
         /// </summary>
         event EventHandler<ProfileSwappedEventArgs>? ProfileSwapped;

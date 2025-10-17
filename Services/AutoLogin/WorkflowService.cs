@@ -337,10 +337,10 @@ namespace FFXIManager.Services.AutoLogin
             }
         }
 
-        public async Task<bool> WorkflowExistsAsync(Guid workflowId, CancellationToken cancellationToken = default)
+        public Task<bool> WorkflowExistsAsync(Guid workflowId, CancellationToken cancellationToken = default)
         {
             var filePath = GetWorkflowFilePath(workflowId);
-            return File.Exists(filePath);
+            return Task.FromResult(File.Exists(filePath));
         }
 
         public async Task<IList<WorkflowDefinition>> GetWorkflowsByTagsAsync(IEnumerable<string> tags, CancellationToken cancellationToken = default)
@@ -406,9 +406,9 @@ namespace FFXIManager.Services.AutoLogin
         {
             try
             {
-                // Determine source directory
+                // Determine source directory (flat structure - workflows at root)
                 var appPath = AppDomain.CurrentDomain.BaseDirectory;
-                var defaultWorkflowsSource = Path.Combine(appPath, "workflows", "defaults");
+                var defaultWorkflowsSource = Path.Combine(appPath, "workflows");
 
                 if (!Directory.Exists(defaultWorkflowsSource))
                 {
@@ -417,7 +417,10 @@ namespace FFXIManager.Services.AutoLogin
                 }
 
                 // Copy all default workflow JSON files to root workflows/ directory using GUID filenames
-                var sourceFiles = Directory.GetFiles(defaultWorkflowsSource, "*.json");
+                // Skip README.md and other non-workflow files
+                var sourceFiles = Directory.GetFiles(defaultWorkflowsSource, "*.json")
+                    .Where(f => !f.EndsWith("README.json", StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
                 if (sourceFiles.Length == 0)
                 {
                     await _loggingService.LogWarningAsync("No default workflow files found in application directory");
@@ -446,7 +449,7 @@ namespace FFXIManager.Services.AutoLogin
                     await _loggingService.LogDebugAsync($"Restored default workflow: {workflow.Name} to {workflow.WorkflowId}.json");
                 }
 
-                // Also restore template PNG files to shared workflows/templates/ directory
+                // Also restore template PNG files to shared workflows/templates/ directory (flat structure)
                 var templatesSource = Path.Combine(defaultWorkflowsSource, "templates");
                 if (Directory.Exists(templatesSource))
                 {
@@ -500,9 +503,9 @@ namespace FFXIManager.Services.AutoLogin
         {
             try
             {
-                // Determine application directory containing default workflows
+                // Determine application directory containing default workflows (flat structure)
                 var appPath = AppDomain.CurrentDomain.BaseDirectory;
-                var defaultWorkflowsSource = Path.Combine(appPath, "workflows", "defaults");
+                var defaultWorkflowsSource = Path.Combine(appPath, "workflows");
 
                 if (!Directory.Exists(defaultWorkflowsSource))
                 {
@@ -511,7 +514,10 @@ namespace FFXIManager.Services.AutoLogin
                 }
 
                 // Copy all default workflow JSON files to root workflows/ directory using GUID filenames
-                var sourceFiles = Directory.GetFiles(defaultWorkflowsSource, "*.json");
+                // Skip README.md and other non-workflow files
+                var sourceFiles = Directory.GetFiles(defaultWorkflowsSource, "*.json")
+                    .Where(f => !f.EndsWith("README.json", StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
                 if (sourceFiles.Length == 0)
                 {
                     await _loggingService.LogWarningAsync("No default workflow files found in application directory");
@@ -543,7 +549,7 @@ namespace FFXIManager.Services.AutoLogin
                     }
                 }
 
-                // Copy template PNG files to workflows/templates/ (shared by all workflows)
+                // Copy template PNG files to workflows/templates/ (flat structure, shared by all workflows)
                 var templatesSource = Path.Combine(defaultWorkflowsSource, "templates");
                 if (Directory.Exists(templatesSource))
                 {

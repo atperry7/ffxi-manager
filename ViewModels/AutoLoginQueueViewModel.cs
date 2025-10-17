@@ -34,10 +34,6 @@ namespace FFXIManager.ViewModels
         private bool _disposed;
         private CancellationTokenSource _cancellationTokenSource = new();
 
-        // Profile switching tracking
-        private string? _lastActiveProfileName;
-        private bool _isProfileSwitching;
-
         // Duration update timer
         private readonly DispatcherTimer _durationUpdateTimer;
 
@@ -348,45 +344,6 @@ namespace FFXIManager.ViewModels
                 return $"{TotalQueueItems} account{(TotalQueueItems == 1 ? "" : "s")} ready for auto-login";
             }
         }
-
-        /// <summary>
-        /// Whether we're currently switching between profiles
-        /// </summary>
-        public bool IsProfileSwitching
-        {
-            get => _isProfileSwitching;
-            private set => SetProperty(ref _isProfileSwitching, value);
-        }
-
-        /// <summary>
-        /// Name of the previously active profile (for transition display)
-        /// </summary>
-        public string? LastActiveProfileName
-        {
-            get => _lastActiveProfileName;
-            private set => SetProperty(ref _lastActiveProfileName, value);
-        }
-
-        /// <summary>
-        /// Profile transition message for UI display
-        /// </summary>
-        public string ProfileTransitionMessage
-        {
-            get
-            {
-                if (CurrentItem?.ProfileName != null && LastActiveProfileName != null &&
-                    CurrentItem.ProfileName != LastActiveProfileName)
-                {
-                    return $"Switched from profile '{LastActiveProfileName}' to '{CurrentItem.ProfileName}'";
-                }
-                return string.Empty;
-            }
-        }
-
-        /// <summary>
-        /// Whether to show the profile transition indicator
-        /// </summary>
-        public bool ShowProfileTransition => !string.IsNullOrEmpty(ProfileTransitionMessage) && IsProfileSwitching;
 
         /// <summary>
         /// User-friendly message to display when queue is idle (no current item)
@@ -943,21 +900,6 @@ namespace FFXIManager.ViewModels
         {
             _uiDispatcher.InvokeAsync(() =>
             {
-                // Check for profile switching
-                if (_lastActiveProfileName != null && e.Item.ProfileName != _lastActiveProfileName)
-                {
-                    IsProfileSwitching = true;
-                    _statusService.SetTemporaryMessage($"Switching from profile '{_lastActiveProfileName}' to '{e.Item.ProfileName}'", TimeSpan.FromSeconds(4));
-
-                    // Auto-hide the profile switching indicator after a few seconds
-                    _ = Task.Delay(3000).ContinueWith(_ => _uiDispatcher.InvokeAsync(() =>
-                    {
-                        IsProfileSwitching = false;
-                        OnPropertyChanged(nameof(ShowProfileTransition));
-                    }));
-                }
-
-                LastActiveProfileName = e.Item.ProfileName;
                 UpdateQueueProperties();
                 _statusService.SetMessage($"Starting login: {e.Item.DisplayName}");
             });
@@ -1095,8 +1037,6 @@ namespace FFXIManager.ViewModels
             OnPropertyChanged(nameof(CurrentItem));
             OnPropertyChanged(nameof(QueueStatusDisplay));
             OnPropertyChanged(nameof(QueueProgressDisplay));
-            OnPropertyChanged(nameof(ProfileTransitionMessage));
-            OnPropertyChanged(nameof(ShowProfileTransition));
             OnPropertyChanged(nameof(IdleStateMessage));
 
             // Manage duration update timer based on execution state

@@ -7,30 +7,6 @@ using System.Text.Json;
 namespace FFXIManager.Models
 {
     /// <summary>
-    /// DEPRECATED: Legacy navigation type enum. No longer used in sequence-based navigation.
-    /// The Sequence property now allows mixing keyboard and click actions in any order.
-    /// Kept for backward compatibility only.
-    /// </summary>
-    [Obsolete("NavigationType is deprecated. Use Sequence property to define mixed keyboard/click actions instead.")]
-    public enum NavigationType
-    {
-        /// <summary>
-        /// Legacy: Keyboard-only navigation
-        /// </summary>
-        Keyboard,
-
-        /// <summary>
-        /// Legacy: Click-only navigation
-        /// </summary>
-        RelativeClick,
-
-        /// <summary>
-        /// Legacy: Hybrid fallback approach (no longer needed with sequence-based navigation)
-        /// </summary>
-        Hybrid
-    }
-
-    /// <summary>
     /// Defines a single navigation action within a sequence (keyboard, mouse, or workflow action).
     /// Supports both traditional navigation actions (Tab, Click) and workflow-level actions (Launch, Wait).
     /// </summary>
@@ -220,21 +196,8 @@ namespace FFXIManager.Models
     /// </remarks>
     public class NavigationAction : INotifyPropertyChanged
     {
-        private NavigationType _type = NavigationType.Keyboard;
         private int _postNavigationDelayMs = 500;
         private string? _description;
-
-        /// <summary>
-        /// DEPRECATED: Legacy navigation type property. No longer used.
-        /// Kept for backward compatibility with existing workflow JSON files.
-        /// Use the Sequence property to define navigation behavior instead.
-        /// </summary>
-        [Obsolete("Type property is deprecated. Define navigation using the Sequence property instead.")]
-        public NavigationType Type
-        {
-            get => _type;
-            set { _type = value; OnPropertyChanged(); }
-        }
 
         /// <summary>
         /// **PRIMARY NAVIGATION DEFINITION**: Ordered sequence of keyboard and click actions.

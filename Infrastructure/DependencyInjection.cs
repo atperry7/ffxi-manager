@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging;
 using Serilog;
 using FFXIManager.Services;
 using FFXIManager.Services.AutoLogin;
-using FFXIManager.Services.AutoLogin.Navigation;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
 using FFXIManager.Configuration;
 using FFXIManager.ViewModels;

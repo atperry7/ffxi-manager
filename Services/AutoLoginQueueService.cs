@@ -294,7 +294,6 @@ namespace FFXIManager.Services
             _executionOrchestrator.ItemStarted += (sender, e) => ItemStarted?.Invoke(this, e);
             _executionOrchestrator.ItemCompleted += (sender, e) => ItemCompleted?.Invoke(this, e);
             _executionOrchestrator.ItemFailed += (sender, e) => ItemFailed?.Invoke(this, e);
-            _executionOrchestrator.ItemProgressUpdated += (sender, e) => ItemProgressUpdated?.Invoke(this, e);
             _executionOrchestrator.ProfileSwapped += (sender, e) => ProfileSwapped?.Invoke(this, e);
 
             // Forward task executor events for enhanced progress reporting

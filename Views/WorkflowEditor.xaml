@@ -718,7 +718,7 @@
                                     <TextBox Grid.Row="6" Grid.Column="1"
                                              Text="{Binding SelectedStep.Condition, UpdateSourceTrigger=PropertyChanged}"
                                              Margin="0,0,0,12"
-                                             ToolTip="Optional condition for step execution&#x0a;&#x0a;Examples:&#x0a;• Account.IsOTPEnabled - only if OTP is enabled&#x0a;• !Account.UseWindower - only if Windower is disabled&#x0a;• POLProxyDetected - only if POL Proxy is detected&#x0a;&#x0a;Leave empty to always execute"/>
+                                             ToolTip="Optional condition for step execution based on account properties&#x0a;&#x0a;Examples:&#x0a;• Account.IsOTPEnabled - only if OTP is enabled&#x0a;• !Account.IsOTPEnabled - only if OTP is disabled&#x0a;• Account.HasStoredPassword - only if password is stored&#x0a;&#x0a;For application-based conditions (e.g., skip if POL Proxy running), use 'Skip If Running' field instead"/>
 
                                     <!-- Skip If Application Running -->
                                     <TextBlock Grid.Row="7" Grid.Column="0"

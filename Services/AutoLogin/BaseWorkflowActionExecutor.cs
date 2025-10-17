@@ -67,7 +67,7 @@ namespace FFXIManager.Services.AutoLogin
         {
             if (context.Subtask != null)
             {
-                context.Subtask.UpdateProgress(progress, message);
+                context.Subtask.UpdateProgressWithPhase("action", progress, message);
                 await _loggingService.LogDebugAsync($"[PROGRESS] {message} ({progress}%)");
             }
         }

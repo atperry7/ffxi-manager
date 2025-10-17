@@ -18,6 +18,8 @@ namespace FFXIManager.Models
         private DateTime? _startTime;
         private DateTime? _endTime;
         private string _errorMessage = string.Empty;
+        private DateTime _lastProgressUpdate = DateTime.MinValue;
+        private const int ProgressUpdateThrottleMs = 250; // Minimum 250ms between progress updates
 
         /// <summary>
         /// Unique identifier for this task
@@ -69,6 +71,16 @@ namespace FFXIManager.Models
                 {
                     OnPropertyChanged(nameof(CurrentSubtaskDisplay));
                     OnPropertyChanged(nameof(Progress));
+
+                    // Update StatusMessage to show current executing step
+                    if (value != null && Status == AutoLoginTaskStatus.InProgress)
+                    {
+                        StatusMessage = value.Name;
+                    }
+
+                    // Reset progress update throttle when switching subtasks
+                    // This ensures immediate UI update on subtask transitions
+                    _lastProgressUpdate = DateTime.MinValue;
                 }
             }
         }
@@ -375,9 +387,22 @@ namespace FFXIManager.Models
             if (e.PropertyName == nameof(AutoLoginSubtask.Status) ||
                 e.PropertyName == nameof(AutoLoginSubtask.Progress))
             {
-                OnPropertyChanged(nameof(Progress));
-                OnPropertyChanged(nameof(CompletedSubtasks));
-                OnPropertyChanged(nameof(FailedSubtasks));
+                // Throttle progress updates to smooth UI updates (max once per 250ms)
+                var now = DateTime.Now;
+                var timeSinceLastUpdate = (now - _lastProgressUpdate).TotalMilliseconds;
+
+                // Always update on Status changes (completion, failure, etc.)
+                // Throttle Progress updates to reduce UI jumpiness
+                var isStatusChange = e.PropertyName == nameof(AutoLoginSubtask.Status);
+                var shouldUpdateProgress = isStatusChange || timeSinceLastUpdate >= ProgressUpdateThrottleMs;
+
+                if (shouldUpdateProgress)
+                {
+                    _lastProgressUpdate = now;
+                    OnPropertyChanged(nameof(Progress));
+                    OnPropertyChanged(nameof(CompletedSubtasks));
+                    OnPropertyChanged(nameof(FailedSubtasks));
+                }
             }
         }
 

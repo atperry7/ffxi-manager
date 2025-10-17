@@ -21,7 +21,6 @@ namespace FFXIManager.Models.AutoLogin
         private string _templatePath = string.Empty;
         private bool _isEnabled = true;
         private bool _isOptional;
-        private string? _condition;
         private int _estimatedDurationSeconds = 5;
 
         /// <summary>
@@ -91,19 +90,6 @@ namespace FFXIManager.Models.AutoLogin
         {
             get => _isOptional;
             set => SetProperty(ref _isOptional, value);
-        }
-
-        /// <summary>
-        /// Optional conditional expression that determines if this step should execute.
-        /// Examples: "Account.IsOTPEnabled", "!Account.UseWindower"
-        /// Null or empty means always execute (if enabled).
-        /// DEPRECATED: Use SkipIfApplicationRunning for application-based conditions.
-        /// </summary>
-        [Obsolete("Use SkipIfApplicationRunning for application-based skip conditions")]
-        public string? Condition
-        {
-            get => _condition;
-            set => SetProperty(ref _condition, value);
         }
 
         private string? _skipIfApplicationRunning;
@@ -312,7 +298,6 @@ namespace FFXIManager.Models.AutoLogin
                 TemplatePath = TemplatePath,
                 IsEnabled = IsEnabled,
                 IsOptional = IsOptional,
-                Condition = Condition,
                 SkipIfApplicationRunning = SkipIfApplicationRunning,
                 EstimatedDurationSeconds = EstimatedDurationSeconds,
                 FallbackTemplatePaths = new List<string>(FallbackTemplatePaths),

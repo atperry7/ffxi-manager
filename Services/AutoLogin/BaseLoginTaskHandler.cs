@@ -179,7 +179,7 @@ namespace FFXIManager.Services.AutoLogin
                 // Check the condition
                 if (await condition())
                 {
-                    subtask?.UpdateProgress(progressEnd, $"{conditionDescription} - condition met");
+                    subtask?.UpdateProgressWithPhase("waiting", progressEnd, $"{conditionDescription} - condition met");
                     return;
                 }
 
@@ -188,7 +188,7 @@ namespace FFXIManager.Services.AutoLogin
                 {
                     var elapsed = DateTime.UtcNow - (endTime - timeout);
                     var progressPercent = (int)(progressStart + (progressEnd - progressStart) * (elapsed.TotalMilliseconds / timeout.TotalMilliseconds));
-                    subtask?.UpdateProgress(Math.Min(progressPercent, progressEnd - 1), $"{conditionDescription} - waiting...");
+                    subtask?.UpdateProgressWithPhase("waiting", Math.Min(progressPercent, progressEnd - 1), $"{conditionDescription} - waiting...");
                     lastProgressUpdate = DateTime.UtcNow;
                 }
 
@@ -203,7 +203,7 @@ namespace FFXIManager.Services.AutoLogin
         /// </summary>
         protected async Task UpdateProgressAsync(AutoLoginSubtask subtask, int progress, string message)
         {
-            subtask?.UpdateProgress(progress, message);
+            subtask?.UpdateProgressWithPhase("processing", progress, message);
 
             // Log technical details at debug level, user-friendly summary at info level
             await _loggingService.LogDebugAsync($"Progress {progress}%: {message}");
@@ -598,134 +598,5 @@ namespace FFXIManager.Services.AutoLogin
             throw new InvalidOperationException($"Failed to capture screenshot for {purpose} after {retryCount + 1} attempts");
         }
 
-        /// <summary>
-        /// Clicks at coordinates defined in a template's JSON metadata.
-        /// </summary>
-        protected async Task ClickAtTemplateCoordinatesAsync(
-            AutoLoginSubtask subtask,
-            string templatePath,
-            IntPtr windowHandle,
-            CancellationToken cancellationToken,
-            IUIAutomationService? automationService = null)
-        {
-            if (automationService == null)
-                throw new ArgumentNullException(nameof(automationService), "IUIAutomationService must be provided for template-based clicking");
-
-            await UpdateProgressWithPhaseAsync(subtask, "authentication", 10, "Loading template metadata");
-
-            // Load template metadata to get click coordinates
-            var metadata = await _templateManagementService.GetTemplateMetadataAsync(templatePath);
-            if (metadata == null)
-            {
-                throw new InvalidOperationException($"Template metadata not found: {templatePath}");
-            }
-
-            var clickPoint = new Point(metadata.Action.ClickOffset.X, metadata.Action.ClickOffset.Y);
-            var description = metadata.Action.Parameters.TryGetValue("description", out var desc) ? desc.ToString() : metadata.Name;
-
-            await UpdateProgressWithPhaseAsync(subtask, "authentication", 30, "Using template coordinates");
-
-            // Use the standard coordinate-based click method
-            await ClickAtCoordinatesAsync(
-                subtask,
-                clickPoint,
-                windowHandle,
-                description ?? "template-based button",
-                cancellationToken,
-                automationService);
-        }
-
-        /// <summary>
-        /// Executes navigation using the strategy defined in template metadata.
-        /// This is the NEW PREFERRED method for all UI navigation (replaces direct clicking).
-        /// Supports keyboard navigation (resolution/DPI independent) with fallback to relative clicking.
-        /// </summary>
-        /// <param name="subtask">Subtask for progress reporting</param>
-        /// <param name="templatePath">Path to template with navigation metadata</param>
-        /// <param name="windowHandle">Window handle to interact with</param>
-        /// <param name="templateMatch">Template match result for relative positioning (required for click fallback)</param>
-        /// <param name="automationService">UI automation service for input simulation</param>
-        /// <param name="cancellationToken">Cancellation token</param>
-        /// <returns>True if navigation succeeded, false otherwise</returns>
-        /// <remarks>
-        /// This method reads the navigation configuration from template JSON metadata
-        /// and uses the appropriate strategy (Keyboard, RelativeClick, or Hybrid).
-        /// </remarks>
-        protected async Task<bool> ExecuteNavigationFromTemplateAsync(
-            AutoLoginSubtask subtask,
-            string templatePath,
-            IntPtr windowHandle,
-            TemplateMatchResult templateMatch,
-            IUIAutomationService automationService,
-            CancellationToken cancellationToken)
-        {
-            // Load template metadata to get navigation configuration
-            var metadata = await _templateManagementService.GetTemplateMetadataAsync(templatePath);
-            if (metadata == null)
-            {
-                await _loggingService.LogWarningAsync($"Template metadata not found for: {templatePath}");
-                return false;
-            }
-
-            // Check if navigation metadata exists
-            if (metadata.Navigation == null)
-            {
-                await _loggingService.LogWarningAsync($"No navigation metadata defined in template: {templatePath}");
-                return false;
-            }
-
-            // Execute navigation using the configured action
-            return await ExecuteNavigationActionAsync(
-                subtask,
-                metadata.Navigation,
-                windowHandle,
-                templateMatch,
-                automationService,
-                cancellationToken);
-        }
-
-        /// <summary>
-        /// Executes a navigation action using the appropriate strategy.
-        /// Supports Keyboard, RelativeClick, and Hybrid navigation types.
-        /// </summary>
-        /// <param name="subtask">Subtask for progress reporting</param>
-        /// <param name="action">Navigation action configuration</param>
-        /// <param name="windowHandle">Window handle to interact with</param>
-        /// <param name="templateMatch">Template match result for relative positioning</param>
-        /// <param name="automationService">UI automation service for input simulation</param>
-        /// <param name="cancellationToken">Cancellation token</param>
-        /// <returns>True if navigation succeeded, false otherwise</returns>
-        protected async Task<bool> ExecuteNavigationActionAsync(
-            AutoLoginSubtask subtask,
-            NavigationAction action,
-            IntPtr windowHandle,
-            TemplateMatchResult? templateMatch,
-            IUIAutomationService automationService,
-            CancellationToken cancellationToken)
-        {
-            // Enforce Hybrid strategy for consistency and maintainability
-            var strategy = new Navigation.HybridNavigationStrategy(automationService, _screenshotService, _loggingService);
-            await _loggingService.LogInfoAsync($"Executing navigation using strategy: {strategy.StrategyName} (forced hybrid)");
-            return await strategy.ExecuteAsync(windowHandle, action, templateMatch, cancellationToken);
-        }
-
-        /// <summary>
-        /// Calculates a relative click point from a template match and offset percentage.
-        /// This enables resolution/DPI independent clicking by using the detected template as an anchor.
-        /// </summary>
-        /// <param name="templateMatch">The template match result providing location and dimensions</param>
-        /// <param name="relativeOffset">Relative offset (0.0 to 1.0) within the template region</param>
-        /// <returns>Absolute point in window coordinates</returns>
-        /// <remarks>
-        /// Example: For a template at (100, 100) with size (200, 100) and offset (0.5, 0.5),
-        /// the calculated point would be (200, 150) - the center of the template region.
-        /// </remarks>
-        protected Point CalculateRelativeClickPoint(TemplateMatchResult templateMatch, RelativeClickOffset relativeOffset)
-        {
-            var absoluteX = templateMatch.WindowRelativePosition.X + (int)(templateMatch.MatchSize.Width * relativeOffset.X);
-            var absoluteY = templateMatch.WindowRelativePosition.Y + (int)(templateMatch.MatchSize.Height * relativeOffset.Y);
-
-            return new Point(absoluteX, absoluteY);
-        }
     }
 }

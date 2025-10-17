@@ -82,7 +82,7 @@ namespace FFXIManager.Services.AutoLogin
                 var baseProgress = 60;
                 var rangeSize = 25;
                 var progressPercent = baseProgress + (int)((elapsed.TotalSeconds / timeout.TotalSeconds) * rangeSize);
-                subtask.UpdateProgress(Math.Min(85, progressPercent), "Verifying launched process");
+                subtask.UpdateProgressWithPhase("launch", Math.Min(85, progressPercent), "Verifying launched process");
 
                 await Task.Delay(500, cancellationToken); // Poll every 500ms for process detection
             }
@@ -129,7 +129,7 @@ namespace FFXIManager.Services.AutoLogin
 
                 // Update progress
                 var progress = (attempt * 100) / maxAttempts;
-                subtask.UpdateProgress(Math.Min(95, progress), "Waiting for process responsiveness");
+                subtask.UpdateProgressWithPhase("launch", Math.Min(95, progress), "Waiting for process responsiveness");
 
                 await Task.Delay(checkInterval, cancellationToken);
             }

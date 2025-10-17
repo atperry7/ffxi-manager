@@ -43,7 +43,6 @@ namespace FFXIManager.Services
         public event EventHandler<AutoLoginQueueItemEventArgs>? ItemStarted;
         public event EventHandler<AutoLoginQueueItemEventArgs>? ItemCompleted;
         public event EventHandler<AutoLoginQueueItemEventArgs>? ItemFailed;
-        public event EventHandler<AutoLoginQueueItemEventArgs>? ItemProgressUpdated;
         public event EventHandler<ProfileSwappedEventArgs>? ProfileSwapped;
 
         #endregion

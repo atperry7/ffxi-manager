@@ -483,15 +483,8 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                         }
                         else
                         {
-                            if (md.Navigation.Type != FFXIManager.Models.NavigationType.Hybrid)
-                            {
-                                report.NonHybrid++;
-                                await _loggingService.LogWarningAsync($"[Template Validation] Navigation.type is '{md.Navigation.Type}', expected 'Hybrid': {jsonFile}");
-                            }
-                            else
-                            {
-                                report.HybridConformant++;
-                            }
+                            // Note: NavigationType validation removed - workflow-first architecture no longer uses template JSON files
+                            report.HybridConformant++;
                         }
 
                         if (md.Action != null && (md.Action.ClickOffset?.X != 0 || md.Action.ClickOffset?.Y != 0))
