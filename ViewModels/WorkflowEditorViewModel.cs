@@ -218,9 +218,15 @@ namespace FFXIManager.ViewModels
                     OnPropertyChanged(nameof(CanEditNavigationAction));
                     OnPropertyChanged(nameof(IsLaunchActionSelected));
                     OnPropertyChanged(nameof(IsWaitActionSelected));
+                    OnPropertyChanged(nameof(IsInputPasswordActionSelected));
+                    OnPropertyChanged(nameof(IsInputOTPActionSelected));
+                    OnPropertyChanged(nameof(IsMemberSlotActionSelected));
+                    OnPropertyChanged(nameof(IsCharacterSlotActionSelected));
+                    OnPropertyChanged(nameof(IsSlotActionSelected));
                     OnPropertyChanged(nameof(LaunchApplicationName));
                     OnPropertyChanged(nameof(LaunchAllowSkipIfRunning));
                     OnPropertyChanged(nameof(LaunchAllowSkipIfNotConfigured));
+                    OnPropertyChanged(nameof(SlotNavigationMethod));
                     UpdateCommandStates();
                 }
             }
@@ -255,6 +261,48 @@ namespace FFXIManager.ViewModels
         /// Whether the selected navigation action is a Wait action
         /// </summary>
         public bool IsWaitActionSelected => SelectedNavigationAction?.Action == "Wait";
+
+        /// <summary>
+        /// Whether the selected navigation action is an InputPassword action
+        /// </summary>
+        public bool IsInputPasswordActionSelected => SelectedNavigationAction?.Action == "InputPassword";
+
+        /// <summary>
+        /// Whether the selected navigation action is an InputOTP action
+        /// </summary>
+        public bool IsInputOTPActionSelected => SelectedNavigationAction?.Action == "InputOTP";
+
+        /// <summary>
+        /// Whether the selected navigation action is a MemberSlot action
+        /// </summary>
+        public bool IsMemberSlotActionSelected => SelectedNavigationAction?.Action == "MemberSlot";
+
+        /// <summary>
+        /// Whether the selected navigation action is a CharacterSlot action
+        /// </summary>
+        public bool IsCharacterSlotActionSelected => SelectedNavigationAction?.Action == "CharacterSlot";
+
+        /// <summary>
+        /// Whether the selected navigation action is a slot-based action (MemberSlot or CharacterSlot)
+        /// </summary>
+        public bool IsSlotActionSelected => IsMemberSlotActionSelected || IsCharacterSlotActionSelected;
+
+        /// <summary>
+        /// Navigation method for slot actions (from Parameters dictionary)
+        /// </summary>
+        public string SlotNavigationMethod
+        {
+            get => SelectedNavigationAction?.GetParameter<string>("NavigationMethod", "Keyboard") ?? "Keyboard";
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("NavigationMethod", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
 
         /// <summary>
         /// Template image source for thumbnail preview
@@ -1434,9 +1482,15 @@ namespace FFXIManager.ViewModels
             {
                 OnPropertyChanged(nameof(IsLaunchActionSelected));
                 OnPropertyChanged(nameof(IsWaitActionSelected));
+                OnPropertyChanged(nameof(IsInputPasswordActionSelected));
+                OnPropertyChanged(nameof(IsInputOTPActionSelected));
+                OnPropertyChanged(nameof(IsMemberSlotActionSelected));
+                OnPropertyChanged(nameof(IsCharacterSlotActionSelected));
+                OnPropertyChanged(nameof(IsSlotActionSelected));
                 OnPropertyChanged(nameof(LaunchApplicationName));
                 OnPropertyChanged(nameof(LaunchAllowSkipIfRunning));
                 OnPropertyChanged(nameof(LaunchAllowSkipIfNotConfigured));
+                OnPropertyChanged(nameof(SlotNavigationMethod));
             }
         }
 

@@ -915,6 +915,10 @@
                                                                         <sys:String>Click</sys:String>
                                                                         <sys:String>Launch</sys:String>
                                                                         <sys:String>Wait</sys:String>
+                                                                        <sys:String>InputPassword</sys:String>
+                                                                        <sys:String>InputOTP</sys:String>
+                                                                        <sys:String>MemberSlot</sys:String>
+                                                                        <sys:String>CharacterSlot</sys:String>
                                                                     </x:Array>
                                                                 </Setter.Value>
                                                             </Setter>
@@ -936,6 +940,10 @@
                                                                         <sys:String>Click</sys:String>
                                                                         <sys:String>Launch</sys:String>
                                                                         <sys:String>Wait</sys:String>
+                                                                        <sys:String>InputPassword</sys:String>
+                                                                        <sys:String>InputOTP</sys:String>
+                                                                        <sys:String>MemberSlot</sys:String>
+                                                                        <sys:String>CharacterSlot</sys:String>
                                                                     </x:Array>
                                                                 </Setter.Value>
                                                             </Setter>
@@ -1002,6 +1010,10 @@
                                                             <ComboBoxItem Content="Click"/>
                                                             <ComboBoxItem Content="Launch"/>
                                                             <ComboBoxItem Content="Wait"/>
+                                                            <ComboBoxItem Content="InputPassword"/>
+                                                            <ComboBoxItem Content="InputOTP"/>
+                                                            <ComboBoxItem Content="MemberSlot"/>
+                                                            <ComboBoxItem Content="CharacterSlot"/>
                                                         </ComboBox>
 
                                                         <TextBlock Grid.Row="1" Grid.Column="0" Text="Description:" VerticalAlignment="Top" Margin="0,0,0,8"/>
@@ -1114,6 +1126,92 @@
                                                             <TextBlock Text="Wait Duration" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
                                                             <TextBlock Text="Use the 'Delay After (ms)' field above to set the wait duration."
                                                                        FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap"/>
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <!-- InputPassword Properties (visible only for InputPassword actions) -->
+                                                    <Border Visibility="{Binding IsInputPasswordActionSelected, Converter={StaticResource BoolToVisConverter}}"
+                                                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12"
+                                                            Background="{DynamicResource SurfaceBrush}">
+                                                        <StackPanel>
+                                                            <TextBlock Text="Password Input" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
+                                                            <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8">
+                                                                Password will be retrieved from Windows Credential Manager using the account's stored credentials.
+                                                            </TextBlock>
+                                                            <TextBlock FontSize="10" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{DynamicResource InfoTextBrush}">Security Features:</TextBlock>
+                                                            <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}">• Password masked in logs (shown as ****)</TextBlock>
+                                                            <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}">• Cleared from memory after use</TextBlock>
+                                                            <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8">• Optional template detection for field location</TextBlock>
+                                                            <Border Background="{DynamicResource InfoBackgroundBrush}" BorderBrush="{DynamicResource InfoBorderBrush}"
+                                                                    BorderThickness="1" CornerRadius="3" Padding="8">
+                                                                <TextBlock FontSize="10" TextWrapping="Wrap" Foreground="{DynamicResource InfoTextBrush}">
+                                                                    💡 Configure password in Settings → PlayOnline Accounts
+                                                                </TextBlock>
+                                                            </Border>
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <!-- InputOTP Properties (visible only for InputOTP actions) -->
+                                                    <Border Visibility="{Binding IsInputOTPActionSelected, Converter={StaticResource BoolToVisConverter}}"
+                                                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12"
+                                                            Background="{DynamicResource SurfaceBrush}">
+                                                        <StackPanel>
+                                                            <TextBlock Text="OTP Input" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
+                                                            <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8">
+                                                                OTP code will be generated from the secret stored in Windows Credential Manager.
+                                                            </TextBlock>
+                                                            <TextBlock FontSize="10" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{DynamicResource InfoTextBrush}">Security Features:</TextBlock>
+                                                            <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}">• OTP code masked in logs (shown as ******)</TextBlock>
+                                                            <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}">• Cleared from memory after use</TextBlock>
+                                                            <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8">• Optional template detection for field location</TextBlock>
+                                                            <Border Background="{DynamicResource InfoBackgroundBrush}" BorderBrush="{DynamicResource InfoBorderBrush}"
+                                                                    BorderThickness="1" CornerRadius="3" Padding="8">
+                                                                <TextBlock FontSize="10" TextWrapping="Wrap" Foreground="{DynamicResource InfoTextBrush}">
+                                                                    💡 Configure OTP secret in Settings → PlayOnline Accounts
+                                                                </TextBlock>
+                                                            </Border>
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <!-- Slot Navigation Properties (visible for MemberSlot/CharacterSlot actions) -->
+                                                    <Border Visibility="{Binding IsSlotActionSelected, Converter={StaticResource BoolToVisConverter}}"
+                                                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12"
+                                                            Background="{DynamicResource SurfaceBrush}">
+                                                        <StackPanel>
+                                                            <TextBlock FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8">
+                                                                <TextBlock.Text>
+                                                                    <MultiBinding StringFormat="{}{0} Navigation">
+                                                                        <Binding Path="SelectedNavigationAction.Action"/>
+                                                                    </MultiBinding>
+                                                                </TextBlock.Text>
+                                                            </TextBlock>
+
+                                                            <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8">
+                                                                Navigates to the slot number defined in the account settings (POLMemberSlot or FFXICharacterSlot).
+                                                            </TextBlock>
+
+                                                            <Grid Margin="0,0,0,8">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="120"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+
+                                                                <TextBlock Grid.Column="0" Text="Navigation Method:" VerticalAlignment="Center"/>
+                                                                <ComboBox Grid.Column="1"
+                                                                          SelectedValue="{Binding SlotNavigationMethod, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                                                                    <ComboBoxItem Content="Keyboard"/>
+                                                                    <ComboBoxItem Content="Click"/>
+                                                                </ComboBox>
+                                                            </Grid>
+
+                                                            <Border Background="{DynamicResource InfoBackgroundBrush}" BorderBrush="{DynamicResource InfoBorderBrush}"
+                                                                    BorderThickness="1" CornerRadius="3" Padding="8">
+                                                                <StackPanel>
+                                                                    <TextBlock FontSize="10" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{DynamicResource InfoTextBrush}">Navigation Methods:</TextBlock>
+                                                                    <TextBlock FontSize="10" Foreground="{DynamicResource InfoTextBrush}">• Keyboard: Uses arrow keys (Home → Down/Right)</TextBlock>
+                                                                    <TextBlock FontSize="10" Foreground="{DynamicResource InfoTextBrush}">• Click: Uses template match + click coordinates</TextBlock>
+                                                                </StackPanel>
+                                                            </Border>
                                                         </StackPanel>
                                                     </Border>
                                                 </StackPanel>
