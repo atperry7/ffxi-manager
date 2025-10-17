@@ -108,8 +108,10 @@ namespace FFXIManager.Services.AutoLogin
             // Ensure directory exists
             Directory.CreateDirectory(_workflowsDirectory);
 
-            // Get all JSON files in workflows directory (including defaults subdirectory)
-            var files = Directory.GetFiles(_workflowsDirectory, "*.json", SearchOption.AllDirectories);
+            // Get all JSON files in workflows directory (top level only - flat structure)
+            // Note: Changed from SearchOption.AllDirectories to TopDirectoryOnly to avoid
+            // loading duplicate workflows from legacy workflows/defaults/ subdirectory
+            var files = Directory.GetFiles(_workflowsDirectory, "*.json", SearchOption.TopDirectoryOnly);
 
             foreach (var file in files)
             {
@@ -404,7 +406,7 @@ namespace FFXIManager.Services.AutoLogin
         {
             try
             {
-                // Determine source and destination directories
+                // Determine source directory
                 var appPath = AppDomain.CurrentDomain.BaseDirectory;
                 var defaultWorkflowsSource = Path.Combine(appPath, "workflows", "defaults");
 
@@ -414,10 +416,7 @@ namespace FFXIManager.Services.AutoLogin
                     return 0;
                 }
 
-                var defaultWorkflowsDestination = Path.Combine(_workflowsDirectory, "defaults");
-                Directory.CreateDirectory(defaultWorkflowsDestination);
-
-                // Copy all default workflow JSON files, forcing overwrite
+                // Copy all default workflow JSON files to root workflows/ directory using GUID filenames
                 var sourceFiles = Directory.GetFiles(defaultWorkflowsSource, "*.json");
                 if (sourceFiles.Length == 0)
                 {
@@ -428,20 +427,30 @@ namespace FFXIManager.Services.AutoLogin
                 int restoredCount = 0;
                 foreach (var sourceFile in sourceFiles)
                 {
-                    var fileName = Path.GetFileName(sourceFile);
-                    var destFile = Path.Combine(defaultWorkflowsDestination, fileName);
+                    // Read the JSON to extract the WorkflowId
+                    var json = await File.ReadAllTextAsync(sourceFile);
+                    var workflow = JsonSerializer.Deserialize<WorkflowDefinition>(json, JsonOptions);
 
-                    // Force copy/overwrite
+                    if (workflow == null)
+                    {
+                        await _loggingService.LogWarningAsync($"Failed to deserialize workflow from {sourceFile}");
+                        continue;
+                    }
+
+                    // Destination: workflows/{guid}.json (flat structure)
+                    var destFile = GetWorkflowFilePath(workflow.WorkflowId);
+
+                    // Force copy/overwrite to restore defaults
                     File.Copy(sourceFile, destFile, overwrite: true);
                     restoredCount++;
-                    await _loggingService.LogDebugAsync($"Restored default workflow: {fileName}");
+                    await _loggingService.LogDebugAsync($"Restored default workflow: {workflow.Name} to {workflow.WorkflowId}.json");
                 }
 
-                // Also restore template PNG files
+                // Also restore template PNG files to shared workflows/templates/ directory
                 var templatesSource = Path.Combine(defaultWorkflowsSource, "templates");
                 if (Directory.Exists(templatesSource))
                 {
-                    var templatesDestination = Path.Combine(defaultWorkflowsDestination, "templates");
+                    var templatesDestination = Path.Combine(_workflowsDirectory, "templates");
                     Directory.CreateDirectory(templatesDestination);
 
                     var templateFiles = Directory.GetFiles(templatesSource, "*.png");
@@ -450,7 +459,7 @@ namespace FFXIManager.Services.AutoLogin
                         var fileName = Path.GetFileName(templateFile);
                         var destFile = Path.Combine(templatesDestination, fileName);
 
-                        // Force copy/overwrite
+                        // Force copy/overwrite to restore templates
                         File.Copy(templateFile, destFile, overwrite: true);
                         await _loggingService.LogDebugAsync($"Restored template: {fileName}");
                     }
@@ -484,7 +493,8 @@ namespace FFXIManager.Services.AutoLogin
 
         /// <summary>
         /// Ensures system-provided default workflows exist.
-        /// Copies them from the application directory to APPDATA if they don't exist yet.
+        /// Copies them from the application directory to APPDATA using GUID-based filenames in flat structure.
+        /// Templates are shared in workflows/templates/ directory.
         /// </summary>
         private async Task EnsureSystemWorkflowsAsync()
         {
@@ -500,11 +510,7 @@ namespace FFXIManager.Services.AutoLogin
                     return;
                 }
 
-                // Destination: APPDATA/FFXIManager/workflows/defaults/
-                var defaultWorkflowsDestination = Path.Combine(_workflowsDirectory, "defaults");
-                Directory.CreateDirectory(defaultWorkflowsDestination);
-
-                // Copy all default workflow JSON files
+                // Copy all default workflow JSON files to root workflows/ directory using GUID filenames
                 var sourceFiles = Directory.GetFiles(defaultWorkflowsSource, "*.json");
                 if (sourceFiles.Length == 0)
                 {
@@ -515,23 +521,33 @@ namespace FFXIManager.Services.AutoLogin
                 int copiedCount = 0;
                 foreach (var sourceFile in sourceFiles)
                 {
-                    var fileName = Path.GetFileName(sourceFile);
-                    var destFile = Path.Combine(defaultWorkflowsDestination, fileName);
+                    // Read the JSON to extract the WorkflowId
+                    var json = await File.ReadAllTextAsync(sourceFile);
+                    var workflow = JsonSerializer.Deserialize<WorkflowDefinition>(json, JsonOptions);
+
+                    if (workflow == null)
+                    {
+                        await _loggingService.LogWarningAsync($"Failed to deserialize workflow from {sourceFile}");
+                        continue;
+                    }
+
+                    // Destination: workflows/{guid}.json (flat structure)
+                    var destFile = GetWorkflowFilePath(workflow.WorkflowId);
 
                     // Copy if doesn't exist, or if source is newer
                     if (!File.Exists(destFile) || File.GetLastWriteTimeUtc(sourceFile) > File.GetLastWriteTimeUtc(destFile))
                     {
                         File.Copy(sourceFile, destFile, overwrite: true);
                         copiedCount++;
-                        await _loggingService.LogDebugAsync($"Copied default workflow: {fileName}");
+                        await _loggingService.LogDebugAsync($"Copied default workflow: {workflow.Name} to {workflow.WorkflowId}.json");
                     }
                 }
 
-                // Copy template PNG files from workflows/defaults/templates/ to APPDATA
+                // Copy template PNG files to workflows/templates/ (shared by all workflows)
                 var templatesSource = Path.Combine(defaultWorkflowsSource, "templates");
                 if (Directory.Exists(templatesSource))
                 {
-                    var templatesDestination = Path.Combine(defaultWorkflowsDestination, "templates");
+                    var templatesDestination = Path.Combine(_workflowsDirectory, "templates");
                     Directory.CreateDirectory(templatesDestination);
 
                     var templateFiles = Directory.GetFiles(templatesSource, "*.png");

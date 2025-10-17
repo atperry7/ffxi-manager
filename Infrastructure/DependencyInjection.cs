@@ -126,7 +126,7 @@ namespace FFXIManager.Infrastructure
             services.AddTransient<EmbeddedCharacterMonitorViewModel>();
             services.AddSingleton<AutoLoginQueueViewModel>();
             services.AddTransient<WorkflowEditorViewModel>();
-            services.AddTransient<FFXIManager.Views.WorkflowEditor>();
+            services.AddTransient<FFXIManager.Views.WorkflowEditorWindow>();
             services.AddTransient<TemplateViewerDialogViewModel>();
             services.AddTransient<FFXIManager.Views.TemplateViewerDialog>();
 

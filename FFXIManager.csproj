@@ -72,16 +72,6 @@
   </ItemGroup>
 
   <!-- Copy screenshot detection templates to output directory -->
-  <ItemGroup>
-    <Content Include="Templates\**\*.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <TargetPath>Resources\Templates\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
-    </Content>
-    <Content Include="Templates\**\*.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <TargetPath>Resources\Templates\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
-    </Content>
-  </ItemGroup>
 
   <!-- Copy default workflows to output directory -->
   <ItemGroup>

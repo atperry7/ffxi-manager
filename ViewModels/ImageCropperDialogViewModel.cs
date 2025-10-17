@@ -261,9 +261,14 @@ namespace FFXIManager.ViewModels
             RequestClose?.Invoke(this, EventArgs.Empty);
         }
 
-        private void UseFullImage()
+        private async void UseFullImage()
         {
-            CropRectangle = null;
+            // Create a rectangle representing the full image dimensions
+            CropRectangle = new Rectangle(0, 0, (int)ImageWidth, (int)ImageHeight);
+
+            await _loggingService.LogInfoAsync(
+                $"Using full image: X=0, Y=0, Width={ImageWidth}, Height={ImageHeight}");
+
             DialogResult = true;
             RequestClose?.Invoke(this, EventArgs.Empty);
         }

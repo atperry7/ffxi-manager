@@ -1,0 +1,107 @@
+<UserControl x:Class="FFXIManager.Views.WorkflowEditor.ActionListPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:converters="clr-namespace:FFXIManager.Converters"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="300">
+    <UserControl.Resources>
+        <converters:ActionIconConverter x:Key="ActionIconConverter"/>
+        <converters:ActionSummaryConverter x:Key="ActionSummaryConverter"/>
+    </UserControl.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="{DynamicResource HeaderBackgroundBrush}" Padding="10">
+            <TextBlock Text="Navigation Actions" Foreground="{DynamicResource HeaderTextBrush}"
+                       FontSize="14" FontWeight="SemiBold"/>
+        </Border>
+
+        <!-- Action List -->
+        <ListBox Grid.Row="1" x:Name="ActionListBox"
+                 ItemsSource="{Binding NavigationActions}"
+                 SelectedItem="{Binding SelectedNavigationAction, Mode=TwoWay}"
+                 Background="{DynamicResource BackgroundBrush}"
+                 BorderThickness="0"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="Margin" Value="0"/>
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+                            Padding="10" Background="Transparent">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Action Icon -->
+                            <Border Grid.Row="0" Grid.Column="0" Grid.RowSpan="2"
+                                    Width="40" Height="40" CornerRadius="20"
+                                    Background="{DynamicResource AccentBrush}" Margin="0,0,10,0"
+                                    VerticalAlignment="Top">
+                                <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           FontSize="16" Foreground="White" FontWeight="Bold"
+                                           Text="{Binding Action, Converter={StaticResource ActionIconConverter}}"/>
+                            </Border>
+
+                            <!-- Action Type -->
+                            <TextBlock Grid.Row="0" Grid.Column="1"
+                                       Text="{Binding Action}"
+                                       FontWeight="SemiBold" FontSize="13"
+                                       Margin="0,0,0,3"/>
+
+                            <!-- Action Description -->
+                            <TextBlock Grid.Row="1" Grid.Column="1"
+                                       Text="{Binding Description}"
+                                       Foreground="Gray" FontSize="11"
+                                       TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                       MaxHeight="40"/>
+
+                            <!-- Action Details Summary -->
+                            <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                                       Margin="50,5,0,0" FontSize="10" Foreground="DarkGray"
+                                       Text="{Binding Converter={StaticResource ActionSummaryConverter}}"/>
+
+                            <!-- Delete Button -->
+                            <Button Grid.Row="0" Grid.Column="2" Grid.RowSpan="2"
+                                    Content="✕" Width="24" Height="24"
+                                    FontSize="12" FontWeight="Bold"
+                                    VerticalAlignment="Top"
+                                    Click="DeleteAction_Click"
+                                    ToolTip="Remove this action"
+                                    Background="Transparent"
+                                    BorderThickness="0"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- Add Action Button -->
+        <Border Grid.Row="2" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+            <Button Content="+ Add Action" Height="40"
+                    Click="AddAction_Click"
+                    HorizontalAlignment="Stretch"
+                    Margin="10"/>
+        </Border>
+    </Grid>
+</UserControl>

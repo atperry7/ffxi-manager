@@ -1,0 +1,117 @@
+<UserControl x:Class="FFXIManager.Views.WorkflowEditor.ActionEditors.ClickActionEditor"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="450" d:DesignWidth="400">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0" Text="Click Action"
+                   FontSize="16" FontWeight="SemiBold" Margin="0,0,0,15"/>
+
+        <!-- Click Position -->
+        <GroupBox Grid.Row="1" Header="Click Position (Relative Coordinates)" Margin="0,0,0,10">
+            <StackPanel Margin="5">
+                <TextBlock Text="Click coordinates are relative to the detected template (0.0 - 1.0):"
+                           TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                <!-- X Coordinate -->
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="80"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="X:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Slider Grid.Column="1" Minimum="0.0" Maximum="1.0"
+                            Value="{Binding ClickX, Mode=TwoWay}"
+                            TickFrequency="0.1" IsSnapToTickEnabled="True"
+                            VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBox Grid.Column="2"
+                             Text="{Binding ClickX, StringFormat=F2, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             VerticalContentAlignment="Center"/>
+                </Grid>
+
+                <!-- Y Coordinate -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="80"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Y:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Slider Grid.Column="1" Minimum="0.0" Maximum="1.0"
+                            Value="{Binding ClickY, Mode=TwoWay}"
+                            TickFrequency="0.1" IsSnapToTickEnabled="True"
+                            VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBox Grid.Column="2"
+                             Text="{Binding ClickY, StringFormat=F2, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             VerticalContentAlignment="Center"/>
+                </Grid>
+
+                <!-- Position Hints -->
+                <Border Background="{DynamicResource InfoBackgroundBrush}" BorderBrush="{DynamicResource InfoBorderBrush}" BorderThickness="1"
+                        CornerRadius="3" Padding="8" Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock FontSize="11" FontWeight="SemiBold" Margin="0,0,0,3" Foreground="{DynamicResource InfoTextBrush}">Common Positions:</TextBlock>
+                        <TextBlock FontSize="11" Margin="0,2,0,0" Foreground="{DynamicResource InfoTextBrush}">• Center: X=0.5, Y=0.5</TextBlock>
+                        <TextBlock FontSize="11" Margin="0,2,0,0" Foreground="{DynamicResource InfoTextBrush}">• Top-Left: X=0.0, Y=0.0</TextBlock>
+                        <TextBlock FontSize="11" Margin="0,2,0,0" Foreground="{DynamicResource InfoTextBrush}">• Top-Right: X=1.0, Y=0.0</TextBlock>
+                        <TextBlock FontSize="11" Margin="0,2,0,0" Foreground="{DynamicResource InfoTextBrush}">• Bottom-Left: X=0.0, Y=1.0</TextBlock>
+                        <TextBlock FontSize="11" Margin="0,2,0,0" Foreground="{DynamicResource InfoTextBrush}">• Bottom-Right: X=1.0, Y=1.0</TextBlock>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Click Count -->
+        <GroupBox Grid.Row="2" Header="Click Configuration" Margin="0,0,0,10">
+            <StackPanel Margin="5">
+                <TextBlock Text="Number of times to click:" Margin="0,0,0,5"/>
+                <TextBox Text="{Binding Count, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         VerticalContentAlignment="Center" Margin="0,0,0,5"/>
+                <TextBlock Text="Typically 1 for single clicks, 2 for double-clicks"
+                           FontSize="11" Foreground="Gray"/>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Delay Configuration -->
+        <GroupBox Grid.Row="3" Header="Delay After Each Click" Margin="0,0,0,10">
+            <StackPanel Margin="5">
+                <TextBlock Text="Delay in milliseconds after each click:" Margin="0,0,0,5"/>
+                <TextBox Text="{Binding DelayMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         VerticalContentAlignment="Center" Margin="0,0,0,5"/>
+                <TextBlock Text="Default: 500ms - gives UI time to respond"
+                           FontSize="11" Foreground="Gray"/>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Description -->
+        <GroupBox Grid.Row="4" Header="Description" Margin="0,0,0,10">
+            <TextBox Text="{Binding Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     TextWrapping="Wrap" AcceptsReturn="True"
+                     Height="60" VerticalScrollBarVisibility="Auto"
+                     Margin="5"
+                     ToolTip="Describe what this click does (e.g., 'Click Log In button', 'Click confirmation')"/>
+        </GroupBox>
+
+        <!-- Help Text -->
+        <Border Grid.Row="5" Background="{DynamicResource InfoBackgroundBrush}" BorderBrush="{DynamicResource InfoBorderBrush}"
+                BorderThickness="1" CornerRadius="3" Padding="10">
+            <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource InfoTextBrush}">
+                <Run Text="⚠️ Note: " FontWeight="SemiBold"/>
+                <Run Text="Click actions are resolution-independent and relative to the detected template. Coordinates are normalized (0.0 = left/top edge, 1.0 = right/bottom edge). Use keyboard navigation when possible for better reliability."/>
+            </TextBlock>
+        </Border>
+    </Grid>
+</UserControl>

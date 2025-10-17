@@ -6,9 +6,9 @@ namespace FFXIManager.Views
     /// <summary>
     /// Interaction logic for WorkflowEditor.xaml
     /// </summary>
-    public partial class WorkflowEditor : Window
+    public partial class WorkflowEditorWindow : Window
     {
-        public WorkflowEditor(WorkflowEditorViewModel viewModel)
+        public WorkflowEditorWindow(WorkflowEditorViewModel viewModel)
         {
             InitializeComponent();
             DataContext = viewModel;

@@ -6,22 +6,35 @@ This directory contains workflow definitions for the FFXIManager auto-login syst
 
 ```
 workflows/
-├── defaults/          # Default workflows provided by FFXIManager (read-only)
-│   └── playonline-standard.json
-└── README.md         # This file
+├── defaults/                 # Source defaults in application directory (read-only)
+│   ├── playonline-standard.json
+│   └── templates/           # Template PNG files
+│       └── *.png
+└── README.md                # This file
+```
+
+User workflows are stored in a flat structure:
+```
+%APPDATA%/FFXIManager/workflows/
+├── {workflow-guid-1}.json   # Default workflow copied with GUID filename
+├── {workflow-guid-2}.json   # Custom workflow
+├── ...
+└── templates/               # Shared templates for all workflows
+    └── *.png
 ```
 
 ## Default Workflows
 
-Default workflows are located in the `defaults/` subdirectory and are:
-- **Read-only**: Cannot be modified directly by users
-- **Version-controlled**: Included in the FFXIManager repository
+Default workflows are:
+- **Provided**: Shipped with FFXIManager in `workflows/defaults/` (application directory)
+- **Copied on startup**: Automatically copied to APPDATA using GUID-based filenames
 - **Restorable**: Users can restore defaults if they make mistakes
 - **Cloneable**: Users can clone them to create custom variations
+- **Modifiable**: Users can modify default workflows freely without duplicates
 
 On application startup, default workflows are copied to:
 ```
-%APPDATA%/FFXIManager/workflows/defaults/
+%APPDATA%/FFXIManager/workflows/{workflow-guid}.json
 ```
 
 ## Workflow File Format
@@ -133,17 +146,19 @@ Steps can be conditionally executed using the `Condition` property:
 
 ## Template Paths
 
-Template paths follow the format: `Application/template_name`
+Template paths reference PNG filenames without extension from the shared templates directory.
 
 Examples:
-- `PlayOnline/member_selection`
-- `PlayOnline/password_entry_screen`
-- `FFXI/character_list`
+- `member_selection_screen`
+- `password_entry_screen`
+- `character_selection_screen`
 
 Templates are stored in:
 ```
-%APPDATA%/FFXIManager/templates/
+%APPDATA%/FFXIManager/workflows/templates/
 ```
+
+Templates are shared by all workflows (default and custom) in a centralized location.
 
 ## Best Practices
 

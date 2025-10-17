@@ -98,11 +98,19 @@ namespace FFXIManager.Services.AutoLogin
             // Phase 2: Get window handle from context or discover it
             var windowHandle = await GetOrDiscoverWindowHandleAsync(subtask, queueItem, context, cancellationToken);
 
-            // Phase 3: Detect screen using template
-            await UpdateProgressWithPhaseAsync(subtask, "authentication", 20, $"Looking for {stepDef.DisplayName}");
-            var templateMatch = await DetectScreenAsync(subtask, stepDef, windowHandle, cancellationToken);
+            // Phase 3: Detect screen using step-level template (if configured)
+            TemplateMatchResult? templateMatch = null;
+            if (!string.IsNullOrWhiteSpace(stepDef.TemplatePath))
+            {
+                await UpdateProgressWithPhaseAsync(subtask, "authentication", 20, $"Looking for {stepDef.DisplayName}");
+                templateMatch = await DetectScreenAsync(subtask, stepDef, windowHandle, cancellationToken);
+            }
+            else
+            {
+                await _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] No step-level template configured for '{stepDef.DisplayName}' - skipping pre-detection");
+            }
 
-            // Phase 4: Execute navigation
+            // Phase 4: Execute navigation (with or without template match)
             await UpdateProgressWithPhaseAsync(subtask, "authentication", 60, $"Navigating {stepDef.DisplayName}");
             await ExecuteNavigationAsync(subtask, stepDef, windowHandle, templateMatch, cancellationToken);
 
@@ -118,6 +126,7 @@ namespace FFXIManager.Services.AutoLogin
 
         /// <summary>
         /// Validates that the workflow step definition is complete and valid.
+        /// Step-level templates are optional - steps can use action-level templates or blind navigation.
         /// </summary>
         private void ValidateWorkflowStep(WorkflowStepDefinition stepDef)
         {
@@ -127,10 +136,11 @@ namespace FFXIManager.Services.AutoLogin
                 throw new InvalidOperationException(errorMessage);
             }
 
-            if (string.IsNullOrWhiteSpace(stepDef.TemplatePath))
-            {
-                throw new InvalidOperationException($"Workflow step '{stepDef.DisplayName}' has no template path configured");
-            }
+            // Step-level template is OPTIONAL
+            // Valid patterns:
+            // 1. TemplatePath + Navigation = Wait for screen, then navigate
+            // 2. TemplatePath only = Detection-only step (no navigation)
+            // 3. Navigation only = Blind navigation or action-level templates (Launch actions)
         }
 
         /// <summary>
@@ -262,12 +272,13 @@ namespace FFXIManager.Services.AutoLogin
         /// <summary>
         /// Executes navigation for the workflow step using the unified action executor pattern.
         /// Each action in the sequence is routed to the appropriate executor.
+        /// Template match is optional - actions may use step-level detection, action-level detection, or neither.
         /// </summary>
         private async Task<bool> ExecuteNavigationAsync(
             AutoLoginSubtask subtask,
             WorkflowStepDefinition stepDef,
             IntPtr windowHandle,
-            TemplateMatchResult templateMatch,
+            TemplateMatchResult? templateMatch,
             CancellationToken cancellationToken)
         {
             // Get navigation from step definition (100% workflow-driven)

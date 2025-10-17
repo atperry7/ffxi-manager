@@ -224,6 +224,9 @@ namespace FFXIManager
                 // Ensure PlayOnline monitoring is started regardless of UI windows
                 services.GetRequiredService<IPlayOnlineMonitorService>().StartMonitoring();
 
+                // Ensure External Application monitoring is started to load applications for workflow editor
+                services.GetRequiredService<IExternalApplicationService>().StartMonitoring();
+
                 // **WORKFLOW SYSTEM**: Initialize workflow service to ensure default workflows exist
                 try
                 {

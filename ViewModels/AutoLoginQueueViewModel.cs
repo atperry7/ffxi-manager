@@ -1035,7 +1035,7 @@ namespace FFXIManager.ViewModels
         {
             try
             {
-                var window = _serviceProvider.GetService(typeof(FFXIManager.Views.WorkflowEditor)) as System.Windows.Window;
+                var window = _serviceProvider.GetService(typeof(FFXIManager.Views.WorkflowEditorWindow)) as System.Windows.Window;
                 if (window != null)
                 {
                     window.Owner = System.Windows.Application.Current?.MainWindow;

@@ -5,14 +5,14 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Select Template Region" Height="700" Width="900"
-        Background="#1E1E1E"
+        Background="{DynamicResource BackgroundBrush}"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
 
-        <!-- Button styles -->
+        <!-- Button styles using theme resources -->
         <Style x:Key="BaseButton" TargetType="Button">
             <Setter Property="Height" Value="36"/>
             <Setter Property="Padding" Value="20,8"/>
@@ -22,21 +22,21 @@
         </Style>
 
         <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="#0078D4"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#0078D4"/>
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonTextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
         </Style>
 
         <Style x:Key="SuccessButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="#107C10"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#107C10"/>
+            <Setter Property="Background" Value="{DynamicResource SuccessBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonTextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource SuccessBrush}"/>
         </Style>
 
         <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="#2D2D2D"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#555555"/>
+            <Setter Property="Background" Value="{DynamicResource SecondaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ButtonTextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
         </Style>
     </Window.Resources>
 
@@ -50,8 +50,8 @@
 
         <!-- Instructions -->
         <Border Grid.Row="0"
-                Background="#2D2D2D"
-                BorderBrush="#555555"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1"
                 CornerRadius="6"
                 Padding="12"
@@ -60,10 +60,10 @@
                 <TextBlock Text="📐 Select Template Region"
                            FontWeight="SemiBold"
                            FontSize="14"
-                           Foreground="White"
+                           Foreground="{DynamicResource PrimaryTextBrush}"
                            Margin="0,0,0,5"/>
                 <TextBlock TextWrapping="Wrap"
-                           Foreground="#CCCCCC">
+                           Foreground="{DynamicResource SecondaryTextBrush}">
                     Drag on the image below to select the region you want to use as the template.
                     If your screenshot is already the correct size, click "Use Full Image".
                 </TextBlock>
@@ -72,8 +72,8 @@
 
         <!-- Image with selection overlay -->
         <Border Grid.Row="1"
-                Background="#252525"
-                BorderBrush="#555555"
+                Background="{DynamicResource CardBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="8"
@@ -120,7 +120,7 @@
                                    Canvas.Top="{Binding SelectionY}"
                                    Width="{Binding SelectionWidth}"
                                    Height="{Binding SelectionHeight}"
-                                   Stroke="DodgerBlue"
+                                   Stroke="{DynamicResource AccentBrush}"
                                    StrokeThickness="2"
                                    StrokeDashArray="5 3"
                                    Fill="Transparent"
@@ -132,14 +132,14 @@
 
         <!-- Selection info -->
         <Border Grid.Row="2"
-                Background="#2D2D2D"
-                BorderBrush="#555555"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1"
                 CornerRadius="6"
                 Padding="10"
                 Margin="0,0,0,10">
             <TextBlock Text="{Binding SelectionInfo}"
-                       Foreground="White"
+                       Foreground="{DynamicResource PrimaryTextBrush}"
                        FontWeight="Medium"
                        TextAlignment="Center"/>
         </Border>

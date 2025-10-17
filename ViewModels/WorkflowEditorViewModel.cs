@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -38,6 +39,11 @@ namespace FFXIManager.ViewModels
         private bool _hasUnsavedChanges;
         private bool _disposed;
         private CancellationTokenSource _cancellationTokenSource = new();
+
+        // Event subscription tracking to prevent memory leaks
+        private WorkflowStepDefinition? _subscribedStep;
+        private ObservableCollection<KeyboardAction>? _subscribedSequence;
+        private readonly List<KeyboardAction> _subscribedActions = new();
 
         public WorkflowEditorViewModel(
             IWorkflowService workflowService,
@@ -104,11 +110,18 @@ namespace FFXIManager.ViewModels
             {
                 if (SetProperty(ref _selectedStep, value))
                 {
+                    // Unsubscribe from previous step
+                    UnsubscribeFromStepChanges();
+
                     OnPropertyChanged(nameof(HasStepSelected));
                     OnPropertyChanged(nameof(CanEditStep));
                     OnPropertyChanged(nameof(NavigationActions));
                     OnPropertyChanged(nameof(HasNavigationAction));
                     SelectedNavigationAction = null;
+
+                    // Subscribe to new step
+                    SubscribeToStepChanges();
+
                     UpdateCommandStates();
                 }
             }
@@ -404,13 +417,61 @@ namespace FFXIManager.ViewModels
                     return;
                 }
 
+                // Check if this is a modified default workflow from the defaults/ directory
+                // Default workflows are named by friendly names (e.g., "playonline-standard.json")
+                // but saved by GUID. This creates duplicates. To prevent this, we assign a new
+                // WorkflowId when a default workflow is modified, making it a distinct user workflow.
+                var expectedFilePath = _workflowService.GetWorkflowFilePath(SelectedWorkflow.WorkflowId);
+                var isModifiedDefault = !System.IO.File.Exists(expectedFilePath) && SelectedWorkflow.IsDefault;
+
+                if (isModifiedDefault)
+                {
+                    // This is a default workflow being saved for the first time as a user workflow
+                    // Assign new ID, clear default flag, update metadata
+                    var oldId = SelectedWorkflow.WorkflowId;
+                    var oldName = SelectedWorkflow.Name;
+
+                    SelectedWorkflow.WorkflowId = Guid.NewGuid();
+                    SelectedWorkflow.IsDefault = false;
+                    SelectedWorkflow.Name = $"{SelectedWorkflow.Name} (Custom)";
+                    SelectedWorkflow.CreatedDate = DateTime.UtcNow;
+                    SelectedWorkflow.LastModifiedDate = DateTime.UtcNow;
+
+                    await _loggingService.LogInfoAsync($"Converting default workflow '{oldName}' ({oldId}) to user workflow with new ID: {SelectedWorkflow.WorkflowId}");
+
+                    // Inform user about the change
+                    await _dialogService.ShowMessageDialogAsync("Workflow Converted",
+                        $"The default workflow has been converted to a custom user workflow.\n\n" +
+                        $"Original: {oldName}\n" +
+                        $"New Name: {SelectedWorkflow.Name}\n\n" +
+                        $"This prevents conflicts with the original default workflow.");
+                }
+
                 SelectedWorkflow.LastModifiedDate = DateTime.UtcNow;
                 var success = await _workflowService.SaveWorkflowAsync(SelectedWorkflow, _cancellationTokenSource.Token);
 
                 if (success)
                 {
                     HasUnsavedChanges = false;
-                    await _loggingService.LogInfoAsync($"Saved workflow: {SelectedWorkflow.Name}");
+
+                    // Capture the saved workflow ID before reload (in case SelectedWorkflow changes)
+                    var savedWorkflowId = SelectedWorkflow.WorkflowId;
+                    var savedWorkflowName = SelectedWorkflow.Name;
+
+                    // Reload workflows to reflect the new workflow in the list
+                    await LoadWorkflowsAsync();
+
+                    // Reselect the workflow by its new ID
+                    await _uiDispatcher.InvokeAsync(() =>
+                    {
+                        var reloadedWorkflow = Workflows.FirstOrDefault(w => w != null && w.WorkflowId == savedWorkflowId);
+                        if (reloadedWorkflow != null)
+                        {
+                            SelectedWorkflow = reloadedWorkflow;
+                        }
+                    });
+
+                    await _loggingService.LogInfoAsync($"Saved workflow: {savedWorkflowName}");
                     await _dialogService.ShowMessageDialogAsync("Saved", "Workflow saved successfully");
                 }
                 else
@@ -675,6 +736,10 @@ namespace FFXIManager.ViewModels
                 OnPropertyChanged(nameof(NavigationActions));
                 OnPropertyChanged(nameof(HasNavigationAction));
                 HasUnsavedChanges = true;
+
+                // Subscribe to the newly created navigation sequence
+                SubscribeToNavigationSequenceChanges();
+
                 UpdateCommandStates();
 
                 _ = _loggingService.LogDebugAsync($"Initialized sequence-based navigation for step: {SelectedStep.DisplayName}");
@@ -855,29 +920,53 @@ namespace FFXIManager.ViewModels
                     return;
                 }
 
-                // Generate template path based on step ID (guaranteed unique)
-                // Format: Application/stepid where stepid is the unique GUID
-                var templateName = SelectedStep.StepId.ToLowerInvariant().Replace("-", "_");
-                var templatePath = $"PlayOnline/{templateName}"; // Default to PlayOnline category
+                // Validate crop rectangle
+                if (cropViewModel.CropRectangle == null)
+                {
+                    await _loggingService.LogWarningAsync("No crop rectangle selected");
+                    await _dialogService.ShowMessageDialogAsync("Invalid Selection", "No crop area was selected.");
+                    return;
+                }
 
-                await _loggingService.LogInfoAsync($"Creating template: {templatePath} for step '{SelectedStep.DisplayName}'");
+                // Generate unique template name based on step ID (flat structure - no directories)
+                var templateName = $"step_{SelectedStep.StepId.ToLowerInvariant().Replace("-", "_")}";
 
-                // Save cropped template image
-                var success = await _templateService.CropAndReplaceTemplateImageAsync(
-                    templatePath,
+                // Get template directory path
+                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var templatesPath = System.IO.Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
+                System.IO.Directory.CreateDirectory(templatesPath);
+
+                var templateFilePath = System.IO.Path.Combine(templatesPath, $"{templateName}.png");
+
+                await _loggingService.LogInfoAsync($"Creating template: {templateName} for step '{SelectedStep.DisplayName}'");
+
+                // Get image crop service from DI
+                var imageCropService = _serviceProvider.GetService(typeof(IImageCropService))
+                    as IImageCropService;
+
+                if (imageCropService == null)
+                {
+                    await _loggingService.LogErrorAsync("IImageCropService not available from DI");
+                    await _dialogService.ShowMessageDialogAsync("Service Error", "Image crop service not available.");
+                    return;
+                }
+
+                // Crop and save the image directly to template location
+                var success = await imageCropService.CropImageAsync(
                     dialog.FileName,
-                    cropViewModel.CropRectangle);
+                    cropViewModel.CropRectangle.Value,
+                    templateFilePath);
 
                 if (success)
                 {
-                    // Update step with new template path
-                    SelectedStep.TemplatePath = templatePath;
+                    // Update step with new template path (stored without extension)
+                    SelectedStep.TemplatePath = templateName;
                     HasUnsavedChanges = true;
                     UpdateCommandStates();
 
-                    await _loggingService.LogInfoAsync($"Template created successfully: {templatePath}");
+                    await _loggingService.LogInfoAsync($"Template created successfully: {templateName}");
                     await _dialogService.ShowMessageDialogAsync("Template Created",
-                        $"Template '{templateName}' created successfully\n\nPath: {templatePath}");
+                        $"Template '{templateName}' created successfully");
                 }
                 else
                 {
@@ -1035,6 +1124,145 @@ namespace FFXIManager.ViewModels
             (ViewTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
         }
 
+        /// <summary>
+        /// Subscribes to property changes on the currently selected step and its navigation sequence
+        /// </summary>
+        private void SubscribeToStepChanges()
+        {
+            if (_selectedStep == null) return;
+
+            // Subscribe to step property changes
+            if (_selectedStep is INotifyPropertyChanged stepNotifier)
+            {
+                stepNotifier.PropertyChanged += OnStepPropertyChanged;
+                _subscribedStep = _selectedStep;
+            }
+
+            // Subscribe to navigation sequence changes
+            SubscribeToNavigationSequenceChanges();
+        }
+
+        /// <summary>
+        /// Unsubscribes from property changes on the previously selected step
+        /// </summary>
+        private void UnsubscribeFromStepChanges()
+        {
+            // Unsubscribe from step property changes
+            if (_subscribedStep is INotifyPropertyChanged stepNotifier)
+            {
+                stepNotifier.PropertyChanged -= OnStepPropertyChanged;
+                _subscribedStep = null;
+            }
+
+            // Unsubscribe from navigation sequence changes
+            UnsubscribeFromNavigationSequenceChanges();
+        }
+
+        /// <summary>
+        /// Subscribes to collection changes on the navigation sequence and property changes on individual actions
+        /// </summary>
+        private void SubscribeToNavigationSequenceChanges()
+        {
+            if (_selectedStep?.Navigation?.Sequence == null) return;
+
+            var sequence = _selectedStep.Navigation.Sequence;
+
+            // Subscribe to collection changes
+            sequence.CollectionChanged += OnNavigationSequenceChanged;
+            _subscribedSequence = sequence;
+
+            // Subscribe to property changes on existing actions
+            foreach (var action in sequence)
+            {
+                SubscribeToActionPropertyChanges(action);
+            }
+        }
+
+        /// <summary>
+        /// Unsubscribes from navigation sequence collection changes and all action property changes
+        /// </summary>
+        private void UnsubscribeFromNavigationSequenceChanges()
+        {
+            // Unsubscribe from collection changes
+            if (_subscribedSequence != null)
+            {
+                _subscribedSequence.CollectionChanged -= OnNavigationSequenceChanged;
+                _subscribedSequence = null;
+            }
+
+            // Unsubscribe from all action property changes
+            foreach (var action in _subscribedActions.ToList())
+            {
+                UnsubscribeFromActionPropertyChanges(action);
+            }
+        }
+
+        /// <summary>
+        /// Subscribes to property changes on a navigation action
+        /// </summary>
+        private void SubscribeToActionPropertyChanges(KeyboardAction action)
+        {
+            if (action == null) return;
+
+            action.PropertyChanged += OnActionPropertyChanged;
+            _subscribedActions.Add(action);
+        }
+
+        /// <summary>
+        /// Unsubscribes from property changes on a navigation action
+        /// </summary>
+        private void UnsubscribeFromActionPropertyChanges(KeyboardAction action)
+        {
+            if (action == null) return;
+
+            action.PropertyChanged -= OnActionPropertyChanged;
+            _subscribedActions.Remove(action);
+        }
+
+        /// <summary>
+        /// Event handler for step property changes
+        /// </summary>
+        private void OnStepPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            // Any property change on the step means unsaved changes
+            HasUnsavedChanges = true;
+        }
+
+        /// <summary>
+        /// Event handler for navigation sequence collection changes
+        /// </summary>
+        private void OnNavigationSequenceChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            // Handle new items being added
+            if (e.NewItems != null)
+            {
+                foreach (KeyboardAction action in e.NewItems)
+                {
+                    SubscribeToActionPropertyChanges(action);
+                }
+            }
+
+            // Handle items being removed
+            if (e.OldItems != null)
+            {
+                foreach (KeyboardAction action in e.OldItems)
+                {
+                    UnsubscribeFromActionPropertyChanges(action);
+                }
+            }
+
+            // Collection changes already set HasUnsavedChanges in existing code
+        }
+
+        /// <summary>
+        /// Event handler for action property changes
+        /// </summary>
+        private void OnActionPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            // Any property change on a navigation action means unsaved changes
+            HasUnsavedChanges = true;
+        }
+
         #endregion
 
         #region IDisposable
@@ -1043,6 +1271,9 @@ namespace FFXIManager.ViewModels
         {
             if (_disposed) return;
             _disposed = true;
+
+            // Unsubscribe from all event handlers to prevent memory leaks
+            UnsubscribeFromStepChanges();
 
             _cancellationTokenSource?.Cancel();
             _cancellationTokenSource?.Dispose();

@@ -1,9 +1,11 @@
-<Window x:Class="FFXIManager.Views.WorkflowEditor"
+<Window x:Class="FFXIManager.Views.WorkflowEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FFXIManager.Views"
+        xmlns:workflowEditor="clr-namespace:FFXIManager.Views.WorkflowEditor"
+        xmlns:actionEditors="clr-namespace:FFXIManager.Views.WorkflowEditor.ActionEditors"
         xmlns:converters="clr-namespace:FFXIManager.Converters"
         mc:Ignorable="d"
         Title="Workflow Editor - Auto-Login Customization"
@@ -22,6 +24,34 @@
         <!-- Action-based Visibility Converters -->
         <converters:IsClickActionToVisibilityConverter x:Key="IsClickActionToVisConverter"/>
         <converters:IsNotClickActionToVisibilityConverter x:Key="IsNotClickActionToVisConverter"/>
+
+        <!-- Action Converters for Master-Detail UI -->
+        <converters:ActionIconConverter x:Key="ActionIconConverter"/>
+        <converters:ActionSummaryConverter x:Key="ActionSummaryConverter"/>
+
+        <!-- Action Editor Data Templates -->
+        <DataTemplate x:Key="LaunchActionEditorTemplate">
+            <actionEditors:LaunchActionEditor/>
+        </DataTemplate>
+
+        <DataTemplate x:Key="KeyboardActionEditorTemplate">
+            <actionEditors:KeyboardActionEditor/>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ClickActionEditorTemplate">
+            <actionEditors:ClickActionEditor/>
+        </DataTemplate>
+
+        <DataTemplate x:Key="WaitActionEditorTemplate">
+            <actionEditors:WaitActionEditor/>
+        </DataTemplate>
+
+        <!-- Action Editor Template Selector -->
+        <workflowEditor:ActionEditorTemplateSelector x:Key="ActionEditorTemplateSelector"
+                                            LaunchTemplate="{StaticResource LaunchActionEditorTemplate}"
+                                            KeyboardTemplate="{StaticResource KeyboardActionEditorTemplate}"
+                                            ClickTemplate="{StaticResource ClickActionEditorTemplate}"
+                                            WaitTemplate="{StaticResource WaitActionEditorTemplate}"/>
 
         <!-- Step Template Selector -->
         <DataTemplate x:Key="WorkflowStepTemplate">
@@ -759,129 +789,42 @@
                                                  ToolTip="Human-readable description of this navigation action"/>
                                     </Grid>
 
-                                    <!-- Navigation Actions Header -->
-                                    <Grid Margin="0,0,0,8">
-                                        <TextBlock Text="Actions Sequence"
-                                                   FontSize="13"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource PrimaryTextBrush}"
-                                                   VerticalAlignment="Center"/>
-                                        <Button Content="+ Add Action"
-                                                Command="{Binding AddNavigationActionCommand}"
-                                                Width="100"
-                                                Height="28"
-                                                HorizontalAlignment="Right"
-                                                Style="{StaticResource PrimaryButton}"/>
-                                    </Grid>
+                                    <!-- Navigation Actions Master-Detail Editor -->
+                                    <TextBlock Text="Actions Sequence"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource PrimaryTextBrush}"
+                                               Margin="0,0,0,12"/>
 
-                                    <!-- Navigation Actions DataGrid -->
                                     <Border BorderBrush="{DynamicResource BorderBrush}"
                                             BorderThickness="1"
                                             CornerRadius="6"
-                                            Margin="0,0,0,12"
-                                            MaxHeight="300">
-                                        <DataGrid ItemsSource="{Binding NavigationActions}"
-                                                  SelectedItem="{Binding SelectedNavigationAction, Mode=TwoWay}"
-                                                  Style="{StaticResource DataGridBase}"
-                                                  GridLinesVisibility="Horizontal">
-                                            <DataGrid.Columns>
-                                                <!-- Action Type -->
-                                                <DataGridTextColumn Header="Action"
-                                                                    Binding="{Binding Action, UpdateSourceTrigger=PropertyChanged}"
-                                                                    Width="100">
-                                                    <DataGridTextColumn.ElementStyle>
-                                                        <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextCellStyle}">
-                                                            <Setter Property="ToolTip" Value="Tab, Enter, Click, etc."/>
-                                                        </Style>
-                                                    </DataGridTextColumn.ElementStyle>
-                                                </DataGridTextColumn>
+                                            Margin="0,0,0,0"
+                                            Height="500"
+                                            Background="{DynamicResource SurfaceBrush}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="250"/>
+                                                <ColumnDefinition Width="1"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
 
-                                                <!-- Count (hidden for Click actions) -->
-                                                <DataGridTemplateColumn Header="Count" Width="60">
-                                                    <DataGridTemplateColumn.CellTemplate>
-                                                        <DataTemplate>
-                                                            <TextBlock Text="{Binding Count}"
-                                                                       Style="{StaticResource DataGridTextCellStyle}"
-                                                                       ToolTip="Number of times to repeat this action"
-                                                                       Visibility="{Binding Action, Converter={StaticResource IsNotClickActionToVisConverter}}"/>
-                                                        </DataTemplate>
-                                                    </DataGridTemplateColumn.CellTemplate>
-                                                </DataGridTemplateColumn>
+                                            <!-- Master: Action List Panel -->
+                                            <workflowEditor:ActionListPanel Grid.Column="0"
+                                                                   DataContext="{Binding}"/>
 
-                                                <!-- Delay (ms) -->
-                                                <DataGridTextColumn Header="Delay (ms)"
-                                                                    Binding="{Binding DelayMs, UpdateSourceTrigger=PropertyChanged}"
-                                                                    Width="80">
-                                                    <DataGridTextColumn.ElementStyle>
-                                                        <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextCellStyle}">
-                                                            <Setter Property="ToolTip" Value="Delay after executing this action"/>
-                                                        </Style>
-                                                    </DataGridTextColumn.ElementStyle>
-                                                </DataGridTextColumn>
+                                            <!-- Splitter -->
+                                            <Border Grid.Column="1" Background="{DynamicResource BorderBrush}"/>
 
-                                                <!-- Click X (only for Click actions) -->
-                                                <DataGridTemplateColumn Header="Click X" Width="70">
-                                                    <DataGridTemplateColumn.CellTemplate>
-                                                        <DataTemplate>
-                                                            <TextBlock Text="{Binding ClickX, StringFormat=F3}"
-                                                                       Style="{StaticResource DataGridTextCellStyle}"
-                                                                       ToolTip="Relative X coordinate (0.0-1.0)"
-                                                                       Visibility="{Binding Action, Converter={StaticResource IsClickActionToVisConverter}}"/>
-                                                        </DataTemplate>
-                                                    </DataGridTemplateColumn.CellTemplate>
-                                                </DataGridTemplateColumn>
-
-                                                <!-- Click Y (only for Click actions) -->
-                                                <DataGridTemplateColumn Header="Click Y" Width="70">
-                                                    <DataGridTemplateColumn.CellTemplate>
-                                                        <DataTemplate>
-                                                            <TextBlock Text="{Binding ClickY, StringFormat=F3}"
-                                                                       Style="{StaticResource DataGridTextCellStyle}"
-                                                                       ToolTip="Relative Y coordinate (0.0-1.0)"
-                                                                       Visibility="{Binding Action, Converter={StaticResource IsClickActionToVisConverter}}"/>
-                                                        </DataTemplate>
-                                                    </DataGridTemplateColumn.CellTemplate>
-                                                </DataGridTemplateColumn>
-
-                                                <!-- Description -->
-                                                <DataGridTextColumn Header="Description"
-                                                                    Binding="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
-                                                                    Width="*">
-                                                    <DataGridTextColumn.ElementStyle>
-                                                        <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextCellStyle}">
-                                                            <Setter Property="ToolTip" Value="Optional description of this action"/>
-                                                        </Style>
-                                                    </DataGridTextColumn.ElementStyle>
-                                                </DataGridTextColumn>
-                                            </DataGrid.Columns>
-                                        </DataGrid>
+                                            <!-- Detail: Action Editor -->
+                                            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto"
+                                                          Background="{DynamicResource BackgroundBrush}">
+                                                <ContentControl Content="{Binding SelectedNavigationAction}"
+                                                                ContentTemplateSelector="{StaticResource ActionEditorTemplateSelector}"
+                                                                Margin="10"/>
+                                            </ScrollViewer>
+                                        </Grid>
                                     </Border>
-
-                                    <!-- Navigation Action Buttons -->
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="8"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="8"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Button Grid.Column="0"
-                                                Content="↑ Move Up"
-                                                Command="{Binding MoveNavigationActionUpCommand}"
-                                                Height="32"
-                                                Style="{StaticResource SecondaryButton}"/>
-                                        <Button Grid.Column="2"
-                                                Content="↓ Move Down"
-                                                Command="{Binding MoveNavigationActionDownCommand}"
-                                                Height="32"
-                                                Style="{StaticResource SecondaryButton}"/>
-                                        <Button Grid.Column="4"
-                                                Content="Remove"
-                                                Command="{Binding RemoveNavigationActionCommand}"
-                                                Height="32"
-                                                Style="{StaticResource DangerButton}"/>
-                                    </Grid>
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>

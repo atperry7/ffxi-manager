@@ -7,8 +7,7 @@
         Title="Template Viewer"
         Height="700" Width="900"
         WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource BackgroundBrush}"
-        Style="{StaticResource CustomWindowStyle}">
+        Background="{DynamicResource BackgroundBrush}">
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -150,7 +149,7 @@
                 CornerRadius="6"
                 Padding="8"
                 Margin="0,0,0,10"
-                Visibility="{Binding ClickMarkers.Count, Converter={StaticResource CountToVisibilityConverter}}">
+                Visibility="{Binding ClickMarkers.Count, Converter={StaticResource ZeroToInverseVisibilityConverter}}">
             <StackPanel>
                 <TextBlock Text="Click Points:"
                            FontWeight="SemiBold"

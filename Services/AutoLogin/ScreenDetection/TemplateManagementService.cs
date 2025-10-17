@@ -32,9 +32,10 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             _imageCropService = imageCropService; // Optional dependency
 
             // Set templates base path to workflow directory (centralized with workflow definitions)
+            // Templates are shared by all workflows (default and custom) in a flat structure
             var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             var appDirectory = Path.Combine(appDataPath, "FFXIManager");
-            _templatesBasePath = Path.Combine(appDirectory, "workflows", "defaults", "templates");
+            _templatesBasePath = Path.Combine(appDirectory, "workflows", "templates");
 
             // Ensure templates directory exists
             Directory.CreateDirectory(_templatesBasePath);
