@@ -25,7 +25,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
     public class ClickActionExecutor : BaseWorkflowActionExecutor
     {
         private readonly IUIAutomationService _automationService;
-        private readonly IScreenshotCaptureService _screenshotService;
+        private readonly IScreenDetectionCoordinator _screenDetection;
 
         public override string ActionType => "Click";
 
@@ -34,11 +34,11 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
         public ClickActionExecutor(
             ILoggingService loggingService,
             IUIAutomationService automationService,
-            IScreenshotCaptureService screenshotService)
+            IScreenDetectionCoordinator screenDetection)
             : base(loggingService)
         {
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
-            _screenshotService = screenshotService ?? throw new ArgumentNullException(nameof(screenshotService));
+            _screenDetection = screenDetection ?? throw new ArgumentNullException(nameof(screenDetection));
         }
 
         protected override async Task<bool> ExecuteActionAsync(
@@ -70,8 +70,15 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             await _loggingService.LogDebugAsync($"[CLICK] Absolute window-relative point: ({absolutePoint.X}, {absolutePoint.Y})");
 
-            // Capture screenshot to convert to screen coordinates
-            var screenshot = await _screenshotService.CaptureWindowAsync(context.WindowHandle, cancellationToken);
+            // Ensure fresh handle in case of splash → main transitions
+            if (!await context.EnsureFreshWindowHandleAsync())
+            {
+                await _loggingService.LogErrorAsync("[CLICK] Unable to refresh window handle before capture");
+                return false;
+            }
+
+            // Capture screenshot to convert to screen coordinates (with logging + retries)
+            var screenshot = await _screenDetection.CaptureScreenshotWithLogging(context.WindowHandle, "click coordinate conversion", cancellationToken, retryCount: 0);
             if (screenshot == null || !screenshot.IsValid)
             {
                 await _loggingService.LogErrorAsync("[CLICK] Failed to capture window screenshot for coordinate conversion");

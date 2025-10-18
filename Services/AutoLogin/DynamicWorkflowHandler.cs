@@ -28,32 +28,36 @@ namespace FFXIManager.Services.AutoLogin
     /// It allows users to define new steps or customize existing ones through JSON configuration
     /// without modifying code.
     /// </remarks>
-    public class DynamicWorkflowHandler : BaseLoginTaskHandler
+    public class DynamicWorkflowHandler : ILoginTaskHandler
     {
+        private readonly ILoggingService _loggingService;
         private readonly IUIAutomationService _automationService;
         private readonly IWorkflowActionExecutorFactory _actionExecutorFactory;
         private readonly IWindowDiscoveryService _windowDiscoveryService;
+        private readonly IScreenDetectionCoordinator _screenDetectionCoordinator;
+        private readonly IWorkflowProgressService _progressService;
 
         public DynamicWorkflowHandler(
             ILoggingService loggingService,
-            IScreenshotCaptureService screenshotService,
-            ITemplateMatchingService templateService,
-            ITemplateManagementService templateManagementService,
             IUIAutomationService automationService,
             IWorkflowActionExecutorFactory actionExecutorFactory,
-            IWindowDiscoveryService windowDiscoveryService)
-            : base(loggingService, screenshotService, templateService, templateManagementService)
+            IWindowDiscoveryService windowDiscoveryService,
+            IScreenDetectionCoordinator screenDetectionCoordinator,
+            IWorkflowProgressService progressService)
         {
+            _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
             _actionExecutorFactory = actionExecutorFactory ?? throw new ArgumentNullException(nameof(actionExecutorFactory));
             _windowDiscoveryService = windowDiscoveryService ?? throw new ArgumentNullException(nameof(windowDiscoveryService));
+            _screenDetectionCoordinator = screenDetectionCoordinator ?? throw new ArgumentNullException(nameof(screenDetectionCoordinator));
+            _progressService = progressService ?? throw new ArgumentNullException(nameof(progressService));
         }
 
         /// <summary>
         /// Can handle any subtask that has a WorkflowStepDefinition.
         /// This allows the handler to execute user-defined workflow steps.
         /// </summary>
-        public override bool CanHandle(AutoLoginSubtask subtask)
+        public bool CanHandle(AutoLoginSubtask subtask)
         {
             // Check if subtask has workflow step definition
             return subtask?.WorkflowStep != null;
@@ -63,20 +67,36 @@ namespace FFXIManager.Services.AutoLogin
         /// Executes a workflow step dynamically based on its definition.
         /// Uses unified action executor pattern - no routing based on StepType.
         /// </summary>
-        protected override async Task ExecuteHandlerLogicAsync(
+        public async Task ExecuteAsync(
             AutoLoginSubtask subtask,
             AutoLoginQueueItem queueItem,
             IAutoLoginContext context,
             CancellationToken cancellationToken)
         {
-            var stepDef = subtask.WorkflowStep!;
+            await _loggingService.LogDebugAsync($"Starting execution of '{subtask.Name}' for {queueItem.DisplayName}");
 
-            await _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] Executing step: {stepDef.DisplayName} (StepId: {stepDef.StepId})");
+            try
+            {
+                ValidateInputs(subtask, queueItem);
 
-            // ALL workflow steps now use the unified navigation/action execution flow
-            await ExecuteNavigationStepAsync(subtask, queueItem, context, cancellationToken);
+                var stepDef = subtask.WorkflowStep!;
 
-            await _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] Completed step: {stepDef.DisplayName}");
+                await _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] Executing step: {stepDef.DisplayName} (StepId: {stepDef.StepId})");
+                await ExecuteNavigationStepAsync(subtask, queueItem, context, cancellationToken);
+                await _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] Completed step: {stepDef.DisplayName}");
+
+                await _loggingService.LogDebugAsync($"Successfully completed '{subtask.Name}' for {queueItem.DisplayName}");
+            }
+            catch (OperationCanceledException)
+            {
+                await _loggingService.LogDebugAsync($"Execution of '{subtask.Name}' was cancelled for {queueItem.DisplayName}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync($"Failed to execute '{subtask.Name}' for {queueItem.DisplayName}", ex);
+                throw;
+            }
         }
 
         /// <summary>
@@ -92,7 +112,7 @@ namespace FFXIManager.Services.AutoLogin
             var stepDef = subtask.WorkflowStep!;
 
             // Phase 1: Validate step definition
-            await UpdateProgressWithPhaseAsync(subtask, "startup", 5, "Validating workflow step");
+            await _progressService.UpdateProgressWithPhaseAsync(subtask, "startup", 5, "Validating workflow step");
             ValidateWorkflowStep(stepDef);
 
             // Phase 2: Decide detection strategy
@@ -109,8 +129,12 @@ namespace FFXIManager.Services.AutoLogin
                 var targetApp = TargetApplicationResolver.ResolveForStep(stepDef);
                 var windowInfo = await _windowDiscoveryService.DiscoverWindowInfoAsync(targetApp, context, cancellationToken);
                 windowHandle = windowInfo.WindowHandle;
-                await UpdateProgressWithPhaseAsync(subtask, "authentication", 20, $"Looking for {stepDef.DisplayName}");
-                templateMatch = await DetectScreenAsync(subtask, stepDef, windowHandle, cancellationToken);
+                await _progressService.UpdateProgressWithPhaseAsync(subtask, "authentication", 20, $"Looking for {stepDef.DisplayName}");
+                // Build PID-first handle refresh
+                Func<CancellationToken, Task<IntPtr>> refreshHandleAsync = async (ct) =>
+                    await _windowDiscoveryService.GetFreshWindowHandleFromPidAsync(windowInfo.ProcessId, targetApp);
+
+                templateMatch = await DetectScreenAsync(subtask, stepDef, windowHandle, cancellationToken, refreshHandleAsync);
             }
             else
             {
@@ -118,17 +142,17 @@ namespace FFXIManager.Services.AutoLogin
             }
 
             // Phase 3: Execute navigation with on-demand discovery/detection
-            await UpdateProgressWithPhaseAsync(subtask, "authentication", 60, $"Navigating {stepDef.DisplayName}");
+            await _progressService.UpdateProgressWithPhaseAsync(subtask, "authentication", 60, $"Navigating {stepDef.DisplayName}");
             await ExecuteNavigationAsync(subtask, stepDef, queueItem, context, windowHandle, templateMatch, cancellationToken);
 
             // Phase 5: Post-navigation delay (if configured)
             if (stepDef.EstimatedDurationSeconds > 0)
             {
-                await UpdateProgressWithPhaseAsync(subtask, "authentication", 90, "Waiting for screen transition");
+                await _progressService.UpdateProgressWithPhaseAsync(subtask, "authentication", 90, "Waiting for screen transition");
                 await Task.Delay(TimeSpan.FromSeconds(Math.Min(stepDef.EstimatedDurationSeconds, 3)), cancellationToken);
             }
 
-            await UpdateProgressWithPhaseAsync(subtask, "authentication", 100, $"{stepDef.DisplayName} completed");
+            await _progressService.UpdateProgressWithPhaseAsync(subtask, "authentication", 100, $"{stepDef.DisplayName} completed");
         }
 
 
@@ -182,7 +206,8 @@ namespace FFXIManager.Services.AutoLogin
             AutoLoginSubtask subtask,
             WorkflowStepDefinition stepDef,
             IntPtr windowHandle,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            Func<CancellationToken, Task<IntPtr>>? refreshHandleAsync = null)
         {
             var primaryTemplate = stepDef.TemplatePath;
             var description = stepDef.DisplayName;
@@ -203,15 +228,31 @@ namespace FFXIManager.Services.AutoLogin
 
                 await _loggingService.LogInfoAsync($"Detection config - MaxAttempts: {options.MaxAttempts?.ToString() ?? "auto"}, Delay: {delayMs}ms");
 
-                return await WaitForScreenDetectionAsync(
-                    subtask,
-                    primaryTemplate,
-                    windowHandle,
-                    description,
-                    stepDef.ConfidenceThreshold,
-                    stepDef.Tolerance,
-                    cancellationToken,
-                    options);
+                if (refreshHandleAsync != null)
+                {
+                    return await _screenDetectionCoordinator.WaitForScreenDetectionWithHandleRefreshAsync(
+                        subtask,
+                        primaryTemplate,
+                        windowHandle,
+                        refreshHandleAsync,
+                        description,
+                        stepDef.ConfidenceThreshold,
+                        stepDef.Tolerance,
+                        cancellationToken,
+                        options);
+                }
+                else
+                {
+                    return await _screenDetectionCoordinator.WaitForScreenDetectionAsync(
+                        subtask,
+                        primaryTemplate,
+                        windowHandle,
+                        description,
+                        stepDef.ConfidenceThreshold,
+                        stepDef.Tolerance,
+                        cancellationToken,
+                        options);
+                }
             }
             catch (TimeoutException) when (stepDef.FallbackTemplatePaths.Count > 0)
             {
@@ -233,15 +274,31 @@ namespace FFXIManager.Services.AutoLogin
                             MaxAttempts = attemptsFb
                         };
 
-                        return await WaitForScreenDetectionAsync(
-                            subtask,
-                            fallbackTemplate,
-                            windowHandle,
-                            $"{description} (fallback)",
-                            stepDef.ConfidenceThreshold,
-                            stepDef.Tolerance,
-                            cancellationToken,
-                            options);
+                        if (refreshHandleAsync != null)
+                        {
+                            return await _screenDetectionCoordinator.WaitForScreenDetectionWithHandleRefreshAsync(
+                                subtask,
+                                fallbackTemplate,
+                                windowHandle,
+                                refreshHandleAsync,
+                                $"{description} (fallback)",
+                                stepDef.ConfidenceThreshold,
+                                stepDef.Tolerance,
+                                cancellationToken,
+                                options);
+                        }
+                        else
+                        {
+                            return await _screenDetectionCoordinator.WaitForScreenDetectionAsync(
+                                subtask,
+                                fallbackTemplate,
+                                windowHandle,
+                                $"{description} (fallback)",
+                                stepDef.ConfidenceThreshold,
+                                stepDef.Tolerance,
+                                cancellationToken,
+                                options);
+                        }
                     }
                     catch (TimeoutException)
                     {
@@ -273,7 +330,8 @@ namespace FFXIManager.Services.AutoLogin
             KeyboardAction action,
             IntPtr windowHandle,
             CancellationToken cancellationToken,
-            int defaultTimeout = 3)
+            int defaultTimeout = 3,
+            Func<CancellationToken, Task<IntPtr>>? refreshHandleAsync = null)
         {
             var templatePath = action.GetParameter<string>("TemplatePath", string.Empty);
             if (string.IsNullOrWhiteSpace(templatePath) || windowHandle == IntPtr.Zero)
@@ -296,7 +354,7 @@ namespace FFXIManager.Services.AutoLogin
 
             try
             {
-                return await DetectScreenAsync(subtask, tempStep, windowHandle, cancellationToken);
+                return await DetectScreenAsync(subtask, tempStep, windowHandle, cancellationToken, refreshHandleAsync);
             }
             catch (TimeoutException)
             {
@@ -457,13 +515,16 @@ namespace FFXIManager.Services.AutoLogin
             {
                 if (actionContext.TemplateMatch == null)
                 {
+                    var refresh = BuildHandleRefreshFunc(action, stepDef, actionContext, actionContext.AutoLoginContext!, cancellationToken);
+
                     actionContext.TemplateMatch = await PerformActionLevelDetectionAsync(
                         subtask,
                         stepDef,
                         action,
                         actionContext.WindowHandle,
                         cancellationToken,
-                        defaultTimeout: stepDef.EstimatedDurationSeconds);
+                        defaultTimeout: stepDef.EstimatedDurationSeconds,
+                        refreshHandleAsync: refresh);
                 }
                 return;
             }
@@ -472,19 +533,63 @@ namespace FFXIManager.Services.AutoLogin
             if (string.Equals(action.Action, "Keyboard", StringComparison.OrdinalIgnoreCase) ||
                 _actionExecutorFactory.IsKeyboardAction(action.Action))
             {
+                var refreshKb = BuildHandleRefreshFunc(action, stepDef, actionContext, actionContext.AutoLoginContext!, cancellationToken);
+
                 var match = await PerformActionLevelDetectionAsync(
                     subtask,
                     stepDef,
                     action,
                     actionContext.WindowHandle,
                     cancellationToken,
-                    defaultTimeout: 3);
+                    defaultTimeout: 3,
+                    refreshHandleAsync: refreshKb);
 
                 if (match != null)
                 {
                     actionContext.TemplateMatch = match;
                 }
             }
+        }
+
+        private Func<CancellationToken, Task<IntPtr>> BuildHandleRefreshFunc(
+            KeyboardAction action,
+            WorkflowStepDefinition stepDef,
+            WorkflowActionContext actionContext,
+            IAutoLoginContext autoLoginContext,
+            CancellationToken cancellationToken)
+        {
+            return async (ct) =>
+            {
+                // PID-first refresh via discovery service
+                if (actionContext.ProcessId > 0 && actionContext.WindowDiscoveryService != null)
+                {
+                    var fresh = await actionContext.WindowDiscoveryService.GetFreshWindowHandleFromPidAsync(actionContext.ProcessId, actionContext.ApplicationName);
+                    if (fresh != IntPtr.Zero)
+                    {
+                        actionContext.WindowHandle = fresh; // keep context in sync
+                        return fresh;
+                    }
+                }
+
+                // Fallback: rediscover by app name (from action or step)
+                var appName = action.GetParameter<string>("ApplicationName", string.Empty);
+                if (string.IsNullOrWhiteSpace(appName))
+                {
+                    appName = TargetApplicationResolver.ResolveForStep(stepDef);
+                }
+
+                if (!string.IsNullOrWhiteSpace(appName))
+                {
+                    var info = await _windowDiscoveryService.DiscoverWindowInfoAsync(appName, autoLoginContext, ct);
+                    if (info.IsValid)
+                    {
+                        actionContext.UpdateFromWindowInfo(info);
+                        return info.WindowHandle;
+                    }
+                }
+
+                return IntPtr.Zero;
+            };
         }
 
         /// <summary>
@@ -565,27 +670,56 @@ namespace FFXIManager.Services.AutoLogin
             if (handle == IntPtr.Zero)
                 return;
 
-            // Calculate timeout based on retry configuration
+            // Build detection options and thresholds from action parameters
             var retryAttempts = action.GetParameter<int>("RetryAttempts", stepDef.RetryAttempts ?? 60);
             var retryDelayMs = action.GetParameter<int>("RetryDelayMs", stepDef.RetryDelayMs ?? 500);
-            var defaultTimeout = retryAttempts * (retryDelayMs / 1000 + 1);
+            var confidence = action.GetParameter<float>("ConfidenceThreshold", stepDef.ConfidenceThreshold);
+            var tolerance = action.GetParameter<int>("Tolerance", stepDef.Tolerance);
 
-            // Create a modified action with RequireMatch = true for launch readiness
-            var readinessAction = new KeyboardAction
+            var options = new ScreenDetectionOptions
             {
-                Action = "Launch",
-                Parameters = new Dictionary<string, object>(action.Parameters)
+                Timeout = TimeSpan.FromSeconds(Math.Max(stepDef.EstimatedDurationSeconds, Math.Max(30, (retryAttempts * (retryDelayMs + 250)) / 1000))),
+                CheckInterval = TimeSpan.FromMilliseconds(retryDelayMs),
+                MaxAttempts = retryAttempts
             };
-            readinessAction.Parameters["RequireMatch"] = true; // Launch readiness always required
 
-            // Perform readiness detection
-            var match = await PerformActionLevelDetectionAsync(
+            // Define handle refresh strategy (PID-first; falls back to rediscovery by app name)
+            var refreshHandleAsync = new Func<CancellationToken, Task<IntPtr>>(async ct =>
+            {
+                if (actionContext.ProcessId > 0 && actionContext.WindowDiscoveryService != null)
+                {
+                    var fresh = await actionContext.WindowDiscoveryService.GetFreshWindowHandleFromPidAsync(actionContext.ProcessId, actionContext.ApplicationName);
+                    if (fresh != IntPtr.Zero)
+                    {
+                        actionContext.WindowHandle = fresh; // keep context in sync
+                        return fresh;
+                    }
+                }
+
+                var appName = action.GetParameter<string>("ApplicationName", string.Empty);
+                if (!string.IsNullOrWhiteSpace(appName))
+                {
+                    var info = await _windowDiscoveryService.DiscoverWindowInfoAsync(appName, autoLoginContext, ct);
+                    if (info.IsValid)
+                    {
+                        actionContext.UpdateFromWindowInfo(info);
+                        return info.WindowHandle;
+                    }
+                }
+                return IntPtr.Zero;
+            });
+
+            // Perform readiness detection with handle refresh awareness
+            var match = await _screenDetectionCoordinator.WaitForScreenDetectionWithHandleRefreshAsync(
                 subtask,
-                stepDef,
-                readinessAction,
+                readinessTemplate,
                 handle,
-                cancellationToken,
-                defaultTimeout: defaultTimeout);
+                refreshHandleAsync,
+                screenDescription: stepDef.DisplayName,
+                confidenceThreshold: confidence,
+                tolerance: tolerance,
+                cancellationToken: cancellationToken,
+                options: options);
 
             if (match != null)
             {
@@ -597,9 +731,16 @@ namespace FFXIManager.Services.AutoLogin
         /// <summary>
         /// Validates inputs specific to dynamic workflow execution.
         /// </summary>
-        protected override void ValidateInputs(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem)
+        private void ValidateInputs(AutoLoginSubtask subtask, AutoLoginQueueItem queueItem)
         {
-            base.ValidateInputs(subtask, queueItem);
+            if (subtask == null)
+                throw new ArgumentNullException(nameof(subtask));
+
+            if (queueItem == null)
+                throw new ArgumentNullException(nameof(queueItem));
+
+            if (queueItem.Account == null)
+                throw new InvalidOperationException($"Account information is required for '{subtask.Name}'");
 
             if (subtask.WorkflowStep == null)
             {

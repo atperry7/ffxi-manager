@@ -60,7 +60,9 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<IImageCropService, ImageCropService>();
             services.AddSingleton<ITemplateMatchingService, TemplateMatchingService>();
             services.AddSingleton<ITemplateManagementService, TemplateManagementService>();
+            services.AddSingleton<IScreenDetectionCoordinator, ScreenDetectionCoordinator>();
             services.AddSingleton<IUIAutomationService, UIAutomationService>();
+            services.AddSingleton<IWorkflowProgressService, WorkflowProgressService>();
 
             // Context management service for AutoLogin
             services.AddSingleton<IAutoLoginContextService, AutoLoginContextService>();

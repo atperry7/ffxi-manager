@@ -39,7 +39,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
     public class CharacterSlotActionExecutor : BaseWorkflowActionExecutor
     {
         private readonly IUIAutomationService _automationService;
-        private readonly IScreenshotCaptureService _screenshotService;
+        private readonly IScreenDetectionCoordinator _screenDetection;
         private readonly ITemplateMatchingService _templateService;
 
         public override string ActionType => "CharacterSlot";
@@ -48,12 +48,12 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
         public CharacterSlotActionExecutor(
             ILoggingService loggingService,
             IUIAutomationService automationService,
-            IScreenshotCaptureService screenshotService,
+            IScreenDetectionCoordinator screenDetection,
             ITemplateMatchingService templateService)
             : base(loggingService)
         {
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
-            _screenshotService = screenshotService ?? throw new ArgumentNullException(nameof(screenshotService));
+            _screenDetection = screenDetection ?? throw new ArgumentNullException(nameof(screenDetection));
             _templateService = templateService ?? throw new ArgumentNullException(nameof(templateService));
         }
 
@@ -95,8 +95,12 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
                     try
                     {
-                        // Capture screenshot
-                        var screenshot = await _screenshotService.CaptureWindowAsync(context.WindowHandle, cancellationToken);
+                        // Ensure fresh handle and capture screenshot
+                        if (!await context.EnsureFreshWindowHandleAsync())
+                        {
+                            await _loggingService.LogWarningAsync("[CHARACTER-SLOT] Unable to refresh window handle before detection");
+                        }
+                        var screenshot = await _screenDetection.CaptureScreenshotWithLogging(context.WindowHandle, "character slot detection", cancellationToken, retryCount: 0);
 
                         if (screenshot != null && screenshot.IsValid)
                         {
@@ -219,8 +223,12 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             if (templateMatch?.IsValid == true)
             {
-                // Capture screenshot for coordinate conversion
-                var screenshot = await _screenshotService.CaptureWindowAsync(context.WindowHandle, cancellationToken);
+                // Ensure fresh handle and capture for conversion
+                if (!await context.EnsureFreshWindowHandleAsync())
+                {
+                    throw new InvalidOperationException("Unable to refresh window handle for click coordinate conversion");
+                }
+                var screenshot = await _screenDetection.CaptureScreenshotWithLogging(context.WindowHandle, "character slot click conversion", cancellationToken, retryCount: 0);
                 if (screenshot == null || !screenshot.IsValid)
                 {
                     throw new InvalidOperationException("Failed to capture window screenshot for coordinate conversion");

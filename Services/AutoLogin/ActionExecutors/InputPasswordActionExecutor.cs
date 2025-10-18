@@ -30,7 +30,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
     {
         private readonly IWindowsCredentialsService _credentialsService;
         private readonly IUIAutomationService _automationService;
-        private readonly IScreenshotCaptureService _screenshotService;
+        private readonly IScreenDetectionCoordinator _screenDetection;
         private readonly ITemplateMatchingService _templateService;
 
         public override string ActionType => "InputPassword";
@@ -40,13 +40,13 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             ILoggingService loggingService,
             IWindowsCredentialsService credentialsService,
             IUIAutomationService automationService,
-            IScreenshotCaptureService screenshotService,
+            IScreenDetectionCoordinator screenDetection,
             ITemplateMatchingService templateService)
             : base(loggingService)
         {
             _credentialsService = credentialsService ?? throw new ArgumentNullException(nameof(credentialsService));
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
-            _screenshotService = screenshotService ?? throw new ArgumentNullException(nameof(screenshotService));
+            _screenDetection = screenDetection ?? throw new ArgumentNullException(nameof(screenDetection));
             _templateService = templateService ?? throw new ArgumentNullException(nameof(templateService));
         }
 
@@ -96,8 +96,13 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
                     try
                     {
-                        // Capture screenshot
-                        var screenshot = await _screenshotService.CaptureWindowAsync(context.WindowHandle, cancellationToken);
+                        // Ensure fresh handle and capture screenshot
+                        if (!await context.EnsureFreshWindowHandleAsync())
+                        {
+                            await _loggingService.LogWarningAsync("[INPUT-PASSWORD] Unable to refresh window handle before detection");
+                        }
+
+                        var screenshot = await _screenDetection.CaptureScreenshotWithLogging(context.WindowHandle, "password field detection", cancellationToken, retryCount: 0);
 
                         if (screenshot != null && screenshot.IsValid)
                         {
