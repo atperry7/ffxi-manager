@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FFXIManager.Models;
@@ -155,22 +155,20 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
         {
             await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Using keyboard navigation to slot {targetSlot}");
 
-            // Strategy: Press Home to go to slot 1, then Down arrow (targetSlot - 1) times
-            // This ensures we start from a known position
 
-            // Press Home to go to first slot
-            await _automationService.SendKeyAsync(ConsoleKey.Home, cancellationToken);
-            await Task.Delay(action.DelayMs, cancellationToken);
-
-            // Press Down arrow to navigate to target slot (0-indexed from slot 1)
-            var downPresses = targetSlot - 1;
-            for (int i = 0; i < downPresses; i++)
+            // Press Tab to navigate to target slot (0-indexed from slot 1)
+            var tabPresses = targetSlot;
+            for (int i = 0; i < tabPresses; i++)
             {
-                await _automationService.SendKeyAsync(ConsoleKey.DownArrow, cancellationToken);
+                await _automationService.SendKeyAsync(ConsoleKey.Tab, cancellationToken);
                 await Task.Delay(action.DelayMs, cancellationToken);
             }
 
-            await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Keyboard navigation completed: {downPresses} down arrow presses");
+            // Press Enter to select slot that was navigated to
+            await _automationService.SendKeyAsync(ConsoleKey.Enter, cancellationToken);
+            await Task.Delay(action.DelayMs, cancellationToken);
+
+            await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Keyboard navigation completed: {tabPresses} tab presses");
         }
 
         /// <summary>

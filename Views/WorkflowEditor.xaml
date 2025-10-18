@@ -1208,9 +1208,13 @@
 
                                                                 <TextBlock Grid.Column="0" Text="Navigation Method:" VerticalAlignment="Center"/>
                                                                 <ComboBox Grid.Column="1"
-                                                                          SelectedValue="{Binding SlotNavigationMethod, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
-                                                                    <ComboBoxItem Content="Keyboard"/>
-                                                                    <ComboBoxItem Content="Click"/>
+                                                                          SelectedItem="{Binding SlotNavigationMethod, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                                                                    <ComboBox.ItemsSource>
+                                                                        <x:Array Type="sys:String" xmlns:sys="clr-namespace:System;assembly=mscorlib">
+                                                                            <sys:String>Keyboard</sys:String>
+                                                                            <sys:String>Click</sys:String>
+                                                                        </x:Array>
+                                                                    </ComboBox.ItemsSource>
                                                                 </ComboBox>
                                                             </Grid>
 
