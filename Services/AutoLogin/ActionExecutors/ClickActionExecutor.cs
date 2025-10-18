@@ -29,6 +29,8 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
         public override string ActionType => "Click";
 
+        public override bool RequiresWindowHandle => true;
+
         public ClickActionExecutor(
             ILoggingService loggingService,
             IUIAutomationService automationService,

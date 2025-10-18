@@ -36,6 +36,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
         private readonly ITemplateMatchingService _templateService;
 
         public override string ActionType => "MemberSlot";
+        public override bool RequiresWindowHandle => true;
 
         public MemberSlotActionExecutor(
             ILoggingService loggingService,

@@ -40,6 +40,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
         private readonly ITemplateMatchingService _templateService;
 
         public override string ActionType => "InputOTP";
+        public override bool RequiresWindowHandle => true;
 
         public InputOTPActionExecutor(
             ILoggingService loggingService,

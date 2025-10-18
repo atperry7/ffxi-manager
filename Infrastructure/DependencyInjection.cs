@@ -65,6 +65,9 @@ namespace FFXIManager.Infrastructure
             // Context management service for AutoLogin
             services.AddSingleton<IAutoLoginContextService, AutoLoginContextService>();
 
+            // Window discovery service (centralized window handle discovery)
+            services.AddSingleton<IWindowDiscoveryService, WindowDiscoveryService>();
+
             // AutoLogin support services (refactored for SOLID principles)
             services.AddSingleton<IWorkflowService, WorkflowService>();
             services.AddSingleton<WorkflowTaskBuilder>(); // Builds subtasks from workflows

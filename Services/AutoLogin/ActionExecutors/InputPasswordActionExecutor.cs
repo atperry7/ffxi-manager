@@ -34,6 +34,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
         private readonly ITemplateMatchingService _templateService;
 
         public override string ActionType => "InputPassword";
+        public override bool RequiresWindowHandle => true;
 
         public InputPasswordActionExecutor(
             ILoggingService loggingService,

@@ -23,6 +23,12 @@ namespace FFXIManager.Services.AutoLogin
         public abstract string ActionType { get; }
 
         /// <summary>
+        /// Indicates whether this executor requires a valid window handle.
+        /// Default: false. Override in derived classes that need window handles.
+        /// </summary>
+        public virtual bool RequiresWindowHandle => false;
+
+        /// <summary>
         /// Executes the workflow action with error handling and logging
         /// </summary>
         public async Task<bool> ExecuteAsync(

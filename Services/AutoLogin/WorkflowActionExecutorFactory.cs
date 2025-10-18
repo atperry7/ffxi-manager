@@ -86,7 +86,7 @@ namespace FFXIManager.Services.AutoLogin
         /// <summary>
         /// Determines if an action is a keyboard input action
         /// </summary>
-        private bool IsKeyboardAction(string actionType)
+        public bool IsKeyboardAction(string actionType)
         {
             return KeyboardActions.Contains(actionType);
         }
@@ -116,5 +116,10 @@ namespace FFXIManager.Services.AutoLogin
         /// Gets all registered action types
         /// </summary>
         IEnumerable<string> GetRegisteredActionTypes();
+
+        /// <summary>
+        /// Determines if an action type is a keyboard input action
+        /// </summary>
+        bool IsKeyboardAction(string actionType);
     }
 }

@@ -103,10 +103,12 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                         context.Subtask.Skip($"{app.Name} already running");
                     }
 
-                    // Store process ID in context for potential later use
+                    // Store process ID in context for potential later use (type-safe)
                     var stepId = context.WorkflowStep?.StepId ?? "launch";
-                    context.AutoLoginContext?.SetData($"{stepId}_ProcessId", app.ProcessIds.First());
-                    context.AutoLoginContext?.SetData($"{stepId}_Skipped", true);
+                    var skippedPid = app.ProcessIds.First();
+                    context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchProcessId(stepId), skippedPid);
+                    context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchSkipped(stepId), true);
+                    context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchApplicationName(stepId), app.Name);
                     return true; // Skipping is considered success
                 }
 
@@ -157,9 +159,15 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             var processId = app.ProcessIds.First();
             await _loggingService.LogInfoAsync($"[LAUNCH] {app.Name} process detected (PID: {processId})");
 
-            // Store process ID in context for later use
+            // Store process ID in context for later use (type-safe)
             var stepIdForContext = context.WorkflowStep?.StepId ?? "launch";
-            context.AutoLoginContext?.SetData($"{stepIdForContext}_ProcessId", processId);
+            context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchProcessId(stepIdForContext), processId);
+            context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchApplicationName(stepIdForContext), app.Name);
+            context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchTimestamp(stepIdForContext), DateTime.UtcNow);
+
+            // Update action context with PID for subsequent actions
+            context.ProcessId = processId;
+            context.ApplicationName = app.Name;
 
             // Phase 5: Complete
             await UpdateProgressAsync(context, 100, $"{app.Name} launched");
