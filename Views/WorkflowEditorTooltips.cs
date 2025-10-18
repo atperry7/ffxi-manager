@@ -24,8 +24,6 @@ namespace FFXIManager.Views
             // Step Properties - Retry Configuration
             ["MaxRetryAttempts"] = "Number of detection attempts before giving up\nExample: 15 attempts = check screen 15 times at 1-second intervals\n\nRecommended: 10-15 for stable screens, 20-30 for slow transitions",
 
-            ["ScreenshotRetryCount"] = "Screenshot capture retries per detection attempt\nEach detection attempt will retry screenshot capture this many times\n\nDefault: Auto-calculated (MaxRetryAttempts ÷ 3, minimum 5)\nIncrease if screenshots fail due to slow window rendering\n\nExample with MaxRetryAttempts=15, ScreenshotRetryCount=5:\n- 15 detection attempts × 6 screenshot attempts = 90 total captures",
-
             ["RetryAttempts"] = "Template detection attempts (LaunchApplication steps only)\nUsed when waiting for application UI to become ready\n\nDefault: 30 attempts × 500ms = 15 seconds",
 
             ["RetryDelayMs"] = "Delay between template detection retry attempts\nDefault: 500ms (half second)",
@@ -82,7 +80,6 @@ namespace FFXIManager.Views
         public static class Step
         {
             public static string MaxRetryAttempts => Get("MaxRetryAttempts");
-            public static string ScreenshotRetryCount => Get("ScreenshotRetryCount");
             public static string EstimatedDurationSeconds => Get("EstimatedDurationSeconds");
             public static string ConfidenceThreshold => Get("ConfidenceThreshold");
             public static string Tolerance => Get("Tolerance");

@@ -30,13 +30,8 @@ public class ScreenDetectionOptions
     public int? MaxAttempts { get; set; } = null;
 
     /// <summary>
-    /// Number of retries for screenshot capture within each detection attempt.
-    /// Default is 5 retries (6 total attempts per detection) to handle transient window capture issues.
-    /// </summary>
-    public int ScreenshotRetryCount { get; set; } = 5;
-
-    /// <summary>
     /// Default options: 30-second timeout, 1-second intervals, 80% confidence.
+    /// Screenshot capture uses built-in retry logic (2 retries per capture).
     /// </summary>
     public static ScreenDetectionOptions Default => new();
 

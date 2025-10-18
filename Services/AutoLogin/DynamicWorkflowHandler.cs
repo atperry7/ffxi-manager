@@ -342,10 +342,14 @@ namespace FFXIManager.Services.AutoLogin
                 if (hintedPid > 0 && target.ProcessIds.Contains(hintedPid))
                 {
                     var windows = await _processUtilityService.GetProcessWindowsAsync(hintedPid);
-                    var handle = windows.FirstOrDefault()?.Handle ?? IntPtr.Zero;
+
+                    // Smart window selection: prefer main window over splash screens
+                    var mainWindow = windows.FirstOrDefault(w => w.IsVisible && w.IsMainWindow) ?? windows.FirstOrDefault(w => w.IsVisible);
+                    var handle = mainWindow?.Handle ?? IntPtr.Zero;
+
                     if (handle != IntPtr.Zero && _processUtilityService.IsWindowValid(handle))
                     {
-                        await _loggingService.LogInfoAsync($"[WINDOW-DISCOVERY] Using window from hint PID {hintedPid} for {app}: 0x{handle.ToInt64():X}");
+                        await _loggingService.LogInfoAsync($"[WINDOW-DISCOVERY] Using main window from hint PID {hintedPid} for {app}: 0x{handle.ToInt64():X} (Title: '{mainWindow?.Title ?? "Unknown"}')");
                         return handle;
                     }
                 }
@@ -354,10 +358,14 @@ namespace FFXIManager.Services.AutoLogin
                 foreach (var pid in target.ProcessIds)
                 {
                     var windows = await _processUtilityService.GetProcessWindowsAsync(pid);
-                    var handle = windows.FirstOrDefault()?.Handle ?? IntPtr.Zero;
+
+                    // Smart window selection: prefer main window over splash screens
+                    var mainWindow = windows.FirstOrDefault(w => w.IsVisible && w.IsMainWindow) ?? windows.FirstOrDefault(w => w.IsVisible);
+                    var handle = mainWindow?.Handle ?? IntPtr.Zero;
+
                     if (handle != IntPtr.Zero && _processUtilityService.IsWindowValid(handle))
                     {
-                        await _loggingService.LogInfoAsync($"[WINDOW-DISCOVERY] Using discovered window for {app} (PID {pid}): 0x{handle.ToInt64():X}");
+                        await _loggingService.LogInfoAsync($"[WINDOW-DISCOVERY] Using main window for {app} (PID {pid}): 0x{handle.ToInt64():X} (Title: '{mainWindow?.Title ?? "Unknown"}')");
                         return handle;
                     }
                 }
@@ -441,11 +449,10 @@ namespace FFXIManager.Services.AutoLogin
                 {
                     Timeout = TimeSpan.FromSeconds(Math.Max(stepDef.EstimatedDurationSeconds, Math.Max(30, (attempts * (delayMs + 250)) / 1000))),
                     CheckInterval = TimeSpan.FromMilliseconds(delayMs),
-                    MaxAttempts = attempts,
-                    ScreenshotRetryCount = stepDef.ScreenshotRetryCount ?? Math.Max(stepDef.MaxRetryAttempts / 3, 5) // Use workflow value or auto-calculate
+                    MaxAttempts = attempts
                 };
 
-                await _loggingService.LogInfoAsync($"Detection config - MaxAttempts: {options.MaxAttempts?.ToString() ?? "auto"}, ScreenshotRetries: {options.ScreenshotRetryCount}");
+                await _loggingService.LogInfoAsync($"Detection config - MaxAttempts: {options.MaxAttempts?.ToString() ?? "auto"}, Delay: {delayMs}ms");
 
                 return await WaitForScreenDetectionAsync(
                     subtask,
@@ -474,8 +481,7 @@ namespace FFXIManager.Services.AutoLogin
                         {
                             Timeout = TimeSpan.FromSeconds(Math.Max(15, (attemptsFb * (delayFb + 250)) / 1000)),
                             CheckInterval = TimeSpan.FromMilliseconds(delayFb),
-                            MaxAttempts = attemptsFb,
-                            ScreenshotRetryCount = stepDef.ScreenshotRetryCount ?? Math.Max(stepDef.MaxRetryAttempts / 3, 5)
+                            MaxAttempts = attemptsFb
                         };
 
                         return await WaitForScreenDetectionAsync(

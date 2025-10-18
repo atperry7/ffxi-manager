@@ -144,7 +144,6 @@ namespace FFXIManager.Models.AutoLogin
         private int _maxRetryAttempts = 3;
         private int? _retryAttempts;
         private int? _retryDelayMs;
-        private int? _screenshotRetryCount;
         private float _confidenceThreshold = 0.8f;
         private int _tolerance = 5;
 
@@ -177,23 +176,6 @@ namespace FFXIManager.Models.AutoLogin
         {
             get => _retryDelayMs;
             set => SetProperty(ref _retryDelayMs, value);
-        }
-
-        /// <summary>
-        /// Number of retry attempts for screenshot capture within each detection attempt.
-        /// If null, automatically calculated as Max(MaxRetryAttempts / 3, 5).
-        /// Increase this if screenshot capture is unreliable (e.g., slow window rendering).
-        /// Default: null (auto-calculated)
-        /// </summary>
-        /// <remarks>
-        /// This provides fine-grained control over transient screenshot capture failures
-        /// separate from template detection attempts. Each detection attempt will retry
-        /// screenshot capture this many times before failing.
-        /// </remarks>
-        public int? ScreenshotRetryCount
-        {
-            get => _screenshotRetryCount;
-            set => SetProperty(ref _screenshotRetryCount, value);
         }
 
         /// <summary>
@@ -305,7 +287,6 @@ namespace FFXIManager.Models.AutoLogin
                 MaxRetryAttempts = MaxRetryAttempts,
                 RetryAttempts = RetryAttempts,
                 RetryDelayMs = RetryDelayMs,
-                ScreenshotRetryCount = ScreenshotRetryCount,
                 ConfidenceThreshold = ConfidenceThreshold,
                 Tolerance = Tolerance,
                 Metadata = new Dictionary<string, object>(Metadata)

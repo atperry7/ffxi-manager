@@ -70,7 +70,7 @@
               "AllowSkipIfRunning": false,
               "RetryAttempts": 60,
               "RetryDelayMs": 500,
-              "TemplatePath": "Windower/launch_arrow",
+              "TemplatePath": "launch_arrow",
               "ConfidenceThreshold": 0.8
             }
           },
@@ -82,7 +82,7 @@
             "ClickX": 0.5,
             "ClickY": 0.5,
             "Parameters": {
-              "TemplatePath": "Windower/launch_arrow",
+              "TemplatePath": "launch_arrow",
               "ConfidenceThreshold": 0.8,
               "RetryAttempts": 30,
               "RetryDelayMs": 500,

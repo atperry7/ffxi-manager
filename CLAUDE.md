@@ -137,7 +137,7 @@ The application uses **OpenCV (OpenCvSharp4)** for template matching to detect U
 - **ITemplateManagementService** - Loads/manages template metadata
 - **IUIAutomationService** - Executes UI automation (keyboard/mouse)
 
-**Templates** (`workflows/defaults/templates/` directory):
+**Templates** (`workflows/templates/` directory):
 - PNG images are the visual templates for template matching (OpenCV)
 - **No JSON metadata files** - all metadata (confidenceThreshold, tolerance) is defined in workflow step definitions
 - Flat directory structure (not organized by application subdirectories)
@@ -192,7 +192,7 @@ The application uses **OpenCV (OpenCvSharp4)** for template matching to detect U
 
 **CRITICAL PRINCIPLE**: Workflows are the single source of truth for all auto-login configuration including navigation, timing, and template metadata.
 
-**Template PNG Files** (`workflows/defaults/templates/` directory):
+**Template PNG Files** (`workflows/templates/` directory):
 - Pure PNG images for OpenCV template matching - no metadata files
 - Used exclusively for screen detection
 - All template configuration (confidenceThreshold, tolerance) is defined in workflow step definitions
@@ -279,7 +279,7 @@ All services registered in `Infrastructure/DependencyInjection.cs`:
    - **Result**: 100% task-based progress tracking - no enum-based step identification. Progress flows through AutoLoginTask → AutoLoginSubtask → UI in real-time.
 
 2. **Template Metadata Migration to Workflows - Phase 4**
-   - Moved template PNG files from `Templates/` to `workflows/defaults/templates/` (flat structure)
+   - Moved template PNG files from `Templates/` to `workflows/templates/` (flat structure)
    - Removed all template JSON metadata files (14 files)
    - Added `ConfidenceThreshold` and `Tolerance` properties to `WorkflowStepDefinition`
    - Updated workflow JSON to include all template metadata in step definitions

@@ -580,7 +580,6 @@
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
                                     <!-- Display Name -->
@@ -698,35 +697,13 @@
                                              Margin="0,0,0,12"
                                              ToolTip="Number of detection attempts before giving up&#x0a;Example: 15 attempts = check screen 15 times at 1-second intervals&#x0a;&#x0a;Recommended: 10-15 for stable screens, 20-30 for slow transitions"/>
 
-                                    <!-- Screenshot Retry Count -->
-                                    <TextBlock Grid.Row="5" Grid.Column="0"
-                                               Text="Screenshot Retries:"
-                                               VerticalAlignment="Center"
-                                               Foreground="{DynamicResource PrimaryTextBrush}"
-                                               Margin="0,0,0,12"/>
-                                    <TextBox Grid.Row="5" Grid.Column="1"
-                                             Text="{Binding SelectedStep.ScreenshotRetryCount, UpdateSourceTrigger=PropertyChanged}"
-                                             Margin="0,0,0,12"
-                                             ToolTip="Screenshot capture retries per detection attempt&#x0a;Each detection attempt will retry screenshot capture this many times&#x0a;&#x0a;Default: Auto-calculated (MaxRetryAttempts ÷ 3, minimum 5)&#x0a;Increase if screenshots fail due to slow window rendering&#x0a;Leave empty for auto-calculation&#x0a;&#x0a;Example with MaxRetries=15, ScreenshotRetries=5:&#x0a;15 detection attempts × 6 screenshot attempts = 90 total captures"/>
-
-                                    <!-- Condition -->
-                                    <TextBlock Grid.Row="6" Grid.Column="0"
-                                               Text="Condition:"
-                                               VerticalAlignment="Center"
-                                               Foreground="{DynamicResource PrimaryTextBrush}"
-                                               Margin="0,0,0,12"/>
-                                    <TextBox Grid.Row="6" Grid.Column="1"
-                                             Text="{Binding SelectedStep.Condition, UpdateSourceTrigger=PropertyChanged}"
-                                             Margin="0,0,0,12"
-                                             ToolTip="Optional condition for step execution based on account properties&#x0a;&#x0a;Examples:&#x0a;• Account.IsOTPEnabled - only if OTP is enabled&#x0a;• !Account.IsOTPEnabled - only if OTP is disabled&#x0a;• Account.HasStoredPassword - only if password is stored&#x0a;&#x0a;For application-based conditions (e.g., skip if POL Proxy running), use 'Skip If Running' field instead"/>
-
                                     <!-- Skip If Application Running -->
-                                    <TextBlock Grid.Row="7" Grid.Column="0"
+                                    <TextBlock Grid.Row="5" Grid.Column="0"
                                                Text="Skip If Running:"
                                                VerticalAlignment="Center"
                                                Foreground="{DynamicResource PrimaryTextBrush}"
                                                Margin="0,0,0,12"/>
-                                    <ComboBox Grid.Row="7" Grid.Column="1"
+                                    <ComboBox Grid.Row="6" Grid.Column="1"
                                               ItemsSource="{Binding AvailableApplications}"
                                               SelectedValue="{Binding SelectedStep.SkipIfApplicationRunning, UpdateSourceTrigger=PropertyChanged}"
                                               DisplayMemberPath="Name"
@@ -741,12 +718,12 @@
                                     </ComboBox>
 
                                     <!-- Flags -->
-                                    <TextBlock Grid.Row="8" Grid.Column="0"
+                                    <TextBlock Grid.Row="7" Grid.Column="0"
                                                Text="Flags:"
                                                VerticalAlignment="Top"
                                                Foreground="{DynamicResource PrimaryTextBrush}"
                                                Margin="0,0,0,12"/>
-                                    <StackPanel Grid.Row="8" Grid.Column="1" Margin="0,0,0,12">
+                                    <StackPanel Grid.Row="7" Grid.Column="1" Margin="0,0,0,12">
                                         <CheckBox Content="Enabled"
                                                   IsChecked="{Binding SelectedStep.IsEnabled}"
                                                   Margin="0,0,0,4"
@@ -758,11 +735,11 @@
                                     </StackPanel>
 
                                     <!-- Step ID (Immutable) -->
-                                    <TextBlock Grid.Row="9" Grid.Column="0"
+                                    <TextBlock Grid.Row="8" Grid.Column="0"
                                                Text="Step ID:"
                                                VerticalAlignment="Center"
                                                Foreground="{DynamicResource PrimaryTextBrush}"/>
-                                    <StackPanel Grid.Row="9" Grid.Column="1" Orientation="Horizontal">
+                                    <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal">
                                         <TextBlock Text="{Binding SelectedStep.StepId}"
                                                    FontSize="11"
                                                    FontFamily="Consolas"

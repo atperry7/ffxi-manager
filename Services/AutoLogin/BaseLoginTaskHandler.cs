@@ -385,7 +385,7 @@ namespace FFXIManager.Services.AutoLogin
             var maxAttempts = options.MaxAttempts ?? (int)(options.Timeout.TotalSeconds / options.CheckInterval.TotalSeconds);
             var startTime = DateTime.UtcNow;
 
-            await _loggingService.LogInfoAsync($"Starting {screenDescription} detection - MaxAttempts: {maxAttempts}, ScreenshotRetries: {options.ScreenshotRetryCount}, Timeout: {options.Timeout.TotalSeconds}s");
+            await _loggingService.LogInfoAsync($"Starting {screenDescription} detection - MaxAttempts: {maxAttempts}, Interval: {options.CheckInterval.TotalMilliseconds}ms, Timeout: {options.Timeout.TotalSeconds}s");
 
             // Determine phase based on screen description for better user messaging
             var phase = GetDetectionPhase(screenDescription);
@@ -403,7 +403,24 @@ namespace FFXIManager.Services.AutoLogin
 
                 subtask.UpdateProgressWithPhase(phase, progress, userFriendlyMessage);
 
-                var screenshot = await CaptureScreenshotWithLogging(windowHandle, screenDescription, cancellationToken, options.ScreenshotRetryCount);
+                // Try to capture screenshot with minimal retries (let detection loop handle most retries)
+                WindowScreenshot? screenshot = null;
+                try
+                {
+                    screenshot = await CaptureScreenshotWithLogging(windowHandle, screenDescription, cancellationToken, retryCount: 0);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    await _loggingService.LogDebugAsync($"{screenDescription} screenshot failed on attempt {attempt}/{maxAttempts}: {ex.Message}");
+
+                    // Continue loop to keep trying
+                    if (attempt < maxAttempts)
+                    {
+                        await Task.Delay(options.CheckInterval, cancellationToken);
+                    }
+                    continue;
+                }
+
                 var match = await _templateService.FindElementAsync(screenshot, templatePath, cancellationToken);
 
                 await _loggingService.LogDebugAsync($"{screenDescription} detection attempt {attempt}/{maxAttempts}: confidence={match.Confidence:P}, threshold={confidenceThreshold:P}");
@@ -435,13 +452,21 @@ namespace FFXIManager.Services.AutoLogin
                 }
             }
 
-            // Final attempt for diagnosis
-            var finalScreenshot = await CaptureScreenshotWithLogging(windowHandle, $"final {screenDescription}", cancellationToken, options.ScreenshotRetryCount);
-            var finalMatch = await _templateService.FindElementAsync(finalScreenshot, templatePath, cancellationToken);
+            // Final attempt for diagnosis (optional - don't fail if screenshot unavailable)
+            try
+            {
+                var finalScreenshot = await CaptureScreenshotWithLogging(windowHandle, $"final {screenDescription}", cancellationToken, retryCount: 0);
+                var finalMatch = await _templateService.FindElementAsync(finalScreenshot, templatePath, cancellationToken);
 
-            await _loggingService.LogWarningAsync($"{screenDescription} detection timed out after {options.Timeout.TotalSeconds}s. Final confidence: {finalMatch.Confidence:P}");
-
-            throw new TimeoutException($"Failed to detect {screenDescription} after {options.Timeout.TotalSeconds}s (final confidence: {finalMatch.Confidence:P})");
+                await _loggingService.LogWarningAsync($"{screenDescription} detection timed out after {options.Timeout.TotalSeconds}s. Final confidence: {finalMatch.Confidence:P}");
+                throw new TimeoutException($"Failed to detect {screenDescription} after {options.Timeout.TotalSeconds}s (final confidence: {finalMatch.Confidence:P})");
+            }
+            catch (InvalidOperationException)
+            {
+                // Window handle invalid - unable to capture final screenshot
+                await _loggingService.LogWarningAsync($"{screenDescription} detection timed out after {options.Timeout.TotalSeconds}s. Window no longer available for final diagnostic screenshot.");
+                throw new TimeoutException($"Failed to detect {screenDescription} after {options.Timeout.TotalSeconds}s (window became unavailable)");
+            }
         }
 
         /// <summary>
