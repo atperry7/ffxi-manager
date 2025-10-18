@@ -910,6 +910,10 @@
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
                                                         </Grid.RowDefinitions>
 
                                                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Action Type:" VerticalAlignment="Center" Margin="0,0,0,8"/>
@@ -940,8 +944,98 @@
                                                         <TextBlock Grid.Row="2" Grid.Column="0" Text="Repeat Count:" VerticalAlignment="Center" Margin="0,0,0,8"/>
                                                         <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SelectedNavigationAction.Count, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8"/>
 
-                                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Delay After (ms):" VerticalAlignment="Center"/>
-                                                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding SelectedNavigationAction.DelayMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Delay After (ms):" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                                                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding SelectedNavigationAction.DelayMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8"/>
+
+                                                        <!-- Retry Attempts -->
+                                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Retry Attempts:" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                                                        <TextBox Grid.Row="4" Grid.Column="1" Margin="0,0,0,8"
+                                                                 Text="{Binding ActionRetryAttempts, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                 ToolTip="Number of detection attempts before giving up&#x0a;Example: 30 attempts = check screen 30 times&#x0a;&#x0a;Recommended: 10-30 for UI detection, 30-60 for app launches"/>
+
+                                                        <!-- Retry Delay -->
+                                                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Retry Delay (ms):" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                                                        <TextBox Grid.Row="5" Grid.Column="1" Margin="0,0,0,8"
+                                                                 Text="{Binding ActionRetryDelayMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                 ToolTip="Milliseconds to wait between retry attempts&#x0a;Example: 500ms = half second between checks&#x0a;&#x0a;Recommended: 500-1000ms"/>
+
+                                                        <!-- Template Path -->
+                                                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Template:" VerticalAlignment="Top" Margin="0,0,0,8"/>
+                                                        <Grid Grid.Row="6" Grid.Column="1" Margin="0,0,0,8">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+
+                                                            <StackPanel Grid.Column="0">
+                                                                <TextBox Text="{Binding ActionTemplatePath, UpdateSourceTrigger=PropertyChanged}"
+                                                                         Margin="0,0,0,8"
+                                                                         ToolTip="Template image for screen detection&#x0a;Leave empty if no template matching needed"/>
+
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <Button Content="📷 Select Image"
+                                                                            Command="{Binding SelectActionTemplateImageCommand}"
+                                                                            Width="140"
+                                                                            Height="28"
+                                                                            Margin="0,0,4,0"
+                                                                            Style="{StaticResource CircularPrimaryButton}"
+                                                                            ToolTip="Select a screenshot for template matching"/>
+                                                                    <Button Content="🔄 Replace"
+                                                                            Command="{Binding ReplaceActionTemplateImageCommand}"
+                                                                            Width="100"
+                                                                            Height="28"
+                                                                            Style="{StaticResource CircularSecondaryButton}"
+                                                                            ToolTip="Replace the existing template image"/>
+                                                                </StackPanel>
+                                                            </StackPanel>
+
+                                                            <!-- Template Thumbnail Preview -->
+                                                            <Border Grid.Column="1"
+                                                                    BorderBrush="{DynamicResource BorderBrush}"
+                                                                    BorderThickness="1"
+                                                                    CornerRadius="4"
+                                                                    Margin="12,0,0,0"
+                                                                    Background="{DynamicResource CardBackgroundBrush}"
+                                                                    Visibility="{Binding HasActionTemplateImage, Converter={StaticResource BoolToVisConverter}}"
+                                                                    ToolTip="Click to view full size"
+                                                                    Cursor="Hand">
+                                                                <Border.Effect>
+                                                                    <DropShadowEffect ShadowDepth="2" BlurRadius="8" Opacity="0.3" Color="Black"/>
+                                                                </Border.Effect>
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Style.Triggers>
+                                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                                <Setter Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
+                                                                            </Trigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <Image Source="{Binding ActionTemplateImageSource}"
+                                                                       Width="120"
+                                                                       Height="100"
+                                                                       Stretch="Uniform"
+                                                                       Margin="4">
+                                                                    <Image.InputBindings>
+                                                                        <MouseBinding Gesture="LeftClick"
+                                                                                      Command="{Binding ShowLargeActionTemplateImageCommand}"/>
+                                                                    </Image.InputBindings>
+                                                                </Image>
+                                                            </Border>
+                                                        </Grid>
+
+                                                        <!-- Confidence Threshold -->
+                                                        <TextBlock Grid.Row="7" Grid.Column="0" Text="Confidence:" VerticalAlignment="Center"/>
+                                                        <Grid Grid.Row="7" Grid.Column="1">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="80"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <Slider Grid.Column="0" Minimum="0.0" Maximum="1.0" TickFrequency="0.05" IsSnapToTickEnabled="True"
+                                                                    Value="{Binding ActionConfidenceThreshold, Mode=TwoWay}" Margin="0,0,8,0"
+                                                                    ToolTip="Template match confidence threshold (0.0-1.0)&#x0a;Higher = more strict matching&#x0a;&#x0a;Recommended: 0.7-0.85"/>
+                                                            <TextBox Grid.Column="1" Text="{Binding ActionConfidenceThreshold, StringFormat=F2, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                        </Grid>
                                                     </Grid>
 
                                                     <!-- Click Properties (visible only for Click actions) -->
@@ -1016,8 +1110,8 @@
                                                                           ToolTip="Select the application to launch (configured in Settings)"/>
 
                                                                 <!-- Skip Options -->
-                                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Skip Options:" VerticalAlignment="Top" Margin="0,0,0,8"/>
-                                                                <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
+                                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Skip Options:" VerticalAlignment="Top"/>
+                                                                <StackPanel Grid.Row="1" Grid.Column="1">
                                                                     <CheckBox Content="Skip if already running"
                                                                               IsChecked="{Binding LaunchAllowSkipIfRunning, Mode=TwoWay}"
                                                                               Margin="0,0,0,4"
@@ -1030,7 +1124,7 @@
 
                                                             <TextBlock Text="💡 Configure external applications in Settings → External Applications"
                                                                        FontSize="10" FontStyle="Italic" Foreground="{DynamicResource SecondaryTextBrush}"
-                                                                       TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                                                       TextWrapping="Wrap" Margin="0,8,0,0"/>
                                                         </StackPanel>
                                                     </Border>
 
