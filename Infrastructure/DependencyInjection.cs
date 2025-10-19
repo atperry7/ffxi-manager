@@ -138,6 +138,12 @@ namespace FFXIManager.Infrastructure
             services.AddTransient<TemplateViewerDialogViewModel>();
             services.AddTransient<FFXIManager.Views.TemplateViewerDialog>();
 
+            // Workflow Editor Helpers (SOLID refactoring)
+            services.AddTransient<FFXIManager.ViewModels.WorkflowEditor.WorkflowEditorNavigationManager>();
+            services.AddTransient<FFXIManager.ViewModels.WorkflowEditor.WorkflowEditorStepManager>();
+            services.AddTransient<FFXIManager.ViewModels.WorkflowEditor.WorkflowEditorTemplateManager>();
+            services.AddTransient<FFXIManager.ViewModels.WorkflowEditor.WorkflowEditorWorkflowManager>();
+
             // Hotkey plumbing
             services.AddSingleton<IGlobalHotkeyService, LowLevelHotkeyService>();
             services.AddSingleton<ControllerInputService>();

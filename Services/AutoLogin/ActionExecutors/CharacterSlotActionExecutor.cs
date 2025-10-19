@@ -162,6 +162,13 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
         {
             await _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Using keyboard navigation to slot {targetSlot}");
 
+            // Ensure window has focus to receive keyboard input
+            if (context.WindowHandle != IntPtr.Zero)
+            {
+                await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
+                await Task.Delay(100, cancellationToken);
+            }
+
             // Strategy: Press Home to go to slot 1, then navigate using Right and Down arrows
             // Layout assumption: 4x4 grid
             // - Right arrow: move to next column (slot++)

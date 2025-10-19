@@ -230,8 +230,8 @@ namespace FFXIManager.Services.AutoLogin
             {
                 await _loggingService.LogDebugAsync($"Attempting detection with primary template: {primaryTemplate}");
 
-                var attempts = stepDef.RetryAttempts ?? 30;
-                var delayMs = stepDef.RetryDelayMs ?? 500;
+                var attempts = Math.Max(1, stepDef.RetryAttempts ?? 30);
+                var delayMs = Math.Max(100, stepDef.RetryDelayMs ?? 500); // guard against 0ms hammering
                 var options = new ScreenDetectionOptions
                 {
                     Timeout = TimeSpan.FromSeconds(Math.Max(stepDef.EstimatedDurationSeconds, Math.Max(30, (attempts * (delayMs + 250)) / 1000))),
@@ -239,7 +239,7 @@ namespace FFXIManager.Services.AutoLogin
                     MaxAttempts = attempts
                 };
 
-                await _loggingService.LogInfoAsync($"Detection config - MaxAttempts: {options.MaxAttempts?.ToString() ?? "auto"}, Delay: {delayMs}ms");
+                await _loggingService.LogInfoAsync($"Detection config [primary] - Attempts: {options.MaxAttempts?.ToString() ?? "auto"}, Interval: {delayMs}ms, Timeout: {options.Timeout.TotalSeconds}s");
 
                 if (refreshHandleAsync != null)
                 {
@@ -279,13 +279,14 @@ namespace FFXIManager.Services.AutoLogin
                         await _loggingService.LogDebugAsync($"Attempting detection with fallback template: {fallbackTemplate}");
 
                         var attemptsFb = Math.Max((stepDef.RetryAttempts ?? 30) / 2, 5);
-                        var delayFb = stepDef.RetryDelayMs ?? 500;
+                        var delayFb = Math.Max(100, stepDef.RetryDelayMs ?? 500);
                         var options = new ScreenDetectionOptions
                         {
                             Timeout = TimeSpan.FromSeconds(Math.Max(15, (attemptsFb * (delayFb + 250)) / 1000)),
                             CheckInterval = TimeSpan.FromMilliseconds(delayFb),
                             MaxAttempts = attemptsFb
                         };
+                        await _loggingService.LogInfoAsync($"Detection config [fallback] - Attempts: {options.MaxAttempts}, Interval: {delayFb}ms, Timeout: {options.Timeout.TotalSeconds}s");
 
                         if (refreshHandleAsync != null)
                         {
@@ -362,7 +363,7 @@ namespace FFXIManager.Services.AutoLogin
             tempStep.ConfidenceThreshold = action.GetParameter<float>("ConfidenceThreshold", stepDef.ConfidenceThreshold);
             tempStep.Tolerance = action.GetParameter<int>("Tolerance", stepDef.Tolerance);
             tempStep.RetryAttempts = action.GetParameter<int>("RetryAttempts", stepDef.RetryAttempts ?? 60);
-            tempStep.RetryDelayMs = action.GetParameter<int>("RetryDelayMs", stepDef.RetryDelayMs ?? 500);
+            tempStep.RetryDelayMs = Math.Max(100, action.GetParameter<int>("RetryDelayMs", stepDef.RetryDelayMs ?? 500));
             tempStep.EstimatedDurationSeconds = Math.Max(1, action.GetParameter<int>("TimeoutSeconds", defaultTimeout));
 
             try
@@ -410,7 +411,7 @@ namespace FFXIManager.Services.AutoLogin
             await _loggingService.LogInfoAsync($"[NAVIGATION] Executing {navigation.Sequence.Count} action(s) for step: {stepDef.DisplayName}");
 
             // Build execution context
-            var actionContext = BuildActionContext(subtask, stepDef, autoLoginContext, windowHandle, templateMatch);
+            var actionContext = BuildActionContext(subtask, queueItem, stepDef, autoLoginContext, windowHandle, templateMatch);
 
             // Execute action sequence
             await ExecuteNavigationSequence(subtask, stepDef, navigation, actionContext, autoLoginContext, cancellationToken);
@@ -432,6 +433,7 @@ namespace FFXIManager.Services.AutoLogin
         /// </summary>
         private WorkflowActionContext BuildActionContext(
             AutoLoginSubtask subtask,
+            AutoLoginQueueItem queueItem,
             WorkflowStepDefinition stepDef,
             IAutoLoginContext autoLoginContext,
             IntPtr windowHandle,
@@ -442,7 +444,7 @@ namespace FFXIManager.Services.AutoLogin
                 WindowHandle = windowHandle,
                 TemplateMatch = templateMatch,
                 Subtask = subtask,
-                QueueItem = null, // Not needed currently
+                QueueItem = queueItem,
                 AutoLoginContext = autoLoginContext, // Provide context so actions (e.g., Launch) can persist data
                 WorkflowStep = stepDef,
                 WindowDiscoveryService = _windowDiscoveryService // Enable auto-refresh capability
@@ -709,8 +711,8 @@ namespace FFXIManager.Services.AutoLogin
                 return;
 
             // Build detection options and thresholds from action parameters
-            var retryAttempts = action.GetParameter<int>("RetryAttempts", stepDef.RetryAttempts ?? 60);
-            var retryDelayMs = action.GetParameter<int>("RetryDelayMs", stepDef.RetryDelayMs ?? 500);
+            var retryAttempts = Math.Max(1, action.GetParameter<int>("RetryAttempts", stepDef.RetryAttempts ?? 60));
+            var retryDelayMs = Math.Max(100, action.GetParameter<int>("RetryDelayMs", stepDef.RetryDelayMs ?? 500));
             var confidence = action.GetParameter<float>("ConfidenceThreshold", stepDef.ConfidenceThreshold);
             var tolerance = action.GetParameter<int>("Tolerance", stepDef.Tolerance);
 

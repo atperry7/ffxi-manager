@@ -15,6 +15,7 @@ using FFXIManager.Services;
 using FFXIManager.Services.AutoLogin;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
 using FFXIManager.ViewModels.Base;
+using FFXIManager.ViewModels.WorkflowEditor;
 
 namespace FFXIManager.ViewModels
 {
@@ -33,6 +34,12 @@ namespace FFXIManager.ViewModels
         private readonly IScreenshotCaptureService _screenshotService;
         private readonly IServiceProvider _serviceProvider;
         private readonly IExternalApplicationService _externalApplicationService;
+
+        // SOLID Refactoring: Helper services for specialized operations
+        private readonly WorkflowEditorNavigationManager _navigationManager;
+        private readonly WorkflowEditorStepManager _stepManager;
+        private readonly WorkflowEditorTemplateManager _templateManager;
+        private readonly WorkflowEditorWorkflowManager _workflowManager;
 
         private ObservableCollection<WorkflowDefinition> _workflows;
         private ObservableCollection<ExternalApplication> _availableApplications;
@@ -62,7 +69,11 @@ namespace FFXIManager.ViewModels
             ITemplateManagementService templateService,
             IScreenshotCaptureService screenshotService,
             IServiceProvider serviceProvider,
-            IExternalApplicationService externalApplicationService)
+            IExternalApplicationService externalApplicationService,
+            WorkflowEditorNavigationManager navigationManager,
+            WorkflowEditorStepManager stepManager,
+            WorkflowEditorTemplateManager templateManager,
+            WorkflowEditorWorkflowManager workflowManager)
         {
             _workflowService = workflowService ?? throw new ArgumentNullException(nameof(workflowService));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
@@ -73,6 +84,11 @@ namespace FFXIManager.ViewModels
             _screenshotService = screenshotService ?? throw new ArgumentNullException(nameof(screenshotService));
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _externalApplicationService = externalApplicationService ?? throw new ArgumentNullException(nameof(externalApplicationService));
+
+            _navigationManager = navigationManager ?? throw new ArgumentNullException(nameof(navigationManager));
+            _stepManager = stepManager ?? throw new ArgumentNullException(nameof(stepManager));
+            _templateManager = templateManager ?? throw new ArgumentNullException(nameof(templateManager));
+            _workflowManager = workflowManager ?? throw new ArgumentNullException(nameof(workflowManager));
 
             _workflows = new ObservableCollection<WorkflowDefinition>();
             _availableApplications = new ObservableCollection<ExternalApplication>();
@@ -772,8 +788,10 @@ namespace FFXIManager.ViewModels
             IsLoading = true;
             try
             {
-                var workflows = await _workflowService.GetAvailableWorkflowsAsync(_cancellationTokenSource.Token);
+                // Delegate to helper
+                var workflows = await _workflowManager.LoadWorkflowsAsync(_cancellationTokenSource.Token);
 
+                // Update UI state
                 await _uiDispatcher.InvokeAsync(() =>
                 {
                     Workflows.Clear();
@@ -782,13 +800,6 @@ namespace FFXIManager.ViewModels
                         Workflows.Add(workflow);
                     }
                 });
-
-                await _loggingService.LogInfoAsync($"Loaded {workflows.Count} workflows");
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync("Error loading workflows", ex);
-                await _dialogService.ShowMessageDialogAsync("Load Failed", $"Failed to load workflows: {ex.Message}");
             }
             finally
             {
@@ -800,19 +811,10 @@ namespace FFXIManager.ViewModels
         {
             try
             {
-                var newWorkflow = new WorkflowDefinition
-                {
-                    WorkflowId = Guid.NewGuid(),
-                    Name = "New Workflow",
-                    Description = "Custom workflow created by user",
-                    Version = "1.0.0",
-                    IsDefault = false,
-                    IsReadOnly = false,
-                    CreatedDate = DateTime.UtcNow,
-                    LastModifiedDate = DateTime.UtcNow,
-                    Steps = new ObservableCollection<WorkflowStepDefinition>()
-                };
+                // Delegate to helper
+                var newWorkflow = await _workflowManager.CreateNewWorkflowAsync();
 
+                // Update UI state
                 await _uiDispatcher.InvokeAsync(() =>
                 {
                     Workflows.Add(newWorkflow);
@@ -820,12 +822,10 @@ namespace FFXIManager.ViewModels
                 });
 
                 HasUnsavedChanges = true;
-                await _loggingService.LogInfoAsync("Created new workflow");
             }
-            catch (Exception ex)
+            catch
             {
-                await _loggingService.LogErrorAsync("Error creating workflow", ex);
-                await _dialogService.ShowMessageDialogAsync("Create Failed", $"Failed to create workflow: {ex.Message}");
+                // Error already handled and logged by helper
             }
         }
 
@@ -833,82 +833,28 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedWorkflow == null) return;
 
-            try
+            // Delegate to helper
+            var (success, savedWorkflowId, savedWorkflowName) = await _workflowManager.SaveWorkflowAsync(
+                SelectedWorkflow,
+                _cancellationTokenSource.Token);
+
+            if (success)
             {
-                // Validate before saving
-                if (!_workflowService.ValidateWorkflow(SelectedWorkflow, out var errors))
+                // Update UI state
+                HasUnsavedChanges = false;
+
+                // Reload workflows to reflect the saved workflow
+                await LoadWorkflowsAsync();
+
+                // Reselect the workflow by its ID (may have changed if converted from default)
+                await _uiDispatcher.InvokeAsync(() =>
                 {
-                    await _dialogService.ShowMessageDialogAsync("Validation Failed",
-                        $"Workflow validation failed:\n{string.Join("\n", errors)}");
-                    return;
-                }
-
-                // Check if this is a modified default workflow from the defaults/ directory
-                // Default workflows are named by friendly names (e.g., "playonline-standard.json")
-                // but saved by GUID. This creates duplicates. To prevent this, we assign a new
-                // WorkflowId when a default workflow is modified, making it a distinct user workflow.
-                var expectedFilePath = _workflowService.GetWorkflowFilePath(SelectedWorkflow.WorkflowId);
-                var isModifiedDefault = !System.IO.File.Exists(expectedFilePath) && SelectedWorkflow.IsDefault;
-
-                if (isModifiedDefault)
-                {
-                    // This is a default workflow being saved for the first time as a user workflow
-                    // Assign new ID, clear default flag, update metadata
-                    var oldId = SelectedWorkflow.WorkflowId;
-                    var oldName = SelectedWorkflow.Name;
-
-                    SelectedWorkflow.WorkflowId = Guid.NewGuid();
-                    SelectedWorkflow.IsDefault = false;
-                    SelectedWorkflow.Name = $"{SelectedWorkflow.Name} (Custom)";
-                    SelectedWorkflow.CreatedDate = DateTime.UtcNow;
-                    SelectedWorkflow.LastModifiedDate = DateTime.UtcNow;
-
-                    await _loggingService.LogInfoAsync($"Converting default workflow '{oldName}' ({oldId}) to user workflow with new ID: {SelectedWorkflow.WorkflowId}");
-
-                    // Inform user about the change
-                    await _dialogService.ShowMessageDialogAsync("Workflow Converted",
-                        $"The default workflow has been converted to a custom user workflow.\n\n" +
-                        $"Original: {oldName}\n" +
-                        $"New Name: {SelectedWorkflow.Name}\n\n" +
-                        $"This prevents conflicts with the original default workflow.");
-                }
-
-                SelectedWorkflow.LastModifiedDate = DateTime.UtcNow;
-                var success = await _workflowService.SaveWorkflowAsync(SelectedWorkflow, _cancellationTokenSource.Token);
-
-                if (success)
-                {
-                    HasUnsavedChanges = false;
-
-                    // Capture the saved workflow ID before reload (in case SelectedWorkflow changes)
-                    var savedWorkflowId = SelectedWorkflow.WorkflowId;
-                    var savedWorkflowName = SelectedWorkflow.Name;
-
-                    // Reload workflows to reflect the new workflow in the list
-                    await LoadWorkflowsAsync();
-
-                    // Reselect the workflow by its new ID
-                    await _uiDispatcher.InvokeAsync(() =>
+                    var reloadedWorkflow = Workflows.FirstOrDefault(w => w != null && w.WorkflowId == savedWorkflowId);
+                    if (reloadedWorkflow != null)
                     {
-                        var reloadedWorkflow = Workflows.FirstOrDefault(w => w != null && w.WorkflowId == savedWorkflowId);
-                        if (reloadedWorkflow != null)
-                        {
-                            SelectedWorkflow = reloadedWorkflow;
-                        }
-                    });
-
-                    await _loggingService.LogInfoAsync($"Saved workflow: {savedWorkflowName}");
-                    await _dialogService.ShowMessageDialogAsync("Saved", "Workflow saved successfully");
-                }
-                else
-                {
-                    await _dialogService.ShowMessageDialogAsync("Save Failed", "Failed to save workflow");
-                }
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync("Error saving workflow", ex);
-                await _dialogService.ShowMessageDialogAsync("Save Failed", $"Failed to save workflow: {ex.Message}");
+                        SelectedWorkflow = reloadedWorkflow;
+                    }
+                });
             }
         }
 
@@ -916,36 +862,17 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedWorkflow == null) return;
 
-            try
-            {
-                var result = await _dialogService.ShowConfirmationDialogAsync(
-                    "Delete Workflow",
-                    $"Are you sure you want to delete '{SelectedWorkflow.Name}'?\n\nThis action cannot be undone.");
+            // Delegate to helper
+            var deleted = await _workflowManager.DeleteWorkflowAsync(SelectedWorkflow, _cancellationTokenSource.Token);
 
-                if (result)
+            if (deleted)
+            {
+                // Update UI state
+                await _uiDispatcher.InvokeAsync(() =>
                 {
-                    var success = await _workflowService.DeleteWorkflowAsync(SelectedWorkflow.WorkflowId, _cancellationTokenSource.Token);
-
-                    if (success)
-                    {
-                        await _uiDispatcher.InvokeAsync(() =>
-                        {
-                            Workflows.Remove(SelectedWorkflow);
-                            SelectedWorkflow = null;
-                        });
-
-                        await _loggingService.LogInfoAsync("Deleted workflow");
-                    }
-                    else
-                    {
-                        await _dialogService.ShowMessageDialogAsync("Delete Failed", "Failed to delete workflow");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync("Error deleting workflow", ex);
-                await _dialogService.ShowMessageDialogAsync("Delete Failed", $"Failed to delete workflow: {ex.Message}");
+                    Workflows.Remove(SelectedWorkflow);
+                    SelectedWorkflow = null;
+                });
             }
         }
 
@@ -953,13 +880,15 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedWorkflow == null) return;
 
-            try
-            {
-                var clonedWorkflow = await _workflowService.CloneWorkflowAsync(
-                    SelectedWorkflow.WorkflowId,
-                    $"{SelectedWorkflow.Name} (Copy)",
-                    _cancellationTokenSource.Token);
+            // Delegate to helper
+            var clonedWorkflow = await _workflowManager.CloneWorkflowAsync(
+                SelectedWorkflow.WorkflowId,
+                $"{SelectedWorkflow.Name} (Copy)",
+                _cancellationTokenSource.Token);
 
+            if (clonedWorkflow != null)
+            {
+                // Update UI state
                 await _uiDispatcher.InvokeAsync(() =>
                 {
                     Workflows.Add(clonedWorkflow);
@@ -967,67 +896,32 @@ namespace FFXIManager.ViewModels
                 });
 
                 HasUnsavedChanges = true;
-                await _loggingService.LogInfoAsync($"Cloned workflow: {clonedWorkflow.Name}");
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync("Error cloning workflow", ex);
-                await _dialogService.ShowMessageDialogAsync("Clone Failed", $"Failed to clone workflow: {ex.Message}");
             }
         }
 
         private async Task ImportWorkflowAsync()
         {
-            try
-            {
-                await _dialogService.ShowMessageDialogAsync("Not Implemented", "Workflow import will be implemented in a future update");
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync("Error importing workflow", ex);
-                await _dialogService.ShowMessageDialogAsync("Import Failed", $"Failed to import workflow: {ex.Message}");
-            }
+            // Delegate to helper
+            await _workflowManager.ImportWorkflowAsync();
         }
 
         private async Task ExportWorkflowAsync()
         {
             if (SelectedWorkflow == null) return;
 
-            try
-            {
-                await _dialogService.ShowMessageDialogAsync("Not Implemented", "Workflow export will be implemented in a future update");
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync("Error exporting workflow", ex);
-                await _dialogService.ShowMessageDialogAsync("Export Failed", $"Failed to export workflow: {ex.Message}");
-            }
+            // Delegate to helper
+            await _workflowManager.ExportWorkflowAsync();
         }
 
         private async Task RestoreDefaultWorkflowsAsync()
         {
-            try
+            // Delegate to helper
+            var count = await _workflowManager.RestoreDefaultWorkflowsAsync(_cancellationTokenSource.Token);
+
+            if (count > 0)
             {
-                var result = await _dialogService.ShowConfirmationDialogAsync(
-                    "Restore Defaults",
-                    "This will restore all default workflows from the application directory, overwriting any changes you made to defaults.\n\nAre you sure?");
-
-                if (!result) return;
-
-                var count = await _workflowService.RestoreDefaultWorkflowsAsync(_cancellationTokenSource.Token);
-
-                await _loggingService.LogInfoAsync($"Restored {count} default workflows");
-                await _dialogService.ShowMessageDialogAsync("Restore Complete",
-                    $"Successfully restored {count} default workflow(s).\n\nReloading workflows...");
-
-                // Reload workflows to reflect the restored defaults
+                // Update UI state - reload workflows to reflect restored defaults
                 await LoadWorkflowsAsync();
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync("Error restoring defaults", ex);
-                await _dialogService.ShowMessageDialogAsync("Restore Failed",
-                    $"Failed to restore default workflows: {ex.Message}");
             }
         }
 
@@ -1037,33 +931,14 @@ namespace FFXIManager.ViewModels
 
             try
             {
-                var newStep = new WorkflowStepDefinition
-                {
-                    StepId = Guid.NewGuid().ToString(),
-                    DisplayName = "New Step",
-                    Description = "Configure this step",
-                    Order = SelectedWorkflow.Steps.Count,
-                    IsEnabled = true,
-                    IsOptional = false,
-                    EstimatedDurationSeconds = 5,
-                    MaxRetryAttempts = 3,
-                    TemplatePath = string.Empty
-                };
-
-                await _uiDispatcher.InvokeAsync(() =>
-                {
-                    SelectedWorkflow.AddStep(newStep);
-                    SelectedStep = newStep;
-                });
-
+                var newStep = await _stepManager.AddStepAsync(SelectedWorkflow);
+                SelectedStep = newStep;
                 HasUnsavedChanges = true;
                 OnPropertyChanged(nameof(WorkflowSteps));
-                await _loggingService.LogInfoAsync("Added new step to workflow");
             }
-            catch (Exception ex)
+            catch
             {
-                await _loggingService.LogErrorAsync("Error adding step", ex);
-                await _dialogService.ShowMessageDialogAsync("Add Failed", $"Failed to add step: {ex.Message}");
+                // Error already handled and logged by helper
             }
         }
 
@@ -1071,29 +946,13 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedWorkflow == null || SelectedStep == null) return;
 
-            try
-            {
-                var result = await _dialogService.ShowConfirmationDialogAsync(
-                    "Remove Step",
-                    $"Are you sure you want to remove '{SelectedStep.DisplayName}'?");
+            var removed = await _stepManager.RemoveStepAsync(SelectedWorkflow, SelectedStep);
 
-                if (result)
-                {
-                    await _uiDispatcher.InvokeAsync(() =>
-                    {
-                        SelectedWorkflow.RemoveStep(SelectedStep);
-                        SelectedStep = null;
-                    });
-
-                    HasUnsavedChanges = true;
-                    OnPropertyChanged(nameof(WorkflowSteps));
-                    await _loggingService.LogInfoAsync("Removed step from workflow");
-                }
-            }
-            catch (Exception ex)
+            if (removed)
             {
-                await _loggingService.LogErrorAsync("Error removing step", ex);
-                await _dialogService.ShowMessageDialogAsync("Remove Failed", $"Failed to remove step: {ex.Message}");
+                SelectedStep = null;
+                HasUnsavedChanges = true;
+                OnPropertyChanged(nameof(WorkflowSteps));
             }
         }
 
@@ -1101,16 +960,13 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedWorkflow == null || SelectedStep == null) return;
 
-            try
+            var moved = _stepManager.MoveStepUp(SelectedWorkflow, SelectedStep);
+
+            if (moved)
             {
-                SelectedWorkflow.MoveStep(SelectedStep, SelectedStep.Order - 1);
                 HasUnsavedChanges = true;
                 OnPropertyChanged(nameof(WorkflowSteps));
                 UpdateCommandStates();
-            }
-            catch (Exception ex)
-            {
-                _ = _loggingService.LogErrorAsync("Error moving step up", ex);
             }
         }
 
@@ -1118,90 +974,51 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedWorkflow == null || SelectedStep == null) return;
 
-            try
+            var moved = _stepManager.MoveStepDown(SelectedWorkflow, SelectedStep);
+
+            if (moved)
             {
-                SelectedWorkflow.MoveStep(SelectedStep, SelectedStep.Order + 1);
                 HasUnsavedChanges = true;
                 OnPropertyChanged(nameof(WorkflowSteps));
                 UpdateCommandStates();
-            }
-            catch (Exception ex)
-            {
-                _ = _loggingService.LogErrorAsync("Error moving step down", ex);
             }
         }
 
         private async Task EditStepAsync()
         {
             if (SelectedStep == null) return;
-
-            try
-            {
-                // Step properties are bound directly to UI, so edits are automatic
-                await _loggingService.LogDebugAsync($"Editing step: {SelectedStep.DisplayName}");
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync("Error editing step", ex);
-            }
+            await _stepManager.EditStepAsync(SelectedStep);
         }
 
         private void InitializeNavigation()
         {
             if (SelectedStep == null) return;
 
-            try
-            {
-                SelectedStep.Navigation = new NavigationAction
-                {
-                    Description = $"Navigation for {SelectedStep.DisplayName}",
-                    PostNavigationDelayMs = 500,
-                    Sequence = new ObservableCollection<KeyboardAction>()
-                };
+            _navigationManager.InitializeNavigation(SelectedStep);
 
-                OnPropertyChanged(nameof(NavigationActions));
-                OnPropertyChanged(nameof(HasNavigationAction));
-                HasUnsavedChanges = true;
+            // Update UI state
+            OnPropertyChanged(nameof(NavigationActions));
+            OnPropertyChanged(nameof(HasNavigationAction));
+            HasUnsavedChanges = true;
 
-                // Subscribe to the newly created navigation sequence
-                SubscribeToNavigationSequenceChanges();
+            // Subscribe to the newly created navigation sequence
+            SubscribeToNavigationSequenceChanges();
 
-                UpdateCommandStates();
-
-                _ = _loggingService.LogDebugAsync($"Initialized sequence-based navigation for step: {SelectedStep.DisplayName}");
-            }
-            catch (Exception ex)
-            {
-                _ = _loggingService.LogErrorAsync("Error initializing navigation", ex);
-            }
+            UpdateCommandStates();
         }
 
         private void AddNavigationAction()
         {
             if (SelectedStep?.Navigation == null) return;
 
-            try
+            var newAction = _navigationManager.AddNavigationAction(SelectedStep);
+
+            if (newAction != null)
             {
-                var newAction = new KeyboardAction
-                {
-                    Action = "Tab",
-                    Count = 1,
-                    DelayMs = 100,
-                    Description = "Navigate to next field"
-                };
-
-                SelectedStep.Navigation.Sequence.Add(newAction);
                 SelectedNavigationAction = newAction;
-
                 HasUnsavedChanges = true;
                 OnPropertyChanged(nameof(NavigationActions));
                 UpdateCommandStates();
-
-                _ = _loggingService.LogDebugAsync($"Added navigation action to step: {SelectedStep.DisplayName}");
-            }
-            catch (Exception ex)
-            {
-                _ = _loggingService.LogErrorAsync("Error adding navigation action", ex);
             }
         }
 
@@ -1209,20 +1026,14 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedStep?.Navigation == null || SelectedNavigationAction == null) return;
 
-            try
-            {
-                SelectedStep.Navigation.Sequence.Remove(SelectedNavigationAction);
-                SelectedNavigationAction = null;
+            var removed = _navigationManager.RemoveNavigationAction(SelectedStep, SelectedNavigationAction);
 
+            if (removed)
+            {
+                SelectedNavigationAction = null;
                 HasUnsavedChanges = true;
                 OnPropertyChanged(nameof(NavigationActions));
                 UpdateCommandStates();
-
-                _ = _loggingService.LogDebugAsync($"Removed navigation action from step: {SelectedStep.DisplayName}");
-            }
-            catch (Exception ex)
-            {
-                _ = _loggingService.LogErrorAsync("Error removing navigation action", ex);
             }
         }
 
@@ -1230,22 +1041,12 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedStep?.Navigation == null || SelectedNavigationAction == null) return;
 
-            try
+            var moved = _navigationManager.MoveNavigationActionUp(SelectedStep, SelectedNavigationAction);
+
+            if (moved)
             {
-                var sequence = SelectedStep.Navigation.Sequence;
-                var index = sequence.IndexOf(SelectedNavigationAction);
-                if (index <= 0) return;
-
-                sequence.Move(index, index - 1);
-
                 HasUnsavedChanges = true;
                 UpdateCommandStates();
-
-                _ = _loggingService.LogDebugAsync($"Moved navigation action up in step: {SelectedStep.DisplayName}");
-            }
-            catch (Exception ex)
-            {
-                _ = _loggingService.LogErrorAsync("Error moving navigation action up", ex);
             }
         }
 
@@ -1253,22 +1054,12 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedStep?.Navigation == null || SelectedNavigationAction == null) return;
 
-            try
+            var moved = _navigationManager.MoveNavigationActionDown(SelectedStep, SelectedNavigationAction);
+
+            if (moved)
             {
-                var sequence = SelectedStep.Navigation.Sequence;
-                var index = sequence.IndexOf(SelectedNavigationAction);
-                if (index < 0 || index >= sequence.Count - 1) return;
-
-                sequence.Move(index, index + 1);
-
                 HasUnsavedChanges = true;
                 UpdateCommandStates();
-
-                _ = _loggingService.LogDebugAsync($"Moved navigation action down in step: {SelectedStep.DisplayName}");
-            }
-            catch (Exception ex)
-            {
-                _ = _loggingService.LogErrorAsync("Error moving navigation action down", ex);
             }
         }
 
@@ -1331,73 +1122,35 @@ namespace FFXIManager.ViewModels
                 if (dialog.ShowDialog() != true)
                     return;
 
-                await _loggingService.LogInfoAsync($"Selected image file: {dialog.FileName}");
-
                 // Open image cropper dialog
                 var cropViewModel = new ImageCropperDialogViewModel(dialog.FileName, _loggingService);
-                var cropDialog = new Views.ImageCropperDialog(cropViewModel);
-                cropDialog.Owner = System.Windows.Application.Current.MainWindow;
-
-                var dialogResult = cropDialog.ShowDialog();
-
-                if (dialogResult != true)
+                var cropDialog = new Views.ImageCropperDialog(cropViewModel)
                 {
-                    await _loggingService.LogInfoAsync("Image selection cancelled");
+                    Owner = System.Windows.Application.Current.MainWindow
+                };
+
+                if (cropDialog.ShowDialog() != true)
                     return;
-                }
 
                 // Validate crop rectangle
                 if (cropViewModel.CropRectangle == null)
                 {
-                    await _loggingService.LogWarningAsync("No crop rectangle selected");
                     await _dialogService.ShowMessageDialogAsync("Invalid Selection", "No crop area was selected.");
                     return;
                 }
 
-                // Generate unique template name based on step ID (flat structure - no directories)
-                var templateName = $"step_{SelectedStep.StepId.ToLowerInvariant().Replace("-", "_")}";
-
-                // Get template directory path
-                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                var templatesPath = System.IO.Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
-                System.IO.Directory.CreateDirectory(templatesPath);
-
-                var templateFilePath = System.IO.Path.Combine(templatesPath, $"{templateName}.png");
-
-                await _loggingService.LogInfoAsync($"Creating template: {templateName} for step '{SelectedStep.DisplayName}'");
-
-                // Get image crop service from DI
-                var imageCropService = _serviceProvider.GetService(typeof(IImageCropService))
-                    as IImageCropService;
-
-                if (imageCropService == null)
-                {
-                    await _loggingService.LogErrorAsync("IImageCropService not available from DI");
-                    await _dialogService.ShowMessageDialogAsync("Service Error", "Image crop service not available.");
-                    return;
-                }
-
-                // Crop and save the image directly to template location
-                var success = await imageCropService.CropImageAsync(
+                // Delegate to helper
+                var success = await _templateManager.CreateStepTemplateAsync(
+                    SelectedStep,
                     dialog.FileName,
-                    cropViewModel.CropRectangle.Value,
-                    templateFilePath);
+                    cropViewModel.CropRectangle.Value);
 
                 if (success)
                 {
-                    // Update step with new template path (stored without extension)
-                    SelectedStep.TemplatePath = templateName;
+                    // Update UI state
                     HasUnsavedChanges = true;
                     UpdateCommandStates();
-
-                    await _loggingService.LogInfoAsync($"Template created successfully: {templateName}");
-                    await _dialogService.ShowMessageDialogAsync("Template Created",
-                        $"Template '{templateName}' created successfully");
-                }
-                else
-                {
-                    await _dialogService.ShowMessageDialogAsync("Template Creation Failed",
-                        "Failed to create template image. Check logs for details.");
+                    LoadTemplateImage();
                 }
             }
             catch (Exception ex)
@@ -1418,13 +1171,6 @@ namespace FFXIManager.ViewModels
 
             try
             {
-                var result = await _dialogService.ShowConfirmationDialogAsync(
-                    "Replace Template Image",
-                    $"Replace the template image for '{SelectedStep.DisplayName}'?\n\nThis will update: {SelectedStep.TemplatePath}");
-
-                if (!result)
-                    return;
-
                 // Open file dialog to select new image
                 var dialog = new Microsoft.Win32.OpenFileDialog
                 {
@@ -1436,39 +1182,26 @@ namespace FFXIManager.ViewModels
                 if (dialog.ShowDialog() != true)
                     return;
 
-                await _loggingService.LogInfoAsync($"Selected replacement image: {dialog.FileName}");
-
                 // Open image cropper dialog
                 var cropViewModel = new ImageCropperDialogViewModel(dialog.FileName, _loggingService);
-                var cropDialog = new Views.ImageCropperDialog(cropViewModel);
-                cropDialog.Owner = System.Windows.Application.Current.MainWindow;
-
-                var dialogResult = cropDialog.ShowDialog();
-
-                if (dialogResult != true)
+                var cropDialog = new Views.ImageCropperDialog(cropViewModel)
                 {
-                    await _loggingService.LogInfoAsync("Image replacement cancelled");
+                    Owner = System.Windows.Application.Current.MainWindow
+                };
+
+                if (cropDialog.ShowDialog() != true)
                     return;
-                }
 
-                await _loggingService.LogInfoAsync($"Replacing template: {SelectedStep.TemplatePath}");
-
-                // Replace template image with cropped version
-                var success = await _templateService.CropAndReplaceTemplateImageAsync(
-                    SelectedStep.TemplatePath,
+                // Delegate to helper
+                var success = await _templateManager.ReplaceStepTemplateAsync(
+                    SelectedStep,
                     dialog.FileName,
                     cropViewModel.CropRectangle);
 
                 if (success)
                 {
-                    await _loggingService.LogInfoAsync($"Template replaced successfully: {SelectedStep.TemplatePath}");
-                    await _dialogService.ShowMessageDialogAsync("Template Replaced",
-                        $"Template image for '{SelectedStep.DisplayName}' replaced successfully");
-                }
-                else
-                {
-                    await _dialogService.ShowMessageDialogAsync("Template Replacement Failed",
-                        "Failed to replace template image. Check logs for details.");
+                    // Update UI state
+                    LoadTemplateImage();
                 }
             }
             catch (Exception ex)
@@ -1824,40 +1557,9 @@ namespace FFXIManager.ViewModels
         {
             try
             {
-                // Clear previous image
-                TemplateImageSource = null;
+                // Delegate to helper
+                TemplateImageSource = _templateManager.LoadStepTemplateThumbnail(SelectedStep);
                 OnPropertyChanged(nameof(HasTemplateImage));
-
-                if (SelectedStep == null || string.IsNullOrWhiteSpace(SelectedStep.TemplatePath))
-                    return;
-
-                // Construct template file path
-                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                var templatesPath = System.IO.Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
-                var templateFileName = SelectedStep.TemplatePath.EndsWith(".png")
-                    ? SelectedStep.TemplatePath
-                    : $"{SelectedStep.TemplatePath}.png";
-                var templateFilePath = System.IO.Path.Combine(templatesPath, templateFileName);
-
-                if (!System.IO.File.Exists(templateFilePath))
-                {
-                    _ = _loggingService.LogDebugAsync($"Template file not found: {templateFilePath}");
-                    return;
-                }
-
-                // Load image with BitmapCacheOption.OnLoad to avoid file locking
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.UriSource = new Uri(templateFilePath, UriKind.Absolute);
-                bitmap.DecodePixelHeight = 100; // Thumbnail height
-                bitmap.EndInit();
-                bitmap.Freeze(); // Make it thread-safe
-
-                TemplateImageSource = bitmap;
-                OnPropertyChanged(nameof(HasTemplateImage));
-
-                _ = _loggingService.LogDebugAsync($"Loaded template thumbnail: {templateFileName}");
             }
             catch (Exception ex)
             {
@@ -1874,36 +1576,8 @@ namespace FFXIManager.ViewModels
         {
             try
             {
-                ActionTemplateImageSource = null;
-                OnPropertyChanged(nameof(HasActionTemplateImage));
-
-                if (SelectedNavigationAction == null)
-                    return;
-
-                var actionTemplate = SelectedNavigationAction.GetParameter<string>("TemplatePath", string.Empty);
-                if (string.IsNullOrWhiteSpace(actionTemplate))
-                    return;
-
-                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                var templatesPath = System.IO.Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
-                var templateFileName = actionTemplate.EndsWith(".png") ? actionTemplate : $"{actionTemplate}.png";
-                var templateFilePath = System.IO.Path.Combine(templatesPath, templateFileName);
-
-                if (!System.IO.File.Exists(templateFilePath))
-                {
-                    _ = _loggingService.LogDebugAsync($"Action template file not found: {templateFilePath}");
-                    return;
-                }
-
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.UriSource = new Uri(templateFilePath, UriKind.Absolute);
-                bitmap.DecodePixelHeight = 100;
-                bitmap.EndInit();
-                bitmap.Freeze();
-
-                ActionTemplateImageSource = bitmap;
+                // Delegate to helper
+                ActionTemplateImageSource = _templateManager.LoadActionTemplateThumbnail(SelectedNavigationAction);
                 OnPropertyChanged(nameof(HasActionTemplateImage));
             }
             catch (Exception ex)
@@ -1919,43 +1593,8 @@ namespace FFXIManager.ViewModels
             if (SelectedNavigationAction == null)
                 return;
 
-            try
-            {
-                var actionTemplate = SelectedNavigationAction.GetParameter<string>("TemplatePath", string.Empty);
-                if (string.IsNullOrWhiteSpace(actionTemplate)) return;
-
-                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                var templatesPath = System.IO.Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
-                var templateFileName = actionTemplate.EndsWith(".png") ? actionTemplate : $"{actionTemplate}.png";
-                var templateFilePath = System.IO.Path.Combine(templatesPath, templateFileName);
-
-                if (!System.IO.File.Exists(templateFilePath))
-                {
-                    await _dialogService.ShowMessageDialogAsync("Template Not Found",
-                        $"Template file not found:\n{templateFilePath}");
-                    return;
-                }
-
-                var window = new System.Windows.Window
-                {
-                    Title = $"Action Template Preview: {SelectedNavigationAction.Action}",
-                    Width = 800,
-                    Height = 600,
-                    WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
-                    Owner = System.Windows.Application.Current?.MainWindow,
-                    Content = new System.Windows.Controls.Image
-                    {
-                        Source = new BitmapImage(new Uri(templateFilePath, UriKind.Absolute)),
-                        Stretch = System.Windows.Media.Stretch.Uniform
-                    }
-                };
-
-                window.ShowDialog();
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync("Error showing action template", ex);
-            }
+            // Delegate to helper
+            await _templateManager.ShowLargeActionTemplateAsync(SelectedNavigationAction);
         }
 
         private async Task SelectActionTemplateImageAsync()
@@ -1974,16 +1613,14 @@ namespace FFXIManager.ViewModels
                 if (dialog.ShowDialog() != true)
                     return;
 
-                await _loggingService.LogInfoAsync($"Selected image file for action: {dialog.FileName}");
-
                 var cropViewModel = new ImageCropperDialogViewModel(dialog.FileName, _loggingService);
                 var cropDialog = new Views.ImageCropperDialog(cropViewModel)
                 {
                     Owner = System.Windows.Application.Current.MainWindow
                 };
 
-                var dialogResult = cropDialog.ShowDialog();
-                if (dialogResult != true) return;
+                if (cropDialog.ShowDialog() != true)
+                    return;
 
                 if (cropViewModel.CropRectangle == null)
                 {
@@ -1991,34 +1628,18 @@ namespace FFXIManager.ViewModels
                     return;
                 }
 
-                var templateName = GenerateActionTemplateName();
-                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                var templatesPath = System.IO.Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
-                System.IO.Directory.CreateDirectory(templatesPath);
-                var templateFilePath = System.IO.Path.Combine(templatesPath, $"{templateName}.png");
-
-                var imageCropService = _serviceProvider.GetService(typeof(IImageCropService)) as IImageCropService;
-                if (imageCropService == null)
-                {
-                    await _dialogService.ShowMessageDialogAsync("Service Error", "Image crop service not available.");
-                    return;
-                }
-
-                var success = await imageCropService.CropImageAsync(
+                // Delegate to helper
+                var success = await _templateManager.CreateActionTemplateAsync(
+                    SelectedNavigationAction,
+                    SelectedStep,
                     dialog.FileName,
-                    cropViewModel.CropRectangle.Value,
-                    templateFilePath);
+                    cropViewModel.CropRectangle.Value);
 
                 if (success)
                 {
-                    SelectedNavigationAction.SetParameter("TemplatePath", templateName);
+                    // Update UI state
                     LoadActionTemplateImage();
                     HasUnsavedChanges = true;
-                }
-                else
-                {
-                    await _dialogService.ShowMessageDialogAsync("Template Creation Failed",
-                        "Failed to create template image.");
                 }
             }
             catch (Exception ex)
@@ -2034,15 +1655,6 @@ namespace FFXIManager.ViewModels
 
             try
             {
-                var actionTemplate = SelectedNavigationAction.GetParameter<string>("TemplatePath", string.Empty);
-                if (string.IsNullOrWhiteSpace(actionTemplate)) return;
-
-                var result = await _dialogService.ShowConfirmationDialogAsync(
-                    "Replace Action Template Image",
-                    $"Replace the template image for action '{SelectedNavigationAction.Action}'?\n\nThis will update: {actionTemplate}");
-
-                if (!result) return;
-
                 var dialog = new Microsoft.Win32.OpenFileDialog
                 {
                     Title = "Select New Image for Action Template",
@@ -2058,21 +1670,17 @@ namespace FFXIManager.ViewModels
                     Owner = System.Windows.Application.Current.MainWindow
                 };
 
-                var dialogResult = cropDialog.ShowDialog();
-                if (dialogResult != true) return;
+                if (cropDialog.ShowDialog() != true) return;
 
-                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                var templatesPath = System.IO.Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
-                var templateFileName = actionTemplate.EndsWith(".png") ? actionTemplate : $"{actionTemplate}.png";
-                var templateFilePath = System.IO.Path.Combine(templatesPath, templateFileName);
-
-                var success = await _templateService.CropAndReplaceTemplateImageAsync(
-                    actionTemplate,
+                // Delegate to helper
+                var success = await _templateManager.ReplaceActionTemplateAsync(
+                    SelectedNavigationAction,
                     dialog.FileName,
                     cropViewModel.CropRectangle);
 
                 if (success)
                 {
+                    // Update UI state
                     LoadActionTemplateImage();
                 }
             }
@@ -2084,13 +1692,8 @@ namespace FFXIManager.ViewModels
 
         private string GenerateActionTemplateName()
         {
-            var stepId = SelectedStep?.StepId ?? "step";
-            int index = 0;
-            if (SelectedStep?.Navigation?.Sequence != null && SelectedNavigationAction != null)
-            {
-                index = SelectedStep.Navigation.Sequence.IndexOf(SelectedNavigationAction);
-            }
-            return $"action_{stepId}_{index}".ToLowerInvariant();
+            // Delegate to helper
+            return _templateManager.GenerateActionTemplateName(SelectedStep, SelectedNavigationAction);
         }
 
         private static bool IsKeyboardKey(string? actionName)
@@ -2132,48 +1735,8 @@ namespace FFXIManager.ViewModels
             if (SelectedStep == null || string.IsNullOrWhiteSpace(SelectedStep.TemplatePath))
                 return;
 
-            try
-            {
-                // Construct template file path
-                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                var templatesPath = System.IO.Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
-                var templateFileName = SelectedStep.TemplatePath.EndsWith(".png")
-                    ? SelectedStep.TemplatePath
-                    : $"{SelectedStep.TemplatePath}.png";
-                var templateFilePath = System.IO.Path.Combine(templatesPath, templateFileName);
-
-                if (!System.IO.File.Exists(templateFilePath))
-                {
-                    await _dialogService.ShowMessageDialogAsync("Template Not Found",
-                        $"Template file not found:\n{templateFilePath}");
-                    return;
-                }
-
-                // Create a simple window to display the image
-                var window = new System.Windows.Window
-                {
-                    Title = $"Template Preview: {SelectedStep.DisplayName}",
-                    Width = 800,
-                    Height = 600,
-                    WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
-                    Owner = System.Windows.Application.Current?.MainWindow,
-                    Content = new System.Windows.Controls.Image
-                    {
-                        Source = new BitmapImage(new Uri(templateFilePath, UriKind.Absolute)),
-                        Stretch = System.Windows.Media.Stretch.Uniform
-                    }
-                };
-
-                window.ShowDialog();
-
-                await _loggingService.LogDebugAsync($"Showed large template image: {templateFileName}");
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync("Error showing large template image", ex);
-                await _dialogService.ShowMessageDialogAsync("Display Error",
-                    $"Failed to display template image: {ex.Message}");
-            }
+            // Delegate to helper
+            await _templateManager.ShowLargeStepTemplateAsync(SelectedStep);
         }
 
         #endregion

@@ -155,6 +155,12 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
         {
             await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Using keyboard navigation to slot {targetSlot}");
 
+            // Ensure window has focus to receive keyboard input
+            if (context.WindowHandle != IntPtr.Zero)
+            {
+                await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
+                await Task.Delay(100, cancellationToken);
+            }
 
             // Press Tab to navigate to target slot (0-indexed from slot 1)
             var tabPresses = targetSlot;
