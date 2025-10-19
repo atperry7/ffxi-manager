@@ -62,8 +62,9 @@ namespace FFXIManager.Models.AutoLogin
         }
 
         /// <summary>
-        /// Path to the template image used for screen detection.
-        /// Format: "Application/template_name" (e.g., "PlayOnline/member_selection_screen")
+        /// Path (filename) of the template PNG used for screen detection.
+        /// Location: %APPDATA%/FFXIManager/workflows/templates
+        /// Format: "template_name" or "template_name.png" (no application prefix; flat folder)
         /// OPTIONAL: Can be empty if step uses keyboard-only navigation without screen detection.
         /// </summary>
         public string TemplatePath
@@ -109,10 +110,19 @@ namespace FFXIManager.Models.AutoLogin
             set => SetProperty(ref _skipIfApplicationRunning, value);
         }
 
+        /// <remarks>
+        /// Evaluation timing: snapshot at task-build time (WorkflowTaskBuilder), not re-evaluated during execution.
+        /// </remarks>
+
         /// <summary>
         /// Estimated duration for this step in seconds.
-        /// Used for progress estimation and timeout calculation.
+        /// Used for progress estimation and to size detection timeouts.
         /// </summary>
+        /// <remarks>
+        /// This is not a hard cap across the entire step. Overall per-subtask timeout
+        /// is enforced by AutoLoginTaskExecutor.SubtaskTimeoutSeconds. Detection operations
+        /// within the step use this value to derive their own time budgets.
+        /// </remarks>
         public int EstimatedDurationSeconds
         {
             get => _estimatedDurationSeconds;
@@ -120,8 +130,8 @@ namespace FFXIManager.Models.AutoLogin
         }
 
         /// <summary>
-        /// Alternative template paths to try if the primary template fails detection.
-        /// Provides fallback options for handling UI variations or different resolutions.
+        /// Alternative template filenames to try if the primary template fails detection.
+        /// Files are resolved in the shared templates folder.
         /// </summary>
         public List<string> FallbackTemplatePaths { get; set; } = new();
 
@@ -148,8 +158,9 @@ namespace FFXIManager.Models.AutoLogin
         private int _tolerance = 5;
 
         /// <summary>
-        /// Maximum number of retry attempts for this step if it fails.
-        /// Default is 3. Set to 0 to disable retries.
+        /// Maximum number of retry attempts for this step if the subtask fails.
+        /// Applied by the task executor across whole-step failures, not per detection attempt.
+        /// Default is 3. Set to 0 to disable step-level retries.
         /// </summary>
         public int MaxRetryAttempts
         {
@@ -158,9 +169,9 @@ namespace FFXIManager.Models.AutoLogin
         }
 
         /// <summary>
-        /// Number of retry attempts for template detection.
-        /// Used when waiting for application UI to be ready or screen to appear.
-        /// Default is 30.
+        /// Number of retry attempts for template detection waits.
+        /// Used when waiting for a screen to appear or action-level readiness checks.
+        /// Default baseline is 30 for step-level detection; action/executor logic may override.
         /// </summary>
         public int? RetryAttempts
         {
@@ -170,7 +181,7 @@ namespace FFXIManager.Models.AutoLogin
 
         /// <summary>
         /// Delay in milliseconds between template detection retry attempts.
-        /// Default is 500ms.
+        /// Default is 500ms. Action-level detection may override per action.
         /// </summary>
         public int? RetryDelayMs
         {
@@ -185,8 +196,7 @@ namespace FFXIManager.Models.AutoLogin
         /// Default: 0.8 (80% confidence)
         /// </summary>
         /// <remarks>
-        /// This property replaces the need for separate template JSON metadata files.
-        /// All template matching configuration is now centralized in the workflow step definition.
+        /// Workflow-first: thresholds are defined in the workflow (can be overridden per action).
         /// </remarks>
         public float ConfidenceThreshold
         {
@@ -200,8 +210,7 @@ namespace FFXIManager.Models.AutoLogin
         /// Default: 5 pixels
         /// </summary>
         /// <remarks>
-        /// This property replaces the need for separate template JSON metadata files.
-        /// All template matching configuration is now centralized in the workflow step definition.
+        /// Workflow-first: tolerance is defined in the workflow (can be overridden per action).
         /// </remarks>
         public int Tolerance
         {

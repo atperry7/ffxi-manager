@@ -156,6 +156,8 @@ Templates are stored in:
 
 Templates are shared by all workflows (default and custom) in a centralized location.
 
+Note: Template JSON metadata files are no longer used. All detection thresholds, tolerances, retries, and navigation are defined in workflows (WorkflowDefinition/WorkflowStepDefinition and per-action Parameters). Only PNG images are required in the templates folder.
+
 ## Best Practices
 
 1. **Version Your Workflows**: Update the `Version` field when making changes
@@ -164,6 +166,16 @@ Templates are shared by all workflows (default and custom) in a centralized loca
 4. **Test Thoroughly**: Verify workflows work across different scenarios
 5. **Set Realistic Durations**: Estimate `EstimatedDurationSeconds` accurately
 6. **Keep Steps Atomic**: Each step should do one thing well
+
+## Field Semantics (Workflow-First)
+
+- `TemplatePath`: Template PNG filename under `%APPDATA%/FFXIManager/workflows/templates` (flat). Use `name` or `name.png`.
+- `EstimatedDurationSeconds`: Sizes detection timeouts and progress; not a hard per-step cap. Global TTL is `SubtaskTimeoutSeconds`.
+- `MaxRetryAttempts`: Step-level retry budget if the subtask fails (executor-level), not per detection attempt.
+- `RetryAttempts` / `RetryDelayMs`: Detection wait tuning for screen readiness (step-level default; action-level can override).
+- `ConfidenceThreshold` / `Tolerance`: Matching thresholds (step-level defaults; action-level can override).
+- `IsOptional`: If the step fails, it will be skipped and will not abort the workflow.
+- `SkipIfApplicationRunning`: Evaluated once at task-build time using a snapshot of running apps.
 
 ## Troubleshooting
 

@@ -116,13 +116,32 @@ namespace FFXIManager.Models
             {
                 try
                 {
+                    // If caller expects a string, sanitize common UI wrapper artifacts
+                    if (typeof(T) == typeof(string))
+                    {
+                        // Handle values already stored as string (including potential ComboBoxItem ToString)
+                        if (value is string s)
+                        {
+                            return (T)(object)SanitizeParameterString(s);
+                        }
+
+                        // Handle WPF ComboBoxItem stored directly
+                        var typeName = value?.GetType().FullName ?? string.Empty;
+                        if (typeName == "System.Windows.Controls.ComboBoxItem")
+                        {
+                            var contentProp = value.GetType().GetProperty("Content");
+                            var contentVal = contentProp?.GetValue(value)?.ToString() ?? value.ToString() ?? string.Empty;
+                            return (T)(object)SanitizeParameterString(contentVal);
+                        }
+                    }
+
                     // Handle System.Text.Json.JsonElement from deserialization
                     if (value is System.Text.Json.JsonElement jsonElement)
                     {
                         if (typeof(T) == typeof(string))
                         {
                             var str = jsonElement.GetString();
-                            return str != null ? (T)(object)str : defaultValue;
+                            return str != null ? (T)(object)SanitizeParameterString(str) : defaultValue;
                         }
                         else if (typeof(T) == typeof(int))
                             return (T)(object)jsonElement.GetInt32();
@@ -153,8 +172,36 @@ namespace FFXIManager.Models
         /// </summary>
         public void SetParameter(string key, object value)
         {
-            Parameters[key] = value;
+            object sanitized = value;
+
+            // Normalize WPF ComboBoxItem to its Content string
+            var typeName = value?.GetType().FullName ?? string.Empty;
+            if (typeName == "System.Windows.Controls.ComboBoxItem")
+            {
+                var contentProp = value.GetType().GetProperty("Content");
+                var contentVal = contentProp?.GetValue(value)?.ToString() ?? value.ToString() ?? string.Empty;
+                sanitized = SanitizeParameterString(contentVal);
+            }
+            else if (value is string s)
+            {
+                sanitized = SanitizeParameterString(s);
+            }
+
+            Parameters[key] = sanitized;
             OnPropertyChanged(nameof(Parameters));
+        }
+
+        private static string SanitizeParameterString(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return s;
+
+            const string comboPrefix = "System.Windows.Controls.ComboBoxItem:";
+            if (s.StartsWith(comboPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return s.Substring(comboPrefix.Length).Trim();
+            }
+
+            return s.Trim();
         }
     }
 

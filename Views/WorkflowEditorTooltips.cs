@@ -18,15 +18,15 @@ namespace FFXIManager.Views
             // Step Properties - Basic
             ["DisplayName"] = "Human-readable name shown in the UI during execution",
             ["Description"] = "Detailed description of what this step accomplishes",
-            ["TemplatePath"] = "Path to template PNG image for screen detection\nLeave empty for keyboard-only navigation",
-            ["EstimatedDurationSeconds"] = "Expected time for this step to complete\nUsed for timeout calculation and progress estimation",
+            ["TemplatePath"] = "Template PNG filename for detection\nFolder: %APPDATA%/FFXIManager/workflows/templates (flat)\nFormat: name or name.png\nLeave empty for keyboard-only navigation",
+            ["EstimatedDurationSeconds"] = "Estimated time for this step\nSizes detection timeouts and progress\nNot a hard cap (SubtaskTimeoutSeconds applies)",
 
             // Step Properties - Retry Configuration
-            ["MaxRetryAttempts"] = "Number of detection attempts before giving up\nExample: 15 attempts = check screen 15 times at 1-second intervals\n\nRecommended: 10-15 for stable screens, 20-30 for slow transitions",
+            ["MaxRetryAttempts"] = "Step-level retry budget if the subtask fails\nApplied by the task executor (not per detection attempt)\nDefault: 3 (0 to disable)",
 
-            ["RetryAttempts"] = "Template detection attempts (LaunchApplication steps only)\nUsed when waiting for application UI to become ready\n\nDefault: 30 attempts × 500ms = 15 seconds",
+            ["RetryAttempts"] = "Template detection attempts (wait loops)\nUsed when waiting for a screen or action readiness\nDefault baseline: 30",
 
-            ["RetryDelayMs"] = "Delay between template detection retry attempts\nDefault: 500ms (half second)",
+            ["RetryDelayMs"] = "Delay between template detection attempts\nDefault: 500ms (half second)",
 
             // Step Properties - Template Matching
             ["ConfidenceThreshold"] = "How closely screenshot must match template (0.0-1.0)\n\n• 0.90+  = Very strict (exact match required)\n• 0.80-0.85 = Balanced (recommended)\n• 0.70-0.75 = Lenient (handles minor variations)\n• < 0.70 = Very lenient (may match incorrectly)\n\nDefault: 0.80 (80% confidence)",
@@ -34,7 +34,7 @@ namespace FFXIManager.Views
             ["Tolerance"] = "Position tolerance in pixels for template matching\nAllows template to shift slightly between screenshots\n\nDefault: 5 pixels\nIncrease if UI elements move slightly during animation",
 
             // Step Properties - Conditional Execution
-            ["SkipIfApplicationRunning"] = "Skip this step if specified application is already running\n\nApplication name must match an entry in External Applications settings\n\nExamples:\n• POL Proxy - skip if POL Proxy is running\n• Windower - skip if Windower is running\n\nCommon use case: Skip PlayOnline play screen navigation if POL Proxy is running (POL Proxy bypasses the play screen)\n\nLeave empty for no application-based skip logic",
+            ["SkipIfApplicationRunning"] = "Skip this step if the application is already running\nName must match External Applications settings\nEvaluated at task-build time (snapshot), not re-checked during execution",
 
             // Step Properties - Flags
             ["IsEnabled"] = "Uncheck to skip this step entirely\nDisabled steps are never executed",

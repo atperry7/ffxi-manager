@@ -7,8 +7,8 @@
         xmlns:converters="clr-namespace:FFXIManager.Converters"
         mc:Ignorable="d"
         Title="Workflow Editor - Auto-Login Customization"
-        Height="700" Width="1200"
-        MinHeight="600" MinWidth="900"
+        Height="800" Width="1200"
+        MinHeight="800" MinWidth="900"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource BackgroundBrush}">
 
@@ -21,7 +21,6 @@
 
         <!-- Action-based Visibility Converters -->
         <converters:IsClickActionToVisibilityConverter x:Key="IsClickActionToVisConverter"/>
-        <converters:IsNotClickActionToVisibilityConverter x:Key="IsNotClickActionToVisConverter"/>
 
         <!-- Step Template Selector -->
         <DataTemplate x:Key="WorkflowStepTemplate">
@@ -106,7 +105,7 @@
 
         <!-- Header -->
         <Border Grid.Row="0"
-                Background="{DynamicResource SurfaceBrush}"
+                Background="{DynamicResource HeaderBackgroundBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,0,0,1"
                 Padding="16,12"
@@ -131,36 +130,35 @@
                                FontSize="12"
                                Foreground="{DynamicResource SecondaryTextBrush}"
                                Margin="0,4,0,0"/>
+
                 </StackPanel>
 
                 <!-- Action Buttons -->
                 <StackPanel Grid.Column="1" Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4">
+                    <Button Content="Guide"
+                        Command="{Binding OpenWorkflowGuideCommand}"
+                        Margin="0,0,4,0"
+                        Style="{StaticResource PrimaryButton}"
+                        ToolTip="Open the workflows/README.md guide"/>
                     <Button Content="💾"
                             Command="{Binding SaveWorkflowCommand}"
-                            Width="36"
-                            Height="36"
                             Margin="0,0,4,0"
-                            Style="{StaticResource CircularPrimaryButton}"
-                            ToolTip="Save all changes to the selected workflow"/>
+                            Style="{StaticResource PrimaryButton}"
+                            ToolTip="Save all changes to the selected workflow (Ctrl+S)"/>
                     <Button Content="✅"
                             Command="{Binding ValidateWorkflowCommand}"
-                            Width="36"
-                            Height="36"
                             Margin="0,0,4,0"
-                            Style="{StaticResource CircularSecondaryButton}"
-                            ToolTip="Validate workflow structure and step configuration"/>
+                            Style="{StaticResource SecondaryButton}"
+                            ToolTip="Validate workflow structure and step configuration (F5)"/>
                     <Button Content="🧪"
                             Command="{Binding TestWorkflowCommand}"
-                            Width="36"
-                            Height="36"
                             Margin="0,0,4,0"
-                            Style="{StaticResource CircularSecondaryButton}"
-                            ToolTip="Test the selected workflow with a dry run"/>
+                            Style="{StaticResource SecondaryButton}"
+                            ToolTip="Test the selected workflow with a dry run (F6)"/>
                     <Button Content="🗑️"
+                            Margin="0,0,4,0"
                             Command="{Binding DeleteWorkflowCommand}"
-                            Width="36"
-                            Height="36"
-                            Style="{StaticResource CircularDangerButton}"
+                            Style="{StaticResource DangerButton}"
                             ToolTip="Permanently delete the selected workflow"/>
                 </StackPanel>
 
@@ -193,7 +191,7 @@
                                         BorderBrush="{DynamicResource BorderBrush}"
                                         BorderThickness="1,1,1,0"
                                         CornerRadius="6,6,0,0"
-                                        Padding="16,8"
+                                        Padding="20,10"
                                         Margin="0,0,4,0">
                                     <ContentPresenter x:Name="ContentSite"
                                                       ContentSource="Header"
@@ -214,7 +212,7 @@
                         </Setter.Value>
                     </Setter>
                     <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
-                    <Setter Property="FontSize" Value="13"/>
+                    <Setter Property="FontSize" Value="14"/>
                     <Setter Property="FontWeight" Value="SemiBold"/>
                 </Style>
             </TabControl.Resources>
@@ -223,10 +221,18 @@
             <TabItem Header="Workflows">
                 <Grid Margin="0,8,0,0">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="350"/>
-                        <ColumnDefinition Width="8"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="300" MinWidth="200"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*" MinWidth="300"/>
                     </Grid.ColumnDefinitions>
+
+                    <!-- GridSplitter -->
+                    <GridSplitter Grid.Column="1"
+                                  Width="16"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Stretch"
+                                  Background="Transparent"
+                                  ShowsPreview="False"/>
 
                     <!-- Workflow List -->
                     <Border Grid.Column="0"
@@ -265,6 +271,16 @@
                                                 Padding="12,8"
                                                 Margin="0,4"
                                                 Background="{DynamicResource CardBackgroundBrush}">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsReadOnly}" Value="True">
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}"/>
+                                                            <Setter Property="BorderThickness" Value="2"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
                                             <Grid>
                                                 <Grid.RowDefinitions>
                                                     <RowDefinition Height="Auto"/>
@@ -322,35 +338,35 @@
                                             Command="{Binding CreateNewWorkflowCommand}"
                                             Width="36"
                                             Height="36"
-                                            Margin="2"
+                                            Margin="4"
                                             Style="{StaticResource CircularPrimaryButton}"
                                             ToolTip="Create a new workflow from scratch"/>
                                     <Button Content="📋"
                                             Command="{Binding CloneWorkflowCommand}"
                                             Width="36"
                                             Height="36"
-                                            Margin="2"
+                                            Margin="4"
                                             Style="{StaticResource CircularSecondaryButton}"
                                             ToolTip="Duplicate the selected workflow to create a customized version"/>
                                     <Button Content="📥"
                                             Command="{Binding ImportWorkflowCommand}"
                                             Width="36"
                                             Height="36"
-                                            Margin="2"
+                                            Margin="4"
                                             Style="{StaticResource CircularSecondaryButton}"
                                             ToolTip="Import a workflow from a JSON file"/>
                                     <Button Content="📤"
                                             Command="{Binding ExportWorkflowCommand}"
                                             Width="36"
                                             Height="36"
-                                            Margin="2"
+                                            Margin="4"
                                             Style="{StaticResource CircularSecondaryButton}"
                                             ToolTip="Export the selected workflow to a JSON file"/>
                                     <Button Content="🔄"
                                             Command="{Binding RestoreDefaultsCommand}"
                                             Width="36"
                                             Height="36"
-                                            Margin="2"
+                                            Margin="4"
                                             Style="{StaticResource CircularWarningButton}"
                                             ToolTip="Restore default workflows from application directory"/>
                                 </WrapPanel>
@@ -475,10 +491,18 @@
             <TabItem Header="Step Editor">
                 <Grid Margin="0,8,0,0">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="350"/>
-                        <ColumnDefinition Width="16"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="300" MinWidth="200"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*" MinWidth="300"/>
                     </Grid.ColumnDefinitions>
+
+                    <!-- GridSplitter -->
+                    <GridSplitter Grid.Column="1"
+                                  Width="16"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Stretch"
+                                  Background="Transparent"
+                                  ShowsPreview="False"/>
 
                     <!-- Step List -->
                     <Border Grid.Column="0"
@@ -521,28 +545,28 @@
                                             Command="{Binding AddStepCommand}"
                                             Width="36"
                                             Height="36"
-                                            Margin="2"
+                                            Margin="4"
                                             Style="{StaticResource CircularPrimaryButton}"
                                             ToolTip="Add a new step to the workflow"/>
                                     <Button Content="🗑️"
                                             Command="{Binding RemoveStepCommand}"
                                             Width="36"
                                             Height="36"
-                                            Margin="2"
+                                            Margin="4"
                                             Style="{StaticResource CircularDangerButton}"
                                             ToolTip="Permanently remove the selected step from the workflow"/>
                                     <Button Content="↑"
                                             Command="{Binding MoveStepUpCommand}"
                                             Width="36"
                                             Height="36"
-                                            Margin="2"
+                                            Margin="4"
                                             Style="{StaticResource CircularSecondaryButton}"
                                             ToolTip="Move the selected step up in execution order"/>
                                     <Button Content="↓"
                                             Command="{Binding MoveStepDownCommand}"
                                             Width="36"
                                             Height="36"
-                                            Margin="2"
+                                            Margin="4"
                                             Style="{StaticResource CircularSecondaryButton}"
                                             ToolTip="Move the selected step down in execution order"/>
                                 </WrapPanel>
@@ -557,32 +581,79 @@
                             BorderThickness="1"
                             CornerRadius="8"
                             Padding="16">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel IsEnabled="{Binding HasStepSelected}">
-                                <TextBlock Text="Step Properties"
-                                           FontSize="16"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource PrimaryTextBrush}"
-                                           Margin="0,0,0,16"/>
+                        <Grid IsEnabled="{Binding HasStepSelected}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
 
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="140"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
+                            <!-- Header -->
+                            <TextBlock Grid.Row="0"
+                                       Text="Step Properties"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource PrimaryTextBrush}"
+                                       Margin="0,0,0,16"/>
 
-                                    <!-- Display Name -->
+                            <!-- Tabbed Content -->
+                            <TabControl Grid.Row="1"
+                                        Background="{DynamicResource BackgroundBrush}"
+                                        BorderThickness="0">
+                                <TabControl.Resources>
+                                    <Style TargetType="TabItem">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="TabItem">
+                                                    <Border x:Name="Border"
+                                                            Background="{DynamicResource SurfaceBrush}"
+                                                            BorderBrush="{DynamicResource BorderBrush}"
+                                                            BorderThickness="1,1,1,0"
+                                                            CornerRadius="6,6,0,0"
+                                                            Padding="16,8"
+                                                            Margin="0,0,4,0">
+                                                        <ContentPresenter x:Name="ContentSite"
+                                                                          ContentSource="Header"
+                                                                          VerticalAlignment="Center"
+                                                                          HorizontalAlignment="Center"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsSelected" Value="True">
+                                                            <Setter TargetName="Border" Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+                                                            <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                            <Setter TargetName="Border" Property="BorderThickness" Value="1,2,1,0"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Border" Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+                                        <Setter Property="FontSize" Value="13"/>
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                    </Style>
+                                </TabControl.Resources>
+
+                                <!-- Properties Tab -->
+                                <TabItem Header="Properties">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                                        <StackPanel>
+
+                                <!-- Basic Information GroupBox -->
+                                <GroupBox Header="Basic Information" Margin="0,0,0,12">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="140"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <!-- Display Name -->
                                     <TextBlock Grid.Row="0" Grid.Column="0"
                                                Text="Display Name:"
                                                VerticalAlignment="Center"
@@ -592,26 +663,65 @@
                                              Text="{Binding SelectedStep.DisplayName, UpdateSourceTrigger=PropertyChanged}"
                                              Margin="0,0,0,12"/>
 
-                                    <!-- Description -->
-                                    <TextBlock Grid.Row="1" Grid.Column="0"
-                                               Text="Description:"
-                                               VerticalAlignment="Top"
-                                               Foreground="{DynamicResource PrimaryTextBrush}"
-                                               Margin="0,8,0,12"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1"
-                                             Text="{Binding SelectedStep.Description, UpdateSourceTrigger=PropertyChanged}"
-                                             Height="50"
-                                             TextWrapping="Wrap"
-                                             AcceptsReturn="True"
-                                             Margin="0,0,0,12"/>
+                                        <!-- Description -->
+                                        <TextBlock Grid.Row="1" Grid.Column="0"
+                                                   Text="Description:"
+                                                   VerticalAlignment="Top"
+                                                   Foreground="{DynamicResource PrimaryTextBrush}"
+                                                   Margin="0,8,0,12"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1"
+                                                 Text="{Binding SelectedStep.Description, UpdateSourceTrigger=PropertyChanged}"
+                                                 Height="50"
+                                                 TextWrapping="Wrap"
+                                                 AcceptsReturn="True"
+                                                 Margin="0,0,0,12"/>
 
-                                    <!-- Template Path -->
-                                    <TextBlock Grid.Row="2" Grid.Column="0"
-                                               Text="Template:"
-                                               VerticalAlignment="Top"
-                                               Foreground="{DynamicResource PrimaryTextBrush}"
-                                               Margin="0,8,0,12"/>
-                                    <Grid Grid.Row="2" Grid.Column="1" Margin="0,0,0,12">
+                                        <!-- Step ID (Immutable) -->
+                                        <TextBlock Grid.Row="2" Grid.Column="0"
+                                                   Text="Step ID:"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                        <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                                            <TextBlock Text="{Binding SelectedStep.StepId}"
+                                                       FontSize="11"
+                                                       FontFamily="Consolas"
+                                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                                       VerticalAlignment="Center"/>
+                                            <Border Background="{DynamicResource InfoBrush}"
+                                                    CornerRadius="3"
+                                                    Padding="4,2"
+                                                    Margin="8,0,0,0"
+                                                    ToolTip="Step IDs are permanent and cannot be changed once created. They are used to reference steps in workflows.">
+                                                <TextBlock Text="🔒 IMMUTABLE"
+                                                           FontSize="9"
+                                                           FontWeight="Bold"
+                                                           Foreground="White"/>
+                                            </Border>
+                                        </StackPanel>
+                                    </Grid>
+                                </GroupBox>
+
+                                <!-- Detection & Timing GroupBox -->
+                                <GroupBox Header="Detection &amp; Timing" Margin="0,0,0,12">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="140"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <!-- Template Path -->
+                                        <TextBlock Grid.Row="0" Grid.Column="0"
+                                                   Text="Template:"
+                                                   VerticalAlignment="Top"
+                                                   Foreground="{DynamicResource PrimaryTextBrush}"
+                                                   Margin="0,0,0,12"/>
+                                        <Grid Grid.Row="0" Grid.Column="1" Margin="0,0,0,12">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
@@ -659,6 +769,8 @@
                                                     <Style.Triggers>
                                                         <Trigger Property="IsMouseOver" Value="True">
                                                             <Setter Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                            <Setter Property="BorderThickness" Value="2"/>
                                                         </Trigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -676,108 +788,86 @@
                                         </Border>
                                     </Grid>
 
-                                    <!-- Duration -->
-                                    <TextBlock Grid.Row="3" Grid.Column="0"
-                                               Text="Duration (seconds):"
-                                               VerticalAlignment="Center"
-                                               Foreground="{DynamicResource PrimaryTextBrush}"
-                                               Margin="0,0,0,12"/>
-                                    <TextBox Grid.Row="3" Grid.Column="1"
-                                             Text="{Binding SelectedStep.EstimatedDurationSeconds, UpdateSourceTrigger=PropertyChanged}"
-                                             Margin="0,0,0,12"/>
+                                        <!-- Duration -->
+                                        <TextBlock Grid.Row="1" Grid.Column="0"
+                                                   Text="Duration (seconds):"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource PrimaryTextBrush}"
+                                                   Margin="0,0,0,12"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1"
+                                                 Text="{Binding SelectedStep.EstimatedDurationSeconds, UpdateSourceTrigger=PropertyChanged}"
+                                                 Margin="0,0,0,12"/>
 
-                                    <!-- Max Retry Attempts -->
-                                    <TextBlock Grid.Row="4" Grid.Column="0"
-                                               Text="Max Retries:"
-                                               VerticalAlignment="Center"
-                                               Foreground="{DynamicResource PrimaryTextBrush}"
-                                               Margin="0,0,0,12"/>
-                                    <TextBox Grid.Row="4" Grid.Column="1"
-                                             Text="{Binding SelectedStep.MaxRetryAttempts, UpdateSourceTrigger=PropertyChanged}"
-                                             Margin="0,0,0,12"
-                                             ToolTip="Number of detection attempts before giving up&#x0a;Example: 15 attempts = check screen 15 times at 1-second intervals&#x0a;&#x0a;Recommended: 10-15 for stable screens, 20-30 for slow transitions"/>
+                                        <!-- Max Retry Attempts -->
+                                        <TextBlock Grid.Row="2" Grid.Column="0"
+                                                   Text="Max Retries:"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource PrimaryTextBrush}"
+                                                   Margin="0,0,0,12"/>
+                                        <TextBox Grid.Row="2" Grid.Column="1"
+                                                 Text="{Binding SelectedStep.MaxRetryAttempts, UpdateSourceTrigger=PropertyChanged}"
+                                                 Margin="0,0,0,12"
+                                                 ToolTip="Number of detection attempts before giving up&#x0a;Example: 15 attempts = check screen 15 times at 1-second intervals&#x0a;&#x0a;Recommended: 10-15 for stable screens, 20-30 for slow transitions"/>
 
-                                    <!-- Skip If Application Running -->
-                                    <TextBlock Grid.Row="5" Grid.Column="0"
-                                               Text="Skip If Running:"
-                                               VerticalAlignment="Center"
-                                               Foreground="{DynamicResource PrimaryTextBrush}"
-                                               Margin="0,0,0,12"/>
-                                    <ComboBox Grid.Row="6" Grid.Column="1"
-                                              ItemsSource="{Binding AvailableApplications}"
-                                              SelectedValue="{Binding SelectedStep.SkipIfApplicationRunning, UpdateSourceTrigger=PropertyChanged}"
-                                              DisplayMemberPath="Name"
-                                              SelectedValuePath="Name"
-                                              Margin="0,0,0,12"
-                                              ToolTip="Skip this step if the selected application is already running&#x0a;&#x0a;Use Case: Skip PlayOnline navigation steps if POL Proxy is running&#x0a;&#x0a;Leave empty to never skip based on running applications">
-                                        <ComboBox.ItemContainerStyle>
-                                            <Style TargetType="ComboBoxItem">
-                                                <Setter Property="ToolTip" Value="{Binding ExecutablePath}"/>
-                                            </Style>
-                                        </ComboBox.ItemContainerStyle>
-                                    </ComboBox>
+                                        <!-- Skip If Application Running -->
+                                        <TextBlock Grid.Row="3" Grid.Column="0"
+                                                   Text="Skip If Running:"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource PrimaryTextBrush}"
+                                                   Margin="0,0,0,12"/>
+                                        <ComboBox Grid.Row="3" Grid.Column="1"
+                                                  ItemsSource="{Binding AvailableApplications}"
+                                                  SelectedValue="{Binding SelectedStep.SkipIfApplicationRunning, UpdateSourceTrigger=PropertyChanged}"
+                                                  DisplayMemberPath="Name"
+                                                  SelectedValuePath="Name"
+                                                  Margin="0,0,0,12"
+                                                  ToolTip="Skip this step if the selected application is already running&#x0a;&#x0a;Use Case: Skip PlayOnline navigation steps if POL Proxy is running&#x0a;&#x0a;Leave empty to never skip based on running applications">
+                                            <ComboBox.ItemContainerStyle>
+                                                <Style TargetType="ComboBoxItem">
+                                                    <Setter Property="ToolTip" Value="{Binding ExecutablePath}"/>
+                                                </Style>
+                                            </ComboBox.ItemContainerStyle>
+                                        </ComboBox>
+                                    </Grid>
+                                </GroupBox>
 
-                                    <!-- Flags -->
-                                    <TextBlock Grid.Row="7" Grid.Column="0"
-                                               Text="Flags:"
-                                               VerticalAlignment="Top"
-                                               Foreground="{DynamicResource PrimaryTextBrush}"
-                                               Margin="0,0,0,12"/>
-                                    <StackPanel Grid.Row="7" Grid.Column="1" Margin="0,0,0,12">
+                                <!-- Execution Settings GroupBox -->
+                                <GroupBox Header="Execution Settings" Margin="0,0,0,12">
+                                    <StackPanel>
                                         <CheckBox Content="Enabled"
                                                   IsChecked="{Binding SelectedStep.IsEnabled}"
                                                   Margin="0,0,0,4"
                                                   ToolTip="Uncheck to skip this step entirely&#x0a;Disabled steps are never executed"/>
                                         <CheckBox Content="Optional (can skip on failure)"
                                                   IsChecked="{Binding SelectedStep.IsOptional}"
-                                                  Margin="0,0,0,4"
                                                   ToolTip="Check if step failure should not abort the workflow&#x0a;Optional steps can be skipped on failure"/>
                                     </StackPanel>
+                                </GroupBox>
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                </TabItem>
 
-                                    <!-- Step ID (Immutable) -->
-                                    <TextBlock Grid.Row="8" Grid.Column="0"
-                                               Text="Step ID:"
-                                               VerticalAlignment="Center"
-                                               Foreground="{DynamicResource PrimaryTextBrush}"/>
-                                    <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal">
-                                        <TextBlock Text="{Binding SelectedStep.StepId}"
-                                                   FontSize="11"
-                                                   FontFamily="Consolas"
-                                                   Foreground="{DynamicResource SecondaryTextBrush}"
-                                                   VerticalAlignment="Center"/>
-                                        <Border Background="{DynamicResource InfoBrush}"
-                                                CornerRadius="3"
-                                                Padding="4,2"
-                                                Margin="8,0,0,0"
-                                                ToolTip="Step IDs are permanent and cannot be changed once created. They are used to reference steps in workflows.">
-                                            <TextBlock Text="🔒 IMMUTABLE"
-                                                       FontSize="9"
-                                                       FontWeight="Bold"
-                                                       Foreground="White"/>
-                                        </Border>
-                                    </StackPanel>
-                                </Grid>
-
-                                <!-- Navigation Sequence Section removed (legacy UI replaced by ActionSequenceEditor) -->
-
-
-                                    <!-- Navigation Actions Master-Detail Editor -->
-                                    <TextBlock Text="Actions Sequence"
-                                               FontSize="13"
-                                               FontWeight="SemiBold"
-                                               Foreground="{DynamicResource PrimaryTextBrush}"
-                                               Margin="0,0,0,12"/>
-
-                                    <!-- Navigation Actions DataGrid + Detail Panel -->
-                                    <Grid>
+                                <!-- Actions Tab -->
+                                <TabItem Header="Actions">
+                                    <Grid Margin="0,8,0,0">
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="*"/>
                                             <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto" MaxHeight="350"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*" MinHeight="200"/>
                                         </Grid.RowDefinitions>
 
+                                        <!-- Actions Header -->
+                                        <TextBlock Grid.Row="0"
+                                                   Text="Actions Sequence"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource PrimaryTextBrush}"
+                                                   Margin="0,0,0,12"/>
+
                                         <!-- Toolbar Buttons -->
-                                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
                                             <Button Content="➕"
                                                     Style="{StaticResource CircularPrimaryButton}"
                                                     Command="{Binding AddNavigationActionCommand}"
@@ -804,7 +894,7 @@
                                         </StackPanel>
 
                                         <!-- DataGrid -->
-                                        <DataGrid Grid.Row="1"
+                                        <DataGrid Grid.Row="2"
                                                   Style="{StaticResource DataGridBase}"
                                                   ItemsSource="{Binding NavigationActions}"
                                                   SelectedItem="{Binding SelectedNavigationAction, Mode=TwoWay}"
@@ -812,11 +902,20 @@
                                                   CanUserAddRows="False"
                                                   CanUserDeleteRows="False"
                                                   SelectionMode="Single"
-                                                  Height="250"
-                                                  Margin="0,0,0,12">
+                                                  MinHeight="120"
+                                                  Margin="0,0,0,0">
+                                            <DataGrid.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="➕ Add Action" Command="{Binding AddNavigationActionCommand}"/>
+                                                    <MenuItem Header="🗑️ Delete Action" Command="{Binding RemoveNavigationActionCommand}"/>
+                                                    <Separator/>
+                                                    <MenuItem Header="↑ Move Up" Command="{Binding MoveNavigationActionUpCommand}"/>
+                                                    <MenuItem Header="↓ Move Down" Command="{Binding MoveNavigationActionDownCommand}"/>
+                                                </ContextMenu>
+                                            </DataGrid.ContextMenu>
                                             <DataGrid.Columns>
                                                 <!-- Type Column (editable ComboBox) -->
-                                                <DataGridComboBoxColumn Header="Type" Width="100">
+                                                <DataGridComboBoxColumn Header="Type" Width="120">
                                                     <DataGridComboBoxColumn.ElementStyle>
                                                         <Style TargetType="ComboBox">
                                                             <Setter Property="ItemsSource">
@@ -870,14 +969,14 @@
                                                 </DataGridComboBoxColumn>
 
                                                 <!-- Description Column (editable) -->
-                                                <DataGridTextColumn Header="Description" Binding="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="120">
+                                                <DataGridTextColumn Header="Description" Binding="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="150">
                                                     <DataGridTextColumn.ElementStyle>
                                                         <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextCellStyle}"/>
                                                     </DataGridTextColumn.ElementStyle>
                                                 </DataGridTextColumn>
 
                                                 <!-- Count Column (editable) -->
-                                                <DataGridTextColumn Header="Count" Binding="{Binding Count, UpdateSourceTrigger=PropertyChanged}" Width="60">
+                                                <DataGridTextColumn Header="Count" Binding="{Binding Count, UpdateSourceTrigger=PropertyChanged}" Width="70">
                                                     <DataGridTextColumn.ElementStyle>
                                                         <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextCellStyle}"/>
                                                     </DataGridTextColumn.ElementStyle>
@@ -892,12 +991,21 @@
                                             </DataGrid.Columns>
                                         </DataGrid>
 
+                                        <!-- GridSplitter -->
+                                        <GridSplitter Grid.Row="3"
+                                                      Height="8"
+                                                      HorizontalAlignment="Stretch"
+                                                      VerticalAlignment="Center"
+                                                      Background="Transparent"
+                                                      ShowsPreview="False"
+                                                      Margin="0,4"/>
+
                                         <!-- Detail Panel (below grid for complex actions) -->
-                                        <GroupBox Grid.Row="2" Header="Action Properties" Padding="12"
+                                        <GroupBox Grid.Row="4" Header="Action Properties" Padding="12"
                                                   Visibility="{Binding HasNavigationActionSelected, Converter={StaticResource BoolToVisConverter}}"
                                                   Background="{DynamicResource CardBackgroundBrush}"
                                                   BorderBrush="{DynamicResource BorderBrush}">
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="300">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
                                             <StackPanel>
                                                     <TextBlock Text="Common Properties" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
                                                     <Grid Margin="0,0,0,12">
@@ -1007,6 +1115,8 @@
                                                                         <Style.Triggers>
                                                                             <Trigger Property="IsMouseOver" Value="True">
                                                                                 <Setter Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
+                                                                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                                                <Setter Property="BorderThickness" Value="2"/>
                                                                             </Trigger>
                                                                         </Style.Triggers>
                                                                     </Style>
@@ -1231,32 +1341,30 @@
                                             </StackPanel>
                                         </ScrollViewer>
                                     </GroupBox>
-                                </Grid>
-                            </StackPanel>
-                        </ScrollViewer>
+                                    </Grid>
+                                </TabItem>
+                            </TabControl>
+                        </Grid>
                     </Border>
                 </Grid>
             </TabItem>
         </TabControl>
 
-        <!-- Footer -->
-        <Border Grid.Row="2"
-                Background="{DynamicResource SurfaceBrush}"
-                BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="0,1,0,0"
-                Padding="16,12"
-                Margin="0,16,0,0">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                <TextBlock Text="💡 Tip: "
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource AccentBrush}"
-                           VerticalAlignment="Center"/>
+        <!-- Footer (Collapsible Tip) -->
+        <Expander Grid.Row="2"
+                  Header="💡 Tip"
+                  IsExpanded="True"
+                  Background="{DynamicResource SurfaceBrush}"
+                  BorderBrush="{DynamicResource BorderBrush}"
+                  BorderThickness="0,1,0,0"
+                  Margin="0,16,0,0">
+            <Border Padding="16,8" Background="{DynamicResource SurfaceBrush}">
                 <TextBlock Text="Changes to workflows are saved automatically when you click 'Save Changes'. Test your workflows before using them in production."
                            FontSize="12"
                            Foreground="{DynamicResource SecondaryTextBrush}"
-                           VerticalAlignment="Center"/>
-            </StackPanel>
-        </Border>
+                           TextWrapping="Wrap"/>
+            </Border>
+        </Expander>
 
         <!-- Loading Overlay -->
         <Border Grid.RowSpan="3"

@@ -188,34 +188,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             }
         }
 
-        public async Task<FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata?> GetTemplateMetadataAsync(string templatePath)
-        {
-            try
-            {
-                var basePath = GetTemplateFilePath(templatePath);
-                var jsonPath = Path.ChangeExtension(basePath, ".json");
-
-                if (!File.Exists(jsonPath))
-                {
-                    return null;
-                }
-
-                var jsonContent = await File.ReadAllTextAsync(jsonPath);
-                var options = new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                };
-                options.Converters.Add(new JsonStringEnumConverter());
-                var md = JsonSerializer.Deserialize<FFXIManager.Services.AutoLogin.ScreenDetection.TemplateMetadata>(jsonContent, options);
-                await LogDeprecatedMetadataAsync(templatePath, md);
-                return md;
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync($"Failed to get template metadata '{templatePath}': {ex.Message}", ex);
-                return null;
-            }
-        }
+        // Legacy metadata retrieval removed (workflow-first architecture)
 
         public IEnumerable<string> GetAvailableTemplatePaths()
         {
@@ -249,62 +222,9 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             }
         }
 
-        public async Task<string> GetTemplateVersionAsync(string templatePath)
-        {
-            try
-            {
-                var metadata = await GetTemplateMetadataAsync(templatePath);
-                return metadata?.Version ?? "1.0.0";
-            }
-            catch
-            {
-                return "1.0.0";
-            }
-        }
+        // Legacy template version retrieval removed
 
-        public async Task<bool> UpdateTemplateNavigationAsync(string templatePath, NavigationAction navigation)
-        {
-            try
-            {
-                var basePath = GetTemplateFilePath(templatePath);
-                var jsonPath = Path.ChangeExtension(basePath, ".json");
-
-                if (!File.Exists(jsonPath))
-                {
-                    await _loggingService.LogWarningAsync($"Template JSON not found for update: {templatePath}");
-                    return false;
-                }
-
-                var jsonContent = await File.ReadAllTextAsync(jsonPath);
-                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                options.Converters.Add(new JsonStringEnumConverter());
-
-                var metadata = JsonSerializer.Deserialize<TemplateMetadata>(jsonContent, options);
-                if (metadata == null)
-                {
-                    await _loggingService.LogWarningAsync($"Failed to deserialize metadata for update: {templatePath}");
-                    return false;
-                }
-
-                metadata.Navigation = navigation;
-
-                var writeOptions = new JsonSerializerOptions { WriteIndented = true };
-                writeOptions.Converters.Add(new JsonStringEnumConverter());
-
-                var updatedJson = JsonSerializer.Serialize(metadata, writeOptions);
-                await File.WriteAllTextAsync(jsonPath, updatedJson);
-
-                // Invalidate cache so next load uses new metadata
-                _templateCache.TryRemove(templatePath, out _);
-                await _loggingService.LogInfoAsync($"[Template Update] Navigation saved and cache invalidated: {templatePath}");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync($"Failed to update template navigation for '{templatePath}': {ex.Message}", ex);
-                return false;
-            }
-        }
+        // Legacy metadata update removed (workflow-first architecture)
 
         public async Task<IList<string>> GetAvailableTemplatePathsAsync(CancellationToken cancellationToken = default)
         {
@@ -450,96 +370,9 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             return parts.Length > 0 ? parts[0] : "Unknown";
         }
 
-        public async Task<TemplateValidationReport> ValidateAllTemplatesAsync(CancellationToken cancellationToken = default)
-        {
-            var report = new TemplateValidationReport();
-            try
-            {
-                var jsonFiles = Directory.Exists(_templatesBasePath)
-                    ? Directory.GetFiles(_templatesBasePath, "*.json", SearchOption.AllDirectories)
-                    : Array.Empty<string>();
+        // Legacy JSON validation removed (workflow-first architecture)
 
-                foreach (var jsonFile in jsonFiles)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    try
-                    {
-                        var json = await File.ReadAllTextAsync(jsonFile, cancellationToken);
-                        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                        options.Converters.Add(new JsonStringEnumConverter());
-                        var md = JsonSerializer.Deserialize<TemplateMetadata>(json, options);
-                        report.TotalTemplates++;
-
-                        if (md == null)
-                        {
-                            await _loggingService.LogWarningAsync($"[Template Validation] Failed to parse: {jsonFile}");
-                            continue;
-                        }
-
-                        if (md.Navigation == null)
-                        {
-                            await _loggingService.LogWarningAsync($"[Template Validation] Missing navigation block: {jsonFile}");
-                        }
-                        else
-                        {
-                            // Note: NavigationType validation removed - workflow-first architecture no longer uses template JSON files
-                            report.HybridConformant++;
-                        }
-
-                        if (md.Action != null && (md.Action.ClickOffset?.X != 0 || md.Action.ClickOffset?.Y != 0))
-                        {
-                            report.DeprecatedActionOffsets++;
-                            await _loggingService.LogWarningAsync($"[Template Validation] Deprecated action.clickOffset present: {jsonFile}");
-                        }
-
-                        if (md.Properties != null && (md.Properties.ContainsKey("memberSlots") || md.Properties.ContainsKey("otpField")))
-                        {
-                            report.DeprecatedAbsoluteBlocks++;
-                            await _loggingService.LogWarningAsync($"[Template Validation] Deprecated absolute block (memberSlots/otpField): {jsonFile}");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        await _loggingService.LogErrorAsync($"[Template Validation] Error validating {jsonFile}: {ex.Message}", ex);
-                    }
-                }
-
-                await _loggingService.LogInfoAsync($"[Template Validation] Total={report.TotalTemplates}, Hybrid={report.HybridConformant}, NonHybrid={report.NonHybrid}, DeprecatedActionOffsets={report.DeprecatedActionOffsets}, DeprecatedBlocks={report.DeprecatedAbsoluteBlocks}");
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync($"[Template Validation] Failed: {ex.Message}", ex);
-            }
-            return report;
-        }
-
-        private async Task LogDeprecatedMetadataAsync(string templatePath, TemplateMetadata? metadata)
-        {
-            try
-            {
-                if (metadata == null) return;
-
-                // action.clickOffset with absolute X/Y is legacy and should be removed
-                if (metadata.Action != null && (metadata.Action.ClickOffset?.X != 0 || metadata.Action.ClickOffset?.Y != 0))
-                {
-                    await _loggingService.LogWarningAsync($"[Template:{templatePath}] Deprecated 'action.clickOffset' detected. Please move to navigation.fallback.clickOffset and remove 'action'.");
-                }
-
-                // Known legacy fields sometimes embedded in Properties
-                if (metadata.Properties != null)
-                {
-                    if (metadata.Properties.ContainsKey("memberSlots") || metadata.Properties.ContainsKey("otpField"))
-                    {
-                        await _loggingService.LogWarningAsync($"[Template:{templatePath}] Deprecated absolute coordinate fields detected (memberSlots/otpField). Remove and rely on Hybrid navigation.");
-                    }
-                }
-            }
-            catch
-            {
-                // Best-effort; do not block on diagnostics
-            }
-        }
+        // Legacy deprecation diagnostics for JSON metadata removed
 
         
         

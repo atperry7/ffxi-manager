@@ -119,7 +119,7 @@
             "ClickX": 0.5,
             "ClickY": 0.5,
             "Parameters": {
-              "NavigationMethod": "System.Windows.Controls.ComboBoxItem: Keyboard"
+              "NavigationMethod": "Keyboard"
             }
           }
         ],
@@ -493,7 +493,7 @@
             "ClickX": 0.5,
             "ClickY": 0.5,
             "Parameters": {
-              "NavigationMethod": "System.Windows.Controls.ComboBoxItem: Keyboard"
+              "NavigationMethod": "Keyboard"
             }
           },
           {

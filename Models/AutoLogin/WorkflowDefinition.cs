@@ -113,7 +113,12 @@ namespace FFXIManager.Models.AutoLogin
 
         /// <summary>
         /// Ordered collection of steps that comprise this workflow.
-        /// Steps are executed in order based on their Order property.
+        /// Steps are filtered by IsEnabled and any evaluator-provided conditions (e.g., application-based skip),
+        /// then executed in ascending Order.
+        ///
+        /// Notes:
+        /// - Template assets are PNGs stored in %APPDATA%/FFXIManager/workflows/templates (flat folder).
+        /// - All detection thresholds/navigation are defined at the step or per-action level (workflow-first).
         /// </summary>
         public ObservableCollection<WorkflowStepDefinition> Steps { get; set; } = new();
 
@@ -303,7 +308,9 @@ namespace FFXIManager.Models.AutoLogin
         }
 
         /// <summary>
-        /// Gets steps that should execute based on enabled status and conditions
+        /// Gets steps that should execute based on enabled status and conditions.
+        /// The optional evaluator can implement snapshot-time skip logic (e.g., SkipIfApplicationRunning),
+        /// which is applied during task building.
         /// </summary>
         /// <param name="conditionEvaluator">Function to evaluate conditional logic (receives full step for application-based checks)</param>
         /// <returns>Filtered list of executable steps</returns>

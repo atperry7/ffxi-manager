@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using System.Diagnostics;
 using FFXIManager.Infrastructure;
 using FFXIManager.Models;
 using FFXIManager.Models.AutoLogin;
@@ -226,6 +227,8 @@ namespace FFXIManager.ViewModels
                     OnPropertyChanged(nameof(IsMemberSlotActionSelected));
                     OnPropertyChanged(nameof(IsCharacterSlotActionSelected));
                     OnPropertyChanged(nameof(IsSlotActionSelected));
+                    OnPropertyChanged(nameof(SelectedLaunchApplication));
+                    OnPropertyChanged(nameof(LaunchApplicationId));
                     OnPropertyChanged(nameof(LaunchApplicationName));
                     OnPropertyChanged(nameof(LaunchAllowSkipIfRunning));
                     OnPropertyChanged(nameof(LaunchAllowSkipIfNotConfigured));
@@ -492,7 +495,92 @@ namespace FFXIManager.ViewModels
                 if (SelectedNavigationAction != null && value != null)
                 {
                     SelectedNavigationAction.SetParameter("ApplicationName", value);
+                    // If a matching application exists, also set ApplicationId for stability
+                    var app = AvailableApplications.FirstOrDefault(a => a.Name.Equals(value, StringComparison.OrdinalIgnoreCase));
+                    if (app != null)
+                    {
+                        SelectedNavigationAction.SetParameter("ApplicationId", app.Id.ToString());
+                    }
                     OnPropertyChanged();
+                    OnPropertyChanged(nameof(LaunchApplicationId));
+                    OnPropertyChanged(nameof(SelectedLaunchApplication));
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Stable application identifier (GUID) for Launch actions
+        /// </summary>
+        public Guid? LaunchApplicationId
+        {
+            get
+            {
+                var idStr = SelectedNavigationAction?.GetParameter<string>("ApplicationId", string.Empty);
+                if (Guid.TryParse(idStr, out var id)) return id;
+                return null;
+            }
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    var idText = value.HasValue ? value.Value.ToString() : string.Empty;
+                    SelectedNavigationAction.SetParameter("ApplicationId", idText);
+
+                    // Also maintain ApplicationName for better UI summaries
+                    if (value.HasValue)
+                    {
+                        var app = AvailableApplications.FirstOrDefault(a => a.Id == value.Value);
+                        if (app != null)
+                        {
+                            SelectedNavigationAction.SetParameter("ApplicationName", app.Name);
+                        }
+                    }
+
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(LaunchApplicationName));
+                    OnPropertyChanged(nameof(SelectedLaunchApplication));
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Helper for binding a ComboBox to the selected application object.
+        /// </summary>
+        public ExternalApplication? SelectedLaunchApplication
+        {
+            get
+            {
+                var id = LaunchApplicationId;
+                if (id.HasValue)
+                {
+                    return AvailableApplications.FirstOrDefault(a => a.Id == id.Value);
+                }
+                // fallback by name
+                var name = LaunchApplicationName;
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    return AvailableApplications.FirstOrDefault(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                }
+                return null;
+            }
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    if (value != null)
+                    {
+                        SelectedNavigationAction.SetParameter("ApplicationId", value.Id.ToString());
+                        SelectedNavigationAction.SetParameter("ApplicationName", value.Name);
+                    }
+                    else
+                    {
+                        SelectedNavigationAction.SetParameter("ApplicationId", string.Empty);
+                    }
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(LaunchApplicationId));
+                    OnPropertyChanged(nameof(LaunchApplicationName));
                     HasUnsavedChanges = true;
                 }
             }
@@ -559,6 +647,7 @@ namespace FFXIManager.ViewModels
 
         public ICommand TestWorkflowCommand { get; private set; } = null!;
         public ICommand ValidateWorkflowCommand { get; private set; } = null!;
+        public ICommand OpenWorkflowGuideCommand { get; private set; } = null!;
 
         // Template image management commands
         public ICommand SelectTemplateImageCommand { get; private set; } = null!;
@@ -645,6 +734,9 @@ namespace FFXIManager.ViewModels
             ValidateWorkflowCommand = new RelayCommand(
                 async () => await ValidateWorkflowAsync(),
                 () => HasWorkflowSelected);
+
+            OpenWorkflowGuideCommand = new RelayCommand(
+                async () => await OpenWorkflowGuideAsync());
 
             SelectTemplateImageCommand = new RelayCommand(
                 async () => await SelectTemplateImageAsync(),
@@ -1680,6 +1772,48 @@ namespace FFXIManager.ViewModels
             if (e.PropertyName == nameof(KeyboardAction.Parameters) && sender == SelectedNavigationAction)
             {
                 LoadActionTemplateImage();
+            }
+        }
+
+        private async Task OpenWorkflowGuideAsync()
+        {
+            try
+            {
+                string? readmePath = null;
+
+                var appDir = AppDomain.CurrentDomain.BaseDirectory;
+                var appReadme = System.IO.Path.Combine(appDir, "workflows", "README.md");
+                if (System.IO.File.Exists(appReadme))
+                {
+                    readmePath = appReadme;
+                }
+                else
+                {
+                    var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                    var appDataReadme = System.IO.Path.Combine(appDataPath, "FFXIManager", "workflows", "README.md");
+                    if (System.IO.File.Exists(appDataReadme))
+                    {
+                        readmePath = appDataReadme;
+                    }
+                }
+
+                if (string.IsNullOrEmpty(readmePath))
+                {
+                    await _dialogService.ShowMessageDialogAsync("Guide Not Found", "Could not locate workflows/README.md.");
+                    return;
+                }
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = readmePath,
+                    UseShellExecute = true
+                };
+                Process.Start(psi);
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Failed to open workflow guide", ex);
+                await _dialogService.ShowMessageDialogAsync("Open Failed", $"Failed to open workflow guide: {ex.Message}");
             }
         }
 

@@ -44,12 +44,6 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         /// </summary>
         void ClearCache();
 
-        /// <summary>
-        /// Gets template metadata without loading the image data
-        /// </summary>
-        /// <param name="templatePath">Path to the template</param>
-        /// <returns>Template metadata</returns>
-        Task<TemplateMetadata?> GetTemplateMetadataAsync(string templatePath);
 
         /// <summary>
         /// Lists all available template paths
@@ -70,26 +64,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         /// <returns>True if the template exists and is valid</returns>
         Task<bool> ValidateTemplateAsync(string templatePath);
 
-        /// <summary>
-        /// Gets the version of a template
-        /// </summary>
-        /// <param name="templatePath">Path to the template</param>
-        /// <returns>Template version string</returns>
-        Task<string> GetTemplateVersionAsync(string templatePath);
-
-        /// <summary>
-        /// Updates only the navigation section of a template's JSON metadata and refreshes caches.
-        /// </summary>
-        /// <param name="templatePath">Path to the template (e.g., "PlayOnline/login_information_screen")</param>
-        /// <param name="navigation">Navigation action to persist</param>
-        /// <returns>True if the update succeeded</returns>
-        Task<bool> UpdateTemplateNavigationAsync(string templatePath, NavigationAction navigation);
-
-        /// <summary>
-        /// Validates all templates on disk for Hybrid conformance and deprecated fields.
-        /// Logs warnings for any issues and returns a summary report.
-        /// </summary>
-        Task<TemplateValidationReport> ValidateAllTemplatesAsync(System.Threading.CancellationToken cancellationToken = default);
+        
 
         /// <summary>
         /// Replaces the PNG image file for an existing template.
@@ -112,15 +87,5 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         Task<bool> CropAndReplaceTemplateImageAsync(string templatePath, string newImagePath, System.Drawing.Rectangle? cropRectangle);
     }
 
-    /// <summary>
-    /// Summary report for template validation diagnostics.
-    /// </summary>
-    public class TemplateValidationReport
-    {
-        public int TotalTemplates { get; set; }
-        public int HybridConformant { get; set; }
-        public int NonHybrid { get; set; }
-        public int DeprecatedActionOffsets { get; set; }
-        public int DeprecatedAbsoluteBlocks { get; set; }
-    }
+    
 }

@@ -94,6 +94,14 @@ namespace FFXIManager.Services.AutoLogin
             }
             catch (Exception ex)
             {
+                var stepDef = subtask.WorkflowStep;
+                if (stepDef?.IsOptional == true)
+                {
+                    await _loggingService.LogWarningAsync($"[DYNAMIC-WORKFLOW] Optional step failed and will be skipped: {stepDef.DisplayName} - {ex.Message}");
+                    subtask.Skip($"Optional step failed: {ex.Message}");
+                    return;
+                }
+
                 await _loggingService.LogErrorAsync($"Failed to execute '{subtask.Name}' for {queueItem.DisplayName}", ex);
                 throw;
             }
@@ -116,14 +124,18 @@ namespace FFXIManager.Services.AutoLogin
             ValidateWorkflowStep(stepDef);
 
             // Phase 2: Decide detection strategy
-            // If this is a detection-only step (no navigation), do traditional pre-detection.
-            // Otherwise, defer window discovery and detection to per-action execution to allow Launch-first flows.
+            // Pre-detect when:
+            //  - detection-only step (no navigation), OR
+            //  - step has TemplatePath and navigation does NOT include a Launch action (gated navigation)
+            // Otherwise (Launch-first flows), defer detection to per-action execution.
             bool hasNavigation = stepDef.Navigation != null && stepDef.Navigation.Sequence != null && stepDef.Navigation.Sequence.Count > 0;
+            bool hasTemplate = !string.IsNullOrWhiteSpace(stepDef.TemplatePath);
+            bool navHasLaunch = hasNavigation && (stepDef.Navigation?.Sequence != null) && stepDef.Navigation.Sequence.Any(a => string.Equals(a.Action, "Launch", StringComparison.OrdinalIgnoreCase));
 
             IntPtr windowHandle = IntPtr.Zero;
             TemplateMatchResult? templateMatch = null;
 
-            if (!hasNavigation && !string.IsNullOrWhiteSpace(stepDef.TemplatePath))
+            if ((hasTemplate && !hasNavigation) || (hasTemplate && hasNavigation && !navHasLaunch))
             {
                 await _loggingService.LogDebugAsync("[DYNAMIC-WORKFLOW] Detection-only step - performing pre-detection");
                 var targetApp = TargetApplicationResolver.ResolveForStep(stepDef);
@@ -192,10 +204,11 @@ namespace FFXIManager.Services.AutoLogin
             }
 
             // Step-level template is OPTIONAL
-            // Valid patterns:
-            // 1. TemplatePath + Navigation = Wait for screen, then navigate
-            // 2. TemplatePath only = Detection-only step (no navigation)
-            // 3. Navigation only = Blind navigation or action-level templates (Launch actions)
+            // Supported patterns:
+            // 1. TemplatePath only = Detection-only step (no navigation)
+            // 2. TemplatePath + Navigation (no Launch) = Pre-detect screen, then run navigation (gated navigation)
+            // 3. Navigation with Launch = Launch-first; detection occurs per-action (Click requires action-level TemplatePath)
+            // 4. Navigation only (no templates) = Blind navigation
         }
 
         /// <summary>
@@ -486,16 +499,41 @@ namespace FFXIManager.Services.AutoLogin
             if (actionContext.WindowHandle == IntPtr.Zero)
             {
                 await _loggingService.LogDebugAsync("[NAVIGATION] Acquiring window info on-demand for UI action");
-                var windowInfo = await _windowDiscoveryService.DiscoverWindowInfoAsync(targetApp, autoLoginContext, cancellationToken);
 
-                if (!windowInfo.IsValid)
+                // Use step-level retry configuration to wait for spawned apps (e.g., PlayOnline after launch)
+                var stepDef = actionContext.WorkflowStep;
+                var attempts = Math.Max(1, stepDef?.RetryAttempts ?? 30);
+                var delayMs = Math.Max(100, stepDef?.RetryDelayMs ?? 500);
+
+                Exception? lastError = null;
+                for (int attempt = 1; attempt <= attempts; attempt++)
                 {
-                    throw new InvalidOperationException("Could not acquire a valid window for UI interaction.");
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try
+                    {
+                        var windowInfo = await _windowDiscoveryService.DiscoverWindowInfoAsync(targetApp, autoLoginContext, cancellationToken);
+                        if (windowInfo.IsValid)
+                        {
+                            // Update context with PID + handle
+                            actionContext.UpdateFromWindowInfo(windowInfo);
+                            await _loggingService.LogInfoAsync($"[NAVIGATION] Acquired window - PID: {windowInfo.ProcessId}, Handle: 0x{windowInfo.WindowHandle.ToInt64():X}");
+                            return;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        lastError = ex;
+                    }
+
+                    if (attempt < attempts)
+                    {
+                        await _loggingService.LogDebugAsync($"[NAVIGATION] Window not available yet for '{targetApp}' (attempt {attempt}/{attempts}). Retrying in {delayMs}ms...");
+                        await Task.Delay(delayMs, cancellationToken);
+                    }
                 }
 
-                // Update context with PID + handle
-                actionContext.UpdateFromWindowInfo(windowInfo);
-                await _loggingService.LogInfoAsync($"[NAVIGATION] Acquired window - PID: {windowInfo.ProcessId}, Handle: 0x{windowInfo.WindowHandle.ToInt64():X}");
+                // If we reach here, we failed to get a window within retry budget
+                throw new InvalidOperationException("Could not acquire a valid window for UI interaction.", lastError);
             }
         }
 

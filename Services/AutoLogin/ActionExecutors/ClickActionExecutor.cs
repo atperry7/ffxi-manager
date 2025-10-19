@@ -94,20 +94,30 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 return false;
             }
 
-            await _loggingService.LogInfoAsync($"[CLICK] Clicking at screen coordinates: ({screenPoint.X}, {screenPoint.Y})");
+            var repeat = Math.Max(1, action.Count);
+            await _loggingService.LogInfoAsync($"[CLICK] Clicking at screen coordinates: ({screenPoint.X}, {screenPoint.Y}) x{repeat}");
 
             // Activate window first
             await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
             await Task.Delay(100, cancellationToken);
 
-            // Move mouse for visual feedback
-            await _automationService.MoveMouseAsync(screenPoint, cancellationToken);
-            await Task.Delay(200, cancellationToken);
+            for (int i = 0; i < repeat; i++)
+            {
+                // Move mouse for visual feedback
+                await _automationService.MoveMouseAsync(screenPoint, cancellationToken);
+                await Task.Delay(200, cancellationToken);
 
-            // Perform click
-            await _automationService.ClickAsync(screenPoint, cancellationToken);
+                // Perform click
+                await _automationService.ClickAsync(screenPoint, cancellationToken);
 
-            // Post-click delay from action configuration
+                // Inter-click delay (except after final click)
+                if (i < repeat - 1 && action.DelayMs > 0)
+                {
+                    await Task.Delay(action.DelayMs, cancellationToken);
+                }
+            }
+
+            // Post-click delay from action configuration (also after final click)
             if (action.DelayMs > 0)
             {
                 await Task.Delay(action.DelayMs, cancellationToken);
