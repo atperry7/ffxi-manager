@@ -12,6 +12,7 @@ namespace FFXIManager.Models
     /// </summary>
     public class ExternalApplication : INotifyPropertyChanged
     {
+        private Guid _id = Guid.Empty;
         private string _name = string.Empty;
         private string _executablePath = string.Empty;
         private string _arguments = string.Empty;
@@ -29,6 +30,12 @@ namespace FFXIManager.Models
         private string _cachedExecutablePath = string.Empty;
         private DateTime _lastFileCheckTime = DateTime.MinValue;
         private static readonly TimeSpan FileCheckCacheTime = TimeSpan.FromSeconds(5); // Cache for 5 seconds
+
+        public Guid Id
+        {
+            get => _id;
+            set => SetProperty(ref _id, value);
+        }
 
         public string Name
         {

@@ -6,14 +6,7 @@
   "IsDefault": true,
   "IsReadOnly": false,
   "CreatedDate": "2025-01-15T00:00:00Z",
-  "LastModifiedDate": "2025-01-16T00:00:00Z",
-  "Author": "FFXIManager",
-  "Tags": [
-    "playonline",
-    "standard",
-    "default",
-    "complete"
-  ],
+  "LastModifiedDate": "2025-10-18T17:36:04.8352577Z",
   "Steps": [
     {
       "StepId": "launch_pol_proxy",
@@ -24,13 +17,15 @@
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 10,
-      "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Description": "Launch POL Proxy application",
         "Sequence": [
           {
             "Action": "Launch",
+            "Count": 1,
+            "DelayMs": 100,
+            "ClickX": 0.5,
+            "ClickY": 0.5,
             "Parameters": {
               "ApplicationName": "POL Proxy",
               "AllowSkipIfNotConfigured": true,
@@ -40,10 +35,14 @@
             }
           }
         ],
+        "Description": "Launch POL Proxy application",
         "PostNavigationDelayMs": 0
       },
+      "MaxRetryAttempts": 3,
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Metadata": {
-        "Purpose": "Generic application launch - leverages ExternalApplicationService + template detection"
+        "Purpose": "Generic application launch - leverages ExternalApplicationService \u002B template detection"
       }
     },
     {
@@ -55,15 +54,15 @@
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 15,
-      "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
-      "ConfidenceThreshold": 0.8,
-      "Tolerance": 5,
       "Navigation": {
-        "Description": "Launch Windower and click the Launch Arrow button to start PlayOnline",
         "Sequence": [
           {
             "Action": "Launch",
+            "Count": 1,
+            "DelayMs": 100,
+            "ClickX": 0.5,
+            "ClickY": 0.5,
             "Parameters": {
               "ApplicationName": "Windower",
               "AllowSkipIfNotConfigured": false,
@@ -90,8 +89,12 @@
             }
           }
         ],
+        "Description": "Launch Windower and click the Launch Arrow button to start PlayOnline",
         "PostNavigationDelayMs": 3000
       },
+      "MaxRetryAttempts": 50,
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Metadata": {
         "Purpose": "Generic application launch with post-launch navigation"
       }
@@ -105,33 +108,27 @@
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 30,
-      "MaxRetryAttempts": 15,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Description": "Navigate to and select member slot using Tab+Enter",
         "Sequence": [
           {
-            "Action": "Tab",
+            "Action": "MemberSlot",
             "Count": 1,
-            "DelayMs": 150,
-            "Description": "Tab to member slot area"
-          },
-          {
-            "Action": "Enter",
-            "Count": 1,
-            "DelayMs": 500,
-            "Description": "Select default slot (slot 1)"
+            "DelayMs": 100,
+            "Description": "Navigate to next field",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {
+              "NavigationMethod": "System.Windows.Controls.ComboBoxItem: Keyboard"
+            }
           }
         ],
-        "Fallback": {
-          "ClickOffset": {
-            "X": 0.5,
-            "Y": 0.2
-          },
-          "Description": "Click upper-center of first slot area"
-        },
+        "Description": "Navigate to and select member slot using Tab\u002BEnter",
         "PostNavigationDelayMs": 1000
       },
+      "MaxRetryAttempts": 15,
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Metadata": {}
     },
     {
@@ -143,27 +140,25 @@
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 3,
-      "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Description": "Navigate to and click Log In button",
         "Sequence": [
           {
             "Action": "Enter",
             "Count": 1,
             "DelayMs": 500,
-            "Description": "Activate Log In button"
+            "Description": "Activate Log In button",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
           }
         ],
-        "Fallback": {
-          "ClickOffset": {
-            "X": 0.5,
-            "Y": 0.5
-          },
-          "Description": "Click center of Log In button"
-        },
+        "Description": "Navigate to and click Log In button",
         "PostNavigationDelayMs": 1000
       },
+      "MaxRetryAttempts": 3,
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Metadata": {}
     },
     {
@@ -175,20 +170,34 @@
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 2,
-      "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Description": "Focus password field on connection screen",
         "Sequence": [
           {
             "Action": "Tab",
             "Count": 1,
             "DelayMs": 200,
-            "Description": "Tab to password field"
+            "Description": "Tab to password field",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
+          },
+          {
+            "Action": "Enter",
+            "Count": 1,
+            "DelayMs": 100,
+            "Description": "Navigate to next field",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
           }
         ],
+        "Description": "Focus password field on connection screen",
         "PostNavigationDelayMs": 500
       },
+      "MaxRetryAttempts": 3,
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Metadata": {}
     },
     {
@@ -200,10 +209,8 @@
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 2,
-      "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Description": "Activate virtual keyboard password field (explicit click)",
         "Sequence": [
           {
             "Action": "Click",
@@ -211,11 +218,25 @@
             "DelayMs": 500,
             "Description": "Click center of virtual keyboard password field",
             "ClickX": 0.5,
-            "ClickY": 0.5
+            "ClickY": 0.5,
+            "Parameters": {}
+          },
+          {
+            "Action": "InputPassword",
+            "Count": 1,
+            "DelayMs": 100,
+            "Description": "Password Input",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
           }
         ],
+        "Description": "Activate virtual keyboard password field (explicit click)",
         "PostNavigationDelayMs": 100
       },
+      "MaxRetryAttempts": 3,
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Metadata": {
         "RequiresCredentials": "Password"
       }
@@ -229,27 +250,25 @@
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 2,
-      "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Description": "Confirm password using circle button",
         "Sequence": [
           {
-            "Action": "Enter",
+            "Action": "Click",
             "Count": 1,
             "DelayMs": 500,
-            "Description": "Confirm password"
+            "Description": "Click the confirmation",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
           }
         ],
-        "Fallback": {
-          "ClickOffset": {
-            "X": 0.5,
-            "Y": 0.5
-          },
-          "Description": "Click circle confirmation button"
-        },
+        "Description": "Confirm password using circle button",
         "PostNavigationDelayMs": 500
       },
+      "MaxRetryAttempts": 3,
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Metadata": {}
     },
     {
@@ -261,20 +280,34 @@
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 3,
-      "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Description": "Tab to OTP field and enter code",
         "Sequence": [
           {
             "Action": "Tab",
             "Count": 2,
             "DelayMs": 100,
-            "Description": "Tab to OTP field"
+            "Description": "Tab to OTP field",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
+          },
+          {
+            "Action": "InputOTP",
+            "Count": 1,
+            "DelayMs": 100,
+            "Description": "Navigate to next field",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
           }
         ],
+        "Description": "Tab to OTP field and enter code",
         "PostNavigationDelayMs": 500
       },
+      "MaxRetryAttempts": 3,
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Metadata": {
         "RequiresCredentials": "OTP"
       }
@@ -284,31 +317,29 @@
       "DisplayName": "Connect to Servers",
       "Description": "Click the Connect button to proceed to PlayOnline servers",
       "Order": 8,
-      "TemplatePath": "connect_button",
+      "TemplatePath": "step_pol_connect_button",
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 3,
-      "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Description": "Activate Connect button",
         "Sequence": [
           {
-            "Action": "Enter",
+            "Action": "Click",
             "Count": 1,
             "DelayMs": 500,
-            "Description": "Press Enter to connect"
+            "Description": "Click connect button to finish login",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
           }
         ],
-        "Fallback": {
-          "ClickOffset": {
-            "X": 0.5,
-            "Y": 0.5
-          },
-          "Description": "Click Connect button"
-        },
+        "Description": "Activate Connect button",
         "PostNavigationDelayMs": 2000
       },
+      "MaxRetryAttempts": 3,
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Metadata": {}
     },
     {
@@ -321,26 +352,34 @@
       "IsOptional": false,
       "SkipIfApplicationRunning": "POL Proxy",
       "EstimatedDurationSeconds": 5,
-      "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Description": "Navigate to Final Fantasy XI in game list",
         "Sequence": [
           {
             "Action": "Tab",
             "Count": 1,
             "DelayMs": 200,
-            "Description": "Tab to game list"
+            "Description": "Tab to game list",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
           },
           {
             "Action": "Enter",
             "Count": 1,
             "DelayMs": 500,
-            "Description": "Select FFXI"
+            "Description": "Select FFXI",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
           }
         ],
+        "Description": "Navigate to Final Fantasy XI in game list",
         "PostNavigationDelayMs": 1000
       },
+      "MaxRetryAttempts": 3,
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Metadata": {}
     },
     {
@@ -353,27 +392,25 @@
       "IsOptional": false,
       "SkipIfApplicationRunning": "POL Proxy",
       "EstimatedDurationSeconds": 3,
-      "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Description": "Confirm play selection",
         "Sequence": [
           {
             "Action": "Enter",
             "Count": 1,
             "DelayMs": 500,
-            "Description": "Confirm FFXI launch"
+            "Description": "Confirm FFXI launch",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
           }
         ],
-        "Fallback": {
-          "ClickOffset": {
-            "X": 0.5,
-            "Y": 0.5
-          },
-          "Description": "Click confirmation button"
-        },
+        "Description": "Confirm play selection",
         "PostNavigationDelayMs": 3000
       },
+      "MaxRetryAttempts": 3,
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Metadata": {}
     },
     {
@@ -385,20 +422,25 @@
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 5,
-      "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Description": "Accept terms with Enter key",
         "Sequence": [
           {
             "Action": "Enter",
             "Count": 1,
             "DelayMs": 500,
-            "Description": "Accept FFXI Terms of Service"
+            "Description": "Accept FFXI Terms of Service",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
           }
         ],
+        "Description": "Accept terms with Enter key",
         "PostNavigationDelayMs": 2000
       },
+      "MaxRetryAttempts": 3,
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Metadata": {}
     },
     {
@@ -410,20 +452,25 @@
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 3,
-      "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Description": "Select Character menu option",
         "Sequence": [
           {
             "Action": "Enter",
             "Count": 1,
             "DelayMs": 500,
-            "Description": "Select Character option"
+            "Description": "Select Character option",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
           }
         ],
+        "Description": "Select Character menu option",
         "PostNavigationDelayMs": 2000
       },
+      "MaxRetryAttempts": 3,
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Metadata": {}
     },
     {
@@ -435,26 +482,36 @@
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 3,
-      "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Description": "Navigate to character slot and confirm selection (slot number determines arrow count)",
         "Sequence": [
           {
-            "Action": "Down",
+            "Action": "CharacterSlot",
             "Count": 0,
             "DelayMs": 200,
-            "Description": "Navigate to desired character slot (dynamic count based on slot number)"
+            "Description": "Navigate to desired character slot (dynamic count based on slot number)",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {
+              "NavigationMethod": "System.Windows.Controls.ComboBoxItem: Keyboard"
+            }
           },
           {
             "Action": "Enter",
             "Count": 1,
             "DelayMs": 500,
-            "Description": "Confirm character selection"
+            "Description": "Confirm character selection",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
           }
         ],
+        "Description": "Navigate to character slot and confirm selection (slot number determines arrow count)",
         "PostNavigationDelayMs": 2000
       },
+      "MaxRetryAttempts": 3,
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Metadata": {
         "DynamicNavigation": "CharacterSlot"
       }
@@ -468,27 +525,44 @@
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 5,
-      "MaxRetryAttempts": 3,
       "FallbackTemplatePaths": [],
       "Navigation": {
-        "Description": "Final confirmation to enter game world",
         "Sequence": [
           {
             "Action": "Enter",
             "Count": 1,
             "DelayMs": 500,
-            "Description": "Confirm login to game world"
+            "Description": "Confirm login to game world",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
           }
         ],
+        "Description": "Final confirmation to enter game world",
         "PostNavigationDelayMs": 5000
       },
+      "MaxRetryAttempts": 3,
+      "ConfidenceThreshold": 0.8,
+      "Tolerance": 5,
       "Metadata": {}
     }
   ],
+  "Tags": [
+    "playonline",
+    "standard",
+    "default",
+    "complete"
+  ],
+  "Author": "FFXIManager",
   "Metadata": {
     "RequiredSlots": "1",
     "Category": "Standard",
     "SupportedResolutions": "All",
     "Notes": "Complete workflow covering full PlayOnline and FFXI login sequence. Supports OTP conditional execution and POL Proxy bypass for play screen navigation."
-  }
+  },
+  "TotalEstimatedDurationSeconds": 94,
+  "EnabledStepCount": 15,
+  "OptionalStepCount": 0,
+  "DurationDisplay": "~1m 34s",
+  "TagsDisplay": "playonline, standard, default, complete"
 }

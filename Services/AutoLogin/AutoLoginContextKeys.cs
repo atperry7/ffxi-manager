@@ -44,6 +44,22 @@ namespace FFXIManager.Services.AutoLogin
         public static string LaunchTimestamp(string stepId) => $"launch_{NormalizeStepId(stepId)}_Timestamp";
 
         /// <summary>
+        /// Gets context key for a launched application's process ID using application GUID.
+        /// Preferred over name/step-based keys to avoid rename fragility.
+        /// </summary>
+        public static string LaunchProcessIdByApp(Guid appId) => $"launch_app_{appId:N}_ProcessId";
+
+        /// <summary>
+        /// Gets context key for launch timestamp using application GUID.
+        /// </summary>
+        public static string LaunchTimestampByApp(Guid appId) => $"launch_app_{appId:N}_Timestamp";
+
+        /// <summary>
+        /// Stores an association of application name to GUID so later steps can resolve Id from name.
+        /// </summary>
+        public static string ApplicationIdMap(string applicationName) => $"app_{NormalizeStepId(applicationName)}_Id";
+
+        /// <summary>
         /// Gets context key for cached window handle (refreshable from PID).
         /// Note: Window handles can become stale - always re-validate or refresh from PID before use.
         /// </summary>

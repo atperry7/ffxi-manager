@@ -50,6 +50,12 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
         {
             // Extract parameters
             var applicationName = action.GetParameter<string>("ApplicationName", string.Empty);
+            var applicationIdParam = action.GetParameter<string>("ApplicationId", string.Empty);
+            Guid appIdParam = Guid.Empty;
+            if (!string.IsNullOrWhiteSpace(applicationIdParam))
+            {
+                Guid.TryParse(applicationIdParam, out appIdParam);
+            }
             var allowSkipIfRunning = action.GetParameter<bool>("AllowSkipIfRunning", false);
             var allowSkipIfNotConfigured = action.GetParameter<bool>("AllowSkipIfNotConfigured", true);
 
@@ -65,8 +71,15 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             await UpdateProgressAsync(context, 10, $"Finding {applicationName}");
 
             var apps = await _externalApplicationService.GetApplicationsAsync();
-            var app = apps.FirstOrDefault(a =>
-                a.Name.Equals(applicationName, StringComparison.OrdinalIgnoreCase));
+            ExternalApplication? app = null;
+            if (appIdParam != Guid.Empty)
+            {
+                app = apps.FirstOrDefault(a => a.Id == appIdParam);
+            }
+            if (app == null && !string.IsNullOrWhiteSpace(applicationName))
+            {
+                app = apps.FirstOrDefault(a => a.Name.Equals(applicationName, StringComparison.OrdinalIgnoreCase));
+            }
 
             if (app == null)
             {
@@ -87,6 +100,11 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             }
 
             await _loggingService.LogInfoAsync($"[LAUNCH] Found application: {app.Name} at {app.ExecutablePath}");
+            // Persist name->id mapping for later steps that only pass a name
+            if (!string.IsNullOrWhiteSpace(app.Name))
+            {
+                context.AutoLoginContext?.SetData(AutoLoginContextKeys.ApplicationIdMap(app.Name), app.Id);
+            }
 
             // Phase 2: Check if already running
             await UpdateProgressAsync(context, 20, $"Checking {app.Name} status");
@@ -106,6 +124,10 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                     // Store process ID in context for potential later use (type-safe)
                     var stepId = context.WorkflowStep?.StepId ?? "launch";
                     var skippedPid = app.ProcessIds.First();
+                    // GUID-based context keys (preferred)
+                    context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchProcessIdByApp(app.Id), skippedPid);
+                    context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchTimestampByApp(app.Id), DateTime.UtcNow);
+                    // Legacy step/name-based keys to support downstream until fully migrated
                     context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchProcessId(stepId), skippedPid);
                     context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchSkipped(stepId), true);
                     context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchApplicationName(stepId), app.Name);
@@ -161,6 +183,10 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             // Store process ID in context for later use (type-safe)
             var stepIdForContext = context.WorkflowStep?.StepId ?? "launch";
+            // GUID-based context keys (preferred)
+            context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchProcessIdByApp(app.Id), processId);
+            context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchTimestampByApp(app.Id), DateTime.UtcNow);
+            // Legacy step/name-based keys to support downstream until fully migrated
             context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchProcessId(stepIdForContext), processId);
             context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchApplicationName(stepIdForContext), app.Name);
             context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchTimestamp(stepIdForContext), DateTime.UtcNow);
@@ -168,6 +194,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             // Update action context with PID for subsequent actions
             context.ProcessId = processId;
             context.ApplicationName = app.Name;
+            context.ApplicationId = app.Id;
 
             // Phase 5: Complete
             await UpdateProgressAsync(context, 100, $"{app.Name} launched");

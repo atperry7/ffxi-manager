@@ -21,6 +21,11 @@ namespace FFXIManager.Services
         Task<List<ExternalApplication>> GetApplicationsAsync();
 
         /// <summary>
+        /// Gets a configured external application by its stable GUID identifier.
+        /// </summary>
+        Task<ExternalApplication?> GetApplicationByIdAsync(Guid id);
+
+        /// <summary>
         /// Adds a new external application
         /// </summary>
         Task<ExternalApplication> AddApplicationAsync(ExternalApplication application);

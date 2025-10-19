@@ -94,6 +94,11 @@ namespace FFXIManager.Services.AutoLogin
         public string? ApplicationName { get; set; }
 
         /// <summary>
+        /// Stable application identifier (GUID). Preferred over name for identity.
+        /// </summary>
+        public Guid? ApplicationId { get; set; }
+
+        /// <summary>
         /// Window handle for UI automation (may be IntPtr.Zero for actions that don't need it).
         /// This is a cached value that can be refreshed from ProcessId if stale.
         /// </summary>

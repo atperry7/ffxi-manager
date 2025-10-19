@@ -6,6 +6,7 @@ namespace FFXIManager.Models.Settings
     /// </summary>
     public class ExternalApplicationData
     {
+        public System.Guid Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string ExecutablePath { get; set; } = string.Empty;
         public string Arguments { get; set; } = string.Empty;
@@ -15,4 +16,3 @@ namespace FFXIManager.Models.Settings
         public bool AllowMultipleInstances { get; set; }
     }
 }
-

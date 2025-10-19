@@ -91,9 +91,20 @@ namespace FFXIManager.Services.AutoLogin
                     return null;
                 }
 
-                // Try PID hint from context first
-                var hintKey = AutoLoginContextKeys.LaunchProcessId(applicationName);
-                var hintedPid = context.GetValueData<int>(hintKey);
+                // Resolve ApplicationId from name if available in context map
+                int hintedPid = 0;
+                var appId = context.GetValueData<Guid>(AutoLoginContextKeys.ApplicationIdMap(applicationName));
+                if (appId != Guid.Empty)
+                {
+                    hintedPid = context.GetValueData<int>(AutoLoginContextKeys.LaunchProcessIdByApp(appId));
+                }
+
+                if (hintedPid == 0)
+                {
+                    // Legacy: try name/step-based key
+                    var hintKey = AutoLoginContextKeys.LaunchProcessId(applicationName);
+                    hintedPid = context.GetValueData<int>(hintKey);
+                }
 
                 if (hintedPid > 0 && targetApp.ProcessIds.Contains(hintedPid))
                 {

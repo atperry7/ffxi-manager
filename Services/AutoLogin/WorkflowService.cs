@@ -19,6 +19,7 @@ namespace FFXIManager.Services.AutoLogin
     {
         private readonly ILoggingService _loggingService;
         private readonly ISettingsService _settingsService;
+        private readonly IExternalApplicationService _externalApplicationService;
         private readonly string _workflowsDirectory;
         private readonly Dictionary<Guid, WorkflowDefinition> _workflowCache = new();
         private readonly SemaphoreSlim _cacheLock = new(1, 1);
@@ -30,10 +31,14 @@ namespace FFXIManager.Services.AutoLogin
             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
         };
 
-        public WorkflowService(ILoggingService loggingService, ISettingsService settingsService)
+        public WorkflowService(
+            ILoggingService loggingService,
+            ISettingsService settingsService,
+            IExternalApplicationService externalApplicationService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+            _externalApplicationService = externalApplicationService ?? throw new ArgumentNullException(nameof(externalApplicationService));
 
             // Use application data directory for workflow storage
             var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
@@ -78,6 +83,13 @@ namespace FFXIManager.Services.AutoLogin
 
                 if (workflow != null)
                 {
+                    // Migrate application identity to GUID-based if needed
+                    var migrated = await MigrateWorkflowApplicationIdsAsync(workflow, cancellationToken);
+                    if (migrated)
+                    {
+                        // Best-effort save to persist migration
+                        _ = SaveWorkflowAsync(workflow, cancellationToken);
+                    }
                     // Add to cache
                     await _cacheLock.WaitAsync(cancellationToken);
                     try
@@ -122,6 +134,12 @@ namespace FFXIManager.Services.AutoLogin
 
                     if (workflow != null)
                     {
+                        // Migrate application identity to GUID-based if needed
+                        var migrated = await MigrateWorkflowApplicationIdsAsync(workflow, cancellationToken);
+                        if (migrated)
+                        {
+                            _ = SaveWorkflowAsync(workflow, cancellationToken);
+                        }
                         workflows.Add(workflow);
 
                         // Update cache
@@ -163,6 +181,9 @@ namespace FFXIManager.Services.AutoLogin
 
             try
             {
+                // Migrate application identity (ensures newly created/edited workflows persist GUIDs)
+                await MigrateWorkflowApplicationIdsAsync(workflow, cancellationToken);
+
                 // Update metadata
                 workflow.LastModifiedDate = DateTime.UtcNow;
 
@@ -192,6 +213,50 @@ namespace FFXIManager.Services.AutoLogin
                 await _loggingService.LogErrorAsync($"Failed to save workflow {workflow.Name}", ex);
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Ensures Launch actions include ApplicationId (GUID) parameter by resolving from ApplicationName.
+        /// Returns true if any changes were made.
+        /// </summary>
+        private async Task<bool> MigrateWorkflowApplicationIdsAsync(WorkflowDefinition workflow, CancellationToken cancellationToken)
+        {
+            if (workflow?.Steps == null || workflow.Steps.Count == 0)
+                return false;
+
+            var applications = await _externalApplicationService.GetApplicationsAsync();
+            bool changed = false;
+
+            foreach (var step in workflow.Steps)
+            {
+                var seq = step?.Navigation?.Sequence;
+                if (seq == null || seq.Count == 0) continue;
+
+                foreach (var action in seq)
+                {
+                    if (!string.Equals(action.Action, "Launch", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var idStr = action.GetParameter<string>("ApplicationId", string.Empty);
+                    if (!string.IsNullOrWhiteSpace(idStr))
+                        continue; // already set
+
+                    var name = action.GetParameter<string>("ApplicationName", string.Empty);
+                    if (string.IsNullOrWhiteSpace(name))
+                        continue;
+
+                    var app = applications.FirstOrDefault(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                    if (app != null && app.Id != Guid.Empty)
+                    {
+                        action.SetParameter("ApplicationId", app.Id.ToString());
+                        // Normalize name to current value (in case of capitalization updates)
+                        action.SetParameter("ApplicationName", app.Name);
+                        changed = true;
+                    }
+                }
+            }
+
+            return changed;
         }
 
         public async Task<bool> DeleteWorkflowAsync(Guid workflowId, CancellationToken cancellationToken = default)

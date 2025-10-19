@@ -68,6 +68,15 @@ namespace FFXIManager.Services
             }
         }
 
+        public async Task<ExternalApplication?> GetApplicationByIdAsync(Guid id)
+        {
+            await Task.Yield();
+            lock (_lock)
+            {
+                return _applications.FirstOrDefault(a => a.Id == id);
+            }
+        }
+
         public async Task<ExternalApplication> AddApplicationAsync(ExternalApplication application)
         {
             if (application == null) throw new ArgumentNullException(nameof(application));
@@ -465,8 +474,15 @@ namespace FFXIManager.Services
                 {
                     foreach (var appData in settings.ExternalApplications)
                     {
+                        // Assign a GUID if missing
+                        if (appData.Id == Guid.Empty)
+                        {
+                            appData.Id = Guid.NewGuid();
+                        }
+
                         var application = new ExternalApplication
                         {
+                            Id = appData.Id,
                             Name = appData.Name,
                             ExecutablePath = appData.ExecutablePath,
                             Arguments = appData.Arguments,
@@ -513,6 +529,7 @@ namespace FFXIManager.Services
 
                 settings.ExternalApplications = apps.Select(app => new ExternalApplicationData
                 {
+                    Id = app.Id == Guid.Empty ? Guid.NewGuid() : app.Id,
                     Name = app.Name,
                     ExecutablePath = app.ExecutablePath,
                     Arguments = app.Arguments,
@@ -521,6 +538,16 @@ namespace FFXIManager.Services
                     IsEnabled = app.IsEnabled,
                     AllowMultipleInstances = app.AllowMultipleInstances
                 }).ToList();
+
+                // Ensure in-memory apps reflect any generated Ids
+                foreach (var data in settings.ExternalApplications)
+                {
+                    var inMem = _applications.FirstOrDefault(a => a.Name == data.Name && a.ExecutablePath == data.ExecutablePath);
+                    if (inMem != null && inMem.Id == Guid.Empty)
+                    {
+                        inMem.Id = data.Id;
+                    }
+                }
 
                 _settings.SaveSettings(settings);
 
