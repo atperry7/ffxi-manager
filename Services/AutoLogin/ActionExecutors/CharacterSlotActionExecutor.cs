@@ -169,19 +169,14 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 await Task.Delay(100, cancellationToken);
             }
 
-            // Strategy: Press Home to go to slot 1, then navigate using Right and Down arrows
-            // Layout assumption: 4x4 grid
-            // - Right arrow: move to next column (slot++)
-            // - Down arrow: move to next row (slot += 4)
-
-            // Press Home to go to first slot (slot 1)
-            await _automationService.SendKeyAsync(ConsoleKey.Home, cancellationToken);
-            await Task.Delay(action.DelayMs, cancellationToken);
+            // Character selection defaults focus on slot 1 in DX9; no Home/reset needed
 
             // Calculate grid position (0-indexed)
-            int slotIndex = targetSlot - 1; // Convert to 0-indexed
-            int row = slotIndex / 4; // 0-3
-            int column = slotIndex % 4; // 0-3
+            int rowSize = Math.Max(1, action.GetParameter<int>("RowSize", 4));
+            int colSize = Math.Max(1, action.GetParameter<int>("ColumnSize", 4));
+            int slotIndex = targetSlot - 1; // Convert to 0-idx
+            int row = slotIndex / colSize; // rows determined by columns per row
+            int column = slotIndex % colSize;
 
             await _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Target grid position: Row {row}, Column {column}");
 
@@ -199,7 +194,11 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 await Task.Delay(action.DelayMs, cancellationToken);
             }
 
-            await _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Keyboard navigation completed: {row} down, {column} right");
+            // Confirm selection
+            await _automationService.SendKeyAsync(ConsoleKey.Enter, cancellationToken);
+            await Task.Delay(action.DelayMs, cancellationToken);
+
+            await _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Keyboard navigation completed: {row} down, {column} right + Enter");
         }
 
         /// <summary>
@@ -215,14 +214,20 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
         {
             await _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Using click navigation to slot {targetSlot}");
 
-            // Get click coordinates from action parameters
+            // Get click coordinates from action parameters or compute defaults from 4x4 grid
             var clickX = action.GetParameter<double?>("ClickX", null);
             var clickY = action.GetParameter<double?>("ClickY", null);
 
             if (!clickX.HasValue || !clickY.HasValue)
             {
-                await _loggingService.LogWarningAsync("[CHARACTER-SLOT] Click navigation requires ClickX and ClickY parameters");
-                throw new InvalidOperationException("Click navigation requires ClickX and ClickY coordinates");
+                int slotIndex0 = Math.Clamp(targetSlot - 1, 0, 15);
+                int row = slotIndex0 / 4; // 0..3
+                int col = slotIndex0 % 4; // 0..3
+                var defaultX = (col + 0.5) / 4.0;
+                var defaultY = (row + 0.5) / 4.0;
+                clickX = defaultX;
+                clickY = defaultY;
+                await _loggingService.LogInfoAsync($"[CHARACTER-SLOT] Using computed default click coords for slot {targetSlot}: ({defaultX:F2}, {defaultY:F2})");
             }
 
             // Calculate click position

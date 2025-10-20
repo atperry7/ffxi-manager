@@ -353,6 +353,37 @@ namespace FFXIManager.ViewModels
             }
         }
 
+        // Slot click coordinates (for MemberSlot/CharacterSlot when NavigationMethod=Click)
+        public double SlotClickX
+        {
+            get => SelectedNavigationAction?.GetParameter<double>("ClickX", 0.5) ?? 0.5;
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("ClickX", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        public double SlotClickY
+        {
+            get => SelectedNavigationAction?.GetParameter<double>("ClickY", 0.5) ?? 0.5;
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("ClickY", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        // (Removed legacy Home/reset options for DX9)
+
         /// <summary>
         /// Template image source for thumbnail preview
         /// </summary>
@@ -1721,12 +1752,14 @@ namespace FFXIManager.ViewModels
             {
                 // Delegate to helper
                 ActionTemplateImageSource = _templateManager.LoadActionTemplateThumbnail(SelectedNavigationAction);
+                OnPropertyChanged(nameof(ActionTemplatePath));
                 OnPropertyChanged(nameof(HasActionTemplateImage));
             }
             catch (Exception ex)
             {
                 _ = _loggingService.LogErrorAsync("Error loading action template image", ex);
                 ActionTemplateImageSource = null;
+                OnPropertyChanged(nameof(ActionTemplatePath));
                 OnPropertyChanged(nameof(HasActionTemplateImage));
             }
         }

@@ -6,7 +6,7 @@
   "IsDefault": true,
   "IsReadOnly": false,
   "CreatedDate": "2025-01-15T00:00:00Z",
-  "LastModifiedDate": "2025-10-18T17:36:04.8352577Z",
+  "LastModifiedDate": "2025-10-20T01:22:55.0995778Z",
   "Steps": [
     {
       "StepId": "launch_pol_proxy",
@@ -16,7 +16,7 @@
       "TemplatePath": "",
       "IsEnabled": true,
       "IsOptional": false,
-      "EstimatedDurationSeconds": 10,
+      "EstimatedDurationSeconds": 15,
       "FallbackTemplatePaths": [],
       "Navigation": {
         "Sequence": [
@@ -31,7 +31,8 @@
               "AllowSkipIfNotConfigured": true,
               "AllowSkipIfRunning": true,
               "RetryAttempts": 20,
-              "RetryDelayMs": 500
+              "RetryDelayMs": 500,
+              "ApplicationId": "d919a8ca-0c19-4f98-bd23-0920c4cb6024"
             }
           }
         ],
@@ -39,12 +40,10 @@
         "PostNavigationDelayMs": 0
       },
       "MaxRetryAttempts": 3,
-      "RetryAttempts": null,
-      "RetryDelayMs": null,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
       "Metadata": {
-        "Purpose": "Generic application launch - leverages ExternalApplicationService + template detection"
+        "Purpose": "Generic application launch - leverages ExternalApplicationService \u002B template detection"
       }
     },
     {
@@ -72,7 +71,8 @@
               "RetryAttempts": 60,
               "RetryDelayMs": 500,
               "TemplatePath": "launch_arrow",
-              "ConfidenceThreshold": 0.8
+              "ConfidenceThreshold": 0.8,
+              "ApplicationId": "16cb8aee-4c47-43dc-adfa-5975fbc9ac9c"
             }
           },
           {
@@ -95,8 +95,6 @@
         "PostNavigationDelayMs": 3000
       },
       "MaxRetryAttempts": 3,
-      "RetryAttempts": null,
-      "RetryDelayMs": null,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
       "Metadata": {
@@ -123,12 +121,13 @@
             "ClickX": 0.5,
             "ClickY": 0.5,
             "Parameters": {
-              "NavigationMethod": "Keyboard"
+              "NavigationMethod": "Click",
+              "TemplatePath": "member_selection_screen"
             }
           }
         ],
-        "Description": "Navigate to and select member slot using Tab+Enter",
-        "PostNavigationDelayMs": 1000
+        "Description": "Navigate to and select member slot using Tab\u002BEnter",
+        "PostNavigationDelayMs": 100
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -145,29 +144,31 @@
       "TemplatePath": "login_information_screen",
       "IsEnabled": true,
       "IsOptional": false,
-      "EstimatedDurationSeconds": 3,
+      "EstimatedDurationSeconds": 30,
       "FallbackTemplatePaths": [],
       "Navigation": {
         "Sequence": [
           {
-            "Action": "Enter",
+            "Action": "Click",
             "Count": 1,
-            "DelayMs": 500,
+            "DelayMs": 100,
             "Description": "Activate Log In button",
             "ClickX": 0.5,
             "ClickY": 0.5,
-            "Parameters": {}
+            "Parameters": {
+              "TemplatePath": "login_information_screen"
+            }
           }
         ],
         "Description": "Navigate to and click Log In button",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 100
       },
       "MaxRetryAttempts": 3,
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {},
-      "RetryAttempts": 60,
-      "RetryDelayMs": 500
+      "Metadata": {}
     },
     {
       "StepId": "pol_connect_screen",
@@ -177,7 +178,7 @@
       "TemplatePath": "connect_to_playonline_screen",
       "IsEnabled": true,
       "IsOptional": false,
-      "EstimatedDurationSeconds": 2,
+      "EstimatedDurationSeconds": 30,
       "FallbackTemplatePaths": [],
       "Navigation": {
         "Sequence": [
@@ -204,11 +205,11 @@
         "PostNavigationDelayMs": 500
       },
       "MaxRetryAttempts": 3,
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {},
-      "RetryAttempts": 60,
-      "RetryDelayMs": 500
+      "Metadata": {}
     },
     {
       "StepId": "pol_virtual_keyboard",
@@ -218,7 +219,7 @@
       "TemplatePath": "virtual_keyboard_password_input_screen",
       "IsEnabled": true,
       "IsOptional": false,
-      "EstimatedDurationSeconds": 2,
+      "EstimatedDurationSeconds": 30,
       "FallbackTemplatePaths": [],
       "Navigation": {
         "Sequence": [
@@ -229,7 +230,9 @@
             "Description": "Click center of virtual keyboard password field",
             "ClickX": 0.5,
             "ClickY": 0.5,
-            "Parameters": {}
+            "Parameters": {
+              "TemplatePath": "virtual_keyboard_password_input_screen"
+            }
           },
           {
             "Action": "InputPassword",
@@ -245,13 +248,13 @@
         "PostNavigationDelayMs": 100
       },
       "MaxRetryAttempts": 3,
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
       "Metadata": {
         "RequiresCredentials": "Password"
-      },
-      "RetryAttempts": 60,
-      "RetryDelayMs": 500
+      }
     },
     {
       "StepId": "pol_password_confirmation",
@@ -261,7 +264,7 @@
       "TemplatePath": "circle_confirmation_password",
       "IsEnabled": true,
       "IsOptional": false,
-      "EstimatedDurationSeconds": 2,
+      "EstimatedDurationSeconds": 30,
       "FallbackTemplatePaths": [],
       "Navigation": {
         "Sequence": [
@@ -272,18 +275,20 @@
             "Description": "Click the confirmation",
             "ClickX": 0.5,
             "ClickY": 0.5,
-            "Parameters": {}
+            "Parameters": {
+              "TemplatePath": "circle_confirmation_password"
+            }
           }
         ],
         "Description": "Confirm password using circle button",
         "PostNavigationDelayMs": 500
       },
       "MaxRetryAttempts": 3,
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {},
-      "RetryAttempts": 60,
-      "RetryDelayMs": 500
+      "Metadata": {}
     },
     {
       "StepId": "pol_otp_entry",
@@ -292,8 +297,8 @@
       "Order": 7,
       "TemplatePath": "",
       "IsEnabled": true,
-      "IsOptional": false,
-      "EstimatedDurationSeconds": 3,
+      "IsOptional": true,
+      "EstimatedDurationSeconds": 15,
       "FallbackTemplatePaths": [],
       "Navigation": {
         "Sequence": [
@@ -324,9 +329,7 @@
       "Tolerance": 5,
       "Metadata": {
         "RequiresCredentials": "OTP"
-      },
-      "RetryAttempts": null,
-      "RetryDelayMs": null
+      }
     },
     {
       "StepId": "pol_connect_button",
@@ -336,7 +339,7 @@
       "TemplatePath": "step_pol_connect_button",
       "IsEnabled": true,
       "IsOptional": false,
-      "EstimatedDurationSeconds": 3,
+      "EstimatedDurationSeconds": 30,
       "FallbackTemplatePaths": [],
       "Navigation": {
         "Sequence": [
@@ -347,18 +350,20 @@
             "Description": "Click connect button to finish login",
             "ClickX": 0.5,
             "ClickY": 0.5,
-            "Parameters": {}
+            "Parameters": {
+              "TemplatePath": "step_pol_connect_button"
+            }
           }
         ],
         "Description": "Activate Connect button",
         "PostNavigationDelayMs": 2000
       },
       "MaxRetryAttempts": 3,
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {},
-      "RetryAttempts": 60,
-      "RetryDelayMs": 500
+      "Metadata": {}
     },
     {
       "StepId": "pol_play_screen",
@@ -396,11 +401,11 @@
         "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {},
-      "RetryAttempts": 60,
-      "RetryDelayMs": 500
+      "Metadata": {}
     },
     {
       "StepId": "pol_play_confirmation",
@@ -416,6 +421,15 @@
       "Navigation": {
         "Sequence": [
           {
+            "Action": "Tab",
+            "Count": 1,
+            "DelayMs": 100,
+            "Description": "Navigate to next field",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
+          },
+          {
             "Action": "Enter",
             "Count": 1,
             "DelayMs": 500,
@@ -429,11 +443,11 @@
         "PostNavigationDelayMs": 3000
       },
       "MaxRetryAttempts": 3,
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {},
-      "RetryAttempts": 60,
-      "RetryDelayMs": 500
+      "Metadata": {}
     },
     {
       "StepId": "ffxi_terms_acceptance",
@@ -454,18 +468,20 @@
             "Description": "Accept FFXI Terms of Service",
             "ClickX": 0.5,
             "ClickY": 0.5,
-            "Parameters": {}
+            "Parameters": {
+              "TemplatePath": "ffxi_accept_terms"
+            }
           }
         ],
         "Description": "Accept terms with Enter key",
         "PostNavigationDelayMs": 2000
       },
       "MaxRetryAttempts": 3,
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {},
-      "RetryAttempts": 60,
-      "RetryDelayMs": 500
+      "Metadata": {}
     },
     {
       "StepId": "ffxi_main_menu",
@@ -475,7 +491,7 @@
       "TemplatePath": "ffxi_main_screen",
       "IsEnabled": true,
       "IsOptional": false,
-      "EstimatedDurationSeconds": 3,
+      "EstimatedDurationSeconds": 30,
       "FallbackTemplatePaths": [],
       "Navigation": {
         "Sequence": [
@@ -486,18 +502,20 @@
             "Description": "Select Character option",
             "ClickX": 0.5,
             "ClickY": 0.5,
-            "Parameters": {}
+            "Parameters": {
+              "TemplatePath": "ffxi_main_screen"
+            }
           }
         ],
         "Description": "Select Character menu option",
         "PostNavigationDelayMs": 2000
       },
       "MaxRetryAttempts": 3,
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {},
-      "RetryAttempts": 60,
-      "RetryDelayMs": 500
+      "Metadata": {}
     },
     {
       "StepId": "ffxi_character_slot_selection",
@@ -507,7 +525,7 @@
       "TemplatePath": "ffxi_character_slot_select_screen",
       "IsEnabled": true,
       "IsOptional": false,
-      "EstimatedDurationSeconds": 3,
+      "EstimatedDurationSeconds": 30,
       "FallbackTemplatePaths": [],
       "Navigation": {
         "Sequence": [
@@ -521,28 +539,19 @@
             "Parameters": {
               "NavigationMethod": "Keyboard"
             }
-          },
-          {
-            "Action": "Enter",
-            "Count": 1,
-            "DelayMs": 500,
-            "Description": "Confirm character selection",
-            "ClickX": 0.5,
-            "ClickY": 0.5,
-            "Parameters": {}
           }
         ],
         "Description": "Navigate to character slot and confirm selection (slot number determines arrow count)",
         "PostNavigationDelayMs": 2000
       },
       "MaxRetryAttempts": 3,
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
       "Metadata": {
         "DynamicNavigation": "CharacterSlot"
-      },
-      "RetryAttempts": 60,
-      "RetryDelayMs": 500
+      }
     },
     {
       "StepId": "ffxi_character_confirmation",
@@ -552,7 +561,7 @@
       "TemplatePath": "ffxi_character_confirmation",
       "IsEnabled": true,
       "IsOptional": false,
-      "EstimatedDurationSeconds": 5,
+      "EstimatedDurationSeconds": 30,
       "FallbackTemplatePaths": [],
       "Navigation": {
         "Sequence": [
@@ -564,17 +573,37 @@
             "ClickX": 0.5,
             "ClickY": 0.5,
             "Parameters": {}
+          },
+          {
+            "Action": "Wait",
+            "Count": 1,
+            "DelayMs": 100,
+            "Description": "Artifical wait for the confirm character",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {}
+          },
+          {
+            "Action": "Enter",
+            "Count": 1,
+            "DelayMs": 100,
+            "Description": "Enter on Yes",
+            "ClickX": 0.5,
+            "ClickY": 0.5,
+            "Parameters": {
+              "TemplatePath": "ffxi_character_confirmation"
+            }
           }
         ],
         "Description": "Final confirmation to enter game world",
         "PostNavigationDelayMs": 5000
       },
       "MaxRetryAttempts": 3,
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {},
-      "RetryAttempts": 60,
-      "RetryDelayMs": 500
+      "Metadata": {}
     }
   ],
   "Tags": [
@@ -590,9 +619,9 @@
     "SupportedResolutions": "All",
     "Notes": "Complete workflow covering full PlayOnline and FFXI login sequence. Supports OTP conditional execution and POL Proxy bypass for play screen navigation."
   },
-  "TotalEstimatedDurationSeconds": 94,
+  "TotalEstimatedDurationSeconds": 328,
   "EnabledStepCount": 15,
-  "OptionalStepCount": 0,
-  "DurationDisplay": "~1m 34s",
+  "OptionalStepCount": 1,
+  "DurationDisplay": "~5m 28s",
   "TagsDisplay": "playonline, standard, default, complete"
 }

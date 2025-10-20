@@ -77,11 +77,12 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             var account = context.QueueItem.Account;
             var profile = context.QueueItem.Profile;
 
-            // Check if OTP is enabled for this account
+            // Check if OTP is enabled for this account. If not, treat as no-op success so the step can proceed.
             if (!account.IsOTPEnabled || account.OTPConfiguration == null)
             {
-                await _loggingService.LogWarningAsync($"[INPUT-OTP] OTP is not enabled for account {account.DisplayName}");
-                return false;
+                await _loggingService.LogInfoAsync($"[INPUT-OTP] OTP not enabled for {account.DisplayName} - skipping action (treated as success)");
+                // Do not fail or retry this action; consider it successfully skipped.
+                return true;
             }
 
             await _loggingService.LogInfoAsync($"[INPUT-OTP] Retrieving OTP secret for account {account.DisplayName}");

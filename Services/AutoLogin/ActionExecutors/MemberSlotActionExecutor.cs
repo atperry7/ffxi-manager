@@ -162,11 +162,15 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 await Task.Delay(100, cancellationToken);
             }
 
-            // Press Tab to navigate to target slot (0-indexed from slot 1)
-            var tabPresses = targetSlot - 1;
-            for (int i = 0; i < tabPresses; i++)
+            // DX9-friendly behavior: First Down typically selects slot 1 (when none is selected)
+            await _automationService.SendKeyAsync(ConsoleKey.DownArrow, cancellationToken);
+            await Task.Delay(action.DelayMs, cancellationToken);
+
+            // Move down to target slot (targetSlot - 1 more times)
+            var downPresses = Math.Max(0, targetSlot);
+            for (int i = 0; i < downPresses; i++)
             {
-                await _automationService.SendKeyAsync(ConsoleKey.Tab, cancellationToken);
+                await _automationService.SendKeyAsync(ConsoleKey.DownArrow, cancellationToken);
                 await Task.Delay(action.DelayMs, cancellationToken);
             }
 
@@ -174,7 +178,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             await _automationService.SendKeyAsync(ConsoleKey.Enter, cancellationToken);
             await Task.Delay(action.DelayMs, cancellationToken);
 
-            await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Keyboard navigation completed: {tabPresses} tab presses");
+            await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Keyboard navigation completed: 1 initial down + {downPresses} down");
         }
 
         /// <summary>
@@ -190,14 +194,21 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
         {
             await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Using click navigation to slot {targetSlot}");
 
-            // Get click coordinates from action parameters
+            // Get click coordinates from action parameters or compute default by slot (4-item vertical list)
             var clickX = action.GetParameter<double?>("ClickX", null);
             var clickY = action.GetParameter<double?>("ClickY", null);
 
             if (!clickX.HasValue || !clickY.HasValue)
             {
-                await _loggingService.LogWarningAsync("[MEMBER-SLOT] Click navigation requires ClickX and ClickY parameters");
-                throw new InvalidOperationException("Click navigation requires ClickX and ClickY coordinates");
+                // Compute defaults relative to the detected template region:
+                // - X: center (0.5)
+                // - Y: center of the target slot row (0.125, 0.375, 0.625, 0.875)
+                var slotIndex0 = Math.Clamp(targetSlot - 1, 0, 3); // 0..3
+                var defaultX = 0.5;
+                var defaultY = (slotIndex0 + 0.5) / 4.0; // centers per quarter
+                clickX = defaultX;
+                clickY = defaultY;
+                await _loggingService.LogInfoAsync($"[MEMBER-SLOT] Using computed default click coords for slot {targetSlot}: ({defaultX:F2}, {defaultY:F2})");
             }
 
             // Calculate click position
