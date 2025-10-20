@@ -80,49 +80,8 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             await _loggingService.LogInfoAsync($"[CHARACTER-SLOT] Navigating to character slot {targetSlot} for account {account.DisplayName}");
 
-            // Get navigation method
-            var navigationMethod = action.GetParameter<string>("NavigationMethod", "Keyboard");
-
             try
             {
-                // Optional template detection (hybrid mode)
-                TemplateMatchResult? templateMatch = null;
-                var templatePath = action.GetParameter<string?>("TemplatePath", null);
-
-                if (!string.IsNullOrWhiteSpace(templatePath) && context.WindowHandle != IntPtr.Zero)
-                {
-                    await _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Attempting template detection: {templatePath}");
-
-                    try
-                    {
-                        // Ensure fresh handle and capture screenshot
-                        if (!await context.EnsureFreshWindowHandleAsync())
-                        {
-                            await _loggingService.LogWarningAsync("[CHARACTER-SLOT] Unable to refresh window handle before detection");
-                        }
-                        var screenshot = await _screenDetection.CaptureScreenshotWithLogging(context.WindowHandle, "character slot detection", cancellationToken, retryCount: 0);
-
-                        if (screenshot != null && screenshot.IsValid)
-                        {
-                            // Check for template match
-                            templateMatch = await _templateService.FindElementAsync(screenshot, templatePath, cancellationToken);
-
-                            if (templateMatch?.IsValid == true)
-                            {
-                                await _loggingService.LogInfoAsync($"[CHARACTER-SLOT] Template matched: {templatePath} (confidence: {templateMatch.Confidence:F2})");
-                            }
-                            else
-                            {
-                                await _loggingService.LogWarningAsync($"[CHARACTER-SLOT] Template not found: {templatePath}, proceeding with blind navigation");
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        await _loggingService.LogWarningAsync($"[CHARACTER-SLOT] Template detection failed: {ex.Message}, proceeding with blind navigation");
-                    }
-                }
-
                 // Ensure window has focus
                 if (context.WindowHandle != IntPtr.Zero)
                 {
@@ -130,15 +89,8 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                     await Task.Delay(100, cancellationToken);
                 }
 
-                // Execute navigation based on method
-                if (navigationMethod.Equals("Click", StringComparison.OrdinalIgnoreCase))
-                {
-                    await NavigateWithClickAsync(action, context, templateMatch, targetSlot, cancellationToken);
-                }
-                else // Default to Keyboard
-                {
-                    await NavigateWithKeyboardAsync(action, context, targetSlot, cancellationToken);
-                }
+                // MVP: Keyboard-only navigation
+                await NavigateWithKeyboardAsync(action, context, targetSlot, cancellationToken);
 
                 await _loggingService.LogInfoAsync($"[CHARACTER-SLOT] Successfully navigated to character slot {targetSlot}");
                 return true;
@@ -201,82 +153,6 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             await _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Keyboard navigation completed: {row} down, {column} right + Enter");
         }
 
-        /// <summary>
-        /// Navigates to the target slot by clicking on it.
-        /// Requires template match or explicit click coordinates.
-        /// </summary>
-        private async Task NavigateWithClickAsync(
-            KeyboardAction action,
-            WorkflowActionContext context,
-            TemplateMatchResult? templateMatch,
-            int targetSlot,
-            CancellationToken cancellationToken)
-        {
-            await _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Using click navigation to slot {targetSlot}");
-
-            // Get click coordinates from action parameters or compute defaults from 4x4 grid
-            var clickX = action.GetParameter<double?>("ClickX", null);
-            var clickY = action.GetParameter<double?>("ClickY", null);
-
-            if (!clickX.HasValue || !clickY.HasValue)
-            {
-                int slotIndex0 = Math.Clamp(targetSlot - 1, 0, 15);
-                int row = slotIndex0 / 4; // 0..3
-                int col = slotIndex0 % 4; // 0..3
-                var defaultX = (col + 0.5) / 4.0;
-                var defaultY = (row + 0.5) / 4.0;
-                clickX = defaultX;
-                clickY = defaultY;
-                await _loggingService.LogInfoAsync($"[CHARACTER-SLOT] Using computed default click coords for slot {targetSlot}: ({defaultX:F2}, {defaultY:F2})");
-            }
-
-            // Calculate click position
-            System.Drawing.Point clickPoint;
-
-            if (templateMatch?.IsValid == true)
-            {
-                // Ensure fresh handle and capture for conversion
-                if (!await context.EnsureFreshWindowHandleAsync())
-                {
-                    throw new InvalidOperationException("Unable to refresh window handle for click coordinate conversion");
-                }
-                var screenshot = await _screenDetection.CaptureScreenshotWithLogging(context.WindowHandle, "character slot click conversion", cancellationToken, retryCount: 0);
-                if (screenshot == null || !screenshot.IsValid)
-                {
-                    throw new InvalidOperationException("Failed to capture window screenshot for coordinate conversion");
-                }
-
-                // Calculate relative click point
-                var absoluteX = templateMatch.WindowRelativePosition.X + (int)(templateMatch.MatchSize.Width * clickX.Value);
-                var absoluteY = templateMatch.WindowRelativePosition.Y + (int)(templateMatch.MatchSize.Height * clickY.Value);
-                var windowRelativePoint = new System.Drawing.Point(absoluteX, absoluteY);
-
-                // Convert to screen coordinates
-                clickPoint = screenshot.ToScreenCoordinates(windowRelativePoint);
-
-                await _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Clicking at template-relative position: ({clickX.Value:F2}, {clickY.Value:F2})");
-            }
-            else
-            {
-                // Fallback: Use window-relative coordinates
-                // Note: This assumes the action coordinates are already window-relative
-                await _loggingService.LogWarningAsync("[CHARACTER-SLOT] No template match available, using window-relative coordinates");
-
-                if (context.WindowHandle == IntPtr.Zero)
-                {
-                    throw new InvalidOperationException("Click navigation requires valid window handle for fallback mode");
-                }
-
-                // Convert relative coordinates (0.0-1.0) to window-relative pixels
-                // This requires window size, which we'll need to get
-                throw new NotImplementedException("Window-relative click navigation without template match not yet implemented");
-            }
-
-            // Perform click
-            await _automationService.ClickAsync(clickPoint, cancellationToken);
-            await Task.Delay(action.DelayMs, cancellationToken);
-
-            await _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Click navigation completed at ({clickPoint.X}, {clickPoint.Y})");
-        }
+        // Click navigation removed in MVP; keyboard-only supported
     }
 }

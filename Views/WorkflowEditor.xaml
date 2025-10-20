@@ -1379,7 +1379,6 @@
                                                                     <ComboBox.ItemsSource>
                                                                         <x:Array Type="sys:String" xmlns:sys="clr-namespace:System;assembly=mscorlib">
                                                                             <sys:String>Keyboard</sys:String>
-                                                                            <sys:String>Click</sys:String>
                                                                         </x:Array>
                                                                     </ComboBox.ItemsSource>
                                                                 </ComboBox>
@@ -1389,8 +1388,8 @@
                                                                     BorderThickness="1" CornerRadius="3" Padding="8">
                                                                 <StackPanel>
                                                                     <TextBlock FontSize="10" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{DynamicResource InfoTextBrush}">Navigation Methods:</TextBlock>
-                                                                    <TextBlock FontSize="10" Foreground="{DynamicResource InfoTextBrush}">• Keyboard: Uses arrow keys (Home → Down/Right)</TextBlock>
-                                                                    <TextBlock FontSize="10" Foreground="{DynamicResource InfoTextBrush}">• Click: Uses template match + click coordinates</TextBlock>
+                                                                    <TextBlock FontSize="10" Foreground="{DynamicResource InfoTextBrush}">• Keyboard: Uses Tab to cycle slots</TextBlock>
+                                                                    <TextBlock FontSize="10" Foreground="{DynamicResource InfoTextBrush}">• May support future methods</TextBlock>
                                                                 </StackPanel>
                                                             </Border>
                                                         </StackPanel>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System;
 using System.Linq;
 using System.Threading;
@@ -122,6 +122,21 @@ namespace FFXIManager.Services.AutoLogin
             // Phase 1: Validate step definition
             await _progressService.UpdateProgressWithPhaseAsync(subtask, "startup", 5, "Validating workflow step");
             ValidateWorkflowStep(stepDef);
+
+            // OTP-aware short-circuit: If this is an OTP step but the account doesn't use OTP, skip the entire step.
+            try
+            {
+                var account = queueItem?.Account;
+                var hasOtpNavigation = stepDef.Navigation != null && stepDef.Navigation.Sequence != null && stepDef.Navigation.Sequence.Count > 0;
+                var hasOtpAction = hasOtpNavigation && (stepDef.Navigation?.Sequence != null) && stepDef.Navigation.Sequence.Any(a => string.Equals(a.Action, "InputOTP", StringComparison.OrdinalIgnoreCase));
+
+                if (account != null && account.IsOTPEnabled == false && hasOtpAction)
+                {
+                    await _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] Skipping OTP step '{stepDef.DisplayName}' for account without OTP enabled");
+                    return; // Treat as successful no-op
+                }
+            }
+            catch { /* best-effort */ }
 
             // Phase 2: Decide detection strategy
             // Pre-detect when:

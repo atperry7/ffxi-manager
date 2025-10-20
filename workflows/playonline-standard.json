@@ -121,7 +121,7 @@
             "ClickX": 0.5,
             "ClickY": 0.5,
             "Parameters": {
-              "NavigationMethod": "Click",
+              "NavigationMethod": "Keyboard",
               "TemplatePath": "member_selection_screen"
             }
           }
@@ -336,7 +336,7 @@
       "DisplayName": "Connect to Servers",
       "Description": "Click the Connect button to proceed to PlayOnline servers",
       "Order": 8,
-      "TemplatePath": "step_pol_connect_button",
+      "TemplatePath": "connect_to_playonline_screen",
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 30,
@@ -351,7 +351,7 @@
             "ClickX": 0.5,
             "ClickY": 0.5,
             "Parameters": {
-              "TemplatePath": "step_pol_connect_button"
+              "TemplatePath": "connect_to_playonline_screen"
             }
           }
         ],
