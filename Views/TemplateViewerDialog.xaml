@@ -9,6 +9,10 @@
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource BackgroundBrush}">
 
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
+    </Window.Resources>
+
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -47,6 +51,10 @@
                     <Run Text="Click Points: "/>
                     <Run Text="{Binding ClickMarkers.Count, Mode=OneWay}"/>
                 </TextBlock>
+                <TextBlock Text="Click the image to select a position"
+                           Foreground="{DynamicResource PrimaryTextBrush}"
+                           FontWeight="SemiBold"
+                           Visibility="{Binding IsPickMode, Converter={StaticResource BoolToVisConverter}}"/>
             </StackPanel>
         </Border>
 
@@ -74,7 +82,8 @@
                                 Width="{Binding TemplateImageWidth}"
                                 Height="{Binding TemplateImageHeight}"
                                 ClipToBounds="True"
-                                Background="Transparent">
+                                Background="Transparent"
+                                MouseLeftButtonDown="TemplateCanvas_MouseLeftButtonDown">
                             <!-- Click Markers -->
                             <ItemsControl ItemsSource="{Binding ClickMarkers}">
                                 <ItemsControl.ItemsPanel>
@@ -188,14 +197,31 @@
                        FontSize="11"/>
         </Border>
 
-        <!-- Close Button -->
-        <Button Grid.Row="5"
-                Content="Close"
-                Width="100"
-                Height="32"
-                HorizontalAlignment="Right"
-                Style="{StaticResource SecondaryButton}"
-                IsCancel="True"
-                Click="CloseButton_Click"/>
+        <!-- Actions -->
+        <Grid Grid.Row="5">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="1"
+                    Content="Apply"
+                    Width="100"
+                    Height="32"
+                    Margin="0,0,8,0"
+                    Visibility="{Binding IsPickMode, Converter={StaticResource BoolToVisConverter}}"
+                    Style="{StaticResource PrimaryButton}"
+                    IsDefault="True"
+                    Click="ApplyButton_Click"/>
+
+            <Button Grid.Column="2"
+                    Content="Close"
+                    Width="100"
+                    Height="32"
+                    Style="{StaticResource SecondaryButton}"
+                    IsCancel="True"
+                    Click="CloseButton_Click"/>
+        </Grid>
     </Grid>
 </Window>

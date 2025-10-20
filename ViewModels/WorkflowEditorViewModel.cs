@@ -121,7 +121,8 @@ namespace FFXIManager.ViewModels
                     // Unsubscribe from previous workflow
                     UnsubscribeFromWorkflowChanges();
 
-                    SelectedStep = null;
+                    // Auto-select first step of the selected workflow for a smoother UX
+                    SelectedStep = _selectedWorkflow?.Steps?.FirstOrDefault();
                     OnPropertyChanged(nameof(HasWorkflowSelected));
                     OnPropertyChanged(nameof(CanEditWorkflow));
                     OnPropertyChanged(nameof(WorkflowSteps));
@@ -429,6 +430,9 @@ namespace FFXIManager.ViewModels
         /// Whether the selected action has a template image
         /// </summary>
         public bool HasActionTemplateImage => ActionTemplateImageSource != null;
+
+        public bool HasAnyTemplateForAction =>
+            !string.IsNullOrEmpty(ActionTemplatePath) || !string.IsNullOrWhiteSpace(SelectedStep?.TemplatePath);
 
         #region Step-Level Retry Configuration Properties
 
@@ -953,7 +957,8 @@ namespace FFXIManager.ViewModels
 
             ShowLargeActionTemplateImageCommand = new RelayCommand(
                 async () => await ShowLargeActionTemplateImageAsync(),
-                () => HasActionTemplateImage);
+                () => HasAnyTemplateForAction);
+
         }
 
         #endregion
@@ -975,6 +980,16 @@ namespace FFXIManager.ViewModels
                     foreach (var workflow in workflows.OrderBy(w => w.Name))
                     {
                         Workflows.Add(workflow);
+                    }
+
+                    // Auto-select default workflow (or first) if available
+                    if (Workflows.Count > 0)
+                    {
+                        var defaultWf = Workflows.FirstOrDefault(w => w.IsDefault) ?? Workflows.FirstOrDefault();
+                        if (defaultWf != null)
+                        {
+                            SelectedWorkflow = defaultWf;
+                        }
                     }
                 });
             }
@@ -1782,9 +1797,22 @@ namespace FFXIManager.ViewModels
             if (SelectedNavigationAction == null)
                 return;
 
-            // Delegate to helper
-            await _templateManager.ShowLargeActionTemplateAsync(SelectedNavigationAction);
+            if (string.Equals(SelectedNavigationAction.Action, "Click", StringComparison.OrdinalIgnoreCase))
+            {
+                var changed = await _templateManager.PickClickPositionForActionAsync(SelectedStep, SelectedNavigationAction);
+                if (changed)
+                {
+                    HasUnsavedChanges = true;
+                    OnPropertyChanged(nameof(SelectedNavigationAction));
+                }
+            }
+            else
+            {
+                await _templateManager.ShowLargeActionTemplateAsync(SelectedNavigationAction);
+            }
         }
+
+        
 
         private async Task SelectActionTemplateImageAsync()
         {

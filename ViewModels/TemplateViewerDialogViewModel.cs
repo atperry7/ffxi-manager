@@ -26,6 +26,9 @@ namespace FFXIManager.ViewModels
         private double _templateImageHeight;
         private string _templateName = string.Empty;
         private string _status = string.Empty;
+        private bool _isPickMode;
+        private double _pickedX;
+        private double _pickedY;
 
         public TemplateViewerDialogViewModel(
             ILoggingService loggingService,
@@ -81,9 +84,47 @@ namespace FFXIManager.ViewModels
         }
 
         /// <summary>
+        /// When true, the dialog accepts a click on the image to select a position.
+        /// Coordinates are exposed via PickedX/PickedY (0.0 - 1.0) after dialog closes.
+        /// </summary>
+        public bool IsPickMode
+        {
+            get => _isPickMode;
+            set => SetProperty(ref _isPickMode, value);
+        }
+
+        /// <summary>
+        /// Picked X coordinate in relative units (0.0 - 1.0)
+        /// </summary>
+        public double PickedX
+        {
+            get => _pickedX;
+            set => SetProperty(ref _pickedX, value);
+        }
+
+        /// <summary>
+        /// Picked Y coordinate in relative units (0.0 - 1.0)
+        /// </summary>
+        public double PickedY
+        {
+            get => _pickedY;
+            set => SetProperty(ref _pickedY, value);
+        }
+
+        /// <summary>
         /// Collection of click markers to display on the template
         /// </summary>
         public ObservableCollection<ClickMarker> ClickMarkers { get; } = new();
+
+        /// <summary>
+        /// Raised whenever a pick is made in pick mode (normalized X,Y)
+        /// </summary>
+        public event Action<double, double>? PickChanged;
+
+        public void NotifyPickChanged()
+        {
+            PickChanged?.Invoke(PickedX, PickedY);
+        }
 
         /// <summary>
         /// Loads and displays a template with click markers based on the navigation sequence

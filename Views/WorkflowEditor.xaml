@@ -19,6 +19,9 @@
         <!-- Inverse Boolean to Visibility Converter -->
         <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisConverter"/>
 
+        <!-- Math Converters -->
+        <converters:MultiplyConverter x:Key="MultiplyConverter"/>
+
         <!-- Action-based Visibility Converters -->
         <converters:IsClickActionToVisibilityConverter x:Key="IsClickActionToVisConverter"/>
 
@@ -761,7 +764,7 @@
                                                 Margin="12,0,0,0"
                                                 Background="{DynamicResource CardBackgroundBrush}"
                                                 Visibility="{Binding HasTemplateImage, Converter={StaticResource BoolToVisConverter}}"
-                                                ToolTip="Click to view full size"
+                                                            ToolTip="Click to preview; for Click actions, click the image to set the position"
                                                 Cursor="Hand">
                                             <Border.Effect>
                                                 <DropShadowEffect ShadowDepth="2" BlurRadius="8" Opacity="0.3" Color="Black"/>
@@ -1186,14 +1189,14 @@
 
                                                             <!-- Template Thumbnail Preview -->
                                                             <Border Grid.Column="1"
-                                                                    BorderBrush="{DynamicResource BorderBrush}"
-                                                                    BorderThickness="1"
-                                                                    CornerRadius="4"
-                                                                    Margin="12,0,0,0"
-                                                                    Background="{DynamicResource CardBackgroundBrush}"
-                                                                    Visibility="{Binding HasActionTemplateImage, Converter={StaticResource BoolToVisConverter}}"
-                                                                    ToolTip="Click to view full size"
-                                                                    Cursor="Hand">
+                                                                     BorderBrush="{DynamicResource BorderBrush}"
+                                                                     BorderThickness="1"
+                                                                     CornerRadius="4"
+                                                                     Margin="12,0,0,0"
+                                                                     Background="{DynamicResource CardBackgroundBrush}"
+                                                                     Visibility="{Binding HasActionTemplateImage, Converter={StaticResource BoolToVisConverter}}"
+                                                                     ToolTip="Click to view full size"
+                                                                     Cursor="Hand">
                                                                 <Border.Effect>
                                                                     <DropShadowEffect ShadowDepth="2" BlurRadius="8" Opacity="0.3" Color="Black"/>
                                                                 </Border.Effect>
@@ -1208,16 +1211,46 @@
                                                                         </Style.Triggers>
                                                                     </Style>
                                                                 </Border.Style>
-                                                                <Image Source="{Binding ActionTemplateImageSource}"
-                                                                       Width="120"
-                                                                       Height="100"
-                                                                       Stretch="Uniform"
-                                                                       Margin="4">
-                                                                    <Image.InputBindings>
-                                                                        <MouseBinding Gesture="LeftClick"
-                                                                                      Command="{Binding ShowLargeActionTemplateImageCommand}"/>
-                                                                    </Image.InputBindings>
-                                                                </Image>
+                                                                <Grid>
+                                                                    <!-- Thumbnail Image -->
+                                                                    <Image x:Name="ActionTemplateThumbImage"
+                                                                           Source="{Binding ActionTemplateImageSource}"
+                                                                           Width="120"
+                                                                           Height="100"
+                                                                           Stretch="Uniform"
+                                                                           Margin="4">
+                                                                        <Image.InputBindings>
+                                                                            <MouseBinding Gesture="LeftClick"
+                                                                                          Command="{Binding ShowLargeActionTemplateImageCommand}"/>
+                                                                        </Image.InputBindings>
+                                                                    </Image>
+
+                                                                    <!-- Click Point Overlay (approximate) -->
+                                                                    <Canvas IsHitTestVisible="False"
+                                                                            Width="{Binding ElementName=ActionTemplateThumbImage, Path=ActualWidth}"
+                                                                            Height="{Binding ElementName=ActionTemplateThumbImage, Path=ActualHeight}"
+                                                                            Margin="4"
+                                                                            Visibility="{Binding IsClickActionSelected, Converter={StaticResource BoolToVisConverter}}">
+                                                                        <Ellipse Width="8" Height="8" Fill="{DynamicResource AccentBrush}">
+                                                                            <Ellipse.RenderTransform>
+                                                                                <TranslateTransform>
+                                                                                    <TranslateTransform.X>
+                                                                                        <MultiBinding Converter="{StaticResource MultiplyConverter}">
+                                                                                            <Binding Path="SelectedNavigationAction.ClickX"/>
+                                                                                            <Binding ElementName="ActionTemplateThumbImage" Path="ActualWidth"/>
+                                                                                        </MultiBinding>
+                                                                                    </TranslateTransform.X>
+                                                                                    <TranslateTransform.Y>
+                                                                                        <MultiBinding Converter="{StaticResource MultiplyConverter}">
+                                                                                            <Binding Path="SelectedNavigationAction.ClickY"/>
+                                                                                            <Binding ElementName="ActionTemplateThumbImage" Path="ActualHeight"/>
+                                                                                        </MultiBinding>
+                                                                                    </TranslateTransform.Y>
+                                                                                </TranslateTransform>
+                                                                            </Ellipse.RenderTransform>
+                                                                        </Ellipse>
+                                                                    </Canvas>
+                                                                </Grid>
                                                             </Border>
                                                         </Grid>
 
@@ -1234,105 +1267,6 @@
                                                             <TextBox Grid.Column="1" Text="{Binding ActionConfidenceThreshold, StringFormat=F2, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                                         </Grid>
                                                     </Grid>
-
-                                                    <!-- Click Properties (always visible; enabled only for Click actions) -->
-                                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12"
-                                                            Background="{DynamicResource SurfaceBrush}"
-                                                            IsEnabled="{Binding IsClickActionSelected}">
-                                                        <StackPanel>
-                                                            <TextBlock Text="Click Position" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
-                                                            <TextBlock Text="Coordinates are relative to the detected template (0.0 = left/top edge, 1.0 = right/bottom edge)"
-                                                                       FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/>
-
-                                                            <Grid Margin="0,0,0,8">
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="60"/>
-                                                                    <ColumnDefinition Width="*"/>
-                                                                </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" Text="Click X:" VerticalAlignment="Center"/>
-                                                                <Slider Grid.Column="1" Minimum="0.0" Maximum="1.0"
-                                                                        TickFrequency="0.1" IsSnapToTickEnabled="True"
-                                                                        SmallChange="0.1" LargeChange="0.1"
-                                                                        TickPlacement="BottomRight"
-                                                                        AutoToolTipPlacement="BottomRight" AutoToolTipPrecision="1"
-                                                                        Value="{Binding SelectedNavigationAction.ClickX, Mode=TwoWay}" Margin="8,0"/>
-                                                            </Grid>
-
-                                                            <!-- Tick labels for X slider -->
-                                                            <Grid Margin="0,0,0,12">
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="60"/>
-                                                                    <ColumnDefinition Width="*"/>
-                                                                </Grid.ColumnDefinitions>
-                                                                <Border Grid.Column="1" Background="Transparent" Margin="8,0,0,0">
-                                                                    <UniformGrid Columns="11">
-                                                                        <TextBlock Text="0.0" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.1" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.2" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.3" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.4" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.5" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.6" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.7" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.8" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.9" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="1.0" HorizontalAlignment="Center" FontSize="10"/>
-                                                                    </UniformGrid>
-                                                                </Border>
-                                                            </Grid>
-
-                                                            <Grid>
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="60"/>
-                                                                    <ColumnDefinition Width="*"/>
-                                                                </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" Text="Click Y:" VerticalAlignment="Center"/>
-                                                                <Slider Grid.Column="1" Minimum="0.0" Maximum="1.0"
-                                                                        TickFrequency="0.1" IsSnapToTickEnabled="True"
-                                                                        SmallChange="0.1" LargeChange="0.1"
-                                                                        TickPlacement="BottomRight"
-                                                                        AutoToolTipPlacement="BottomRight" AutoToolTipPrecision="1"
-                                                                        Value="{Binding SelectedNavigationAction.ClickY, Mode=TwoWay}" Margin="8,0"/>
-                                                            </Grid>
-
-                                                            <!-- Tick labels for Y slider -->
-                                                            <Grid Margin="0,0,0,12">
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="60"/>
-                                                                    <ColumnDefinition Width="*"/>
-                                                                </Grid.ColumnDefinitions>
-                                                                <Border Grid.Column="1" Background="Transparent" Margin="8,0,0,0">
-                                                                    <UniformGrid Columns="11">
-                                                                        <TextBlock Text="0.0" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.1" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.2" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.3" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.4" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.5" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.6" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.7" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.8" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="0.9" HorizontalAlignment="Center" FontSize="10"/>
-                                                                        <TextBlock Text="1.0" HorizontalAlignment="Center" FontSize="10"/>
-                                                                    </UniformGrid>
-                                                                </Border>
-                                                            </Grid>
-
-                                                            <!-- Removed legacy slot-specific click settings -->
-
-                                                            <!-- Keyboard Settings removed: DX9-safe defaults assume slot 1 focus without Home/reset -->
-
-                                                            <Border Background="{DynamicResource InfoBackgroundBrush}" BorderBrush="{DynamicResource InfoBorderBrush}"
-                                                                    BorderThickness="1" CornerRadius="3" Padding="8" Margin="0,8,0,0">
-                                                                <StackPanel>
-                                                                    <TextBlock FontSize="10" FontWeight="SemiBold" Margin="0,0,0,3" Foreground="{DynamicResource InfoTextBrush}">Common Positions:</TextBlock>
-                                                                    <TextBlock FontSize="10" Foreground="{DynamicResource InfoTextBrush}">• Center: X=0.5, Y=0.5</TextBlock>
-                                                                    <TextBlock FontSize="10" Foreground="{DynamicResource InfoTextBrush}">• Top-Left: X=0.0, Y=0.0</TextBlock>
-                                                                    <TextBlock FontSize="10" Foreground="{DynamicResource InfoTextBrush}">• Top-Right: X=1.0, Y=0.0</TextBlock>
-                                                                </StackPanel>
-                                                            </Border>
-                                                        </StackPanel>
-                                                    </Border>
 
                                                     <!-- Launch Properties (visible only for Launch actions) -->
                                                     <Border Visibility="{Binding IsLaunchActionSelected, Converter={StaticResource BoolToVisConverter}}"

@@ -443,6 +443,86 @@ namespace FFXIManager.ViewModels.WorkflowEditor
             }
         }
 
+        /// <summary>
+        /// Opens the template viewer in pick mode to select a click position.
+        /// Prefers the action-level template; falls back to step-level template if needed.
+        /// Applies chosen coordinates to the action's ClickX/ClickY.
+        /// </summary>
+        public async Task<bool> PickClickPositionForActionAsync(WorkflowStepDefinition? step, KeyboardAction action)
+        {
+            if (action == null)
+                return false;
+
+            try
+            {
+                var actionTemplate = action.GetParameter<string>("TemplatePath", string.Empty);
+                string? templateFileName = null;
+
+                if (!string.IsNullOrWhiteSpace(actionTemplate))
+                {
+                    templateFileName = actionTemplate.EndsWith(".png") ? actionTemplate : $"{actionTemplate}.png";
+                }
+                else if (!string.IsNullOrWhiteSpace(step?.TemplatePath))
+                {
+                    templateFileName = step!.TemplatePath.EndsWith(".png") ? step!.TemplatePath : $"{step!.TemplatePath}.png";
+                }
+
+                if (string.IsNullOrWhiteSpace(templateFileName))
+                {
+                    await _dialogService.ShowMessageDialogAsync("No Template", "No template image available to pick from. Add a template to the action or step first.");
+                    return false;
+                }
+
+                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var templatesPath = Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
+                var templateFilePath = Path.Combine(templatesPath, templateFileName);
+
+                if (!File.Exists(templateFilePath))
+                {
+                    await _dialogService.ShowMessageDialogAsync("Template Not Found", $"Template file not found:\n{templateFilePath}");
+                    return false;
+                }
+
+                var vm = _serviceProvider.GetService(typeof(FFXIManager.ViewModels.TemplateViewerDialogViewModel)) as FFXIManager.ViewModels.TemplateViewerDialogViewModel;
+                var dlg = _serviceProvider.GetService(typeof(FFXIManager.Views.TemplateViewerDialog)) as Window;
+
+                if (vm == null || dlg is not FFXIManager.Views.TemplateViewerDialog typedDlg)
+                {
+                    await _dialogService.ShowMessageDialogAsync("Service Error", "Template viewer is not available.");
+                    return false;
+                }
+
+                vm.IsPickMode = true;
+                // Live-update the action as picks occur
+                void OnPick(double x, double y)
+                {
+                    action.ClickX = x;
+                    action.ClickY = y;
+                }
+                vm.PickChanged += OnPick;
+                await vm.LoadTemplateAsync(templateFilePath, step?.Navigation?.Sequence);
+                typedDlg.Owner = Application.Current?.MainWindow;
+                typedDlg.DataContext = vm;
+                typedDlg.Title = "Pick Click Position";
+
+                var result = typedDlg.ShowDialog();
+                // Unsubscribe regardless
+                vm.PickChanged -= OnPick;
+                if (result == true)
+                {
+                    // Already applied live; log for clarity
+                    await _loggingService.LogInfoAsync($"Picked click position: X={vm.PickedX:F2}, Y={vm.PickedY:F2}");
+                    return true;
+                }
+                return false;
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error picking click position", ex);
+                return false;
+            }
+        }
+
         #endregion
     }
 }
