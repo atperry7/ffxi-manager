@@ -7,7 +7,7 @@
         xmlns:converters="clr-namespace:FFXIManager.Converters"
         mc:Ignorable="d"
         Title="Workflow Editor - Auto-Login Customization"
-        Height="800" Width="1200"
+        Height="1200" Width="1200"
         MinHeight="800" MinWidth="900"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource BackgroundBrush}">
@@ -883,6 +883,7 @@
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto" MaxHeight="350"/>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="*" MinHeight="200"/>
@@ -896,8 +897,64 @@
                                                    Foreground="{DynamicResource PrimaryTextBrush}"
                                                    Margin="0,0,0,12"/>
 
+                                        <!-- Navigation Settings / Initialize -->
+                                        <!-- Shown when a step has a Navigation object -->
+                                        <Border Grid.Row="1"
+                                                Visibility="{Binding HasNavigationAction, Converter={StaticResource BoolToVisConverter}}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="4"
+                                                Padding="8"
+                                                Background="{DynamicResource SurfaceBrush}"
+                                                Margin="0,0,0,8">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="150"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+
+                                                <!-- Navigation Description -->
+                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Navigation Description:" VerticalAlignment="Center"/>
+                                                <TextBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2"
+                                                         Text="{Binding SelectedStep.Navigation.Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         ToolTip="Human-readable description of the step's navigation sequence"/>
+
+                                                <!-- Post Navigation Delay -->
+                                                <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right">
+                                                    <TextBlock Text="Post-Sequence Delay (ms):" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                    <TextBox Width="100"
+                                                             Text="{Binding SelectedStep.Navigation.PostNavigationDelayMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                             ToolTip="Delay after completing navigation sequence. Allows UI to settle before next step. Recommended: 500-1500ms"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- Shown when step has no Navigation yet -->
+                                        <Border Grid.Row="1"
+                                                Visibility="{Binding HasNavigationAction, Converter={StaticResource InverseBoolToVisConverter}}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="4"
+                                                Padding="12"
+                                                Background="{DynamicResource SurfaceBrush}"
+                                                Margin="0,0,0,8">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="No navigation defined for this step."
+                                                           VerticalAlignment="Center"
+                                                           Margin="0,0,12,0"/>
+                                                <Button Content="Initialize Navigation"
+                                                        Command="{Binding InitializeNavigationCommand}"
+                                                        Style="{StaticResource PrimaryButton}"/>
+                                            </StackPanel>
+                                        </Border>
+
                                         <!-- Toolbar Buttons -->
-                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+                                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
                                             <Button Content="➕"
                                                     Style="{StaticResource CircularPrimaryButton}"
                                                     Command="{Binding AddNavigationActionCommand}"
@@ -924,7 +981,7 @@
                                         </StackPanel>
 
                                         <!-- DataGrid -->
-                                        <DataGrid Grid.Row="2"
+                                        <DataGrid Grid.Row="3"
                                                   Style="{StaticResource DataGridBase}"
                                                   ItemsSource="{Binding NavigationActions}"
                                                   SelectedItem="{Binding SelectedNavigationAction, Mode=TwoWay}"
@@ -1022,7 +1079,7 @@
                                         </DataGrid>
 
                                         <!-- GridSplitter -->
-                                        <GridSplitter Grid.Row="3"
+                                        <GridSplitter Grid.Row="4"
                                                       Height="8"
                                                       HorizontalAlignment="Stretch"
                                                       VerticalAlignment="Center"
@@ -1031,7 +1088,7 @@
                                                       Margin="0,4"/>
 
                                         <!-- Detail Panel (below grid for complex actions) -->
-                                        <GroupBox Grid.Row="4" Header="Action Properties" Padding="12"
+                                        <GroupBox Grid.Row="5" Header="Action Properties" Padding="12"
                                                   Visibility="{Binding HasNavigationActionSelected, Converter={StaticResource BoolToVisConverter}}"
                                                   Background="{DynamicResource CardBackgroundBrush}"
                                                   BorderBrush="{DynamicResource BorderBrush}">
@@ -1178,10 +1235,10 @@
                                                         </Grid>
                                                     </Grid>
 
-                                                    <!-- Click Properties (visible only for Click actions) -->
-                                                    <Border Visibility="{Binding SelectedNavigationAction, Converter={StaticResource IsClickActionToVisConverter}}"
-                                                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12"
-                                                            Background="{DynamicResource SurfaceBrush}">
+                                                    <!-- Click Properties (always visible; enabled only for Click actions) -->
+                                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12"
+                                                            Background="{DynamicResource SurfaceBrush}"
+                                                            IsEnabled="{Binding IsClickActionSelected}">
                                                         <StackPanel>
                                                             <TextBlock Text="Click Position" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
                                                             <TextBlock Text="Coordinates are relative to the detected template (0.0 = left/top edge, 1.0 = right/bottom edge)"
@@ -1191,50 +1248,77 @@
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="60"/>
                                                                     <ColumnDefinition Width="*"/>
-                                                                    <ColumnDefinition Width="80"/>
                                                                 </Grid.ColumnDefinitions>
                                                                 <TextBlock Grid.Column="0" Text="Click X:" VerticalAlignment="Center"/>
-                                                                <Slider Grid.Column="1" Minimum="0.0" Maximum="1.0" TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                                                <Slider Grid.Column="1" Minimum="0.0" Maximum="1.0"
+                                                                        TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                                                        SmallChange="0.1" LargeChange="0.1"
+                                                                        TickPlacement="BottomRight"
+                                                                        AutoToolTipPlacement="BottomRight" AutoToolTipPrecision="1"
                                                                         Value="{Binding SelectedNavigationAction.ClickX, Mode=TwoWay}" Margin="8,0"/>
-                                                                <TextBox Grid.Column="2" Text="{Binding SelectedNavigationAction.ClickX, StringFormat=F2, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                            </Grid>
+
+                                                            <!-- Tick labels for X slider -->
+                                                            <Grid Margin="0,0,0,12">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="60"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <Border Grid.Column="1" Background="Transparent" Margin="8,0,0,0">
+                                                                    <UniformGrid Columns="11">
+                                                                        <TextBlock Text="0.0" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.1" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.2" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.3" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.4" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.5" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.6" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.7" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.8" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.9" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="1.0" HorizontalAlignment="Center" FontSize="10"/>
+                                                                    </UniformGrid>
+                                                                </Border>
                                                             </Grid>
 
                                                             <Grid>
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="60"/>
                                                                     <ColumnDefinition Width="*"/>
-                                                                    <ColumnDefinition Width="80"/>
                                                                 </Grid.ColumnDefinitions>
                                                                 <TextBlock Grid.Column="0" Text="Click Y:" VerticalAlignment="Center"/>
-                                                                <Slider Grid.Column="1" Minimum="0.0" Maximum="1.0" TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                                                <Slider Grid.Column="1" Minimum="0.0" Maximum="1.0"
+                                                                        TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                                                        SmallChange="0.1" LargeChange="0.1"
+                                                                        TickPlacement="BottomRight"
+                                                                        AutoToolTipPlacement="BottomRight" AutoToolTipPrecision="1"
                                                                         Value="{Binding SelectedNavigationAction.ClickY, Mode=TwoWay}" Margin="8,0"/>
-                                                                <TextBox Grid.Column="2" Text="{Binding SelectedNavigationAction.ClickY, StringFormat=F2, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                                             </Grid>
 
-                                                            <!-- Click Settings for Slot Actions -->
-                                                            <GroupBox Header="Click Settings" Margin="0,0,0,8">
-                                                                <StackPanel>
-                                                                    <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,6">
-                                                                        Relative coordinates inside the detected region (0.0 - 1.0). If empty, defaults are computed from the slot index.
-                                                                    </TextBlock>
-                                                                    <Grid Margin="0,0,0,6">
-                                                                        <Grid.ColumnDefinitions>
-                                                                            <ColumnDefinition Width="120"/>
-                                                                            <ColumnDefinition Width="*"/>
-                                                                        </Grid.ColumnDefinitions>
-                                                                        <TextBlock Grid.Column="0" Text="Click X:" VerticalAlignment="Center"/>
-                                                                        <TextBox Grid.Column="1" Text="{Binding SlotClickX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}"/>
-                                                                    </Grid>
-                                                                    <Grid>
-                                                                        <Grid.ColumnDefinitions>
-                                                                            <ColumnDefinition Width="120"/>
-                                                                            <ColumnDefinition Width="*"/>
-                                                                        </Grid.ColumnDefinitions>
-                                                                        <TextBlock Grid.Column="0" Text="Click Y:" VerticalAlignment="Center"/>
-                                                                        <TextBox Grid.Column="1" Text="{Binding SlotClickY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}"/>
-                                                                    </Grid>
-                                                                </StackPanel>
-                                                            </GroupBox>
+                                                            <!-- Tick labels for Y slider -->
+                                                            <Grid Margin="0,0,0,12">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="60"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <Border Grid.Column="1" Background="Transparent" Margin="8,0,0,0">
+                                                                    <UniformGrid Columns="11">
+                                                                        <TextBlock Text="0.0" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.1" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.2" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.3" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.4" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.5" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.6" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.7" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.8" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="0.9" HorizontalAlignment="Center" FontSize="10"/>
+                                                                        <TextBlock Text="1.0" HorizontalAlignment="Center" FontSize="10"/>
+                                                                    </UniformGrid>
+                                                                </Border>
+                                                            </Grid>
+
+                                                            <!-- Removed legacy slot-specific click settings -->
 
                                                             <!-- Keyboard Settings removed: DX9-safe defaults assume slot 1 focus without Home/reset -->
 

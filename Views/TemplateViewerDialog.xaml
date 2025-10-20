@@ -60,7 +60,7 @@
                     BorderThickness="1"
                     CornerRadius="6"
                     Padding="10">
-                <Viewbox Stretch="Uniform" MaxWidth="850" MaxHeight="500">
+                <Viewbox Stretch="Uniform" StretchDirection="DownOnly" MaxWidth="850" MaxHeight="500">
                     <Grid>
                         <!-- Template Image -->
                         <Image Source="{Binding TemplateImage}"

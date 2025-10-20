@@ -166,6 +166,12 @@ namespace FFXIManager.ViewModels
                     // Subscribe to new step
                     SubscribeToStepChanges();
 
+                    // Auto-select the first action in the sequence (more intuitive UX)
+                    if (SelectedStep?.Navigation?.Sequence != null)
+                    {
+                        SelectedNavigationAction = SelectedStep.Navigation.Sequence.FirstOrDefault();
+                    }
+
                     UpdateCommandStates();
                 }
             }
@@ -1171,6 +1177,13 @@ namespace FFXIManager.ViewModels
             OnPropertyChanged(nameof(NavigationActions));
             OnPropertyChanged(nameof(HasNavigationAction));
             HasUnsavedChanges = true;
+
+            // Subscribe to navigation property changes now that it exists
+            if (SelectedStep.Navigation is INotifyPropertyChanged navigationNotifier)
+            {
+                navigationNotifier.PropertyChanged += OnNavigationPropertyChanged;
+                _subscribedNavigation = SelectedStep.Navigation;
+            }
 
             // Subscribe to the newly created navigation sequence
             SubscribeToNavigationSequenceChanges();

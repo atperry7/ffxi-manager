@@ -205,23 +205,40 @@ namespace FFXIManager.ViewModels.WorkflowEditor
                     return;
                 }
 
-                // Create a simple window to display the image
-                var window = new Window
-                {
-                    Title = $"Template Preview: {step.DisplayName}",
-                    Width = 800,
-                    Height = 600,
-                    WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                    Owner = Application.Current?.MainWindow,
-                    Content = new System.Windows.Controls.Image
-                    {
-                        Source = new BitmapImage(new Uri(templateFilePath, UriKind.Absolute)),
-                        Stretch = Stretch.Uniform
-                    }
-                };
+                // Try to use the rich Template Viewer with click markers
+                var vm = _serviceProvider.GetService(typeof(FFXIManager.ViewModels.TemplateViewerDialogViewModel)) as FFXIManager.ViewModels.TemplateViewerDialogViewModel;
+                var dlg = _serviceProvider.GetService(typeof(FFXIManager.Views.TemplateViewerDialog)) as Window;
 
-                window.ShowDialog();
-                await _loggingService.LogDebugAsync($"Showed large template image: {templateFileName}");
+                if (vm != null && dlg is FFXIManager.Views.TemplateViewerDialog typedDlg)
+                {
+                    await vm.LoadTemplateAsync(templateFilePath, step.Navigation?.Sequence);
+                    typedDlg.Owner = Application.Current?.MainWindow;
+                    // Ensure the dialog uses the prepared VM
+                    typedDlg.DataContext = vm;
+                    typedDlg.Title = $"Template Preview: {step.DisplayName}";
+                    typedDlg.ShowDialog();
+                    await _loggingService.LogDebugAsync($"Showed template viewer with markers: {templateFileName}");
+                }
+                else
+                {
+                    // Fallback: simple window
+                    var window = new Window
+                    {
+                        Title = $"Template Preview: {step.DisplayName}",
+                        Width = 800,
+                        Height = 600,
+                        WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                        Owner = Application.Current?.MainWindow,
+                        Content = new System.Windows.Controls.Image
+                        {
+                            Source = new BitmapImage(new Uri(templateFilePath, UriKind.Absolute)),
+                            Stretch = Stretch.Uniform
+                        }
+                    };
+
+                    window.ShowDialog();
+                    await _loggingService.LogDebugAsync($"Showed large template image (fallback): {templateFileName}");
+                }
             }
             catch (Exception ex)
             {
@@ -387,21 +404,38 @@ namespace FFXIManager.ViewModels.WorkflowEditor
                     return;
                 }
 
-                var window = new Window
-                {
-                    Title = $"Action Template Preview: {action.Action}",
-                    Width = 800,
-                    Height = 600,
-                    WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                    Owner = Application.Current?.MainWindow,
-                    Content = new System.Windows.Controls.Image
-                    {
-                        Source = new BitmapImage(new Uri(templateFilePath, UriKind.Absolute)),
-                        Stretch = Stretch.Uniform
-                    }
-                };
+                // Try to use the rich Template Viewer with a marker for this action
+                var vm = _serviceProvider.GetService(typeof(FFXIManager.ViewModels.TemplateViewerDialogViewModel)) as FFXIManager.ViewModels.TemplateViewerDialogViewModel;
+                var dlg = _serviceProvider.GetService(typeof(FFXIManager.Views.TemplateViewerDialog)) as Window;
 
-                window.ShowDialog();
+                if (vm != null && dlg is FFXIManager.Views.TemplateViewerDialog typedDlg)
+                {
+                    var single = new System.Collections.ObjectModel.ObservableCollection<KeyboardAction> { action };
+                    await vm.LoadTemplateAsync(templateFilePath, single);
+                    typedDlg.Owner = Application.Current?.MainWindow;
+                    typedDlg.DataContext = vm;
+                    typedDlg.Title = $"Action Template Preview: {action.Action}";
+                    typedDlg.ShowDialog();
+                    await _loggingService.LogDebugAsync($"Showed action template viewer with marker: {templateFileName}");
+                }
+                else
+                {
+                    var window = new Window
+                    {
+                        Title = $"Action Template Preview: {action.Action}",
+                        Width = 800,
+                        Height = 600,
+                        WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                        Owner = Application.Current?.MainWindow,
+                        Content = new System.Windows.Controls.Image
+                        {
+                            Source = new BitmapImage(new Uri(templateFilePath, UriKind.Absolute)),
+                            Stretch = Stretch.Uniform
+                        }
+                    };
+
+                    window.ShowDialog();
+                }
             }
             catch (Exception ex)
             {
