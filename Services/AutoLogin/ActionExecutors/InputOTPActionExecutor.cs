@@ -140,22 +140,23 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                             {
                                 await _loggingService.LogInfoAsync($"[INPUT-OTP] Template matched: {templatePath} (confidence: {matchResult.Confidence:F2})");
 
-                                // Optional: Click on the detected field if coordinates provided in action
-                                var clickX = action.GetParameter<double?>("ClickX", null);
-                                var clickY = action.GetParameter<double?>("ClickY", null);
-
-                                if (clickX.HasValue && clickY.HasValue)
+                                // Optional: Click one or more points if provided in action parameters
+                                var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", null);
+                                if (points != null && points.Count > 0)
                                 {
-                                    // Calculate relative click point
-                                    var absoluteX = matchResult.WindowRelativePosition.X + (int)(matchResult.MatchSize.Width * clickX.Value);
-                                    var absoluteY = matchResult.WindowRelativePosition.Y + (int)(matchResult.MatchSize.Height * clickY.Value);
-                                    var windowRelativePoint = new System.Drawing.Point(absoluteX, absoluteY);
-
-                                    // Convert to screen coordinates
-                                    var screenPoint = screenshot.ToScreenCoordinates(windowRelativePoint);
-
-                                    await _automationService.ClickAsync(screenPoint, cancellationToken);
-                                    await Task.Delay(action.DelayMs, cancellationToken);
+                                    for (int i = 0; i < points.Count; i++)
+                                    {
+                                        var p = points[i];
+                                        var absoluteX = matchResult.WindowRelativePosition.X + (int)(matchResult.MatchSize.Width * p.X);
+                                        var absoluteY = matchResult.WindowRelativePosition.Y + (int)(matchResult.MatchSize.Height * p.Y);
+                                        var windowRelativePoint = new System.Drawing.Point(absoluteX, absoluteY);
+                                        var screenPoint = screenshot.ToScreenCoordinates(windowRelativePoint);
+                                        await _automationService.ClickAsync(screenPoint, cancellationToken);
+                                        if (i < points.Count - 1 && action.DelayMs > 0)
+                                        {
+                                            await Task.Delay(action.DelayMs, cancellationToken);
+                                        }
+                                    }
                                 }
                             }
                             else

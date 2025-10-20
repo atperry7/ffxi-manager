@@ -19,8 +19,9 @@
         <!-- Inverse Boolean to Visibility Converter -->
         <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisConverter"/>
 
-        <!-- Math Converters -->
+        <!-- Math/Coordinate Converters -->
         <converters:MultiplyConverter x:Key="MultiplyConverter"/>
+        <converters:RelativeToUniformImageCoordinateConverter x:Key="RelativeToUniformImageCoordinateConverter"/>
 
         <!-- Action-based Visibility Converters -->
         <converters:IsClickActionToVisibilityConverter x:Key="IsClickActionToVisConverter"/>
@@ -1225,31 +1226,45 @@
                                                                         </Image.InputBindings>
                                                                     </Image>
 
-                                                                    <!-- Click Point Overlay (approximate) -->
-                                                                    <Canvas IsHitTestVisible="False"
-                                                                            Width="{Binding ElementName=ActionTemplateThumbImage, Path=ActualWidth}"
-                                                                            Height="{Binding ElementName=ActionTemplateThumbImage, Path=ActualHeight}"
-                                                                            Margin="4"
-                                                                            Visibility="{Binding IsClickActionSelected, Converter={StaticResource BoolToVisConverter}}">
-                                                                        <Ellipse Width="8" Height="8" Fill="{DynamicResource AccentBrush}">
-                                                                            <Ellipse.RenderTransform>
-                                                                                <TranslateTransform>
-                                                                                    <TranslateTransform.X>
-                                                                                        <MultiBinding Converter="{StaticResource MultiplyConverter}">
-                                                                                            <Binding Path="SelectedNavigationAction.ClickX"/>
-                                                                                            <Binding ElementName="ActionTemplateThumbImage" Path="ActualWidth"/>
-                                                                                        </MultiBinding>
-                                                                                    </TranslateTransform.X>
-                                                                                    <TranslateTransform.Y>
-                                                                                        <MultiBinding Converter="{StaticResource MultiplyConverter}">
-                                                                                            <Binding Path="SelectedNavigationAction.ClickY"/>
-                                                                                            <Binding ElementName="ActionTemplateThumbImage" Path="ActualHeight"/>
-                                                                                        </MultiBinding>
-                                                                                    </TranslateTransform.Y>
-                                                                                </TranslateTransform>
-                                                                            </Ellipse.RenderTransform>
-                                                                        </Ellipse>
-                                                                    </Canvas>
+                                                                    <!-- Multi ClickPoints Overlay -->
+                                                                    <ItemsControl ItemsSource="{Binding SelectedActionClickPoints}"
+                                                                                  Visibility="{Binding IsClickActionSelected, Converter={StaticResource BoolToVisConverter}}"
+                                                                                  IsHitTestVisible="False"
+                                                                                  Margin="4">
+                                                                        <ItemsControl.ItemsPanel>
+                                                                            <ItemsPanelTemplate>
+                                                                                <Canvas/>
+                                                                            </ItemsPanelTemplate>
+                                                                        </ItemsControl.ItemsPanel>
+                                                                        <ItemsControl.ItemTemplate>
+                                                                            <DataTemplate>
+                                                                                <Ellipse Width="8" Height="8" Fill="{DynamicResource AccentBrush}">
+                                                                                    <Ellipse.RenderTransform>
+                                                                                        <TranslateTransform>
+                                                                                            <TranslateTransform.X>
+                                                                                                <MultiBinding Converter="{StaticResource RelativeToUniformImageCoordinateConverter}" ConverterParameter="X">
+                                                                                                    <Binding Path="X"/>
+                                                                                                    <Binding ElementName="ActionTemplateThumbImage" Path="ActualWidth"/>
+                                                                                                    <Binding ElementName="ActionTemplateThumbImage" Path="ActualHeight"/>
+                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelWidth" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelHeight" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                                                                </MultiBinding>
+                                                                                            </TranslateTransform.X>
+                                                                                            <TranslateTransform.Y>
+                                                                                                <MultiBinding Converter="{StaticResource RelativeToUniformImageCoordinateConverter}" ConverterParameter="Y">
+                                                                                                    <Binding Path="Y"/>
+                                                                                                    <Binding ElementName="ActionTemplateThumbImage" Path="ActualWidth"/>
+                                                                                                    <Binding ElementName="ActionTemplateThumbImage" Path="ActualHeight"/>
+                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelWidth" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelHeight" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                                                                </MultiBinding>
+                                                                                            </TranslateTransform.Y>
+                                                                                        </TranslateTransform>
+                                                                                    </Ellipse.RenderTransform>
+                                                                                </Ellipse>
+                                                                            </DataTemplate>
+                                                                        </ItemsControl.ItemTemplate>
+                                                                    </ItemsControl>
                                                                 </Grid>
                                                             </Border>
                                                         </Grid>

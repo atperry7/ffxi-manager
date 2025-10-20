@@ -27,7 +27,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
     /// **Parameters:**
     /// - NavigationMethod: "Keyboard" or "Click" (default: "Keyboard")
     /// - TemplatePath: Optional template for slot detection (hybrid mode)
-    /// - ClickX, ClickY: Click coordinates if using Click navigation method
+    /// - ClickPoints: Array of relative click coordinates when using click navigation
     ///
     /// **Keyboard Navigation Layout:**
     /// Character slots are typically arranged in a 4x4 grid:

@@ -61,12 +61,10 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             // Determine if multiple click points are defined via Parameters["ClickPoints"] (JSON)
             var multiPoints = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", null);
-            bool useMulti = multiPoints != null && multiPoints.Count > 0;
-            var clickX = action.ClickX;
-            var clickY = action.ClickY;
-            if (!useMulti)
+            if (multiPoints == null || multiPoints.Count == 0)
             {
-                await _loggingService.LogDebugAsync($"[CLICK] Calculating click point: relative ({clickX:F2}, {clickY:F2})");
+                await _loggingService.LogErrorAsync("[CLICK] No click points configured. Add at least 1 point to Parameters['ClickPoints'].");
+                return false;
             }
 
             // Ensure fresh handle in case of splash → main transitions
@@ -88,52 +86,25 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
             await Task.Delay(100, cancellationToken);
 
-            if (useMulti)
+            await _loggingService.LogInfoAsync($"[CLICK] Executing multi-click sequence with {multiPoints!.Count} point(s)");
+            for (int i = 0; i < multiPoints.Count; i++)
             {
-                await _loggingService.LogInfoAsync($"[CLICK] Executing multi-click sequence with {multiPoints!.Count} point(s)");
-                for (int i = 0; i < multiPoints.Count; i++)
-                {
-                    var p = multiPoints[i];
-                    var absolute = CalculateRelativeClickPoint(context.TemplateMatch, p.X, p.Y);
-                    var screenPoint = screenshot.ToScreenCoordinates(absolute);
-                    if (!IsReasonable(screenPoint))
-                    {
-                        await _loggingService.LogWarningAsync($"[CLICK] Skipping out-of-bounds point {i + 1}: ({screenPoint.X}, {screenPoint.Y})");
-                        continue;
-                    }
-
-                    await _loggingService.LogDebugAsync($"[CLICK] Point {i + 1}: screen=({screenPoint.X}, {screenPoint.Y})");
-                    await _automationService.MoveMouseAsync(screenPoint, cancellationToken);
-                    await Task.Delay(150, cancellationToken);
-                    await _automationService.ClickAsync(screenPoint, cancellationToken);
-                    if (i < multiPoints.Count - 1 && action.DelayMs > 0)
-                    {
-                        await Task.Delay(action.DelayMs, cancellationToken);
-                    }
-                }
-            }
-            else
-            {
-                // Single point, possibly repeated by Count
-                var absolutePoint = CalculateRelativeClickPoint(context.TemplateMatch, clickX, clickY);
-                var screenPoint = screenshot.ToScreenCoordinates(absolutePoint);
+                var p = multiPoints[i];
+                var absolute = CalculateRelativeClickPoint(context.TemplateMatch, p.X, p.Y);
+                var screenPoint = screenshot.ToScreenCoordinates(absolute);
                 if (!IsReasonable(screenPoint))
                 {
-                    await _loggingService.LogWarningAsync($"[CLICK] Screen coordinates outside reasonable bounds: ({screenPoint.X}, {screenPoint.Y})");
-                    return false;
+                    await _loggingService.LogWarningAsync($"[CLICK] Skipping out-of-bounds point {i + 1}: ({screenPoint.X}, {screenPoint.Y})");
+                    continue;
                 }
 
-                var repeat = Math.Max(1, action.Count);
-                await _loggingService.LogInfoAsync($"[CLICK] Clicking at screen coordinates: ({screenPoint.X}, {screenPoint.Y}) x{repeat}");
-                for (int i = 0; i < repeat; i++)
+                await _loggingService.LogDebugAsync($"[CLICK] Point {i + 1}: screen=({screenPoint.X}, {screenPoint.Y})");
+                await _automationService.MoveMouseAsync(screenPoint, cancellationToken);
+                await Task.Delay(150, cancellationToken);
+                await _automationService.ClickAsync(screenPoint, cancellationToken);
+                if (i < multiPoints.Count - 1 && action.DelayMs > 0)
                 {
-                    await _automationService.MoveMouseAsync(screenPoint, cancellationToken);
-                    await Task.Delay(150, cancellationToken);
-                    await _automationService.ClickAsync(screenPoint, cancellationToken);
-                    if (i < repeat - 1 && action.DelayMs > 0)
-                    {
-                        await Task.Delay(action.DelayMs, cancellationToken);
-                    }
+                    await Task.Delay(action.DelayMs, cancellationToken);
                 }
             }
 

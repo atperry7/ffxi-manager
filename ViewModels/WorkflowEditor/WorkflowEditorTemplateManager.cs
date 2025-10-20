@@ -472,17 +472,11 @@ namespace FFXIManager.ViewModels.WorkflowEditor
 
             try
             {
+                // Prefer action-level template if provided; fallback to step-level template
                 var actionTemplate = action.GetParameter<string>("TemplatePath", string.Empty);
-                string? templateFileName = null;
-
-                if (!string.IsNullOrWhiteSpace(actionTemplate))
-                {
-                    templateFileName = actionTemplate.EndsWith(".png") ? actionTemplate : $"{actionTemplate}.png";
-                }
-                else if (!string.IsNullOrWhiteSpace(step?.TemplatePath))
-                {
-                    templateFileName = step!.TemplatePath.EndsWith(".png") ? step!.TemplatePath : $"{step!.TemplatePath}.png";
-                }
+                string? templateFileName = !string.IsNullOrWhiteSpace(actionTemplate)
+                    ? (actionTemplate.EndsWith(".png") ? actionTemplate : $"{actionTemplate}.png")
+                    : (!string.IsNullOrWhiteSpace(step?.TemplatePath) ? (step!.TemplatePath.EndsWith(".png") ? step!.TemplatePath : $"{step!.TemplatePath}.png") : null);
 
                 if (string.IsNullOrWhiteSpace(templateFileName))
                 {
@@ -493,7 +487,6 @@ namespace FFXIManager.ViewModels.WorkflowEditor
                 var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
                 var templatesPath = Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
                 var templateFilePath = Path.Combine(templatesPath, templateFileName);
-
                 if (!File.Exists(templateFilePath))
                 {
                     await _dialogService.ShowMessageDialogAsync("Template Not Found", $"Template file not found:\n{templateFilePath}");
@@ -502,33 +495,53 @@ namespace FFXIManager.ViewModels.WorkflowEditor
 
                 var vm = _serviceProvider.GetService(typeof(FFXIManager.ViewModels.TemplateViewerDialogViewModel)) as FFXIManager.ViewModels.TemplateViewerDialogViewModel;
                 var dlg = _serviceProvider.GetService(typeof(FFXIManager.Views.TemplateViewerDialog)) as Window;
-
                 if (vm == null || dlg is not FFXIManager.Views.TemplateViewerDialog typedDlg)
                 {
                     await _dialogService.ShowMessageDialogAsync("Service Error", "Template viewer is not available.");
                     return false;
                 }
 
+                // Multi-pick mode: append points, allow clear-all, then persist all points on Apply
                 vm.IsPickMode = true;
-                // Live-update the action as picks occur
-                void OnPick(double x, double y)
+                vm.IsMultiPickMode = true;
+                vm.MultiPickCount = 1; // start with 1; user clicks will append
+                vm.ResetMultiPick();
+
+                await vm.LoadTemplateAsync(templateFilePath, null);
+                vm.ClickMarkers.Clear();
+
+                // Preload existing ClickPoints if any
+                var existing = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new System.Collections.Generic.List<RelativeClickOffset>())
+                               ?? new System.Collections.Generic.List<RelativeClickOffset>();
+                for (int i = 0; i < existing.Count; i++)
                 {
-                    action.ClickX = x;
-                    action.ClickY = y;
+                    vm.ClickMarkers.Add(new ClickMarker
+                    {
+                        X = existing[i].X * vm.TemplateImageWidth,
+                        Y = existing[i].Y * vm.TemplateImageHeight,
+                        Label = (i + 1).ToString(),
+                        Description = existing[i].Description ?? $"Click {i + 1}",
+                        MarkerColor = System.Windows.Media.Brushes.DodgerBlue,
+                        StepIndex = i
+                    });
                 }
-                vm.PickChanged += OnPick;
-                await vm.LoadTemplateAsync(templateFilePath, step?.Navigation?.Sequence);
+
                 typedDlg.Owner = Application.Current?.MainWindow;
                 typedDlg.DataContext = vm;
-                typedDlg.Title = "Pick Click Position";
+                typedDlg.Title = "Pick Click Points";
 
                 var result = typedDlg.ShowDialog();
-                // Unsubscribe regardless
-                vm.PickChanged -= OnPick;
                 if (result == true)
                 {
-                    // Already applied live; log for clarity
-                    await _loggingService.LogInfoAsync($"Picked click position: X={vm.PickedX:F2}, Y={vm.PickedY:F2}");
+                    // Persist all markers to ClickPoints as normalized offsets
+                    var list = new System.Collections.Generic.List<RelativeClickOffset>();
+                    foreach (var m in vm.ClickMarkers)
+                    {
+                        var nx = vm.TemplateImageWidth > 0 ? m.X / vm.TemplateImageWidth : 0.5;
+                        var ny = vm.TemplateImageHeight > 0 ? m.Y / vm.TemplateImageHeight : 0.5;
+                        list.Add(new RelativeClickOffset { X = nx, Y = ny, Description = m.Description });
+                    }
+                    action.SetParameter("ClickPoints", list);
                     return true;
                 }
                 return false;

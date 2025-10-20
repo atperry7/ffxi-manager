@@ -16,8 +16,6 @@ namespace FFXIManager.Models
         private int _count = 1;
         private int _delayMs = 100;
         private string? _description;
-        private double _clickX = 0.5;
-        private double _clickY = 0.5;
 
         /// <summary>
         /// The action to perform. Supports both navigation and workflow actions:
@@ -64,25 +62,7 @@ namespace FFXIManager.Models
             set { _description = value; OnPropertyChanged(); }
         }
 
-        /// <summary>
-        /// Relative X coordinate for Click action (0.0 = left edge, 0.5 = center, 1.0 = right edge)
-        /// Only used when Action = "Click"
-        /// </summary>
-        public double ClickX
-        {
-            get => _clickX;
-            set { _clickX = value; OnPropertyChanged(); }
-        }
-
-        /// <summary>
-        /// Relative Y coordinate for Click action (0.0 = top edge, 0.5 = center, 1.0 = bottom edge)
-        /// Only used when Action = "Click"
-        /// </summary>
-        public double ClickY
-        {
-            get => _clickY;
-            set { _clickY = value; OnPropertyChanged(); }
-        }
+        // ClickX/ClickY removed in favor of Parameters["ClickPoints"] storing 1..N points
 
         /// <summary>
         /// Flexible parameters for action-specific configuration.

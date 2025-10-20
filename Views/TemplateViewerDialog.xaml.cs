@@ -69,6 +69,23 @@ namespace FFXIManager.Views
                 // Advance to next index (wrap at end)
                 vm.CurrentPickIndex = (idxToSet + 1) % vm.MultiPickCount;
             }
+            else if (vm.IsMultiPickMode)
+            {
+                // Append mode: each click adds a new point (no upper bound)
+                int idx = vm.ClickMarkers.Count;
+                vm.ClickMarkers.Add(new ClickMarker
+                {
+                    X = p.X,
+                    Y = p.Y,
+                    Label = (idx + 1).ToString(),
+                    Description = $"Click {idx + 1}",
+                    MarkerColor = GetColorForIndex(idx),
+                    StepIndex = idx
+                });
+
+                vm.Status = $"Added point {idx + 1}: X={relX:F2}, Y={relY:F2}. Click again to add more or Apply to confirm.";
+                vm.NotifyPickChanged();
+            }
             else
             {
                 // Single-pick mode: show one marker
@@ -93,6 +110,16 @@ namespace FFXIManager.Views
             // Confirm and close
             try { this.DialogResult = true; } catch { }
             Close();
+        }
+
+        private void ClearAllButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is not TemplateViewerDialogViewModel vm) return;
+            if (!vm.IsPickMode) return;
+
+            vm.ClickMarkers.Clear();
+            vm.CurrentPickIndex = 0;
+            vm.Status = "Cleared all points. Click the image to add points.";
         }
 
         private static Brush GetColorForIndex(int index)

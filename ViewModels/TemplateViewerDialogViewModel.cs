@@ -240,19 +240,25 @@ namespace FFXIManager.ViewModels
             {
                 if (step.Action?.Equals("Click", StringComparison.OrdinalIgnoreCase) == true)
                 {
-                    // Convert relative coordinates (0.0-1.0) to absolute pixel positions
-                    var pixelX = step.ClickX * TemplateImageWidth;
-                    var pixelY = step.ClickY * TemplateImageHeight;
-
-                    ClickMarkers.Add(new ClickMarker
+                    var points = step.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", null);
+                    if (points != null && points.Count > 0)
                     {
-                        X = pixelX,
-                        Y = pixelY,
-                        Label = stepIndex.ToString(),
-                        Description = step.Description ?? "Click action",
-                        MarkerColor = Brushes.DodgerBlue,
-                        StepIndex = stepIndex - 1
-                    });
+                        int idx = 1;
+                        foreach (var p in points)
+                        {
+                            var pixelX = p.X * TemplateImageWidth;
+                            var pixelY = p.Y * TemplateImageHeight;
+                            ClickMarkers.Add(new ClickMarker
+                            {
+                                X = pixelX,
+                                Y = pixelY,
+                                Label = (idx++).ToString(),
+                                Description = p.Description ?? "Click action",
+                                MarkerColor = Brushes.DodgerBlue,
+                                StepIndex = stepIndex - 1
+                            });
+                        }
+                    }
                 }
                 stepIndex++;
             }

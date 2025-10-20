@@ -150,7 +150,7 @@
             </Border>
         </ScrollViewer>
 
-        <!-- Legend -->
+        <!-- Legend (vertical DataGrid, scrollable, shows 5 rows) -->
         <Border Grid.Row="3"
                 Background="{DynamicResource HeaderBackgroundBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
@@ -160,27 +160,54 @@
                 Margin="0,0,0,10"
                 Visibility="{Binding ClickMarkers.Count, Converter={StaticResource ZeroToInverseVisibilityConverter}}">
             <StackPanel>
-                <TextBlock Text="Click Points:"
-                           FontWeight="SemiBold"
-                           FontSize="12"
-                           Foreground="{DynamicResource PrimaryTextBrush}"
-                           Margin="0,0,0,5"/>
-                <ItemsControl ItemsSource="{Binding ClickMarkers}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal" Margin="0,2">
-                                <Ellipse Width="12" Height="12"
-                                         Fill="{Binding MarkerColor}"
-                                         Margin="0,0,6,0"/>
-                                <TextBlock Foreground="{DynamicResource SecondaryTextBrush}">
-                                    <Run Text="{Binding Label}" FontWeight="Bold"/>
-                                    <Run Text=" - "/>
-                                    <Run Text="{Binding Description}"/>
-                                </TextBlock>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <DataGrid ItemsSource="{Binding ClickMarkers}"
+                          AutoGenerateColumns="False"
+                          HeadersVisibility="Column"
+                          IsReadOnly="True"
+                          CanUserAddRows="False"
+                          CanUserDeleteRows="False"
+                          GridLinesVisibility="None"
+                          RowHeaderWidth="0"
+                          RowHeight="24"
+                          Background="{DynamicResource HeaderBackgroundBrush}"
+                          Foreground="{DynamicResource PrimaryTextBrush}"
+                          BorderThickness="0"
+                          ScrollViewer.CanContentScroll="True"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto"
+                          MaxHeight="130">
+                    <DataGrid.Resources>
+                        <Style TargetType="DataGridCell">
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="Padding" Value="4,0,4,0"/>
+                            <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+                            <Setter Property="Background" Value="{DynamicResource HeaderBackgroundBrush}"/>
+                        </Style>
+                        <Style TargetType="DataGridColumnHeader">
+                            <Setter Property="Background" Value="{DynamicResource HeaderBackgroundBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+                            <Setter Property="FontSize" Value="11"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                            <Setter Property="Padding" Value="4,2"/>
+                        </Style>
+                    </DataGrid.Resources>
+                    <DataGrid.Columns>
+                        <!-- Color -->
+                        <DataGridTemplateColumn Header="" Width="26">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Ellipse Width="12" Height="12" Fill="{Binding MarkerColor}"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <!-- Label -->
+                        <DataGridTextColumn Header="#" Binding="{Binding Label}" Width="32"/>
+                        <!-- Description -->
+                        <DataGridTextColumn Header="Click Points" Binding="{Binding Description}" Width="*"/>
+                        <!-- Position (rounded) -->
+                        <DataGridTextColumn Header="X" Binding="{Binding X, StringFormat=F0}" Width="50"/>
+                        <DataGridTextColumn Header="Y" Binding="{Binding Y, StringFormat=F0}" Width="50"/>
+                    </DataGrid.Columns>
+                </DataGrid>
             </StackPanel>
         </Border>
 
@@ -203,7 +230,17 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="0"
+                    Content="Clear All"
+                    Width="110"
+                    Height="32"
+                    Margin="0,0,8,0"
+                    Visibility="{Binding IsPickMode, Converter={StaticResource BoolToVisConverter}}"
+                    Style="{StaticResource SecondaryButton}"
+                    Click="ClearAllButton_Click"/>
 
             <Button Grid.Column="1"
                     Content="Apply"

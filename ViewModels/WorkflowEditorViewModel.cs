@@ -271,6 +271,7 @@ namespace FFXIManager.ViewModels
                     OnPropertyChanged(nameof(ActionTimeoutSeconds));
                     OnPropertyChanged(nameof(ActionRequireMatch));
                     OnPropertyChanged(nameof(ActionTargetApplication));
+                    OnPropertyChanged(nameof(SelectedActionClickPoints));
                     LoadActionTemplateImage();
                     UpdateCommandStates();
                 }
@@ -389,6 +390,19 @@ namespace FFXIManager.ViewModels
 
         public bool HasAnyTemplateForAction =>
             !string.IsNullOrEmpty(ActionTemplatePath) || !string.IsNullOrWhiteSpace(SelectedStep?.TemplatePath);
+
+        /// <summary>
+        /// Exposes ClickPoints for the selected action for thumbnail overlays.
+        /// </summary>
+        public System.Collections.Generic.IList<RelativeClickOffset> SelectedActionClickPoints
+        {
+            get
+            {
+                if (SelectedNavigationAction == null) return new System.Collections.Generic.List<RelativeClickOffset>();
+                var list = SelectedNavigationAction.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", null);
+                return list ?? new System.Collections.Generic.List<RelativeClickOffset>();
+            }
+        }
 
         #region Step-Level Retry Configuration Properties
 
@@ -1706,6 +1720,7 @@ namespace FFXIManager.ViewModels
                 OnPropertyChanged(nameof(ActionTimeoutSeconds));
                 OnPropertyChanged(nameof(ActionRequireMatch));
                 OnPropertyChanged(nameof(ActionTargetApplication));
+                OnPropertyChanged(nameof(SelectedActionClickPoints));
                 LoadActionTemplateImage();
             }
 
@@ -1713,6 +1728,7 @@ namespace FFXIManager.ViewModels
             if (e.PropertyName == nameof(KeyboardAction.Parameters) && sender == SelectedNavigationAction)
             {
                 LoadActionTemplateImage();
+                OnPropertyChanged(nameof(SelectedActionClickPoints));
             }
         }
 

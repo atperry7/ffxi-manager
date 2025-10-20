@@ -71,12 +71,18 @@ namespace FFXIManager.Converters
                 : $"App: {appName}";
         }
 
-        private static string GetClickSummary(KeyboardAction action)
+                        private static string GetClickSummary(KeyboardAction action)
         {
-            return $"Position: ({action.ClickX:F2}, {action.ClickY:F2}) • Count: {action.Count} • Delay: {action.DelayMs}ms";
-        }
-
-        private static string GetWaitSummary(KeyboardAction action)
+            var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", null);
+            var n = points?.Count ?? 0;
+            if (n <= 0)
+            {
+                return $"Points: 0 \u0007 Delay: {action.DelayMs}ms";
+            }
+            return n == 1
+                ? $"Points: 1 \u0007 Delay: {action.DelayMs}ms"
+                : $"Points: {n} \u0007 Delay: {action.DelayMs}ms";
+        }private static string GetWaitSummary(KeyboardAction action)
         {
             return $"Duration: {action.DelayMs}ms ({action.DelayMs / 1000.0:F1}s)";
         }
@@ -105,3 +111,4 @@ namespace FFXIManager.Converters
         }
     }
 }
+
