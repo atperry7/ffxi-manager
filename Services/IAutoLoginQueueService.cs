@@ -246,6 +246,8 @@ namespace FFXIManager.Services
         int StepTimeoutSeconds { get; set; }
 
         #endregion
+
+        // No explicit synchronization API required when account instances are canonical
     }
 
     #region Event Args

@@ -344,6 +344,8 @@ namespace FFXIManager.Models
             {
                 OnPropertyChanged(nameof(DisplayName));
             }
+
+            // With canonical account instances and task rebuild per run, no special handling required here
         }
 
         /// <summary>

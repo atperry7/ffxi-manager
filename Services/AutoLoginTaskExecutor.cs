@@ -104,8 +104,8 @@ namespace FFXIManager.Services
         /// </summary>
         private async Task ExecuteTaskInternalAsync(AutoLoginQueueItem queueItem, CancellationToken cancellationToken)
         {
-            // Create or get the task
-            var task = queueItem.Task ?? await CreateWorkflowDrivenTaskAsync(queueItem, cancellationToken);
+            // Always create a fresh task from the latest workflow/account state
+            var task = await CreateWorkflowDrivenTaskAsync(queueItem, cancellationToken);
             queueItem.Task = task;
             _currentTask = task;
 

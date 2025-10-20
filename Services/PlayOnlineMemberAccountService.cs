@@ -16,6 +16,8 @@ namespace FFXIManager.Services
         private readonly ILoggingService _loggingService;
         private readonly IWindowsCredentialsService _credentialsService;
         private readonly object _lockObject = new();
+        // Canonical instances cache by ProfilePath -> AccountId -> Account instance
+        private readonly Dictionary<string, Dictionary<Guid, PlayOnlineMemberAccount>> _accountCache = new();
 
         public PlayOnlineMemberAccountService(
             ISettingsService settingsService,
@@ -38,16 +40,40 @@ namespace FFXIManager.Services
                         var settings = _settingsService.LoadSettings();
                         if (settings.PlayOnlineMemberAccounts.TryGetValue(profileFilePath, out var accounts))
                         {
-                            var accountList = accounts ?? new List<PlayOnlineMemberAccount>();
+                            var sourceList = accounts ?? new List<PlayOnlineMemberAccount>();
 
-                            // Update HasStoredPassword status for each account
-                            foreach (var account in accountList)
+                            if (!_accountCache.TryGetValue(profileFilePath, out var profileCache))
                             {
-                                var target = _credentialsService.GenerateCredentialTarget(profileFilePath, account.Id);
-                                account.HasStoredPassword = _credentialsService.CredentialExistsAsync(target, account.AccountName).Result;
+                                profileCache = new Dictionary<Guid, PlayOnlineMemberAccount>();
+                                _accountCache[profileFilePath] = profileCache;
                             }
 
-                            return accountList;
+                            var canonicalList = new List<PlayOnlineMemberAccount>(sourceList.Count);
+                            foreach (var src in sourceList)
+                            {
+                                // Ensure HasStoredPassword reflects system state
+                                var targetCred = _credentialsService.GenerateCredentialTarget(profileFilePath, src.Id);
+                                var hasPwd = _credentialsService.CredentialExistsAsync(targetCred, src.AccountName).Result;
+                                src.HasStoredPassword = hasPwd;
+
+                                if (!profileCache.TryGetValue(src.Id, out var canonical))
+                                {
+                                    canonical = new PlayOnlineMemberAccount { Id = src.Id };
+                                    profileCache[src.Id] = canonical;
+                                }
+
+                                // Update canonical instance properties using setters to raise notifications
+                                ApplyAccountUpdates(canonical, src);
+                                canonicalList.Add(canonical);
+                            }
+
+                            // Remove any stale cache entries for accounts no longer present
+                            var presentIds = new HashSet<Guid>(sourceList.Select(a => a.Id));
+                            var staleIds = profileCache.Keys.Where(id => !presentIds.Contains(id)).ToList();
+                            foreach (var staleId in staleIds)
+                                profileCache.Remove(staleId);
+
+                            return canonicalList;
                         }
                         return new List<PlayOnlineMemberAccount>();
                     }
@@ -94,8 +120,14 @@ namespace FFXIManager.Services
                             return false;
                         }
 
-                        // Add the account
+                        // Add the account to settings and cache as the canonical instance
                         settings.PlayOnlineMemberAccounts[profileFilePath].Add(account);
+                        if (!_accountCache.TryGetValue(profileFilePath, out var profileCache))
+                        {
+                            profileCache = new Dictionary<Guid, PlayOnlineMemberAccount>();
+                            _accountCache[profileFilePath] = profileCache;
+                        }
+                        profileCache[account.Id] = account;
 
                         // Save settings
                         _settingsService.SaveSettings(settings);
@@ -152,8 +184,24 @@ namespace FFXIManager.Services
                             return false;
                         }
 
-                        // Update the account
-                        accounts[existingIndex] = account;
+                        // Get or create canonical instance for this account
+                        if (!_accountCache.TryGetValue(profileFilePath, out var profileCache))
+                        {
+                            profileCache = new Dictionary<Guid, PlayOnlineMemberAccount>();
+                            _accountCache[profileFilePath] = profileCache;
+                        }
+
+                        if (!profileCache.TryGetValue(account.Id, out var canonical))
+                        {
+                            canonical = accounts[existingIndex];
+                            profileCache[account.Id] = canonical;
+                        }
+
+                        // Apply updates to canonical instance (raise notifications via setters)
+                        ApplyAccountUpdates(canonical, account);
+
+                        // Ensure settings list holds the canonical instance, not a new object
+                        accounts[existingIndex] = canonical;
 
                         // Save settings
                         _settingsService.SaveSettings(settings);
@@ -202,6 +250,12 @@ namespace FFXIManager.Services
 
                         // Remove the account
                         accounts.Remove(accountToRemove);
+
+                        // Remove from cache
+                        if (_accountCache.TryGetValue(profileFilePath, out var profileCache))
+                        {
+                            profileCache.Remove(accountId);
+                        }
 
                         // Clean up empty entries
                         if (accounts.Count == 0)
@@ -318,6 +372,9 @@ namespace FFXIManager.Services
                         var count = accounts?.Count ?? 0;
                         settings.PlayOnlineMemberAccounts.Remove(profileFilePath);
 
+                        // Clear cache for this profile
+                        _accountCache.Remove(profileFilePath);
+
                         // Save settings
                         _settingsService.SaveSettings(settings);
 
@@ -331,6 +388,34 @@ namespace FFXIManager.Services
                     }
                 }
             });
+        }
+
+        private static void ApplyAccountUpdates(PlayOnlineMemberAccount target, PlayOnlineMemberAccount source)
+        {
+            // Update core properties; use properties to trigger INotifyPropertyChanged
+            target.POLMemberSlot = source.POLMemberSlot;
+            target.FFXICharacterSlot = source.FFXICharacterSlot;
+            target.AccountName = source.AccountName ?? string.Empty;
+            target.WorkflowId = source.WorkflowId;
+
+            // HasStoredPassword is computed per profile by credential check above
+            target.HasStoredPassword = source.HasStoredPassword;
+
+            // OTP configuration: create or update as needed
+            if (source.OTPConfiguration == null)
+            {
+                target.OTPConfiguration = null;
+            }
+            else
+            {
+                if (target.OTPConfiguration == null)
+                {
+                    target.OTPConfiguration = new OTPConfiguration();
+                }
+                target.OTPConfiguration.IsEnabled = source.OTPConfiguration.IsEnabled;
+                target.OTPConfiguration.HasStoredSecret = source.OTPConfiguration.HasStoredSecret;
+                target.OTPConfiguration.ProviderName = source.OTPConfiguration.ProviderName;
+            }
         }
 
         public Task<bool> SetAccountPasswordAsync(string profileFilePath, Guid accountId, string password)

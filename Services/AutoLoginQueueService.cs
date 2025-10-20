@@ -104,6 +104,8 @@ namespace FFXIManager.Services
             set => _executionOrchestrator.StepTimeoutSeconds = value;
         }
 
+        // Canonical account sync is handled in PlayOnlineMemberAccountService; no queue-level rebinds required
+
         #endregion
 
         #region Events - Forwarded from Focused Services

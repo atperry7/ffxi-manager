@@ -102,6 +102,8 @@ namespace FFXIManager.Services
         /// <param name="item">Item to retry</param>
         Task RetryItemAsync(AutoLoginQueueItem item);
 
+        // No rebind API required when account instances are canonical
+
         #endregion
 
         #region Events
