@@ -14,6 +14,7 @@ namespace FFXIManager.Models
         private int _ffxiCharacterSlot = 1;
         private OTPConfiguration? _otpConfiguration;
         private string _accountName = string.Empty;
+        private Guid? _workflowId;
         private bool _hasStoredPassword;
         private bool _isOTPCodeVisible = false;
         private string? _currentOTPCode;
@@ -82,6 +83,20 @@ namespace FFXIManager.Models
             get => _accountName;
             set => SetProperty(ref _accountName, value ?? string.Empty);
         }
+
+        /// <summary>
+        /// Optional workflow ID for custom login flow (null = use default workflow)
+        /// </summary>
+        public Guid? WorkflowId
+        {
+            get => _workflowId;
+            set => SetProperty(ref _workflowId, value);
+        }
+
+        /// <summary>
+        /// Gets whether this account uses a custom workflow (true) or default workflow (false)
+        /// </summary>
+        public bool HasCustomWorkflow => WorkflowId.HasValue && WorkflowId.Value != Guid.Empty;
 
         /// <summary>
         /// Gets whether OTP is enabled for this account

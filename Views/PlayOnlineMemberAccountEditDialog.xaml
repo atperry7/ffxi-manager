@@ -53,6 +53,26 @@
                           SelectedItem="{Binding Account.FFXICharacterSlot}"
                           ToolTip="FFXI Character Slot Number (1-16)"/>
 
+                <!-- Workflow Selection -->
+                <Label Content="Auto-Login Workflow (Optional):" Target="{Binding ElementName=WorkflowComboBox}" Margin="0,10,0,0"/>
+                <ComboBox x:Name="WorkflowComboBox"
+                          ItemsSource="{Binding AvailableWorkflows}"
+                          SelectedItem="{Binding SelectedWorkflow}"
+                          ToolTip="Select a custom workflow for this account (optional - defaults to system workflow)">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="4,2">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding Description}"
+                                          FontSize="10"
+                                          Foreground="{DynamicResource SecondaryTextBrush}"
+                                          TextWrapping="Wrap"
+                                          Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
                 <!-- Password -->
                 <Label Content="PlayOnline SE Password:" Target="{Binding ElementName=PasswordBox}" Margin="0,10,0,0"/>
                 <PasswordBox x:Name="PasswordBox"

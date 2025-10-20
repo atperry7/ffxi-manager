@@ -335,9 +335,24 @@ namespace FFXIManager.Services.AutoLogin
             if (account == null)
                 throw new ArgumentNullException(nameof(account));
 
-            // TODO: Add WorkflowId property to PlayOnlineMemberAccount model
-            // For now, always use default workflow
-            return await GetDefaultWorkflowAsync(cancellationToken);
+            // Check if account has a custom workflow assigned
+            if (account.WorkflowId.HasValue && account.WorkflowId.Value != Guid.Empty)
+            {
+                var workflow = await LoadWorkflowAsync(account.WorkflowId.Value, cancellationToken);
+                if (workflow != null)
+                {
+                    await _loggingService.LogDebugAsync($"Using custom workflow '{workflow.Name}' for account '{account.AccountName}'");
+                    return workflow;
+                }
+
+                // Custom workflow not found, log warning and fall back to default
+                await _loggingService.LogWarningAsync($"Custom workflow {account.WorkflowId} not found for account '{account.AccountName}', falling back to default workflow");
+            }
+
+            // Use default workflow
+            var defaultWorkflow = await GetDefaultWorkflowAsync(cancellationToken);
+            await _loggingService.LogDebugAsync($"Using default workflow '{defaultWorkflow.Name}' for account '{account.AccountName}'");
+            return defaultWorkflow;
         }
 
         public WorkflowDefinition CreateNewWorkflow(string name, string? description = null)

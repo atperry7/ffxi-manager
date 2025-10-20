@@ -9,7 +9,9 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using FFXIManager.Infrastructure;
 using FFXIManager.Models;
+using FFXIManager.Models.AutoLogin;
 using FFXIManager.Services;
+using FFXIManager.Services.AutoLogin;
 using FFXIManager.ViewModels.Base;
 using FFXIManager.Views;
 
@@ -28,6 +30,7 @@ namespace FFXIManager.ViewModels
         private readonly IOTPService _otpService;
         private readonly IAutoLoginQueueService _queueService;
         private readonly IWindowsCredentialsService _credentialsService;
+        private readonly IWorkflowService _workflowService;
 
         private ProfileInfo? _currentProfile;
         private PlayOnlineMemberAccount? _selectedAccount;
@@ -44,7 +47,8 @@ namespace FFXIManager.ViewModels
             IUiDispatcher uiDispatcher,
             IOTPService otpService,
             IAutoLoginQueueService queueService,
-            IWindowsCredentialsService credentialsService)
+            IWindowsCredentialsService credentialsService,
+            IWorkflowService workflowService)
         {
             _accountService = accountService ?? throw new ArgumentNullException(nameof(accountService));
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
@@ -54,6 +58,7 @@ namespace FFXIManager.ViewModels
             _otpService = otpService ?? throw new ArgumentNullException(nameof(otpService));
             _queueService = queueService ?? throw new ArgumentNullException(nameof(queueService));
             _credentialsService = credentialsService ?? throw new ArgumentNullException(nameof(credentialsService));
+            _workflowService = workflowService ?? throw new ArgumentNullException(nameof(workflowService));
 
             Accounts = new ObservableCollection<PlayOnlineMemberAccount>();
             Accounts.CollectionChanged += (_, _) =>
@@ -199,7 +204,7 @@ namespace FFXIManager.ViewModels
 
             var dialog = new PlayOnlineMemberAccountEditDialog
             {
-                DataContext = new PlayOnlineMemberAccountEditViewModel(newAccount, Accounts.ToList())
+                DataContext = new PlayOnlineMemberAccountEditViewModel(newAccount, Accounts.ToList(), _workflowService)
             };
 
             if (dialog.ShowDialog() == true)
@@ -260,6 +265,7 @@ namespace FFXIManager.ViewModels
                 POLMemberSlot = account.POLMemberSlot,
                 FFXICharacterSlot = account.FFXICharacterSlot,
                 AccountName = account.AccountName,
+                WorkflowId = account.WorkflowId,
                 HasStoredPassword = account.HasStoredPassword,
                 OTPConfiguration = account.OTPConfiguration != null
                     ? new OTPConfiguration
@@ -275,7 +281,8 @@ namespace FFXIManager.ViewModels
             {
                 DataContext = new PlayOnlineMemberAccountEditViewModel(
                     editAccount,
-                    Accounts.Where(a => a.Id != account.Id).ToList())
+                    Accounts.Where(a => a.Id != account.Id).ToList(),
+                    _workflowService)
             };
 
             if (dialog.ShowDialog() == true)
@@ -863,14 +870,18 @@ namespace FFXIManager.ViewModels
     public class PlayOnlineMemberAccountEditViewModel : ViewModelBase
     {
         private readonly List<PlayOnlineMemberAccount> _existingAccounts;
+        private readonly IWorkflowService _workflowService;
         private string _authenticationKeyInput = string.Empty;
+        private WorkflowDefinition? _selectedWorkflow;
 
         public PlayOnlineMemberAccountEditViewModel(
             PlayOnlineMemberAccount account,
-            List<PlayOnlineMemberAccount> existingAccounts)
+            List<PlayOnlineMemberAccount> existingAccounts,
+            IWorkflowService workflowService)
         {
             Account = account ?? throw new ArgumentNullException(nameof(account));
             _existingAccounts = existingAccounts ?? new List<PlayOnlineMemberAccount>();
+            _workflowService = workflowService ?? throw new ArgumentNullException(nameof(workflowService));
 
             // Ensure OTP configuration exists
             if (Account.OTPConfiguration == null)
@@ -879,6 +890,9 @@ namespace FFXIManager.ViewModels
             }
 
             Account.PropertyChanged += Account_PropertyChanged;
+
+            // Load available workflows asynchronously
+            _ = LoadWorkflowsAsync();
         }
 
         public PlayOnlineMemberAccount Account { get; }
@@ -907,6 +921,27 @@ namespace FFXIManager.ViewModels
         public int[] AvailableFFXISlots => Enumerable.Range(1, 16).ToArray();
 
         /// <summary>
+        /// Available workflows for selection
+        /// </summary>
+        public ObservableCollection<WorkflowDefinition> AvailableWorkflows { get; } = new();
+
+        /// <summary>
+        /// Currently selected workflow (null = use default workflow)
+        /// </summary>
+        public WorkflowDefinition? SelectedWorkflow
+        {
+            get => _selectedWorkflow;
+            set
+            {
+                if (SetProperty(ref _selectedWorkflow, value))
+                {
+                    // Update account's WorkflowId when selection changes
+                    Account.WorkflowId = value?.WorkflowId;
+                }
+            }
+        }
+
+        /// <summary>
         /// Checks if a POL slot is already in use
         /// </summary>
         public bool IsPOLSlotAvailable(int slot)
@@ -918,6 +953,48 @@ namespace FFXIManager.ViewModels
         {
             // Re-validate when properties change
             OnPropertyChanged(nameof(Account));
+        }
+
+        /// <summary>
+        /// Loads available workflows and sets the initial selection based on account's WorkflowId
+        /// </summary>
+        private async Task LoadWorkflowsAsync()
+        {
+            try
+            {
+                var workflows = await _workflowService.GetAvailableWorkflowsAsync();
+
+                // Add "Use Default Workflow" option at the top
+                AvailableWorkflows.Clear();
+                AvailableWorkflows.Add(new WorkflowDefinition
+                {
+                    WorkflowId = Guid.Empty,
+                    Name = "(Use Default Workflow)",
+                    Description = "Automatically use the system default workflow"
+                });
+
+                // Add all available workflows
+                foreach (var workflow in workflows)
+                {
+                    AvailableWorkflows.Add(workflow);
+                }
+
+                // Set initial selection based on account's WorkflowId
+                if (Account.WorkflowId.HasValue && Account.WorkflowId.Value != Guid.Empty)
+                {
+                    SelectedWorkflow = AvailableWorkflows.FirstOrDefault(w => w.WorkflowId == Account.WorkflowId.Value);
+                }
+                else
+                {
+                    // Select "Use Default Workflow" option
+                    SelectedWorkflow = AvailableWorkflows.FirstOrDefault(w => w.WorkflowId == Guid.Empty);
+                }
+            }
+            catch (Exception)
+            {
+                // Best-effort - if workflow loading fails, leave empty collection
+                // Dialog will still be functional for other account settings
+            }
         }
     }
 }
