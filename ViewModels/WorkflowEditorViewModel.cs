@@ -151,6 +151,13 @@ namespace FFXIManager.ViewModels
                     OnPropertyChanged(nameof(CanEditStep));
                     OnPropertyChanged(nameof(NavigationActions));
                     OnPropertyChanged(nameof(HasNavigationAction));
+
+                    // Notify step-level retry configuration properties
+                    OnPropertyChanged(nameof(StepEstimatedDurationSeconds));
+                    OnPropertyChanged(nameof(StepRetryAttempts));
+                    OnPropertyChanged(nameof(StepRetryDelayMs));
+                    OnPropertyChanged(nameof(StepRetryBudgetInfo));
+
                     SelectedNavigationAction = null;
 
                     // Load template image preview
@@ -385,6 +392,139 @@ namespace FFXIManager.ViewModels
         /// Whether the selected action has a template image
         /// </summary>
         public bool HasActionTemplateImage => ActionTemplateImageSource != null;
+
+        #region Step-Level Retry Configuration Properties
+
+        /// <summary>
+        /// Estimated duration for the step in seconds.
+        /// Automatically validates against retry budget and adjusts if needed.
+        /// Minimum value: 1 second
+        /// </summary>
+        public int StepEstimatedDurationSeconds
+        {
+            get => SelectedStep?.EstimatedDurationSeconds ?? 5;
+            set
+            {
+                if (SelectedStep != null)
+                {
+                    // Clamp to minimum of 1 second
+                    var validatedValue = Math.Max(1, value);
+
+                    if (SelectedStep.EstimatedDurationSeconds != validatedValue)
+                    {
+                        SelectedStep.EstimatedDurationSeconds = validatedValue;
+                        OnPropertyChanged();
+                        OnPropertyChanged(nameof(StepRetryBudgetInfo));
+                        ValidateRetryBudget();
+                        HasUnsavedChanges = true;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Number of polling attempts for template detection.
+        /// Triggers validation when changed to ensure EstimatedDurationSeconds is sufficient.
+        /// Minimum value: 1 (if specified)
+        /// </summary>
+        public int? StepRetryAttempts
+        {
+            get => SelectedStep?.RetryAttempts;
+            set
+            {
+                if (SelectedStep != null)
+                {
+                    // Validate: must be positive if not null
+                    int? validatedValue = value.HasValue ? Math.Max(1, value.Value) : null;
+
+                    if (SelectedStep.RetryAttempts != validatedValue)
+                    {
+                        SelectedStep.RetryAttempts = validatedValue;
+                        OnPropertyChanged();
+                        OnPropertyChanged(nameof(StepRetryBudgetInfo));
+                        ValidateRetryBudget();
+                        HasUnsavedChanges = true;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Delay in milliseconds between template detection polling attempts.
+        /// Triggers validation when changed to ensure EstimatedDurationSeconds is sufficient.
+        /// Minimum value: 100ms (if specified)
+        /// </summary>
+        public int? StepRetryDelayMs
+        {
+            get => SelectedStep?.RetryDelayMs;
+            set
+            {
+                if (SelectedStep != null)
+                {
+                    // Validate: must be at least 100ms if not null (matches service layer minimum)
+                    int? validatedValue = value.HasValue ? Math.Max(100, value.Value) : null;
+
+                    if (SelectedStep.RetryDelayMs != validatedValue)
+                    {
+                        SelectedStep.RetryDelayMs = validatedValue;
+                        OnPropertyChanged();
+                        OnPropertyChanged(nameof(StepRetryBudgetInfo));
+                        ValidateRetryBudget();
+                        HasUnsavedChanges = true;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Information about retry time budget for user feedback
+        /// </summary>
+        public string StepRetryBudgetInfo
+        {
+            get
+            {
+                if (SelectedStep == null) return string.Empty;
+
+                var attempts = SelectedStep.RetryAttempts ?? 30;
+                var delayMs = SelectedStep.RetryDelayMs ?? 500;
+                var totalSeconds = (attempts * delayMs) / 1000.0;
+                var estimated = SelectedStep.EstimatedDurationSeconds;
+
+                if (totalSeconds > estimated)
+                {
+                    return $"⚠ Retry budget ({totalSeconds:F1}s) exceeds timeout ({estimated}s)";
+                }
+                else
+                {
+                    return $"✓ Retry budget: {totalSeconds:F1}s of {estimated}s";
+                }
+            }
+        }
+
+        /// <summary>
+        /// Validates that EstimatedDurationSeconds is at least as large as the retry budget.
+        /// Auto-adjusts EstimatedDurationSeconds if needed.
+        /// </summary>
+        private void ValidateRetryBudget()
+        {
+            if (SelectedStep == null) return;
+
+            var attempts = SelectedStep.RetryAttempts ?? 30;
+            var delayMs = SelectedStep.RetryDelayMs ?? 500;
+            var totalSeconds = (int)Math.Ceiling((attempts * delayMs) / 1000.0);
+
+            if (totalSeconds > SelectedStep.EstimatedDurationSeconds)
+            {
+                // Auto-adjust EstimatedDurationSeconds to accommodate retry budget
+                SelectedStep.EstimatedDurationSeconds = totalSeconds;
+                OnPropertyChanged(nameof(StepEstimatedDurationSeconds));
+                OnPropertyChanged(nameof(StepRetryBudgetInfo));
+
+                _ = _loggingService.LogInfoAsync($"Auto-adjusted EstimatedDurationSeconds to {totalSeconds}s to accommodate retry budget");
+            }
+        }
+
+        #endregion
 
         // Common action-level template bindings
         public string? ActionTemplatePath
@@ -1268,6 +1408,9 @@ namespace FFXIManager.ViewModels
             (SelectTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (ReplaceTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (ShowLargeTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (SelectActionTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (ReplaceActionTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (ShowLargeActionTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
         }
 
         /// <summary>

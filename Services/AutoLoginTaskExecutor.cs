@@ -182,62 +182,94 @@ namespace FFXIManager.Services
         /// </summary>
         private async Task ExecuteSubtaskAsync(AutoLoginQueueItem queueItem, AutoLoginTask task, AutoLoginSubtask subtask, CancellationToken cancellationToken)
         {
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(SubtaskTimeoutSeconds));
-            using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
-
-            try
+            // Implement step-level execution retries using subtask.MaxRetryAttempts
+            // Attempt count = initial try + MaxRetryAttempts retries
+            var totalAttempts = Math.Max(1, subtask.MaxRetryAttempts + 1);
+            for (int attempt = 1; attempt <= totalAttempts; attempt++)
             {
-                _ = _loggingService.LogDebugAsync($"Starting subtask: {subtask.Name} for {queueItem.DisplayName}");
+                // Use per-step hard cap based on EstimatedDurationSeconds
+                var stepTimeoutSeconds = Math.Max(1, subtask.EstimatedDurationSeconds);
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(stepTimeoutSeconds));
+                using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
-                // Start the subtask
-                subtask.Start();
-                OnSubtaskStarted(new AutoLoginSubtaskEventArgs(queueItem, task, subtask, "Subtask started"));
-
-                // Execute subtask using appropriate handler
-                await ExecuteSubtaskWithHandlerAsync(queueItem, task, subtask, combinedCts.Token);
-
-                // Complete the subtask only if it's not already in a terminal state
-                // Handlers may call subtask.Fail(), subtask.Skip(), etc. which should not be overridden
-                if (subtask.Status == AutoLoginSubtaskStatus.InProgress)
+                try
                 {
-                    subtask.Complete();
-                    OnSubtaskCompleted(new AutoLoginSubtaskEventArgs(queueItem, task, subtask, "Subtask completed"));
-                    _ = _loggingService.LogDebugAsync($"Completed subtask: {subtask.Name} for {queueItem.DisplayName}");
+                    if (attempt == 1)
+                    {
+                        _ = _loggingService.LogDebugAsync($"Starting subtask: {subtask.Name} for {queueItem.DisplayName}");
+                        // Start the subtask only on first attempt
+                        subtask.Start();
+                        OnSubtaskStarted(new AutoLoginSubtaskEventArgs(queueItem, task, subtask, "Subtask started"));
+                    }
+                    else
+                    {
+                        // Prepare and log retry attempt
+                        subtask.PrepareForRetry();
+                        _ = _loggingService.LogWarningAsync($"Retrying subtask: {subtask.Name} (attempt {attempt}/{totalAttempts}) for {queueItem.DisplayName}");
+                    }
+
+                    // Execute subtask using appropriate handler
+                    await ExecuteSubtaskWithHandlerAsync(queueItem, task, subtask, combinedCts.Token);
+
+                    // Complete the subtask only if it's not already in a terminal state
+                    // Handlers may call subtask.Fail(), subtask.Skip(), etc. which should not be overridden
+                    if (subtask.Status == AutoLoginSubtaskStatus.InProgress)
+                    {
+                        subtask.Complete();
+                        OnSubtaskCompleted(new AutoLoginSubtaskEventArgs(queueItem, task, subtask, attempt == 1 ? "Subtask completed" : $"Subtask completed after retry {attempt - 1}"));
+                        _ = _loggingService.LogDebugAsync($"Completed subtask: {subtask.Name} for {queueItem.DisplayName}");
+                    }
+                    else
+                    {
+                        // Subtask was already completed by handler (failed, skipped, etc.)
+                        _ = _loggingService.LogDebugAsync($"Subtask {subtask.Name} finished with status: {subtask.Status} for {queueItem.DisplayName}");
+                    }
+
+                    // Success — exit retry loop
+                    return;
                 }
-                else
+                catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
                 {
-                    // Subtask was already completed by handler (failed, skipped, etc.)
-                    _ = _loggingService.LogDebugAsync($"Subtask {subtask.Name} finished with status: {subtask.Status} for {queueItem.DisplayName}");
-                }
-            }
-            catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
-            {
-                var errorMessage = $"Subtask timed out after {SubtaskTimeoutSeconds} seconds";
-                subtask.Fail(errorMessage);
-                OnSubtaskFailed(new AutoLoginSubtaskEventArgs(queueItem, task, subtask, errorMessage));
-                _ = _loggingService.LogWarningAsync($"Subtask {subtask.Name} timed out for {queueItem.DisplayName}");
+                    var errorMessage = $"Subtask timed out after {stepTimeoutSeconds} seconds";
+                    subtask.Fail(errorMessage);
+                    OnSubtaskFailed(new AutoLoginSubtaskEventArgs(queueItem, task, subtask, errorMessage));
+                    _ = _loggingService.LogWarningAsync($"Subtask {subtask.Name} timed out for {queueItem.DisplayName} (attempt {attempt}/{totalAttempts})");
 
-                if (!ContinueOnSubtaskFailure)
-                {
-                    throw new TimeoutException(errorMessage);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                subtask.Cancel();
-                _ = _loggingService.LogDebugAsync($"Subtask {subtask.Name} cancelled for {queueItem.DisplayName}");
-                throw;
-            }
-            catch (Exception ex)
-            {
-                var errorMessage = $"Subtask execution failed: {ex.Message}";
-                subtask.Fail(errorMessage);
-                OnSubtaskFailed(new AutoLoginSubtaskEventArgs(queueItem, task, subtask, errorMessage));
-                _ = _loggingService.LogErrorAsync($"Subtask {subtask.Name} failed for {queueItem.DisplayName}", ex);
+                    if (attempt >= totalAttempts || !ContinueOnSubtaskFailure)
+                    {
+                        // Exhausted retries or configured to stop on failure
+                        if (!ContinueOnSubtaskFailure)
+                        {
+                            throw new TimeoutException(errorMessage);
+                        }
+                        return;
+                    }
 
-                if (!ContinueOnSubtaskFailure)
+                    // Retry on next loop iteration
+                }
+                catch (OperationCanceledException)
                 {
+                    subtask.Cancel();
+                    _ = _loggingService.LogDebugAsync($"Subtask {subtask.Name} cancelled for {queueItem.DisplayName}");
                     throw;
+                }
+                catch (Exception ex)
+                {
+                    var errorMessage = $"Subtask execution failed: {ex.Message}";
+                    subtask.Fail(errorMessage);
+                    OnSubtaskFailed(new AutoLoginSubtaskEventArgs(queueItem, task, subtask, errorMessage));
+                    _ = _loggingService.LogErrorAsync($"Subtask {subtask.Name} failed for {queueItem.DisplayName} (attempt {attempt}/{totalAttempts})", ex);
+
+                    if (attempt >= totalAttempts || !ContinueOnSubtaskFailure)
+                    {
+                        if (!ContinueOnSubtaskFailure)
+                        {
+                            throw;
+                        }
+                        return;
+                    }
+
+                    // Retry on next loop iteration
                 }
             }
         }

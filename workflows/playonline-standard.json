@@ -1,4 +1,4 @@
-{
+﻿{
   "WorkflowId": "a8f5c3d2-e1b4-4a7f-9c8b-2d3e4f5a6b7c",
   "Name": "PlayOnline Standard",
   "Description": "Complete workflow for logging into PlayOnline and FFXI. Handles member selection, password entry, optional OTP, and FFXI character login.",
@@ -39,10 +39,12 @@
         "PostNavigationDelayMs": 0
       },
       "MaxRetryAttempts": 3,
+      "RetryAttempts": null,
+      "RetryDelayMs": null,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
       "Metadata": {
-        "Purpose": "Generic application launch - leverages ExternalApplicationService \u002B template detection"
+        "Purpose": "Generic application launch - leverages ExternalApplicationService + template detection"
       }
     },
     {
@@ -92,7 +94,9 @@
         "Description": "Launch Windower and click the Launch Arrow button to start PlayOnline",
         "PostNavigationDelayMs": 3000
       },
-      "MaxRetryAttempts": 50,
+      "MaxRetryAttempts": 3,
+      "RetryAttempts": null,
+      "RetryDelayMs": null,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
       "Metadata": {
@@ -123,10 +127,12 @@
             }
           }
         ],
-        "Description": "Navigate to and select member slot using Tab\u002BEnter",
+        "Description": "Navigate to and select member slot using Tab+Enter",
         "PostNavigationDelayMs": 1000
       },
-      "MaxRetryAttempts": 15,
+      "MaxRetryAttempts": 3,
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
       "Metadata": {}
@@ -159,7 +165,9 @@
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {}
+      "Metadata": {},
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500
     },
     {
       "StepId": "pol_connect_screen",
@@ -198,7 +206,9 @@
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {}
+      "Metadata": {},
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500
     },
     {
       "StepId": "pol_virtual_keyboard",
@@ -239,7 +249,9 @@
       "Tolerance": 5,
       "Metadata": {
         "RequiresCredentials": "Password"
-      }
+      },
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500
     },
     {
       "StepId": "pol_password_confirmation",
@@ -269,7 +281,9 @@
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {}
+      "Metadata": {},
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500
     },
     {
       "StepId": "pol_otp_entry",
@@ -310,7 +324,9 @@
       "Tolerance": 5,
       "Metadata": {
         "RequiresCredentials": "OTP"
-      }
+      },
+      "RetryAttempts": null,
+      "RetryDelayMs": null
     },
     {
       "StepId": "pol_connect_button",
@@ -340,7 +356,9 @@
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {}
+      "Metadata": {},
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500
     },
     {
       "StepId": "pol_play_screen",
@@ -380,7 +398,9 @@
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {}
+      "Metadata": {},
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500
     },
     {
       "StepId": "pol_play_confirmation",
@@ -411,7 +431,9 @@
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {}
+      "Metadata": {},
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500
     },
     {
       "StepId": "ffxi_terms_acceptance",
@@ -441,7 +463,9 @@
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {}
+      "Metadata": {},
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500
     },
     {
       "StepId": "ffxi_main_menu",
@@ -471,7 +495,9 @@
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {}
+      "Metadata": {},
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500
     },
     {
       "StepId": "ffxi_character_slot_selection",
@@ -514,7 +540,9 @@
       "Tolerance": 5,
       "Metadata": {
         "DynamicNavigation": "CharacterSlot"
-      }
+      },
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500
     },
     {
       "StepId": "ffxi_character_confirmation",
@@ -544,7 +572,9 @@
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {}
+      "Metadata": {},
+      "RetryAttempts": 60,
+      "RetryDelayMs": 500
     }
   ],
   "Tags": [

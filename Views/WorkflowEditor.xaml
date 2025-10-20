@@ -713,6 +713,8 @@
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
                                         <!-- Template Path -->
@@ -794,28 +796,56 @@
                                                    VerticalAlignment="Center"
                                                    Foreground="{DynamicResource PrimaryTextBrush}"
                                                    Margin="0,0,0,12"/>
-                                        <TextBox Grid.Row="1" Grid.Column="1"
-                                                 Text="{Binding SelectedStep.EstimatedDurationSeconds, UpdateSourceTrigger=PropertyChanged}"
-                                                 Margin="0,0,0,12"/>
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,12">
+                                            <TextBox Text="{Binding StepEstimatedDurationSeconds, UpdateSourceTrigger=LostFocus, TargetNullValue=5}"
+                                                     Margin="0,0,0,4"
+                                                     ToolTip="Overall step duration estimate (seconds)&#x0a;Used for progress estimation and timeout calculation&#x0a;Auto-adjusts if retry budget requires more time&#x0a;&#x0a;Recommended: 3-10s for UI screens, 10-30s for slow transitions"/>
+                                            <TextBlock Text="{Binding StepRetryBudgetInfo}"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
 
-                                        <!-- Max Retry Attempts -->
+                                        <!-- Retry Attempts (Detection Polling) -->
                                         <TextBlock Grid.Row="2" Grid.Column="0"
-                                                   Text="Max Retries:"
+                                                   Text="Detection Retries:"
                                                    VerticalAlignment="Center"
                                                    Foreground="{DynamicResource PrimaryTextBrush}"
                                                    Margin="0,0,0,12"/>
                                         <TextBox Grid.Row="2" Grid.Column="1"
+                                                 Text="{Binding StepRetryAttempts, UpdateSourceTrigger=LostFocus, TargetNullValue=''}"
+                                                 Margin="0,0,0,12"
+                                                 ToolTip="Number of polling attempts when waiting for template detection&#x0a;Example: 60 attempts = poll screen 60 times&#x0a;Leave empty to use default (30 attempts)&#x0a;&#x0a;Recommended: 30-60 for stable screens, 60-120 for slow app launches"/>
+
+                                        <!-- Retry Delay (Detection Polling Interval) -->
+                                        <TextBlock Grid.Row="3" Grid.Column="0"
+                                                   Text="Detection Delay (ms):"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource PrimaryTextBrush}"
+                                                   Margin="0,0,0,12"/>
+                                        <TextBox Grid.Row="3" Grid.Column="1"
+                                                 Text="{Binding StepRetryDelayMs, UpdateSourceTrigger=LostFocus, TargetNullValue=''}"
+                                                 Margin="0,0,0,12"
+                                                 ToolTip="Milliseconds to wait between template detection attempts&#x0a;Example: 500ms = check every half second&#x0a;Leave empty to use default (500ms)&#x0a;&#x0a;Recommended: 500-1000ms"/>
+
+                                        <!-- Max Retry Attempts (Step Execution) -->
+                                        <TextBlock Grid.Row="4" Grid.Column="0"
+                                                   Text="Step Exec Retries:"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource PrimaryTextBrush}"
+                                                   Margin="0,0,0,12"/>
+                                        <TextBox Grid.Row="4" Grid.Column="1"
                                                  Text="{Binding SelectedStep.MaxRetryAttempts, UpdateSourceTrigger=PropertyChanged}"
                                                  Margin="0,0,0,12"
-                                                 ToolTip="Number of detection attempts before giving up&#x0a;Example: 15 attempts = check screen 15 times at 1-second intervals&#x0a;&#x0a;Recommended: 10-15 for stable screens, 20-30 for slow transitions"/>
+                                                 ToolTip="Number of times to retry the ENTIRE step if it fails&#x0a;This is separate from detection polling retries&#x0a;Example: 3 retries = run entire step up to 3 times if it fails&#x0a;&#x0a;Recommended: 2-3 for most steps"/>
 
                                         <!-- Skip If Application Running -->
-                                        <TextBlock Grid.Row="3" Grid.Column="0"
+                                        <TextBlock Grid.Row="5" Grid.Column="0"
                                                    Text="Skip If Running:"
                                                    VerticalAlignment="Center"
                                                    Foreground="{DynamicResource PrimaryTextBrush}"
                                                    Margin="0,0,0,12"/>
-                                        <ComboBox Grid.Row="3" Grid.Column="1"
+                                        <ComboBox Grid.Row="5" Grid.Column="1"
                                                   ItemsSource="{Binding AvailableApplications}"
                                                   SelectedValue="{Binding SelectedStep.SkipIfApplicationRunning, UpdateSourceTrigger=PropertyChanged}"
                                                   DisplayMemberPath="Name"

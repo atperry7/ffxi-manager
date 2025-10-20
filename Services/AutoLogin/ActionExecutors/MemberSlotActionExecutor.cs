@@ -163,7 +163,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             }
 
             // Press Tab to navigate to target slot (0-indexed from slot 1)
-            var tabPresses = targetSlot;
+            var tabPresses = targetSlot - 1;
             for (int i = 0; i < tabPresses; i++)
             {
                 await _automationService.SendKeyAsync(ConsoleKey.Tab, cancellationToken);

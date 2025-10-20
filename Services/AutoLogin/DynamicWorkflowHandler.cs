@@ -137,16 +137,49 @@ namespace FFXIManager.Services.AutoLogin
 
             if ((hasTemplate && !hasNavigation) || (hasTemplate && hasNavigation && !navHasLaunch))
             {
-                await _loggingService.LogDebugAsync("[DYNAMIC-WORKFLOW] Detection-only step - performing pre-detection");
+                await _loggingService.LogDebugAsync("[DYNAMIC-WORKFLOW] Detection-only step - using on-demand discovery via refresh callback");
                 var targetApp = TargetApplicationResolver.ResolveForStep(stepDef);
-                var windowInfo = await _windowDiscoveryService.DiscoverWindowInfoAsync(targetApp, context, cancellationToken);
-                windowHandle = windowInfo.WindowHandle;
-                await _progressService.UpdateProgressWithPhaseAsync(subtask, "authentication", 20, $"Looking for {stepDef.DisplayName}");
-                // Build PID-first handle refresh
-                Func<CancellationToken, Task<IntPtr>> refreshHandleAsync = async (ct) =>
-                    await _windowDiscoveryService.GetFreshWindowHandleFromPidAsync(windowInfo.ProcessId, targetApp);
 
-                templateMatch = await DetectScreenAsync(subtask, stepDef, windowHandle, cancellationToken, refreshHandleAsync);
+                await _progressService.UpdateProgressWithPhaseAsync(subtask, "authentication", 20, $"Looking for {stepDef.DisplayName}");
+
+                // Build discovery-on-each-attempt refresh function
+                IntPtr latestHandle = IntPtr.Zero;
+                int latestPid = 0;
+                Func<CancellationToken, Task<IntPtr>> refreshHandleAsync = async (ct) =>
+                {
+                    try
+                    {
+                        var info = await _windowDiscoveryService.DiscoverWindowInfoAsync(targetApp, context, ct);
+                        if (info.IsValid)
+                        {
+                            latestHandle = info.WindowHandle;
+                            latestPid = info.ProcessId;
+                            return info.WindowHandle;
+                        }
+                    }
+                    catch { }
+                    return IntPtr.Zero;
+                };
+
+                // Start detection with no initial handle; coordinator will call refresh per attempt
+                templateMatch = await DetectScreenAsync(subtask, stepDef, IntPtr.Zero, cancellationToken, refreshHandleAsync);
+
+                // Capture last discovered handle (if any) for subsequent navigation phase
+                if (latestHandle != IntPtr.Zero)
+                {
+                    windowHandle = latestHandle;
+                }
+
+                // Persist discovered PID to shared context for downstream steps
+                if (latestPid > 0 && context != null)
+                {
+                    var wellKnownKey = GetWellKnownPidKeyForAppName(targetApp);
+                    if (!string.IsNullOrEmpty(wellKnownKey))
+                    {
+                        context.SetData(wellKnownKey!, latestPid);
+                        await _loggingService.LogDebugAsync($"[DYNAMIC-WORKFLOW] Persisted PID {latestPid} for '{targetApp}' to context key '{wellKnownKey}'");
+                    }
+                }
             }
             else
             {
@@ -234,12 +267,20 @@ namespace FFXIManager.Services.AutoLogin
                 var delayMs = Math.Max(100, stepDef.RetryDelayMs ?? 500); // guard against 0ms hammering
                 var options = new ScreenDetectionOptions
                 {
-                    Timeout = TimeSpan.FromSeconds(Math.Max(stepDef.EstimatedDurationSeconds, Math.Max(30, (attempts * (delayMs + 250)) / 1000))),
+                    // EstimatedDurationSeconds is a hard cap for this step
+                    Timeout = TimeSpan.FromSeconds(Math.Max(1, stepDef.EstimatedDurationSeconds)),
                     CheckInterval = TimeSpan.FromMilliseconds(delayMs),
                     MaxAttempts = attempts
                 };
 
-                await _loggingService.LogInfoAsync($"Detection config [primary] - Attempts: {options.MaxAttempts?.ToString() ?? "auto"}, Interval: {delayMs}ms, Timeout: {options.Timeout.TotalSeconds}s");
+                // Budget sanity check: will configured attempts x delay fit in step hard cap?
+                var expectedMs = (attempts * delayMs);
+                if (TimeSpan.FromMilliseconds(expectedMs) > options.Timeout)
+                {
+                    await _loggingService.LogWarningAsync($"Detection polling budget ({attempts}x{delayMs}ms = {expectedMs/1000.0:F1}s) exceeds step hard cap of {options.Timeout.TotalSeconds}s for '{description}'. Consider adjusting RetryAttempts/RetryDelayMs or EstimatedDurationSeconds.");
+                }
+
+                await _loggingService.LogInfoAsync($"Detection config [primary] - Attempts: {options.MaxAttempts?.ToString() ?? "auto"}, Interval: {delayMs}ms, Timeout: {options.Timeout.TotalSeconds}s (hard cap)");
 
                 if (refreshHandleAsync != null)
                 {
@@ -278,15 +319,22 @@ namespace FFXIManager.Services.AutoLogin
                     {
                         await _loggingService.LogDebugAsync($"Attempting detection with fallback template: {fallbackTemplate}");
 
-                        var attemptsFb = Math.Max((stepDef.RetryAttempts ?? 30) / 2, 5);
+                        // Use the configured retry attempts for fallback as well (avoid hard-coded minimums)
+                        var attemptsFb = Math.Max(1, stepDef.RetryAttempts ?? 30);
                         var delayFb = Math.Max(100, stepDef.RetryDelayMs ?? 500);
                         var options = new ScreenDetectionOptions
                         {
-                            Timeout = TimeSpan.FromSeconds(Math.Max(15, (attemptsFb * (delayFb + 250)) / 1000)),
+                            Timeout = TimeSpan.FromSeconds(Math.Max(1, stepDef.EstimatedDurationSeconds)),
                             CheckInterval = TimeSpan.FromMilliseconds(delayFb),
                             MaxAttempts = attemptsFb
                         };
-                        await _loggingService.LogInfoAsync($"Detection config [fallback] - Attempts: {options.MaxAttempts}, Interval: {delayFb}ms, Timeout: {options.Timeout.TotalSeconds}s");
+                        // Budget sanity check for fallback as well
+                        var expectedMsFb = (attemptsFb * delayFb);
+                        if (TimeSpan.FromMilliseconds(expectedMsFb) > options.Timeout)
+                        {
+                            await _loggingService.LogWarningAsync($"Fallback detection budget ({attemptsFb}x{delayFb}ms = {expectedMsFb/1000.0:F1}s) exceeds step hard cap of {options.Timeout.TotalSeconds}s for '{description}'. Consider adjusting configuration.");
+                        }
+                        await _loggingService.LogInfoAsync($"Detection config [fallback] - Attempts: {options.MaxAttempts}, Interval: {delayFb}ms, Timeout: {options.Timeout.TotalSeconds}s (hard cap)");
 
                         if (refreshHandleAsync != null)
                         {
@@ -439,7 +487,7 @@ namespace FFXIManager.Services.AutoLogin
             IntPtr windowHandle,
             TemplateMatchResult? templateMatch)
         {
-            return new WorkflowActionContext
+            var actionCtx = new WorkflowActionContext
             {
                 WindowHandle = windowHandle,
                 TemplateMatch = templateMatch,
@@ -449,6 +497,39 @@ namespace FFXIManager.Services.AutoLogin
                 WorkflowStep = stepDef,
                 WindowDiscoveryService = _windowDiscoveryService // Enable auto-refresh capability
             };
+
+            try
+            {
+                var targetApp = TargetApplicationResolver.ResolveForStep(stepDef);
+                var pidHint = GetPidHintForApp(autoLoginContext, targetApp);
+                if (pidHint > 0)
+                {
+                    actionCtx.ProcessId = pidHint;
+                    actionCtx.ApplicationName = targetApp;
+                }
+            }
+            catch { /* best-effort */ }
+
+            return actionCtx;
+        }
+
+        private static string? GetWellKnownPidKeyForAppName(string appName)
+        {
+            if (string.IsNullOrWhiteSpace(appName)) return null;
+            var name = appName.Trim().ToLowerInvariant();
+            if (name.Contains("playonline") || name == "pol") return AutoLoginContextKeys.WellKnown.PlayOnlineProcessId;
+            if (name.Contains("windower")) return AutoLoginContextKeys.WellKnown.WindowerProcessId;
+            if (name.Contains("proxy") || name.Contains("pol proxy")) return AutoLoginContextKeys.WellKnown.POLProxyProcessId;
+            if (name.Contains("ashita")) return AutoLoginContextKeys.WellKnown.AshitaProcessId;
+            if (name.Contains("ffxi")) return AutoLoginContextKeys.WellKnown.FFXIProcessId;
+            return null;
+        }
+
+        private static int GetPidHintForApp(IAutoLoginContext context, string appName)
+        {
+            var key = GetWellKnownPidKeyForAppName(appName);
+            if (string.IsNullOrEmpty(key)) return 0;
+            try { return context.GetValueData<int>(key!); } catch { return 0; }
         }
 
         /// <summary>
@@ -473,14 +554,47 @@ namespace FFXIManager.Services.AutoLogin
                 // Determine target app for this action
                 var targetApp = TargetApplicationResolver.ResolveForAction(stepDef, navigation, i);
 
-                // Ensure window handle is available if needed
-                await EnsureWindowHandleForAction(action, targetApp, actionContext, autoLoginContext, cancellationToken);
+                // Action-level retry budget (applies to entire action execution including detection)
+                var actionAttempts = Math.Max(1, action.GetParameter<int>("RetryAttempts", stepDef.RetryAttempts ?? 30));
+                var actionDelayMs = Math.Max(100, action.GetParameter<int>("RetryDelayMs", stepDef.RetryDelayMs ?? 500));
 
-                // Ensure template match is available if needed
-                await EnsureTemplateMatchForAction(action, subtask, stepDef, actionContext, cancellationToken);
+                Exception? lastError = null;
+                for (int attempt = 1; attempt <= actionAttempts; attempt++)
+                {
+                    try
+                    {
+                        // Reset per-attempt transient detection to avoid stale matches
+                        actionContext.TemplateMatch = null;
 
-                // Execute the action
-                await ExecuteSingleAction(action, subtask, stepDef, actionContext, autoLoginContext, i + 1, cancellationToken);
+                        // Ensure window handle is available if needed
+                        await EnsureWindowHandleForAction(action, targetApp, actionContext, autoLoginContext, cancellationToken);
+
+                        // Ensure template match is available if needed (per-attempt)
+                        await EnsureTemplateMatchForAction(action, subtask, stepDef, actionContext, cancellationToken);
+
+                        // Execute the action
+                        await ExecuteSingleAction(action, subtask, stepDef, actionContext, autoLoginContext, i + 1, cancellationToken);
+
+                        // Success — break out of per-action retry loop
+                        lastError = null;
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        lastError = ex;
+                        await _loggingService.LogWarningAsync($"[NAVIGATION] Action '{action.Action}' attempt {attempt}/{actionAttempts} failed: {ex.Message}");
+                        if (attempt < actionAttempts)
+                        {
+                            await Task.Delay(actionDelayMs, cancellationToken);
+                        }
+                    }
+                }
+
+                if (lastError != null)
+                {
+                    // Exhausted action-level retries
+                    throw new InvalidOperationException($"Navigation action '{action.Action}' failed after {actionAttempts} attempt(s)", lastError);
+                }
             }
         }
 
@@ -718,7 +832,8 @@ namespace FFXIManager.Services.AutoLogin
 
             var options = new ScreenDetectionOptions
             {
-                Timeout = TimeSpan.FromSeconds(Math.Max(stepDef.EstimatedDurationSeconds, Math.Max(30, (retryAttempts * (retryDelayMs + 250)) / 1000))),
+                // EstimatedDurationSeconds is a hard cap for the step
+                Timeout = TimeSpan.FromSeconds(Math.Max(1, stepDef.EstimatedDurationSeconds)),
                 CheckInterval = TimeSpan.FromMilliseconds(retryDelayMs),
                 MaxAttempts = retryAttempts
             };
