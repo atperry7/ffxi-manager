@@ -39,20 +39,53 @@ namespace FFXIManager.Views
             vm.PickedX = relX;
             vm.PickedY = relY;
 
-            // Update visual marker to reflect new pick (single marker)
-            vm.ClickMarkers.Clear();
-            vm.ClickMarkers.Add(new ClickMarker
+            if (vm.IsMultiPickMode && vm.MultiPickCount > 1)
             {
-                X = p.X,
-                Y = p.Y,
-                Label = "1",
-                Description = "Picked position",
-                MarkerColor = Brushes.Red,
-                StepIndex = 0
-            });
+                // Ensure markers up to count exist
+                while (vm.ClickMarkers.Count < vm.MultiPickCount)
+                {
+                    int idx = vm.ClickMarkers.Count;
+                    vm.ClickMarkers.Add(new ClickMarker
+                    {
+                        X = 0,
+                        Y = 0,
+                        Label = (idx + 1).ToString(),
+                        Description = $"Slot {idx + 1}",
+                        MarkerColor = GetColorForIndex(idx),
+                        StepIndex = idx
+                    });
+                }
 
-            vm.Status = $"Picked: X={relX:F2}, Y={relY:F2}. Click Apply to confirm, or click again to adjust.";
-            vm.NotifyPickChanged();
+                // Update marker for current index
+                var idxToSet = Math.Max(0, Math.Min(vm.MultiPickCount - 1, vm.CurrentPickIndex));
+                var marker = vm.ClickMarkers[idxToSet];
+                marker.X = p.X;
+                marker.Y = p.Y;
+                marker.Description = $"Slot {idxToSet + 1}";
+
+                vm.Status = $"Picked Slot {idxToSet + 1}: X={relX:F2}, Y={relY:F2}. Click again to set next slot or Apply to confirm.";
+                vm.NotifyPickChanged();
+
+                // Advance to next index (wrap at end)
+                vm.CurrentPickIndex = (idxToSet + 1) % vm.MultiPickCount;
+            }
+            else
+            {
+                // Single-pick mode: show one marker
+                vm.ClickMarkers.Clear();
+                vm.ClickMarkers.Add(new ClickMarker
+                {
+                    X = p.X,
+                    Y = p.Y,
+                    Label = "1",
+                    Description = "Picked position",
+                    MarkerColor = Brushes.Red,
+                    StepIndex = 0
+                });
+
+                vm.Status = $"Picked: X={relX:F2}, Y={relY:F2}. Click Apply to confirm, or click again to adjust.";
+                vm.NotifyPickChanged();
+            }
         }
 
         private void ApplyButton_Click(object sender, RoutedEventArgs e)
@@ -60,6 +93,18 @@ namespace FFXIManager.Views
             // Confirm and close
             try { this.DialogResult = true; } catch { }
             Close();
+        }
+
+        private static Brush GetColorForIndex(int index)
+        {
+            switch (index)
+            {
+                case 0: return Brushes.Red;
+                case 1: return Brushes.DodgerBlue;
+                case 2: return Brushes.Orange;
+                case 3: return Brushes.LimeGreen;
+                default: return Brushes.Purple;
+            }
         }
     }
 }

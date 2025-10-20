@@ -698,6 +698,27 @@ namespace FFXIManager.Services.AutoLogin
                 return;
             }
 
+            // Member/Character slot actions: perform action-level detection if action supplies its own template
+            if (string.Equals(action.Action, "MemberSlot", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(action.Action, "CharacterSlot", StringComparison.OrdinalIgnoreCase))
+            {
+                var actionTemplate = action.GetParameter<string>("TemplatePath", string.Empty);
+                if (!string.IsNullOrWhiteSpace(actionTemplate))
+                {
+                    var refresh = BuildHandleRefreshFunc(action, stepDef, actionContext, actionContext.AutoLoginContext!, cancellationToken);
+
+                    actionContext.TemplateMatch = await PerformActionLevelDetectionAsync(
+                        subtask,
+                        stepDef,
+                        action,
+                        actionContext.WindowHandle,
+                        cancellationToken,
+                        defaultTimeout: stepDef.EstimatedDurationSeconds,
+                        refreshHandleAsync: refresh);
+                }
+                return;
+            }
+
             // Keyboard actions: optional confirmation detection
             if (string.Equals(action.Action, "Keyboard", StringComparison.OrdinalIgnoreCase) ||
                 _actionExecutorFactory.IsKeyboardAction(action.Action))

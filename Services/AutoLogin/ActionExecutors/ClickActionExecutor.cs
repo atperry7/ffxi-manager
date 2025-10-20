@@ -59,16 +59,15 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 return false;
             }
 
-            // Extract click coordinates (default to center)
+            // Determine if multiple click points are defined via Parameters["ClickPoints"] (JSON)
+            var multiPoints = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", null);
+            bool useMulti = multiPoints != null && multiPoints.Count > 0;
             var clickX = action.ClickX;
             var clickY = action.ClickY;
-
-            await _loggingService.LogDebugAsync($"[CLICK] Calculating click point: relative ({clickX:F2}, {clickY:F2})");
-
-            // Calculate absolute window-relative point from template match and relative offset
-            var absolutePoint = CalculateRelativeClickPoint(context.TemplateMatch, clickX, clickY);
-
-            await _loggingService.LogDebugAsync($"[CLICK] Absolute window-relative point: ({absolutePoint.X}, {absolutePoint.Y})");
+            if (!useMulti)
+            {
+                await _loggingService.LogDebugAsync($"[CLICK] Calculating click point: relative ({clickX:F2}, {clickY:F2})");
+            }
 
             // Ensure fresh handle in case of splash → main transitions
             if (!await context.EnsureFreshWindowHandleAsync())
@@ -85,39 +84,59 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 return false;
             }
 
-            var screenPoint = screenshot.ToScreenCoordinates(absolutePoint);
-
-            // Validate screen coordinates are reasonable
-            if (screenPoint.X < 0 || screenPoint.Y < 0 || screenPoint.X > 3840 || screenPoint.Y > 2160)
-            {
-                await _loggingService.LogWarningAsync($"[CLICK] Screen coordinates outside reasonable bounds: ({screenPoint.X}, {screenPoint.Y})");
-                return false;
-            }
-
-            var repeat = Math.Max(1, action.Count);
-            await _loggingService.LogInfoAsync($"[CLICK] Clicking at screen coordinates: ({screenPoint.X}, {screenPoint.Y}) x{repeat}");
-
             // Activate window first
             await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
             await Task.Delay(100, cancellationToken);
 
-            for (int i = 0; i < repeat; i++)
+            if (useMulti)
             {
-                // Move mouse for visual feedback
-                await _automationService.MoveMouseAsync(screenPoint, cancellationToken);
-                await Task.Delay(200, cancellationToken);
-
-                // Perform click
-                await _automationService.ClickAsync(screenPoint, cancellationToken);
-
-                // Inter-click delay (except after final click)
-                if (i < repeat - 1 && action.DelayMs > 0)
+                await _loggingService.LogInfoAsync($"[CLICK] Executing multi-click sequence with {multiPoints!.Count} point(s)");
+                for (int i = 0; i < multiPoints.Count; i++)
                 {
-                    await Task.Delay(action.DelayMs, cancellationToken);
+                    var p = multiPoints[i];
+                    var absolute = CalculateRelativeClickPoint(context.TemplateMatch, p.X, p.Y);
+                    var screenPoint = screenshot.ToScreenCoordinates(absolute);
+                    if (!IsReasonable(screenPoint))
+                    {
+                        await _loggingService.LogWarningAsync($"[CLICK] Skipping out-of-bounds point {i + 1}: ({screenPoint.X}, {screenPoint.Y})");
+                        continue;
+                    }
+
+                    await _loggingService.LogDebugAsync($"[CLICK] Point {i + 1}: screen=({screenPoint.X}, {screenPoint.Y})");
+                    await _automationService.MoveMouseAsync(screenPoint, cancellationToken);
+                    await Task.Delay(150, cancellationToken);
+                    await _automationService.ClickAsync(screenPoint, cancellationToken);
+                    if (i < multiPoints.Count - 1 && action.DelayMs > 0)
+                    {
+                        await Task.Delay(action.DelayMs, cancellationToken);
+                    }
+                }
+            }
+            else
+            {
+                // Single point, possibly repeated by Count
+                var absolutePoint = CalculateRelativeClickPoint(context.TemplateMatch, clickX, clickY);
+                var screenPoint = screenshot.ToScreenCoordinates(absolutePoint);
+                if (!IsReasonable(screenPoint))
+                {
+                    await _loggingService.LogWarningAsync($"[CLICK] Screen coordinates outside reasonable bounds: ({screenPoint.X}, {screenPoint.Y})");
+                    return false;
+                }
+
+                var repeat = Math.Max(1, action.Count);
+                await _loggingService.LogInfoAsync($"[CLICK] Clicking at screen coordinates: ({screenPoint.X}, {screenPoint.Y}) x{repeat}");
+                for (int i = 0; i < repeat; i++)
+                {
+                    await _automationService.MoveMouseAsync(screenPoint, cancellationToken);
+                    await Task.Delay(150, cancellationToken);
+                    await _automationService.ClickAsync(screenPoint, cancellationToken);
+                    if (i < repeat - 1 && action.DelayMs > 0)
+                    {
+                        await Task.Delay(action.DelayMs, cancellationToken);
+                    }
                 }
             }
 
-            // Post-click delay from action configuration (also after final click)
             if (action.DelayMs > 0)
             {
                 await Task.Delay(action.DelayMs, cancellationToken);
@@ -138,5 +157,10 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             return new Point(absoluteX, absoluteY);
         }
+
+        private static bool IsReasonable(Point screenPoint)
+            => screenPoint.X >= 0 && screenPoint.Y >= 0 && screenPoint.X <= 8000 && screenPoint.Y <= 8000;
+
+        // Multi-point list is directly stored in action.Parameters["ClickPoints"]
     }
 }

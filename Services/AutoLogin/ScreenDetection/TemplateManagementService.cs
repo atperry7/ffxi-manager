@@ -77,6 +77,19 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             }
         }
 
+        private void InvalidateTemplateCache(string templatePath)
+        {
+            try
+            {
+                var keys = _templateCache.Keys.Where(k => k.Equals(templatePath, StringComparison.OrdinalIgnoreCase) || k.StartsWith(templatePath + "_", StringComparison.OrdinalIgnoreCase)).ToList();
+                foreach (var key in keys)
+                {
+                    _templateCache.TryRemove(key, out _);
+                }
+            }
+            catch { }
+        }
+
         public async Task<bool> ValidateTemplateAsync(UIElementTemplate template, CancellationToken cancellationToken = default)
         {
             return await Task.Run(() =>
@@ -117,7 +130,8 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 await SaveTemplateImageAsync(template, pngPath, cancellationToken);
 
                 // Update cache
-                _templateCache.AddOrUpdate(template.TemplatePath, template, (_, _) => template);
+                // Invalidate all cached variants for this path; next load repopulates as needed
+                InvalidateTemplateCache(template.TemplatePath);
 
                 await _loggingService.LogDebugAsync($"Template saved: {template.TemplatePath}");
             }
@@ -131,6 +145,11 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         public void ClearCache()
         {
             _templateCache.Clear();
+        }
+
+        public void Invalidate(string templatePath)
+        {
+            InvalidateTemplateCache(templatePath);
         }
 
         public async Task<UIElementTemplate?> LoadTemplateAsync(string templatePath)
@@ -509,7 +528,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                     await _loggingService.LogInfoAsync($"Replaced template image: {pngPath}");
 
                     // Clear cache to force reload
-                    _templateCache.TryRemove(templatePath, out _);
+                    InvalidateTemplateCache(templatePath);
 
                     // Verify the template still loads correctly (use default metadata for validation)
                     var template = await LoadTemplateAsync(templatePath);
@@ -518,7 +537,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                         // Rollback on failure
                         await _loggingService.LogWarningAsync("New template failed validation, rolling back");
                         File.Copy(backupPath, pngPath, true);
-                        _templateCache.TryRemove(templatePath, out _);
+                        InvalidateTemplateCache(templatePath);
                         return false;
                     }
 
@@ -543,7 +562,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                         File.Delete(backupPath);
                     }
 
-                    _templateCache.TryRemove(templatePath, out _);
+                    InvalidateTemplateCache(templatePath);
                     return false;
                 }
             }

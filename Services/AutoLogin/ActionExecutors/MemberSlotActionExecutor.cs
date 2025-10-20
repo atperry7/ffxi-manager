@@ -72,11 +72,16 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             try
             {
-                // MVP: Keyboard-only navigation
-                await NavigateWithKeyboardAsync(action, context, targetSlot, cancellationToken);
+                // MVP: Click-only navigation (requires prior template detection)
+                var clicked = await NavigateWithClickAsync(action, context, targetSlot, cancellationToken);
+                if (clicked)
+                {
+                    await _loggingService.LogInfoAsync($"[MEMBER-SLOT] Successfully clicked member slot {targetSlot}");
+                    return true;
+                }
 
-                await _loggingService.LogInfoAsync($"[MEMBER-SLOT] Successfully navigated to member slot {targetSlot}");
-                return true;
+                await _loggingService.LogErrorAsync("[MEMBER-SLOT] Click navigation failed or not available (missing template match or click points)");
+                return false;
             }
             catch (Exception ex)
             {
@@ -123,6 +128,48 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Keyboard navigation completed: 1 initial down + {downPresses} down");
         }
 
-        // Click navigation removed in MVP to reduce complexity; keyboard-only is supported
+        private async Task<bool> NavigateWithClickAsync(
+            KeyboardAction action,
+            WorkflowActionContext context,
+            int targetSlot,
+            CancellationToken cancellationToken)
+        {
+            // Need a detected template region to compute relative click
+            var match = context.TemplateMatch;
+            if (match == null)
+            {
+                await _loggingService.LogWarningAsync("[MEMBER-SLOT] No template match in context; cannot perform click-based navigation");
+                return false;
+            }
+
+            // Ensure window focus
+            if (context.WindowHandle != IntPtr.Zero)
+            {
+                await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
+                await Task.Delay(100, cancellationToken);
+            }
+
+            // Get configured click points from action parameters (JSON array)
+            var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", null);
+            if (points == null || points.Count < 4)
+            {
+                await _loggingService.LogWarningAsync("[MEMBER-SLOT] ClickPoints missing or fewer than 4; cannot click");
+                return false;
+            }
+            var rel = points[Math.Clamp(targetSlot - 1, 0, points.Count - 1)];
+
+            // Convert relative (0-1) to window-relative coordinates within matched region
+            var rect = match.GetBoundingRectangle();
+            var wx = rect.Left + (int)Math.Round(rel.X * rect.Width);
+            var wy = rect.Top + (int)Math.Round(rel.Y * rect.Height);
+
+            await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Clicking slot {targetSlot} at rel=({rel.X:F2},{rel.Y:F2}) -> window=({wx},{wy})");
+
+            await _automationService.ClickWindowRelativeAsync(context.WindowHandle, new System.Drawing.Point(wx, wy), cancellationToken);
+            await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
+
+            return true;
+        }
+
     }
 }

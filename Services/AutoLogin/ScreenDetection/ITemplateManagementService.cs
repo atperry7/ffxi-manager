@@ -44,6 +44,12 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         /// </summary>
         void ClearCache();
 
+        /// <summary>
+        /// Invalidates cached entries for a specific template path (all variants).
+        /// </summary>
+        /// <param name="templatePath">Template file name or path without extension</param>
+        void Invalidate(string templatePath);
+
 
         /// <summary>
         /// Lists all available template paths

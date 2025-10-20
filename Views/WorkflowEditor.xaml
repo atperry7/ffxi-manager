@@ -1368,8 +1368,8 @@
                                                         </StackPanel>
                                                     </Border>
 
-                                                    <!-- Slot Navigation Properties (visible for MemberSlot/CharacterSlot actions) -->
-                                                    <Border Visibility="{Binding IsSlotActionSelected, Converter={StaticResource BoolToVisConverter}}"
+                                                    <!-- MemberSlot Click Configuration -->
+                                                    <Border Visibility="{Binding IsMemberSlotActionSelected, Converter={StaticResource BoolToVisConverter}}"
                                                             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12"
                                                             Background="{DynamicResource SurfaceBrush}">
                                                         <StackPanel>
@@ -1382,34 +1382,19 @@
                                                             </TextBlock>
 
                                                             <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8">
-                                                                Navigates to the slot number defined in the account settings (POLMemberSlot or FFXICharacterSlot).
+                                                                Navigates to the slot number defined in the account settings (POLMemberSlot) by clicking the configured points.
                                                             </TextBlock>
 
-                                                            <Grid Margin="0,0,0,8">
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="120"/>
-                                                                    <ColumnDefinition Width="*"/>
-                                                                </Grid.ColumnDefinitions>
-
-                                                                <TextBlock Grid.Column="0" Text="Navigation Method:" VerticalAlignment="Center"/>
-                                                                <ComboBox Grid.Column="1"
-                                                                          SelectedItem="{Binding SlotNavigationMethod, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
-                                                                    <ComboBox.ItemsSource>
-                                                                        <x:Array Type="sys:String" xmlns:sys="clr-namespace:System;assembly=mscorlib">
-                                                                            <sys:String>Keyboard</sys:String>
-                                                                        </x:Array>
-                                                                    </ComboBox.ItemsSource>
-                                                                </ComboBox>
-                                                            </Grid>
-
-                                                            <Border Background="{DynamicResource InfoBackgroundBrush}" BorderBrush="{DynamicResource InfoBorderBrush}"
-                                                                    BorderThickness="1" CornerRadius="3" Padding="8">
-                                                                <StackPanel>
-                                                                    <TextBlock FontSize="10" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{DynamicResource InfoTextBrush}">Navigation Methods:</TextBlock>
-                                                                    <TextBlock FontSize="10" Foreground="{DynamicResource InfoTextBrush}">• Keyboard: Uses Tab to cycle slots</TextBlock>
-                                                                    <TextBlock FontSize="10" Foreground="{DynamicResource InfoTextBrush}">• May support future methods</TextBlock>
-                                                                </StackPanel>
-                                                            </Border>
+                                                            <!-- MemberSlot Click configuration -->
+                                                            <StackPanel Margin="0,8,0,0">
+                                                                <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,6">
+                                                                    Configure four click points for Member Slots 1-4 by clicking the template preview image above.
+                                                                </TextBlock>
+                                                                <TextBlock FontSize="10" Foreground="{DynamicResource WarningBrush}" Margin="0,6,0,0"
+                                                                           Visibility="{Binding HasTemplateImage, Converter={StaticResource BoolToVisConverter}}">
+                                                                    Uses the step's template image; add one above if missing.
+                                                                </TextBlock>
+                                                            </StackPanel>
                                                         </StackPanel>
                                                     </Border>
                                             </StackPanel>

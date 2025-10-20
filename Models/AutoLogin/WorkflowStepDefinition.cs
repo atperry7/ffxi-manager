@@ -151,6 +151,7 @@ namespace FFXIManager.Models.AutoLogin
         /// </summary>
         public NavigationAction? Navigation { get; set; }
 
+
         private int _maxRetryAttempts = 3;
         private int? _retryAttempts;
         private int? _retryDelayMs;

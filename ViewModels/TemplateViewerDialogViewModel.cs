@@ -27,6 +27,9 @@ namespace FFXIManager.ViewModels
         private string _templateName = string.Empty;
         private string _status = string.Empty;
         private bool _isPickMode;
+        private bool _isMultiPickMode;
+        private int _multiPickCount = 1;
+        private int _currentPickIndex = 0;
         private double _pickedX;
         private double _pickedY;
 
@@ -94,6 +97,34 @@ namespace FFXIManager.ViewModels
         }
 
         /// <summary>
+        /// When true, the dialog will allow multiple sequential picks.
+        /// Use with MultiPickCount to determine how many positions to collect.
+        /// </summary>
+        public bool IsMultiPickMode
+        {
+            get => _isMultiPickMode;
+            set => SetProperty(ref _isMultiPickMode, value);
+        }
+
+        /// <summary>
+        /// Number of picks to collect in multi-pick mode (e.g., 4 for MemberSlot).
+        /// </summary>
+        public int MultiPickCount
+        {
+            get => _multiPickCount;
+            set => SetProperty(ref _multiPickCount, value);
+        }
+
+        /// <summary>
+        /// The index (0-based) of the next pick to record in multi-pick mode.
+        /// </summary>
+        public int CurrentPickIndex
+        {
+            get => _currentPickIndex;
+            set => SetProperty(ref _currentPickIndex, value);
+        }
+
+        /// <summary>
         /// Picked X coordinate in relative units (0.0 - 1.0)
         /// </summary>
         public double PickedX
@@ -121,9 +152,23 @@ namespace FFXIManager.ViewModels
         /// </summary>
         public event Action<double, double>? PickChanged;
 
+        /// <summary>
+        /// Raised on each pick in multi-pick mode with (index, X, Y) normalized.
+        /// </summary>
+        public event Action<int, double, double>? MultiPickChanged;
+
         public void NotifyPickChanged()
         {
             PickChanged?.Invoke(PickedX, PickedY);
+            if (IsMultiPickMode)
+            {
+                MultiPickChanged?.Invoke(CurrentPickIndex, PickedX, PickedY);
+            }
+        }
+
+        public void ResetMultiPick()
+        {
+            CurrentPickIndex = 0;
         }
 
         /// <summary>

@@ -152,28 +152,37 @@ namespace FFXIManager.ViewModels.WorkflowEditor
                 if (step == null || string.IsNullOrWhiteSpace(step.TemplatePath))
                     return null;
 
-                // Construct template file path
+                try
+                {
+                    var template = _templateService.LoadTemplateAsync(step.TemplatePath).GetAwaiter().GetResult();
+                    if (template != null && template.ImageData != null)
+                    {
+                        using var ms = new System.IO.MemoryStream(template.ImageData);
+                        var bmp = new BitmapImage();
+                        bmp.BeginInit();
+                        bmp.CacheOption = BitmapCacheOption.OnLoad;
+                        bmp.StreamSource = ms;
+                        bmp.DecodePixelHeight = 100;
+                        bmp.EndInit();
+                        bmp.Freeze();
+                        return bmp;
+                    }
+                }
+                catch { /* fallback below */ }
+
+                // Fallback: direct file load if service path failed
                 var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
                 var templatesPath = Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
                 var templateFileName = step.TemplatePath.EndsWith(".png") ? step.TemplatePath : $"{step.TemplatePath}.png";
-                var templateFilePath = Path.Combine(templatesPath, templateFileName);
-
-                if (!File.Exists(templateFilePath))
-                {
-                    _ = _loggingService.LogDebugAsync($"Template file not found: {templateFilePath}");
-                    return null;
-                }
-
-                // Load image with BitmapCacheOption.OnLoad to avoid file locking
+                var filePath = Path.Combine(templatesPath, templateFileName);
+                if (!File.Exists(filePath)) return null;
                 var bitmap = new BitmapImage();
                 bitmap.BeginInit();
                 bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.UriSource = new Uri(templateFilePath, UriKind.Absolute);
-                bitmap.DecodePixelHeight = 100; // Thumbnail height
+                bitmap.UriSource = new Uri(filePath, UriKind.Absolute);
+                bitmap.DecodePixelHeight = 100;
                 bitmap.EndInit();
-                bitmap.Freeze(); // Make it thread-safe
-
-                _ = _loggingService.LogDebugAsync($"Loaded template thumbnail: {templateFileName}");
+                bitmap.Freeze();
                 return bitmap;
             }
             catch (Exception ex)
@@ -193,12 +202,10 @@ namespace FFXIManager.ViewModels.WorkflowEditor
 
             try
             {
-                // Construct template file path
                 var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
                 var templatesPath = Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
                 var templateFileName = step.TemplatePath.EndsWith(".png") ? step.TemplatePath : $"{step.TemplatePath}.png";
                 var templateFilePath = Path.Combine(templatesPath, templateFileName);
-
                 if (!File.Exists(templateFilePath))
                 {
                     await _dialogService.ShowMessageDialogAsync("Template Not Found", $"Template file not found:\n{templateFilePath}");
@@ -211,7 +218,7 @@ namespace FFXIManager.ViewModels.WorkflowEditor
 
                 if (vm != null && dlg is FFXIManager.Views.TemplateViewerDialog typedDlg)
                 {
-                    await vm.LoadTemplateAsync(templateFilePath, step.Navigation?.Sequence);
+                    await vm.LoadTemplateAsync(templateFileName, step.Navigation?.Sequence);
                     typedDlg.Owner = Application.Current?.MainWindow;
                     // Ensure the dialog uses the prepared VM
                     typedDlg.DataContext = vm;
@@ -352,25 +359,36 @@ namespace FFXIManager.ViewModels.WorkflowEditor
                 if (string.IsNullOrWhiteSpace(actionTemplate))
                     return null;
 
+                try
+                {
+                    var template = _templateService.LoadTemplateAsync(actionTemplate).GetAwaiter().GetResult();
+                    if (template != null && template.ImageData != null)
+                    {
+                        using var ms = new System.IO.MemoryStream(template.ImageData);
+                        var bmp = new BitmapImage();
+                        bmp.BeginInit();
+                        bmp.CacheOption = BitmapCacheOption.OnLoad;
+                        bmp.StreamSource = ms;
+                        bmp.DecodePixelHeight = 100;
+                        bmp.EndInit();
+                        bmp.Freeze();
+                        return bmp;
+                    }
+                }
+                catch { /* fallback below */ }
+
                 var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
                 var templatesPath = Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
                 var templateFileName = actionTemplate.EndsWith(".png") ? actionTemplate : $"{actionTemplate}.png";
-                var templateFilePath = Path.Combine(templatesPath, templateFileName);
-
-                if (!File.Exists(templateFilePath))
-                {
-                    _ = _loggingService.LogDebugAsync($"Action template file not found: {templateFilePath}");
-                    return null;
-                }
-
+                var filePath = Path.Combine(templatesPath, templateFileName);
+                if (!File.Exists(filePath)) return null;
                 var bitmap = new BitmapImage();
                 bitmap.BeginInit();
                 bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.UriSource = new Uri(templateFilePath, UriKind.Absolute);
+                bitmap.UriSource = new Uri(filePath, UriKind.Absolute);
                 bitmap.DecodePixelHeight = 100;
                 bitmap.EndInit();
                 bitmap.Freeze();
-
                 return bitmap;
             }
             catch (Exception ex)
@@ -397,7 +415,6 @@ namespace FFXIManager.ViewModels.WorkflowEditor
                 var templatesPath = Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
                 var templateFileName = actionTemplate.EndsWith(".png") ? actionTemplate : $"{actionTemplate}.png";
                 var templateFilePath = Path.Combine(templatesPath, templateFileName);
-
                 if (!File.Exists(templateFilePath))
                 {
                     await _dialogService.ShowMessageDialogAsync("Template Not Found", $"Template file not found:\n{templateFilePath}");
@@ -411,7 +428,7 @@ namespace FFXIManager.ViewModels.WorkflowEditor
                 if (vm != null && dlg is FFXIManager.Views.TemplateViewerDialog typedDlg)
                 {
                     var single = new System.Collections.ObjectModel.ObservableCollection<KeyboardAction> { action };
-                    await vm.LoadTemplateAsync(templateFilePath, single);
+                    await vm.LoadTemplateAsync(templateFileName, single);
                     typedDlg.Owner = Application.Current?.MainWindow;
                     typedDlg.DataContext = vm;
                     typedDlg.Title = $"Action Template Preview: {action.Action}";
@@ -520,6 +537,194 @@ namespace FFXIManager.ViewModels.WorkflowEditor
             {
                 await _loggingService.LogErrorAsync("Error picking click position", ex);
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Opens the template viewer in multi-pick mode to select four click positions
+        /// for PlayOnline member slots 1-4. Applies chosen coordinates to the step's
+        /// MemberSlot*Click properties.
+        /// </summary>
+        public async Task<bool> PickMemberSlotClickPositionsForActionAsync(WorkflowStepDefinition step, KeyboardAction action)
+        {
+            if (step == null || action == null)
+                return false;
+
+            try
+            {
+                // Prefer action-level template if provided; fallback to step-level template
+                var actionTemplate = action.GetParameter<string>("TemplatePath", string.Empty);
+                var preferred = !string.IsNullOrWhiteSpace(actionTemplate) ? actionTemplate : step.TemplatePath;
+                if (string.IsNullOrWhiteSpace(preferred))
+                {
+                    await _dialogService.ShowMessageDialogAsync("No Template", "Add a template to the MemberSlot action or the step before setting slot click points.");
+                    return false;
+                }
+
+                var templateFileName = preferred.EndsWith(".png") ? preferred : $"{preferred}.png";
+                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var templatesPath = Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
+                var templateFilePath = Path.Combine(templatesPath, templateFileName);
+
+                if (!File.Exists(templateFilePath))
+                {
+                    await _dialogService.ShowMessageDialogAsync("Template Not Found", $"Template file not found:\n{templateFilePath}");
+                    return false;
+                }
+
+                var vm = _serviceProvider.GetService(typeof(FFXIManager.ViewModels.TemplateViewerDialogViewModel)) as FFXIManager.ViewModels.TemplateViewerDialogViewModel;
+                var dlg = _serviceProvider.GetService(typeof(FFXIManager.Views.TemplateViewerDialog)) as Window;
+
+                if (vm == null || dlg is not FFXIManager.Views.TemplateViewerDialog typedDlg)
+                {
+                    await _dialogService.ShowMessageDialogAsync("Service Error", "Template viewer is not available.");
+                    return false;
+                }
+
+                // Prepare viewmodel
+                vm.IsPickMode = true;
+                vm.IsMultiPickMode = true;
+                vm.MultiPickCount = 4;
+                vm.ResetMultiPick();
+
+                // Preload any existing markers
+                await vm.LoadTemplateAsync(templateFileName, null);
+                vm.ClickMarkers.Clear();
+
+                var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new System.Collections.Generic.List<RelativeClickOffset>())
+                             ?? new System.Collections.Generic.List<RelativeClickOffset>();
+                // Ensure at least 4 placeholders
+                while (points.Count < 4) points.Add(new RelativeClickOffset { X = 0.5, Y = 0.5, Description = $"Slot {points.Count + 1}" });
+
+                for (int i = 0; i < 4; i++)
+                {
+                    var color = i switch
+                    {
+                        0 => System.Windows.Media.Brushes.Red,
+                        1 => System.Windows.Media.Brushes.DodgerBlue,
+                        2 => System.Windows.Media.Brushes.Orange,
+                        _ => System.Windows.Media.Brushes.LimeGreen
+                    };
+
+                    double px = (points[i].X) * vm.TemplateImageWidth;
+                    double py = (points[i].Y) * vm.TemplateImageHeight;
+                    vm.ClickMarkers.Add(new ClickMarker
+                    {
+                        X = px,
+                        Y = py,
+                        Label = (i + 1).ToString(),
+                        Description = $"Slot {i + 1}",
+                        MarkerColor = color,
+                        StepIndex = i
+                    });
+                }
+
+                // Live update to step as picks occur
+                void OnMultiPick(int index, double x, double y)
+                {
+                    if (index >= 0 && index < 4)
+                    {
+                        points[index] = new RelativeClickOffset { X = x, Y = y, Description = $"Slot {index + 1}" };
+                    }
+                }
+
+                vm.MultiPickChanged += OnMultiPick;
+                typedDlg.Owner = Application.Current?.MainWindow;
+                typedDlg.DataContext = vm;
+                typedDlg.Title = "Pick Member Slot Click Points";
+
+                var result = typedDlg.ShowDialog();
+                vm.MultiPickChanged -= OnMultiPick;
+
+                if (result == true)
+                {
+                    // Persist 4 points directly as an array in parameters
+                    action.SetParameter("ClickPoints", points);
+                    return true;
+                }
+                return false;
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error picking member slot click positions", ex);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Shows the step template with the configured member slot click points overlaid.
+        /// </summary>
+        public async Task ShowMemberSlotClickPositionsAsync(WorkflowStepDefinition step, KeyboardAction action)
+        {
+            if (step == null || action == null) return;
+            try
+            {
+                if (string.IsNullOrWhiteSpace(step.TemplatePath))
+                {
+                    await _dialogService.ShowMessageDialogAsync("No Template", "Add a step template to preview click points.");
+                    return;
+                }
+
+                var actionTemplate = action.GetParameter<string>("TemplatePath", string.Empty);
+                var preferred = !string.IsNullOrWhiteSpace(actionTemplate) ? actionTemplate : step.TemplatePath;
+                var templateFileName = preferred.EndsWith(".png") ? preferred : $"{preferred}.png";
+                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var templatesPath = Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
+                var templateFilePath = Path.Combine(templatesPath, templateFileName);
+
+                if (!File.Exists(templateFilePath))
+                {
+                    await _dialogService.ShowMessageDialogAsync("Template Not Found", $"Template file not found:\n{templateFilePath}");
+                    return;
+                }
+
+                var vm = _serviceProvider.GetService(typeof(FFXIManager.ViewModels.TemplateViewerDialogViewModel)) as FFXIManager.ViewModels.TemplateViewerDialogViewModel;
+                var dlg = _serviceProvider.GetService(typeof(FFXIManager.Views.TemplateViewerDialog)) as Window;
+
+                if (vm == null || dlg is not FFXIManager.Views.TemplateViewerDialog typedDlg)
+                {
+                    await _dialogService.ShowMessageDialogAsync("Service Error", "Template viewer is not available.");
+                    return;
+                }
+
+                vm.IsPickMode = false;
+                await vm.LoadTemplateAsync(templateFileName, null);
+                vm.ClickMarkers.Clear();
+
+                var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new System.Collections.Generic.List<RelativeClickOffset>())
+                             ?? new System.Collections.Generic.List<RelativeClickOffset>();
+                while (points.Count < 4) points.Add(new RelativeClickOffset { X = 0.5, Y = 0.5, Description = $"Slot {points.Count + 1}" });
+
+                for (int i = 0; i < 4; i++)
+                {
+                    var color = i switch
+                    {
+                        0 => System.Windows.Media.Brushes.Red,
+                        1 => System.Windows.Media.Brushes.DodgerBlue,
+                        2 => System.Windows.Media.Brushes.Orange,
+                        _ => System.Windows.Media.Brushes.LimeGreen
+                    };
+                    double px = (points[i].X) * vm.TemplateImageWidth;
+                    double py = (points[i].Y) * vm.TemplateImageHeight;
+                    vm.ClickMarkers.Add(new ClickMarker
+                    {
+                        X = px,
+                        Y = py,
+                        Label = (i + 1).ToString(),
+                        Description = $"Slot {i + 1}",
+                        MarkerColor = color,
+                        StepIndex = i
+                    });
+                }
+
+                typedDlg.Owner = Application.Current?.MainWindow;
+                typedDlg.DataContext = vm;
+                typedDlg.Title = "Member Slot Click Points";
+                typedDlg.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error showing member slot click positions", ex);
             }
         }
 

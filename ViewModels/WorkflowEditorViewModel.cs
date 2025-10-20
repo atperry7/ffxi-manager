@@ -262,7 +262,7 @@ namespace FFXIManager.ViewModels
                     OnPropertyChanged(nameof(LaunchApplicationName));
                     OnPropertyChanged(nameof(LaunchAllowSkipIfRunning));
                     OnPropertyChanged(nameof(LaunchAllowSkipIfNotConfigured));
-                    OnPropertyChanged(nameof(SlotNavigationMethod));
+                    // NavigationMethod removed for MemberSlot MVP
                     OnPropertyChanged(nameof(ActionTemplatePath));
                     OnPropertyChanged(nameof(ActionConfidenceThreshold));
                     OnPropertyChanged(nameof(ActionTolerance));
@@ -343,51 +343,7 @@ namespace FFXIManager.ViewModels
         public bool IsKeyboardActionSelected => SelectedNavigationAction?.Action == "Keyboard"
             || IsKeyboardKey(SelectedNavigationAction?.Action);
 
-        /// <summary>
-        /// Navigation method for slot actions (from Parameters dictionary)
-        /// </summary>
-        public string SlotNavigationMethod
-        {
-            get => SelectedNavigationAction?.GetParameter<string>("NavigationMethod", "Keyboard") ?? "Keyboard";
-            set
-            {
-                if (SelectedNavigationAction != null)
-                {
-                    SelectedNavigationAction.SetParameter("NavigationMethod", value);
-                    OnPropertyChanged();
-                    HasUnsavedChanges = true;
-                }
-            }
-        }
-
-        // Slot click coordinates (for MemberSlot/CharacterSlot when NavigationMethod=Click)
-        public double SlotClickX
-        {
-            get => SelectedNavigationAction?.GetParameter<double>("ClickX", 0.5) ?? 0.5;
-            set
-            {
-                if (SelectedNavigationAction != null)
-                {
-                    SelectedNavigationAction.SetParameter("ClickX", value);
-                    OnPropertyChanged();
-                    HasUnsavedChanges = true;
-                }
-            }
-        }
-
-        public double SlotClickY
-        {
-            get => SelectedNavigationAction?.GetParameter<double>("ClickY", 0.5) ?? 0.5;
-            set
-            {
-                if (SelectedNavigationAction != null)
-                {
-                    SelectedNavigationAction.SetParameter("ClickY", value);
-                    OnPropertyChanged();
-                    HasUnsavedChanges = true;
-                }
-            }
-        }
+        // Removed NavigationMethod and per-action slot ClickX/ClickY for MVP
 
         // (Removed legacy Home/reset options for DX9)
 
@@ -578,6 +534,18 @@ namespace FFXIManager.ViewModels
                     SelectedNavigationAction.SetParameter("TemplatePath", value ?? string.Empty);
                     OnPropertyChanged();
                     HasUnsavedChanges = true;
+                    // Invalidate cached variants for this template path (with/without extension)
+                    try
+                    {
+                        var p = value ?? string.Empty;
+                        if (!string.IsNullOrWhiteSpace(p))
+                        {
+                            _templateService.Invalidate(p);
+                            if (!p.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                                _templateService.Invalidate(p + ".png");
+                        }
+                    }
+                    catch { }
                     LoadActionTemplateImage();
                 }
             }
@@ -853,6 +821,8 @@ namespace FFXIManager.ViewModels
         public ICommand SelectActionTemplateImageCommand { get; private set; } = null!;
         public ICommand ReplaceActionTemplateImageCommand { get; private set; } = null!;
         public ICommand ShowLargeActionTemplateImageCommand { get; private set; } = null!;
+        public ICommand PickMemberSlotClickPointsCommand { get; private set; } = null!;
+        public ICommand PreviewMemberSlotClickPointsCommand { get; private set; } = null!;
 
         private void InitializeCommands()
         {
@@ -958,6 +928,31 @@ namespace FFXIManager.ViewModels
             ShowLargeActionTemplateImageCommand = new RelayCommand(
                 async () => await ShowLargeActionTemplateImageAsync(),
                 () => HasAnyTemplateForAction);
+
+            PickMemberSlotClickPointsCommand = new RelayCommand(
+                async () =>
+                {
+                    if (SelectedStep != null && SelectedNavigationAction != null)
+                    {
+                        var changed = await _templateManager.PickMemberSlotClickPositionsForActionAsync(SelectedStep, SelectedNavigationAction);
+                        if (changed)
+                        {
+                            HasUnsavedChanges = true;
+                            OnPropertyChanged(nameof(SelectedStep));
+                        }
+                    }
+                },
+                () => IsMemberSlotActionSelected && SelectedStep != null && !string.IsNullOrWhiteSpace(SelectedStep.TemplatePath));
+
+            PreviewMemberSlotClickPointsCommand = new RelayCommand(
+                async () =>
+                {
+                    if (SelectedStep != null && SelectedNavigationAction != null)
+                    {
+                        await _templateManager.ShowMemberSlotClickPositionsAsync(SelectedStep, SelectedNavigationAction);
+                    }
+                },
+                () => IsMemberSlotActionSelected && SelectedStep != null && !string.IsNullOrWhiteSpace(SelectedStep.TemplatePath));
 
         }
 
@@ -1399,7 +1394,18 @@ namespace FFXIManager.ViewModels
 
                 if (success)
                 {
-                    // Update UI state
+                    // Update UI state + targeted invalidation
+                    try
+                    {
+                        var p = SelectedStep.TemplatePath;
+                        if (!string.IsNullOrWhiteSpace(p))
+                        {
+                            _templateService.Invalidate(p);
+                            if (!p.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                                _templateService.Invalidate(p + ".png");
+                        }
+                    }
+                    catch { }
                     LoadTemplateImage();
                 }
             }
@@ -1691,7 +1697,7 @@ namespace FFXIManager.ViewModels
                 OnPropertyChanged(nameof(LaunchApplicationName));
                 OnPropertyChanged(nameof(LaunchAllowSkipIfRunning));
                 OnPropertyChanged(nameof(LaunchAllowSkipIfNotConfigured));
-                OnPropertyChanged(nameof(SlotNavigationMethod));
+                // NavigationMethod removed for MemberSlot MVP
                 OnPropertyChanged(nameof(ActionTemplatePath));
                 OnPropertyChanged(nameof(ActionConfidenceThreshold));
                 OnPropertyChanged(nameof(ActionTolerance));
@@ -1806,6 +1812,18 @@ namespace FFXIManager.ViewModels
                     OnPropertyChanged(nameof(SelectedNavigationAction));
                 }
             }
+            else if (IsMemberSlotActionSelected)
+            {
+                if (SelectedStep != null && SelectedNavigationAction != null)
+                {
+                    var changed = await _templateManager.PickMemberSlotClickPositionsForActionAsync(SelectedStep, SelectedNavigationAction);
+                    if (changed)
+                    {
+                        HasUnsavedChanges = true;
+                        OnPropertyChanged(nameof(SelectedStep));
+                    }
+                }
+            }
             else
             {
                 await _templateManager.ShowLargeActionTemplateAsync(SelectedNavigationAction);
@@ -1897,7 +1915,18 @@ namespace FFXIManager.ViewModels
 
                 if (success)
                 {
-                    // Update UI state
+                    // Update UI state + targeted invalidation
+                    try
+                    {
+                        var p = SelectedNavigationAction.GetParameter<string>("TemplatePath", string.Empty);
+                        if (!string.IsNullOrWhiteSpace(p))
+                        {
+                            _templateService.Invalidate(p);
+                            if (!p.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                                _templateService.Invalidate(p + ".png");
+                        }
+                    }
+                    catch { }
                     LoadActionTemplateImage();
                 }
             }
@@ -1952,8 +1981,21 @@ namespace FFXIManager.ViewModels
             if (SelectedStep == null || string.IsNullOrWhiteSpace(SelectedStep.TemplatePath))
                 return;
 
-            // Delegate to helper
-            await _templateManager.ShowLargeStepTemplateAsync(SelectedStep);
+            // If MemberSlot action is selected, use the 4-point picker directly from step preview
+            if (IsMemberSlotActionSelected && SelectedNavigationAction != null)
+            {
+                var changed = await _templateManager.PickMemberSlotClickPositionsForActionAsync(SelectedStep, SelectedNavigationAction);
+                if (changed)
+                {
+                    HasUnsavedChanges = true;
+                    OnPropertyChanged(nameof(SelectedStep));
+                }
+            }
+            else
+            {
+                // Delegate to helper
+                await _templateManager.ShowLargeStepTemplateAsync(SelectedStep);
+            }
         }
 
         #endregion
