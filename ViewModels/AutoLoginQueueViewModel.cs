@@ -1,8 +1,10 @@
-﻿using FFXIManager.Infrastructure;
+using FFXIManager.Infrastructure;
 using FFXIManager.Models;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 using System.Collections.ObjectModel;
+using FFXIManager.Models.Settings;
+using System.Linq;
 using System.Windows.Input;
 using System.Windows.Threading;
 
@@ -75,6 +77,18 @@ namespace FFXIManager.ViewModels
         /// Queue items from the service
         /// </summary>
         public ObservableCollection<AutoLoginQueueItem> QueueItems => _queueService.QueueItems;
+
+        /// <summary>
+        /// Step-level performance insights aggregated from recent runs.
+        /// </summary>
+        public IEnumerable<StepPerformanceEntry> StepInsights
+        {
+            get
+            {
+                var stats = _queueService.GetStatistics();
+                return stats.StepPerformance ?? Enumerable.Empty<StepPerformanceEntry>();
+            }
+        }
 
         /// <summary>
         /// Available accounts for selection
@@ -266,7 +280,7 @@ namespace FFXIManager.ViewModels
             // Add timing context for longer operations
             if (CurrentItem != null && CurrentItem.StartTime.HasValue)
             {
-                var duration = DateTime.Now - CurrentItem.StartTime.Value;
+                var duration = DateTime.UtcNow - CurrentItem.StartTime.Value;
                 if (duration.TotalSeconds > 30)
                 {
                     return $"{baseStatus} (This may take 1-2 minutes)";
@@ -428,17 +442,7 @@ namespace FFXIManager.ViewModels
             }
         }
 
-        /// <summary>
-        /// Progress value to display when queue is idle (0-100)
-        /// </summary>
-        public int IdleProgressValue
-        {
-            get
-            {
-                if (TotalQueueItems == 0) return 0;
-                return OverallProgress; // Reuse the existing overall progress calculation
-            }
-        }
+        // IdleProgressValue removed. Bind directly to OverallProgress.
 
         #endregion
 
@@ -1090,8 +1094,7 @@ namespace FFXIManager.ViewModels
                 _durationUpdateTimer.Stop();
             }
             OnPropertyChanged(nameof(IdleStepMessage));
-            OnPropertyChanged(nameof(IdleProgressValue));
-        }
+                    }
 
         private void UpdateCommandStates()
         {
@@ -1153,3 +1156,6 @@ namespace FFXIManager.ViewModels
         #endregion
     }
 }
+
+
+

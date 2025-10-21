@@ -1,4 +1,4 @@
-﻿using FFXIManager.Models;
+using FFXIManager.Models;
 using FFXIManager.Models.Settings;
 
 namespace FFXIManager.Services
@@ -9,6 +9,7 @@ namespace FFXIManager.Services
     public class QueueStatisticsService : IQueueStatisticsService
     {
         private QueueExecutionStatistics _executionStatistics;
+        private readonly Dictionary<Guid, DateTime> _stepStartTimes = new();
 
         public QueueStatisticsService()
         {
@@ -35,7 +36,11 @@ namespace FFXIManager.Services
                 AverageItemTime = _executionStatistics.AverageItemTime,
                 SuccessRate = _executionStatistics.SuccessRate,
                 LastExecutionStart = _executionStatistics.LastExecutionStart,
-                LastExecutionEnd = _executionStatistics.LastExecutionEnd
+                LastExecutionEnd = _executionStatistics.LastExecutionEnd,
+                StepPerformance = _executionStatistics.StepPerformance.Values
+                    .OrderByDescending(s => s.Runs)
+                    .ThenByDescending(s => s.Successes)
+                    .ToList()
             };
         }
 
@@ -91,5 +96,64 @@ namespace FFXIManager.Services
         }
 
         #endregion
+
+        #region Step-level Metrics
+
+        public void RecordStepStart(AutoLoginQueueItem item, AutoLoginSubtask subtask)
+        {
+            if (subtask == null) return;
+            _stepStartTimes[subtask.Id] = DateTime.UtcNow;
+        }
+
+        public void RecordStepCompleted(AutoLoginQueueItem item, AutoLoginSubtask subtask, bool success)
+        {
+            if (subtask?.WorkflowStep == null) return;
+            var key = subtask.WorkflowStep.StepId ?? subtask.Name;
+
+            if (!_executionStatistics.StepPerformance.TryGetValue(key, out var entry))
+            {
+                entry = new Models.Settings.StepPerformanceEntry
+                {
+                    StepId = key,
+                    DisplayName = subtask.WorkflowStep.DisplayName
+                };
+                _executionStatistics.StepPerformance[key] = entry;
+            }
+
+            entry.Runs++;
+            if (success) entry.Successes++; else entry.Failures++;
+
+            if (_stepStartTimes.TryGetValue(subtask.Id, out var started))
+            {
+                var dur = DateTime.UtcNow - started;
+                entry.TotalDuration += dur;
+                entry.AverageDuration = TimeSpan.FromTicks(entry.TotalDuration.Ticks / entry.Runs);
+                _stepStartTimes.Remove(subtask.Id);
+            }
+        }
+
+        public void RecordDetectionResult(string stepId, string displayName, double confidence, double detectionSeconds)
+        {
+            var key = string.IsNullOrWhiteSpace(stepId) ? displayName : stepId;
+            if (!_executionStatistics.StepPerformance.TryGetValue(key, out var entry))
+            {
+                entry = new Models.Settings.StepPerformanceEntry
+                {
+                    StepId = key,
+                    DisplayName = displayName
+                };
+                _executionStatistics.StepPerformance[key] = entry;
+            }
+
+            entry.Detections++;
+            entry.TotalDetectionSeconds += Math.Max(0.0, detectionSeconds);
+            entry.AverageDetectionSeconds = entry.Detections > 0 ? entry.TotalDetectionSeconds / entry.Detections : 0.0;
+            entry.TotalConfidence += Math.Clamp(confidence, 0.0, 1.0);
+            entry.AverageConfidence = entry.Detections > 0 ? entry.TotalConfidence / entry.Detections : 0.0;
+        }
+
+        #endregion
     }
 }
+
+

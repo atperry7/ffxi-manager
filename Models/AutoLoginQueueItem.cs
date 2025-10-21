@@ -268,8 +268,10 @@ namespace FFXIManager.Models
                 if (StartTime == null) return null;
 
                 // Use EndTime if available (task completed), otherwise use current time only for active items
-                var endTime = EndTime ?? (IsActive && EndTime == null ? DateTime.Now : null);
-                return endTime?.Subtract(StartTime.Value);
+                var endTime = EndTime ?? (IsActive && EndTime == null ? DateTime.UtcNow : null);
+                if (endTime == null) return null;
+                var diff = endTime.Value - StartTime.Value;
+                return diff < TimeSpan.Zero ? TimeSpan.Zero : diff;
             }
         }
 

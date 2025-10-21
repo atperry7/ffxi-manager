@@ -52,7 +52,7 @@ namespace FFXIManager.Services
                     WasExecuting = isExecuting,
                     WasPaused = isPaused,
                     OriginalProfilePath = originalProfilePath,
-                    LastSaved = DateTime.Now,
+                    LastSaved = DateTime.UtcNow,
                     Statistics = statistics
                 };
 

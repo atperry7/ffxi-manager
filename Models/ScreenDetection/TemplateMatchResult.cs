@@ -40,7 +40,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         /// <summary>
         /// Timestamp when the match was found
         /// </summary>
-        public DateTime MatchTime { get; set; } = DateTime.Now;
+        public DateTime MatchTime { get; set; } = DateTime.UtcNow;
 
         /// <summary>
         /// Whether this match meets the confidence threshold
@@ -121,7 +121,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 MatchSize = size,
                 Confidence = confidence,
                 Scale = scale,
-                MatchTime = DateTime.Now
+                MatchTime = DateTime.UtcNow
             };
         }
     }

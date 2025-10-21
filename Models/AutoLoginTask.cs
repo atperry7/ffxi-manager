@@ -202,8 +202,10 @@ namespace FFXIManager.Models
                 if (StartTime == null) return null;
 
                 // Use EndTime if available (task completed), otherwise use current time only for active tasks
-                var endTime = EndTime ?? (IsActive && EndTime == null ? DateTime.Now : null);
-                return endTime?.Subtract(StartTime.Value);
+                var endTime = EndTime ?? (IsActive && EndTime == null ? DateTime.UtcNow : null);
+                if (endTime == null) return null;
+                var diff = endTime.Value - StartTime.Value;
+                return diff < TimeSpan.Zero ? TimeSpan.Zero : diff;
             }
         }
 
@@ -286,7 +288,7 @@ namespace FFXIManager.Models
         public void Start()
         {
             Status = AutoLoginTaskStatus.InProgress;
-            StartTime = DateTime.Now;
+            StartTime = DateTime.UtcNow;
             StatusMessage = "Task started";
         }
 
@@ -296,7 +298,7 @@ namespace FFXIManager.Models
         public void Complete()
         {
             Status = AutoLoginTaskStatus.Completed;
-            EndTime = DateTime.Now;
+            EndTime = DateTime.UtcNow;
             CurrentSubtask = null;
             StatusMessage = "Task completed successfully";
         }
@@ -307,7 +309,7 @@ namespace FFXIManager.Models
         public void Fail(string errorMessage)
         {
             Status = AutoLoginTaskStatus.Failed;
-            EndTime = DateTime.Now;
+            EndTime = DateTime.UtcNow;
             ErrorMessage = errorMessage;
             StatusMessage = $"Task failed: {errorMessage}";
         }
@@ -342,7 +344,7 @@ namespace FFXIManager.Models
         public void Cancel()
         {
             Status = AutoLoginTaskStatus.Cancelled;
-            EndTime = DateTime.Now;
+            EndTime = DateTime.UtcNow;
             StatusMessage = "Task cancelled";
         }
 
@@ -385,7 +387,7 @@ namespace FFXIManager.Models
                 e.PropertyName == nameof(AutoLoginSubtask.Progress))
             {
                 // Throttle progress updates to smooth UI updates (max once per 250ms)
-                var now = DateTime.Now;
+                var now = DateTime.UtcNow;
                 var timeSinceLastUpdate = (now - _lastProgressUpdate).TotalMilliseconds;
 
                 // Always update on Status changes (completion, failure, etc.)

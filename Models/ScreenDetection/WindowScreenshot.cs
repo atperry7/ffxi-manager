@@ -45,7 +45,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         /// <summary>
         /// Timestamp when the screenshot was captured
         /// </summary>
-        public DateTime CaptureTime { get; set; } = DateTime.Now;
+        public DateTime CaptureTime { get; set; } = DateTime.UtcNow;
 
         /// <summary>
         /// Optional title of the window at capture time

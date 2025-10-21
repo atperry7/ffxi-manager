@@ -12,7 +12,8 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             float confidenceThreshold,
             int tolerance,
             CancellationToken cancellationToken,
-            ScreenDetectionOptions? options = null);
+            ScreenDetectionOptions? options = null,
+            bool completeOnDetection = true);
 
         Task<TemplateMatchResult> WaitForScreenDetectionWithHandleRefreshAsync(
             AutoLoginSubtask subtask,
@@ -23,7 +24,8 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             float confidenceThreshold,
             int tolerance,
             CancellationToken cancellationToken,
-            ScreenDetectionOptions? options = null);
+            ScreenDetectionOptions? options = null,
+            bool completeOnDetection = true);
 
         Task<WindowScreenshot> CaptureScreenshotWithLogging(
             IntPtr windowHandle,
@@ -32,4 +34,3 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             int retryCount = 2);
     }
 }
-

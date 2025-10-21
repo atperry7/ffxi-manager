@@ -30,7 +30,8 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             float confidenceThreshold,
             int tolerance,
             CancellationToken cancellationToken,
-            ScreenDetectionOptions? options = null)
+            ScreenDetectionOptions? options = null,
+            bool completeOnDetection = true)
         {
             options ??= ScreenDetectionOptions.Default;
 
@@ -71,7 +72,10 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
                 if (match.Confidence >= confidenceThreshold)
                 {
-                    subtask.UpdateProgressWithPhase(phase, 100, "Connection established");
+                    if (completeOnDetection)
+                    {
+                        subtask.UpdateProgressWithPhase(phase, 100, "Connection established");
+                    }
                     await _loggingService.LogInfoAsync($"{screenDescription} detected after {attempt} attempts (confidence: {match.Confidence:P})");
                     return match;
                 }
@@ -106,7 +110,8 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             float confidenceThreshold,
             int tolerance,
             CancellationToken cancellationToken,
-            ScreenDetectionOptions? options = null)
+            ScreenDetectionOptions? options = null,
+            bool completeOnDetection = true)
         {
             options ??= ScreenDetectionOptions.Default;
 
@@ -173,7 +178,10 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
                 if (match.Confidence >= confidenceThreshold)
                 {
-                    subtask.UpdateProgressWithPhase(phase, 100, "Connection established");
+                    if (completeOnDetection)
+                    {
+                        subtask.UpdateProgressWithPhase(phase, 100, "Connection established");
+                    }
                     await _loggingService.LogInfoAsync($"{screenDescription} detected after {attempt} attempts (confidence: {match.Confidence:P})");
                     return match;
                 }

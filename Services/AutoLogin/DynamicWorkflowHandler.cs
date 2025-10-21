@@ -1,6 +1,7 @@
 ﻿using FFXIManager.Models;
 using FFXIManager.Models.AutoLogin;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
+using FFXIManager.Services;
 
 namespace FFXIManager.Services.AutoLogin
 {
@@ -30,6 +31,7 @@ namespace FFXIManager.Services.AutoLogin
         private readonly IWindowDiscoveryService _windowDiscoveryService;
         private readonly IScreenDetectionCoordinator _screenDetectionCoordinator;
         private readonly IWorkflowProgressService _progressService;
+        private readonly IQueueStatisticsService _statisticsService;
 
         public DynamicWorkflowHandler(
             ILoggingService loggingService,
@@ -37,7 +39,8 @@ namespace FFXIManager.Services.AutoLogin
             IWorkflowActionExecutorFactory actionExecutorFactory,
             IWindowDiscoveryService windowDiscoveryService,
             IScreenDetectionCoordinator screenDetectionCoordinator,
-            IWorkflowProgressService progressService)
+            IWorkflowProgressService progressService,
+            IQueueStatisticsService statisticsService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
@@ -45,6 +48,7 @@ namespace FFXIManager.Services.AutoLogin
             _windowDiscoveryService = windowDiscoveryService ?? throw new ArgumentNullException(nameof(windowDiscoveryService));
             _screenDetectionCoordinator = screenDetectionCoordinator ?? throw new ArgumentNullException(nameof(screenDetectionCoordinator));
             _progressService = progressService ?? throw new ArgumentNullException(nameof(progressService));
+            _statisticsService = statisticsService ?? throw new ArgumentNullException(nameof(statisticsService));
         }
 
         /// <summary>
@@ -68,6 +72,8 @@ namespace FFXIManager.Services.AutoLogin
             CancellationToken cancellationToken)
         {
             await _loggingService.LogDebugAsync($"Starting execution of '{subtask.Name}' for {queueItem.DisplayName}");
+            // Record step start for performance tracking
+            try { _statisticsService.RecordStepStart(queueItem, subtask); } catch { }
 
             try
             {
@@ -78,6 +84,9 @@ namespace FFXIManager.Services.AutoLogin
                 await _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] Executing step: {stepDef.DisplayName} (StepId: {stepDef.StepId})");
                 await ExecuteNavigationStepAsync(subtask, queueItem, context, cancellationToken);
                 await _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] Completed step: {stepDef.DisplayName}");
+
+                // Record success
+                try { _statisticsService.RecordStepCompleted(queueItem, subtask, success: true); } catch { }
 
                 await _loggingService.LogDebugAsync($"Successfully completed '{subtask.Name}' for {queueItem.DisplayName}");
             }
@@ -97,6 +106,7 @@ namespace FFXIManager.Services.AutoLogin
                 }
 
                 await _loggingService.LogErrorAsync($"Failed to execute '{subtask.Name}' for {queueItem.DisplayName}", ex);
+                try { _statisticsService.RecordStepCompleted(queueItem, subtask, success: false); } catch { }
                 throw;
             }
         }
@@ -171,7 +181,8 @@ namespace FFXIManager.Services.AutoLogin
                 };
 
                 // Start detection with no initial handle; coordinator will call refresh per attempt
-                templateMatch = await DetectScreenAsync(subtask, stepDef, IntPtr.Zero, cancellationToken, refreshHandleAsync);
+                // For pre-detection with subsequent navigation, avoid marking progress 100 on detection
+                templateMatch = await DetectScreenAsync(subtask, stepDef, IntPtr.Zero, cancellationToken, refreshHandleAsync, completeOnDetection: false);
 
                 // Capture last discovered handle (if any) for subsequent navigation phase
                 if (latestHandle != IntPtr.Zero)
@@ -262,8 +273,10 @@ namespace FFXIManager.Services.AutoLogin
             WorkflowStepDefinition stepDef,
             IntPtr windowHandle,
             CancellationToken cancellationToken,
-            Func<CancellationToken, Task<IntPtr>>? refreshHandleAsync = null)
+            Func<CancellationToken, Task<IntPtr>>? refreshHandleAsync = null,
+            bool completeOnDetection = true)
         {
+            var detectStart = DateTime.UtcNow;
             var primaryTemplate = stepDef.TemplatePath;
             var description = stepDef.DisplayName;
 
@@ -293,7 +306,7 @@ namespace FFXIManager.Services.AutoLogin
 
                 if (refreshHandleAsync != null)
                 {
-                    return await _screenDetectionCoordinator.WaitForScreenDetectionWithHandleRefreshAsync(
+                    var matchPrimary = await _screenDetectionCoordinator.WaitForScreenDetectionWithHandleRefreshAsync(
                         subtask,
                         primaryTemplate,
                         windowHandle,
@@ -302,11 +315,14 @@ namespace FFXIManager.Services.AutoLogin
                         stepDef.ConfidenceThreshold,
                         stepDef.Tolerance,
                         cancellationToken,
-                        options);
+                        options,
+                        completeOnDetection: completeOnDetection);
+                    try { _statisticsService.RecordDetectionResult(stepDef.StepId, stepDef.DisplayName, matchPrimary.Confidence, (DateTime.UtcNow - detectStart).TotalSeconds); } catch { }
+                    return matchPrimary;
                 }
                 else
                 {
-                    return await _screenDetectionCoordinator.WaitForScreenDetectionAsync(
+                    var matchPrimary = await _screenDetectionCoordinator.WaitForScreenDetectionAsync(
                         subtask,
                         primaryTemplate,
                         windowHandle,
@@ -314,7 +330,10 @@ namespace FFXIManager.Services.AutoLogin
                         stepDef.ConfidenceThreshold,
                         stepDef.Tolerance,
                         cancellationToken,
-                        options);
+                        options,
+                        completeOnDetection: completeOnDetection);
+                    try { _statisticsService.RecordDetectionResult(stepDef.StepId, stepDef.DisplayName, matchPrimary.Confidence, (DateTime.UtcNow - detectStart).TotalSeconds); } catch { }
+                    return matchPrimary;
                 }
             }
             catch (TimeoutException) when (stepDef.FallbackTemplatePaths.Count > 0)
@@ -347,7 +366,7 @@ namespace FFXIManager.Services.AutoLogin
 
                         if (refreshHandleAsync != null)
                         {
-                            return await _screenDetectionCoordinator.WaitForScreenDetectionWithHandleRefreshAsync(
+                            var matchFallback = await _screenDetectionCoordinator.WaitForScreenDetectionWithHandleRefreshAsync(
                                 subtask,
                                 fallbackTemplate,
                                 windowHandle,
@@ -356,11 +375,14 @@ namespace FFXIManager.Services.AutoLogin
                                 stepDef.ConfidenceThreshold,
                                 stepDef.Tolerance,
                                 cancellationToken,
-                                options);
+                                options,
+                                completeOnDetection: completeOnDetection);
+                            try { _statisticsService.RecordDetectionResult(stepDef.StepId, stepDef.DisplayName, matchFallback.Confidence, (DateTime.UtcNow - detectStart).TotalSeconds); } catch { }
+                            return matchFallback;
                         }
                         else
                         {
-                            return await _screenDetectionCoordinator.WaitForScreenDetectionAsync(
+                            var matchFallback = await _screenDetectionCoordinator.WaitForScreenDetectionAsync(
                                 subtask,
                                 fallbackTemplate,
                                 windowHandle,
@@ -368,7 +390,10 @@ namespace FFXIManager.Services.AutoLogin
                                 stepDef.ConfidenceThreshold,
                                 stepDef.Tolerance,
                                 cancellationToken,
-                                options);
+                                options,
+                                completeOnDetection: completeOnDetection);
+                            try { _statisticsService.RecordDetectionResult(stepDef.StepId, stepDef.DisplayName, matchFallback.Confidence, (DateTime.UtcNow - detectStart).TotalSeconds); } catch { }
+                            return matchFallback;
                         }
                     }
                     catch (TimeoutException)
@@ -425,7 +450,8 @@ namespace FFXIManager.Services.AutoLogin
 
             try
             {
-                return await DetectScreenAsync(subtask, tempStep, windowHandle, cancellationToken, refreshHandleAsync);
+                // Action-level detection is part of navigation; avoid marking 100% on detection
+                return await DetectScreenAsync(subtask, tempStep, windowHandle, cancellationToken, refreshHandleAsync, completeOnDetection: false);
             }
             catch (TimeoutException)
             {
@@ -895,6 +921,7 @@ namespace FFXIManager.Services.AutoLogin
             });
 
             // Perform readiness detection with handle refresh awareness
+            var readyStart = DateTime.UtcNow;
             var match = await _screenDetectionCoordinator.WaitForScreenDetectionWithHandleRefreshAsync(
                 subtask,
                 readinessTemplate,
@@ -904,12 +931,14 @@ namespace FFXIManager.Services.AutoLogin
                 confidenceThreshold: confidence,
                 tolerance: tolerance,
                 cancellationToken: cancellationToken,
-                options: options);
+                options: options,
+                completeOnDetection: false);
 
             if (match != null)
             {
                 actionContext.TemplateMatch = match;
                 await _loggingService.LogInfoAsync("[LAUNCH-READY] Application readiness confirmed by template");
+                try { _statisticsService.RecordDetectionResult(stepDef.StepId, stepDef.DisplayName, match.Confidence, (DateTime.UtcNow - readyStart).TotalSeconds); } catch { }
             }
         }
 

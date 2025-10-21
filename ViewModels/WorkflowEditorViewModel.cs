@@ -10,6 +10,8 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows.Input;
+using FFXIManager.Models.Settings;
+using System.Linq;
 using System.Windows.Media.Imaging;
 
 namespace FFXIManager.ViewModels
@@ -29,6 +31,7 @@ namespace FFXIManager.ViewModels
         private readonly IScreenshotCaptureService _screenshotService;
         private readonly IServiceProvider _serviceProvider;
         private readonly IExternalApplicationService _externalApplicationService;
+        private readonly IQueueStatisticsService _statisticsService;
 
         // SOLID Refactoring: Helper services for specialized operations
         private readonly WorkflowEditorNavigationManager _navigationManager;
@@ -65,6 +68,7 @@ namespace FFXIManager.ViewModels
             IScreenshotCaptureService screenshotService,
             IServiceProvider serviceProvider,
             IExternalApplicationService externalApplicationService,
+            IQueueStatisticsService statisticsService,
             WorkflowEditorNavigationManager navigationManager,
             WorkflowEditorStepManager stepManager,
             WorkflowEditorTemplateManager templateManager,
@@ -79,6 +83,7 @@ namespace FFXIManager.ViewModels
             _screenshotService = screenshotService ?? throw new ArgumentNullException(nameof(screenshotService));
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _externalApplicationService = externalApplicationService ?? throw new ArgumentNullException(nameof(externalApplicationService));
+            _statisticsService = statisticsService ?? throw new ArgumentNullException(nameof(statisticsService));
 
             _navigationManager = navigationManager ?? throw new ArgumentNullException(nameof(navigationManager));
             _stepManager = stepManager ?? throw new ArgumentNullException(nameof(stepManager));
@@ -216,6 +221,39 @@ namespace FFXIManager.ViewModels
         /// Whether the selected step can be edited
         /// </summary>
         public bool CanEditStep => SelectedStep != null && CanEditWorkflow;
+
+        /// <summary>
+        /// Data-driven recommendations based on recent workflow performance.
+        /// Updated live from statistics (no persistence here).
+        /// </summary>
+        public IEnumerable<string> Recommendations
+        {
+            get
+            {
+                var stats = _statisticsService.GetExecutionStatistics();
+                if (stats?.StepPerformance == null || stats.StepPerformance.Count == 0)
+                    return Enumerable.Empty<string>();
+
+                var recs = new List<string>();
+
+                foreach (var step in stats.StepPerformance.Values.OrderByDescending(s => s.Runs))
+                {
+                    // Suggest increasing retry delay if detection time is high vs. estimated duration
+                    if (step.AverageDetectionSeconds > 1.5)
+                    {
+                        recs.Add($"{step.DisplayName}: detection averages {step.AverageDetectionSeconds:F1}s; consider increasing RetryDelayMs or EstimatedDurationSeconds.");
+                    }
+
+                    // Suggest reviewing confidence if average confidence is borderline
+                    if (step.AverageConfidence > 0 && step.AverageConfidence < 0.75)
+                    {
+                        recs.Add($"{step.DisplayName}: average detection confidence {step.AverageConfidence:P0}; consider template refresh or slightly lower threshold.");
+                    }
+                }
+
+                return recs;
+            }
+        }
 
         /// <summary>
         /// Steps from the currently selected workflow

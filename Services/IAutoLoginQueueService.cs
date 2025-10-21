@@ -339,6 +339,8 @@ namespace FFXIManager.Services
         public double SuccessRate { get; set; }
         public DateTime? LastExecutionStart { get; set; }
         public DateTime? LastExecutionEnd { get; set; }
+        // Optional step-level insights for UI
+        public System.Collections.Generic.List<FFXIManager.Models.Settings.StepPerformanceEntry>? StepPerformance { get; set; }
     }
 
     #endregion

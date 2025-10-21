@@ -28,7 +28,7 @@
         /// <summary>
         /// Last time the queue state was saved
         /// </summary>
-        public DateTime LastSaved { get; set; } = DateTime.Now;
+        public DateTime LastSaved { get; set; } = DateTime.UtcNow;
 
         /// <summary>
         /// Queue execution statistics
@@ -157,6 +157,11 @@
         public Dictionary<string, int> FailureReasons { get; set; } = new();
 
         /// <summary>
+        /// Aggregated step-level performance metrics keyed by StepId.
+        /// </summary>
+        public Dictionary<string, StepPerformanceEntry> StepPerformance { get; set; } = new();
+
+        /// <summary>
         /// Updates statistics with a completed queue item
         /// </summary>
         public void UpdateWithCompletedItem(AutoLoginQueueItem item)
@@ -195,7 +200,7 @@
         public void UpdateExecutionStart()
         {
             TotalExecutions++;
-            LastExecutionStart = DateTime.Now;
+            LastExecutionStart = DateTime.UtcNow;
         }
 
         /// <summary>
@@ -203,7 +208,7 @@
         /// </summary>
         public void UpdateExecutionEnd()
         {
-            LastExecutionEnd = DateTime.Now;
+            LastExecutionEnd = DateTime.UtcNow;
         }
 
         private void UpdateAverageItemTime()

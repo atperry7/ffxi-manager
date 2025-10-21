@@ -75,5 +75,24 @@ namespace FFXIManager.Services
         double CalculateSuccessRate(int completedItems, int failedItems);
 
         #endregion
+
+        #region Step-level Metrics
+
+        /// <summary>
+        /// Records the start of a workflow step for timing.
+        /// </summary>
+        void RecordStepStart(AutoLoginQueueItem item, AutoLoginSubtask subtask);
+
+        /// <summary>
+        /// Records the completion of a workflow step.
+        /// </summary>
+        void RecordStepCompleted(AutoLoginQueueItem item, AutoLoginSubtask subtask, bool success);
+
+        /// <summary>
+        /// Records the final detection result for a step (confidence and duration seconds).
+        /// </summary>
+        void RecordDetectionResult(string stepId, string displayName, double confidence, double detectionSeconds);
+
+        #endregion
     }
 }

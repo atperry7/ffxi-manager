@@ -190,8 +190,11 @@ namespace FFXIManager.Models
                 if (StartTime == null) return null;
 
                 // Use EndTime if available (subtask completed), otherwise use current time only for active subtasks
-                var endTime = EndTime ?? (IsActive && EndTime == null ? DateTime.Now : null);
-                return endTime?.Subtract(StartTime.Value);
+                var endTime = EndTime ?? (IsActive && EndTime == null ? DateTime.UtcNow : null);
+                if (endTime == null) return null;
+
+                var diff = endTime.Value - StartTime.Value;
+                return diff < TimeSpan.Zero ? TimeSpan.Zero : diff;
             }
         }
 
@@ -245,7 +248,7 @@ namespace FFXIManager.Models
             if (!IsActive || !StartTime.HasValue || Progress <= 0 || Progress >= 100)
                 return null;
 
-            var elapsed = DateTime.Now - StartTime.Value;
+            var elapsed = DateTime.UtcNow - StartTime.Value;
             if (elapsed.TotalSeconds < 2) return null; // Need some time to calculate
 
             // Calculate estimated total duration based on current progress rate
@@ -273,7 +276,7 @@ namespace FFXIManager.Models
                     return Progress;
 
                 // If we have a good estimated duration, calculate smooth progress based on time
-                var elapsed = DateTime.Now - StartTime.Value;
+                var elapsed = DateTime.UtcNow - StartTime.Value;
                 var expectedProgress = Math.Min(95, (int)((elapsed.TotalSeconds / EstimatedDurationSeconds) * 100));
 
                 // Use the higher of actual progress or time-based progress for smooth experience
@@ -291,7 +294,7 @@ namespace FFXIManager.Models
         public void Start()
         {
             Status = AutoLoginSubtaskStatus.InProgress;
-            StartTime = DateTime.Now;
+            StartTime = DateTime.UtcNow;
             Progress = 0;
             StatusMessage = $"Starting {Name}";
         }
@@ -304,10 +307,17 @@ namespace FFXIManager.Models
         /// <param name="message">Optional detailed message</param>
         public void UpdateProgressWithPhase(string phase, int progress, string? message = null)
         {
-            Progress = progress;
+            // Ensure progress is monotonic during an active run to avoid UI bouncing
+            var target = Math.Clamp(progress, 0, 100);
+            if (IsActive && target < Progress)
+            {
+                target = Progress;
+            }
+
+            Progress = target;
 
             // Create user-friendly phase-based message
-            var phaseMessage = GetPhaseBasedMessage(phase, progress);
+            var phaseMessage = GetPhaseBasedMessage(phase, target);
             StatusMessage = !string.IsNullOrEmpty(message) ? $"{phaseMessage} - {message}" : phaseMessage;
         }
 
@@ -367,7 +377,7 @@ namespace FFXIManager.Models
         {
             Status = AutoLoginSubtaskStatus.Completed;
             Progress = 100;
-            EndTime = DateTime.Now;
+            EndTime = DateTime.UtcNow;
             StatusMessage = $"{Name} completed";
         }
 
@@ -378,7 +388,7 @@ namespace FFXIManager.Models
         public void Fail(string errorMessage)
         {
             Status = AutoLoginSubtaskStatus.Failed;
-            EndTime = DateTime.Now;
+            EndTime = DateTime.UtcNow;
             ErrorMessage = errorMessage;
             StatusMessage = $"{Name} failed: {errorMessage}";
         }
@@ -390,7 +400,7 @@ namespace FFXIManager.Models
         public void Skip(string? reason = null)
         {
             Status = AutoLoginSubtaskStatus.Skipped;
-            EndTime = DateTime.Now;
+            EndTime = DateTime.UtcNow;
             StatusMessage = $"{Name} skipped" + (string.IsNullOrEmpty(reason) ? "" : $": {reason}");
         }
 
@@ -400,7 +410,7 @@ namespace FFXIManager.Models
         public void Cancel()
         {
             Status = AutoLoginSubtaskStatus.Cancelled;
-            EndTime = DateTime.Now;
+            EndTime = DateTime.UtcNow;
             StatusMessage = $"{Name} cancelled";
         }
 
