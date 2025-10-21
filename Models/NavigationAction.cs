@@ -108,8 +108,8 @@ namespace FFXIManager.Models
                         var typeName = value?.GetType().FullName ?? string.Empty;
                         if (typeName == "System.Windows.Controls.ComboBoxItem")
                         {
-                            var contentProp = value.GetType().GetProperty("Content");
-                            var contentVal = contentProp?.GetValue(value)?.ToString() ?? value.ToString() ?? string.Empty;
+                            var contentProp = value?.GetType().GetProperty("Content");
+                            var contentVal = contentProp?.GetValue(value)?.ToString() ?? value?.ToString() ?? string.Empty;
                             return (T)(object)SanitizeParameterString(contentVal);
                         }
                     }
@@ -136,7 +136,7 @@ namespace FFXIManager.Models
                     if (value is T typedValue)
                         return typedValue;
 
-                    return (T)Convert.ChangeType(value, typeof(T));
+                    return value != null ? (T)Convert.ChangeType(value, typeof(T)) : defaultValue;
                 }
                 catch
                 {
@@ -157,8 +157,8 @@ namespace FFXIManager.Models
             var typeName = value?.GetType().FullName ?? string.Empty;
             if (typeName == "System.Windows.Controls.ComboBoxItem")
             {
-                var contentProp = value.GetType().GetProperty("Content");
-                var contentVal = contentProp?.GetValue(value)?.ToString() ?? value.ToString() ?? string.Empty;
+                var contentProp = value?.GetType().GetProperty("Content");
+                var contentVal = contentProp?.GetValue(value)?.ToString() ?? value?.ToString() ?? string.Empty;
                 sanitized = SanitizeParameterString(contentVal);
             }
             else if (value is string s)

@@ -57,7 +57,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             }
 
             // Determine if multiple click points are defined via Parameters["ClickPoints"] (JSON)
-            var multiPoints = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", null);
+            var multiPoints = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
             if (multiPoints == null || multiPoints.Count == 0)
             {
                 await _loggingService.LogErrorAsync("[CLICK] No click points configured. Add at least 1 point to Parameters['ClickPoints'].");

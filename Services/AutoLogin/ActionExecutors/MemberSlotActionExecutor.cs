@@ -147,7 +147,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             }
 
             // Get configured click points from action parameters (JSON array)
-            var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", null);
+            var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
             if (points == null || points.Count < 4)
             {
                 await _loggingService.LogWarningAsync("[MEMBER-SLOT] ClickPoints missing or fewer than 4; cannot click");

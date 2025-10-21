@@ -111,7 +111,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                                 await _loggingService.LogInfoAsync($"[INPUT-PASSWORD] Template matched: {templatePath} (confidence: {matchResult.Confidence:F2})");
 
                                 // Optional: Click one or more points if provided in action parameters
-                                var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", null);
+                                var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
                                 if (points != null && points.Count > 0)
                                 {
                                     for (int i = 0; i < points.Count; i++)

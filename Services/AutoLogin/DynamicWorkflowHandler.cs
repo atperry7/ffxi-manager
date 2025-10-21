@@ -197,7 +197,7 @@ namespace FFXIManager.Services.AutoLogin
 
             // Phase 3: Execute navigation with on-demand discovery/detection
             await _progressService.UpdateProgressWithPhaseAsync(subtask, "authentication", 60, $"Navigating {stepDef.DisplayName}");
-            await ExecuteNavigationAsync(subtask, stepDef, queueItem, context, windowHandle, templateMatch, cancellationToken);
+            await ExecuteNavigationAsync(subtask, stepDef, queueItem ?? throw new ArgumentNullException(nameof(queueItem)), context ?? throw new ArgumentNullException(nameof(context)), windowHandle, templateMatch, cancellationToken);
 
             // Phase 5: Post-navigation delay (if configured)
             if (stepDef.EstimatedDurationSeconds > 0)

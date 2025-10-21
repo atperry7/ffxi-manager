@@ -149,6 +149,7 @@ namespace FFXIManager.Services.AutoLogin
             _contexts.Clear();
 
             _disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 

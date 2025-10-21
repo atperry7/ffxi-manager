@@ -8,7 +8,7 @@ namespace FFXIManager.Services
     /// Service for OTP (One-Time Password) operations using TOTP algorithm
     /// Handles secure storage and generation of OTP codes for Square Enix authentication
     /// </summary>
-    public class OTPService : IOTPService
+    public partial class OTPService : IOTPService
     {
         private readonly IWindowsCredentialsService _credentialsService;
         private readonly ILoggingService _loggingService;
@@ -134,8 +134,7 @@ namespace FFXIManager.Services
             }
 
             // Validate Base32 format (A-Z, 2-7)
-            var base32Pattern = new Regex(@"^[A-Z2-7]{32}$");
-            if (!base32Pattern.IsMatch(normalized))
+            if (!Base32ValidationRegex().IsMatch(normalized))
             {
                 return null;
             }
@@ -230,5 +229,11 @@ namespace FFXIManager.Services
 
             return bytes;
         }
+
+        /// <summary>
+        /// Generated regex for Base32 validation pattern
+        /// </summary>
+        [GeneratedRegex(@"^[A-Z2-7]{32}$", RegexOptions.None)]
+        private static partial Regex Base32ValidationRegex();
     }
 }

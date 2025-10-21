@@ -176,11 +176,11 @@
                 if (!string.IsNullOrEmpty(item.ErrorMessage))
                 {
                     var reason = item.ErrorMessage.Length > 50
-                        ? item.ErrorMessage.Substring(0, 50) + "..."
+                        ? string.Concat(item.ErrorMessage.AsSpan(0, 50), "...")
                         : item.ErrorMessage;
 
-                    if (FailureReasons.ContainsKey(reason))
-                        FailureReasons[reason]++;
+                    if (FailureReasons.TryGetValue(reason, out var count))
+                        FailureReasons[reason] = count + 1;
                     else
                         FailureReasons[reason] = 1;
                 }

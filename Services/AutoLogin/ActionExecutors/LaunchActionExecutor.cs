@@ -117,7 +117,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
                     // Store process ID in context for potential later use (type-safe)
                     var stepId = context.WorkflowStep?.StepId ?? "launch";
-                    var skippedPid = app.ProcessIds.First();
+                    var skippedPid = app.ProcessIds[0];
                     // GUID-based context keys (preferred)
                     context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchProcessIdByApp(app.Id), skippedPid);
                     context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchTimestampByApp(app.Id), DateTime.UtcNow);
@@ -172,7 +172,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 throw new TimeoutException(message);
             }
 
-            var processId = app.ProcessIds.First();
+            var processId = app.ProcessIds[0];
             await _loggingService.LogInfoAsync($"[LAUNCH] {app.Name} process detected (PID: {processId})");
 
             // Store process ID in context for later use (type-safe)

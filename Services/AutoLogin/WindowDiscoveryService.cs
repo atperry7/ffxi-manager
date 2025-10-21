@@ -277,7 +277,12 @@ namespace FFXIManager.Services.AutoLogin
             {
                 try
                 {
-                    GetWindowThreadProcessId(windowHandle, out uint processId);
+                    var threadId = GetWindowThreadProcessId(windowHandle, out uint processId);
+                    if (threadId == 0)
+                    {
+                        // Failed to get process ID
+                        return 0;
+                    }
                     return (int)processId;
                 }
                 catch
@@ -299,9 +304,14 @@ namespace FFXIManager.Services.AutoLogin
                     var length = GetWindowTextLength(windowHandle);
                     if (length == 0) return string.Empty;
 
-                    var builder = new System.Text.StringBuilder(length + 1);
-                    GetWindowText(windowHandle, builder, builder.Capacity);
-                    return builder.ToString();
+                    var buffer = new char[length + 1];
+                    var result = GetWindowText(windowHandle, buffer, buffer.Length);
+                    if (result == 0)
+                    {
+                        // GetWindowText failed
+                        return string.Empty;
+                    }
+                    return new string(buffer, 0, result);
                 }
                 catch
                 {
@@ -319,7 +329,7 @@ namespace FFXIManager.Services.AutoLogin
         private static extern int GetWindowTextLength(IntPtr hWnd);
 
         [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
-        private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
+        private static extern int GetWindowText(IntPtr hWnd, char[] lpString, int nMaxCount);
 
         #endregion
     }

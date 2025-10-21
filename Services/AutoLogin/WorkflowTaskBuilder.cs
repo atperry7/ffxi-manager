@@ -85,7 +85,7 @@ namespace FFXIManager.Services.AutoLogin
         /// <summary>
         /// Creates a single AutoLoginSubtask from a WorkflowStepDefinition.
         /// </summary>
-        private AutoLoginSubtask CreateSubtaskFromStep(WorkflowStepDefinition step, int executionOrder)
+        private static AutoLoginSubtask CreateSubtaskFromStep(WorkflowStepDefinition step, int executionOrder)
         {
             var subtask = new AutoLoginSubtask
             {

@@ -394,7 +394,7 @@ namespace FFXIManager.ViewModels
             get
             {
                 if (SelectedNavigationAction == null) return new System.Collections.Generic.List<RelativeClickOffset>();
-                var list = SelectedNavigationAction.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", null);
+                var list = SelectedNavigationAction.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
                 return list ?? new System.Collections.Generic.List<RelativeClickOffset>();
             }
         }

@@ -70,8 +70,8 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         [DllImport("user32.dll")]
         private static extern int GetWindowTextLength(IntPtr hWnd);
 
-        [DllImport("user32.dll")]
-        private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern int GetWindowText(IntPtr hWnd, char[] lpString, int nMaxCount);
 
         [DllImport("user32.dll")]
         private static extern int GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId);
@@ -136,7 +136,12 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
                     // Get window metadata
                     var windowTitle = GetWindowTitle(windowHandle);
-                    GetWindowThreadProcessId(windowHandle, out int processId);
+                    var threadId = GetWindowThreadProcessId(windowHandle, out int processId);
+                    if (threadId == 0)
+                    {
+                        _loggingService.LogWarningAsync($"Failed to get process ID for window 0x{windowHandle.ToInt64():X}").Wait();
+                        processId = 0;
+                    }
                     var dpiScale = GetWindowDpiScale(windowHandle);
 
                     var screenshot = new WindowScreenshot
@@ -216,9 +221,14 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 var length = GetWindowTextLength(windowHandle);
                 if (length == 0) return string.Empty;
 
-                var sb = new System.Text.StringBuilder(length + 1);
-                GetWindowText(windowHandle, sb, sb.Capacity);
-                return sb.ToString();
+                var buffer = new char[length + 1];
+                var result = GetWindowText(windowHandle, buffer, buffer.Length);
+                if (result == 0)
+                {
+                    // GetWindowText failed, but we can still return empty string
+                    return string.Empty;
+                }
+                return new string(buffer, 0, result);
             }
             catch
             {
@@ -316,7 +326,15 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 if (memoryDC != IntPtr.Zero)
                     DeleteDC(memoryDC);
                 if (windowDC != IntPtr.Zero)
-                    ReleaseDC(windowHandle, windowDC);
+                {
+                    var releaseResult = ReleaseDC(windowHandle, windowDC);
+                    if (releaseResult == 0)
+                    {
+                        // ReleaseDC failed, but we can't do much about it at this point
+                        // Just log for debugging purposes
+                        _loggingService.LogDebugAsync($"ReleaseDC failed for window 0x{windowHandle.ToInt64():X}").Wait();
+                    }
+                }
             }
         }
 

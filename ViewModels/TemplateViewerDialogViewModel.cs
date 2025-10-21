@@ -236,7 +236,7 @@ namespace FFXIManager.ViewModels
             {
                 if (step.Action?.Equals("Click", StringComparison.OrdinalIgnoreCase) == true)
                 {
-                    var points = step.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", null);
+                    var points = step.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
                     if (points != null && points.Count > 0)
                     {
                         int idx = 1;

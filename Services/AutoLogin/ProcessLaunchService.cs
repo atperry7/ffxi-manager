@@ -158,9 +158,9 @@ namespace FFXIManager.Services.AutoLogin
             while (DateTime.UtcNow < timeoutEnd && !cancellationToken.IsCancellationRequested)
             {
                 var processes = await _processUtilityService.GetProcessesByNamesAsync(processNames);
-                if (processes.Any())
+                if (processes.Count > 0)
                 {
-                    var process = processes.First();
+                    var process = processes[0];
                     await _loggingService.LogInfoAsync($"[PROCESS_LAUNCH] Process detected: {process.ProcessName} (PID: {process.ProcessId})");
                     return process.ProcessId;
                 }

@@ -9,7 +9,7 @@ namespace FFXIManager.Services.AutoLogin
     /// Service implementation for managing auto-login workflow definitions.
     /// Uses JSON file storage in application data directory with in-memory caching.
     /// </summary>
-    public class WorkflowService : IWorkflowService
+    public class WorkflowService : IWorkflowService, IDisposable
     {
         private readonly ILoggingService _loggingService;
         private readonly ISettingsService _settingsService;
@@ -17,6 +17,7 @@ namespace FFXIManager.Services.AutoLogin
         private readonly string _workflowsDirectory;
         private readonly Dictionary<Guid, WorkflowDefinition> _workflowCache = new();
         private readonly SemaphoreSlim _cacheLock = new(1, 1);
+        private bool _disposed;
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -670,6 +671,18 @@ namespace FFXIManager.Services.AutoLogin
             {
                 await _loggingService.LogErrorAsync("Failed to initialize system workflows", ex);
             }
+        }
+
+        /// <summary>
+        /// Disposes the WorkflowService and cleans up resources
+        /// </summary>
+        public void Dispose()
+        {
+            if (_disposed) return;
+
+            _cacheLock?.Dispose();
+            _disposed = true;
+            GC.SuppressFinalize(this);
         }
 
     }

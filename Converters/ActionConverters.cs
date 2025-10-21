@@ -72,7 +72,7 @@ namespace FFXIManager.Converters
 
         private static string GetClickSummary(KeyboardAction action)
         {
-            var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", null);
+            var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
             var n = points?.Count ?? 0;
             if (n <= 0)
             {

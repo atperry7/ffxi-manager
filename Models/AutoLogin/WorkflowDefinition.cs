@@ -233,7 +233,7 @@ namespace FFXIManager.Models.AutoLogin
                 .Select(g => g.Key)
                 .ToList();
 
-            if (duplicateSteps.Any())
+            if (duplicateSteps.Count > 0)
                 errors.Add($"Duplicate step IDs found: {string.Join(", ", duplicateSteps)}");
 
             // Check for duplicate orders
@@ -243,7 +243,7 @@ namespace FFXIManager.Models.AutoLogin
                 .Select(g => g.Key)
                 .ToList();
 
-            if (duplicateOrders.Any())
+            if (duplicateOrders.Count > 0)
                 errors.Add($"Duplicate step orders found: {string.Join(", ", duplicateOrders)}");
 
             // Validate each step
@@ -333,7 +333,7 @@ namespace FFXIManager.Models.AutoLogin
         /// </summary>
         public void AddStep(WorkflowStepDefinition step)
         {
-            var maxOrder = Steps.Any() ? Steps.Max(s => s.Order) : -1;
+            var maxOrder = Steps.Count > 0 ? Steps.Max(s => s.Order) : -1;
             step.Order = maxOrder + 1;
             Steps.Add(step);
             LastModifiedDate = DateTime.UtcNow;

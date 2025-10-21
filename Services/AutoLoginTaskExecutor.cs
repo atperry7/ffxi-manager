@@ -480,6 +480,7 @@ namespace FFXIManager.Services
             }
 
             _disposed = true;
+            GC.SuppressFinalize(this);
         }
 
         #endregion

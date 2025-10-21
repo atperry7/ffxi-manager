@@ -314,7 +314,7 @@ namespace FFXIManager.Models
         /// <summary>
         /// Converts technical messages to user-friendly alternatives
         /// </summary>
-        private string ConvertToUserFriendlyMessage(string technicalMessage)
+        private static string ConvertToUserFriendlyMessage(string technicalMessage)
         {
             // Common technical message patterns and their user-friendly alternatives
             var messagePatterns = new Dictionary<string, string>
@@ -346,7 +346,7 @@ namespace FFXIManager.Models
         /// <summary>
         /// Gets user-friendly phase-based progress message
         /// </summary>
-        private string GetPhaseBasedMessage(string phase, int progress)
+        private static string GetPhaseBasedMessage(string phase, int progress)
         {
             return phase.ToLowerInvariant() switch
             {

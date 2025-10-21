@@ -109,7 +109,7 @@ namespace FFXIManager.Services
                 }
 
                 // Log the reset behavior for user awareness
-                if (restoredItems.Any())
+                if (restoredItems.Count > 0)
                 {
                     await _loggingService.LogInfoAsync($"Queue state loaded: {restoredItems.Count} items reset to pending for fresh auto-login session");
                 }

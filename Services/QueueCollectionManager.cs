@@ -141,7 +141,7 @@ namespace FFXIManager.Services
         {
             // Check if any items are currently executing
             var executingItems = QueueItems.Where(x => x.Status == AutoLoginQueueStatus.InProgress).ToList();
-            if (executingItems.Any())
+            if (executingItems.Count > 0)
             {
                 await _loggingService.LogWarningAsync("Cannot clear queue while items are executing");
                 return;
@@ -201,7 +201,7 @@ namespace FFXIManager.Services
 
             // Don't allow reordering if any items are executing
             var executingItems = QueueItems.Where(x => x.Status == AutoLoginQueueStatus.InProgress).ToList();
-            if (executingItems.Any())
+            if (executingItems.Count > 0)
             {
                 await _loggingService.LogWarningAsync("Cannot reorder queue while items are executing");
                 return;
@@ -227,7 +227,7 @@ namespace FFXIManager.Services
         {
             // Don't reset if any items are executing
             var executingItems = QueueItems.Where(x => x.Status == AutoLoginQueueStatus.InProgress).ToList();
-            if (executingItems.Any())
+            if (executingItems.Count > 0)
             {
                 await _loggingService.LogWarningAsync("Cannot reset queue while items are executing");
                 return;
