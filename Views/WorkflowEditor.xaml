@@ -1151,7 +1151,7 @@
 
                                                         <!-- Template Path -->
                                                         <TextBlock Grid.Row="2" Grid.Column="0" Text="Template:" VerticalAlignment="Top" Margin="0,0,0,8"/>
-                                                        <Grid Grid.Row="6" Grid.Column="1" Margin="0,0,0,8">
+                                                        <Grid Grid.Row="2" Grid.Column="1" Margin="0,0,0,8">
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="*"/>
                                                                 <ColumnDefinition Width="Auto"/>
@@ -1162,18 +1162,18 @@
                                                                          Margin="0,0,0,8"
                                                                          ToolTip="Template image for screen detection&#x0a;Leave empty if no template matching needed"/>
 
-                                                                <StackPanel Orientation="Horizontal">
-                                                                    <Button Content="📷 Select Image"
+                                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                                                    <Button Content="📷"
                                                                             Command="{Binding SelectActionTemplateImageCommand}"
-                                                                            Width="140"
-                                                                            Height="28"
+                                                                            Width="36"
+                                                                            Height="36"
                                                                             Margin="0,0,4,0"
                                                                             Style="{StaticResource CircularPrimaryButton}"
                                                                             ToolTip="Select a screenshot for template matching"/>
-                                                                    <Button Content="🔄 Replace"
+                                                                    <Button Content="🔄"
                                                                             Command="{Binding ReplaceActionTemplateImageCommand}"
-                                                                            Width="100"
-                                                                            Height="28"
+                                                                            Width="36"
+                                                                            Height="36"
                                                                             Style="{StaticResource CircularSecondaryButton}"
                                                                             ToolTip="Replace the existing template image"/>
                                                                 </StackPanel>
@@ -1213,12 +1213,13 @@
                                                                            Margin="4">
                                                                         <Image.InputBindings>
                                                                             <MouseBinding Gesture="LeftClick"
-                                                                                          Command="{Binding ShowLargeActionTemplateImageCommand}"/>
+                                                                                          Command="{Binding RelativeSource={RelativeSource AncestorType=Window}, Path=DataContext.ShowLargeActionTemplateImageCommand}"/>
                                                                         </Image.InputBindings>
                                                                     </Image>
 
                                                                     <!-- Multi ClickPoints Overlay -->
-                                                                    <ItemsControl ItemsSource="{Binding SelectedActionClickPoints}"
+                                                                    <ItemsControl x:Name="ActionTemplateOverlay"
+                                                                                  ItemsSource="{Binding SelectedActionClickPoints}"
                                                                                   Visibility="{Binding IsClickActionSelected, Converter={StaticResource BoolToVisConverter}}"
                                                                                   IsHitTestVisible="False"
                                                                                   Margin="4">
@@ -1235,19 +1236,19 @@
                                                                                             <TranslateTransform.X>
                                                                                                 <MultiBinding Converter="{StaticResource RelativeToUniformImageCoordinateConverter}" ConverterParameter="X">
                                                                                                     <Binding Path="X"/>
-                                                                                                    <Binding ElementName="ActionTemplateThumbImage" Path="ActualWidth"/>
-                                                                                                    <Binding ElementName="ActionTemplateThumbImage" Path="ActualHeight"/>
-                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelWidth" RelativeSource="{RelativeSource AncestorType=Window}"/>
-                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelHeight" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                                                                    <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
+                                                                                                    <Binding Path="ActualHeight" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
+                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelWidth" RelativeSource="{RelativeSource AncestorType=GroupBox}"/>
+                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelHeight" RelativeSource="{RelativeSource AncestorType=GroupBox}"/>
                                                                                                 </MultiBinding>
                                                                                             </TranslateTransform.X>
                                                                                             <TranslateTransform.Y>
                                                                                                 <MultiBinding Converter="{StaticResource RelativeToUniformImageCoordinateConverter}" ConverterParameter="Y">
                                                                                                     <Binding Path="Y"/>
-                                                                                                    <Binding ElementName="ActionTemplateThumbImage" Path="ActualWidth"/>
-                                                                                                    <Binding ElementName="ActionTemplateThumbImage" Path="ActualHeight"/>
-                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelWidth" RelativeSource="{RelativeSource AncestorType=Window}"/>
-                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelHeight" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                                                                    <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
+                                                                                                    <Binding Path="ActualHeight" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
+                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelWidth" RelativeSource="{RelativeSource AncestorType=GroupBox}"/>
+                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelHeight" RelativeSource="{RelativeSource AncestorType=GroupBox}"/>
                                                                                                 </MultiBinding>
                                                                                             </TranslateTransform.Y>
                                                                                         </TranslateTransform>
@@ -1261,7 +1262,7 @@
                                                         </Grid>
 
                                                         <!-- Confidence Threshold -->
-                                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Confidence:" VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Row="7" Grid.Column="0" Text="Confidence:" VerticalAlignment="Center"/>
                                                         <Grid Grid.Row="7" Grid.Column="1">
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="*"/>

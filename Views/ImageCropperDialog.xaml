@@ -11,33 +11,6 @@
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
-
-        <!-- Button styles using theme resources -->
-        <Style x:Key="BaseButton" TargetType="Button">
-            <Setter Property="Height" Value="36"/>
-            <Setter Property="Padding" Value="20,8"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="BorderThickness" Value="1"/>
-        </Style>
-
-        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonTextBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
-        </Style>
-
-        <Style x:Key="SuccessButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="{DynamicResource SuccessBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonTextBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource SuccessBrush}"/>
-        </Style>
-
-        <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="{DynamicResource SecondaryBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource ButtonTextBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-        </Style>
     </Window.Resources>
 
     <Grid Margin="15">
@@ -154,26 +127,29 @@
             </Grid.ColumnDefinitions>
 
             <Button Grid.Column="1"
-                    Content="Use Full Image"
+                    Content="🖼️"
                     Command="{Binding UseFullImageCommand}"
-                    Style="{StaticResource PrimaryButton}"
-                    Width="140"
+                    Style="{StaticResource CircularPrimaryButton}"
+                    Width="36"
+                    Height="36"
                     Margin="0,0,10,0"
                     ToolTip="Use the entire image without cropping"/>
 
             <Button Grid.Column="2"
-                    Content="Apply Crop"
+                    Content="✂️"
                     Command="{Binding ApplyCropCommand}"
-                    Style="{StaticResource SuccessButton}"
-                    Width="120"
+                    Style="{StaticResource CircularSuccessButton}"
+                    Width="36"
+                    Height="36"
                     Margin="0,0,10,0"
                     ToolTip="Crop to the selected region"/>
 
             <Button Grid.Column="3"
-                    Content="Cancel"
+                    Content="❌"
                     Command="{Binding CancelCommand}"
-                    Style="{StaticResource SecondaryButton}"
-                    Width="100"
+                    Style="{StaticResource CircularSecondaryButton}"
+                    Width="36"
+                    Height="36"
                     ToolTip="Cancel and close this dialog"/>
         </Grid>
     </Grid>

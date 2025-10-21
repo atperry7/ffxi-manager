@@ -233,30 +233,33 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <Button Grid.Column="0"
-                    Content="Clear All"
-                    Width="110"
-                    Height="32"
+            <Button Grid.Column="1"
+                    Content="🗑️"
+                    Width="36"
+                    Height="36"
                     Margin="0,0,8,0"
                     Visibility="{Binding IsPickMode, Converter={StaticResource BoolToVisConverter}}"
-                    Style="{StaticResource SecondaryButton}"
+                    Style="{StaticResource CircularDangerButton}"
+                    ToolTip="Remove all click points from the template"
                     Click="ClearAllButton_Click"/>
 
-            <Button Grid.Column="1"
-                    Content="Apply"
-                    Width="100"
-                    Height="32"
+            <Button Grid.Column="2"
+                    Content="✅"
+                    Width="36"
+                    Height="36"
                     Margin="0,0,8,0"
                     Visibility="{Binding IsPickMode, Converter={StaticResource BoolToVisConverter}}"
-                    Style="{StaticResource PrimaryButton}"
+                    Style="{StaticResource CircularSuccessButton}"
+                    ToolTip="Save and apply the selected click points"
                     IsDefault="True"
                     Click="ApplyButton_Click"/>
 
-            <Button Grid.Column="2"
-                    Content="Close"
-                    Width="100"
-                    Height="32"
-                    Style="{StaticResource SecondaryButton}"
+            <Button Grid.Column="3"
+                    Content="❌"
+                    Width="36"
+                    Height="36"
+                    Style="{StaticResource CircularSecondaryButton}"
+                    ToolTip="Close the template viewer"
                     IsCancel="True"
                     Click="CloseButton_Click"/>
         </Grid>
