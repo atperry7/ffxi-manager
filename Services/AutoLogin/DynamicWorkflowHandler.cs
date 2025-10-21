@@ -1,12 +1,6 @@
-﻿using System;
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 using FFXIManager.Models.AutoLogin;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
-using FFXIManager.Infrastructure;
 
 namespace FFXIManager.Services.AutoLogin
 {
@@ -292,7 +286,7 @@ namespace FFXIManager.Services.AutoLogin
                 var expectedMs = (attempts * delayMs);
                 if (TimeSpan.FromMilliseconds(expectedMs) > options.Timeout)
                 {
-                    await _loggingService.LogWarningAsync($"Detection polling budget ({attempts}x{delayMs}ms = {expectedMs/1000.0:F1}s) exceeds step hard cap of {options.Timeout.TotalSeconds}s for '{description}'. Consider adjusting RetryAttempts/RetryDelayMs or EstimatedDurationSeconds.");
+                    await _loggingService.LogWarningAsync($"Detection polling budget ({attempts}x{delayMs}ms = {expectedMs / 1000.0:F1}s) exceeds step hard cap of {options.Timeout.TotalSeconds}s for '{description}'. Consider adjusting RetryAttempts/RetryDelayMs or EstimatedDurationSeconds.");
                 }
 
                 await _loggingService.LogInfoAsync($"Detection config [primary] - Attempts: {options.MaxAttempts?.ToString() ?? "auto"}, Interval: {delayMs}ms, Timeout: {options.Timeout.TotalSeconds}s (hard cap)");
@@ -347,7 +341,7 @@ namespace FFXIManager.Services.AutoLogin
                         var expectedMsFb = (attemptsFb * delayFb);
                         if (TimeSpan.FromMilliseconds(expectedMsFb) > options.Timeout)
                         {
-                            await _loggingService.LogWarningAsync($"Fallback detection budget ({attemptsFb}x{delayFb}ms = {expectedMsFb/1000.0:F1}s) exceeds step hard cap of {options.Timeout.TotalSeconds}s for '{description}'. Consider adjusting configuration.");
+                            await _loggingService.LogWarningAsync($"Fallback detection budget ({attemptsFb}x{delayFb}ms = {expectedMsFb / 1000.0:F1}s) exceeds step hard cap of {options.Timeout.TotalSeconds}s for '{description}'. Consider adjusting configuration.");
                         }
                         await _loggingService.LogInfoAsync($"Detection config [fallback] - Attempts: {options.MaxAttempts}, Interval: {delayFb}ms, Timeout: {options.Timeout.TotalSeconds}s (hard cap)");
 

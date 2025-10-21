@@ -1,9 +1,5 @@
-using System;
+﻿using Microsoft.Extensions.Configuration;
 using System.Collections.Concurrent;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 
 namespace FFXIManager.Services.AutoLogin
 {

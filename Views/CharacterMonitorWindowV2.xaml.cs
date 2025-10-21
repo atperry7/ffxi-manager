@@ -1,8 +1,7 @@
-using System;
+﻿using FFXIManager.ViewModels.CharacterMonitor;
+using Microsoft.Extensions.DependencyInjection;
 using System.Windows;
 using System.Windows.Input;
-using FFXIManager.ViewModels.CharacterMonitor;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace FFXIManager.Views
 {
@@ -19,17 +18,17 @@ namespace FFXIManager.Views
         public CharacterMonitorWindowV2()
         {
             InitializeComponent();
-            
+
             // Resolve and set the view model - null safety check
             if (App.Services != null)
             {
                 _viewModel = App.Services.GetRequiredService<CharacterMonitorViewModel>();
                 DataContext = _viewModel;
-                
+
                 // Subscribe to close request from view model
                 _viewModel.OnCloseRequested += OnViewModelCloseRequested;
             }
-            
+
             // Set initial properties
             ShowInTaskbar = true;
         }
@@ -42,8 +41,8 @@ namespace FFXIManager.Views
             if (e.ClickCount == 2)
             {
                 // Double-click toggles maximize/restore
-                WindowState = WindowState == WindowState.Normal 
-                    ? WindowState.Maximized 
+                WindowState = WindowState == WindowState.Normal
+                    ? WindowState.Maximized
                     : WindowState.Normal;
             }
             else
@@ -90,7 +89,7 @@ namespace FFXIManager.Views
                 _viewModel.Dispose();
                 _viewModel = null;
             }
-            
+
             base.OnClosed(e);
         }
     }

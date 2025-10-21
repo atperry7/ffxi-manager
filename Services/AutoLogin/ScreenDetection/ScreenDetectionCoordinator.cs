@@ -1,9 +1,5 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using FFXIManager.Infrastructure;
 using FFXIManager.Models;
-using FFXIManager.Services;
-using FFXIManager.Infrastructure;
 
 namespace FFXIManager.Services.AutoLogin.ScreenDetection
 {

@@ -1,7 +1,4 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using OpenCvSharp;
+﻿using OpenCvSharp;
 
 namespace FFXIManager.Services.AutoLogin.ScreenDetection;
 

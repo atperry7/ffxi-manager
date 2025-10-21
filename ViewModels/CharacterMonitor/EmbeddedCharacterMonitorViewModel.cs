@@ -1,9 +1,7 @@
-using System;
+﻿using FFXIManager.Services;
+using FFXIManager.ViewModels.Base;
 using System.ComponentModel;
 using System.Windows.Input;
-using FFXIManager.Infrastructure;
-using FFXIManager.Services;
-using FFXIManager.ViewModels.Base;
 
 namespace FFXIManager.ViewModels.CharacterMonitor
 {
@@ -55,8 +53,8 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         /// <summary>
         /// Monitoring status text
         /// </summary>
-        public string MonitoringStatus => CollectionViewModel.CharacterCount > 0 
-            ? "Monitoring Active" 
+        public string MonitoringStatus => CollectionViewModel.CharacterCount > 0
+            ? "Monitoring Active"
             : "No Characters";
 
         /// <summary>
@@ -67,7 +65,7 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         /// <summary>
         /// Quick access to characters collection for binding
         /// </summary>
-        public System.Collections.ObjectModel.ObservableCollection<CharacterItemViewModel> Characters 
+        public System.Collections.ObjectModel.ObservableCollection<CharacterItemViewModel> Characters
             => CollectionViewModel.Characters;
 
         #endregion
@@ -120,8 +118,8 @@ namespace FFXIManager.ViewModels.CharacterMonitor
             {
                 _statusService.SetMessage($"Error opening character monitor: {ex.Message}");
                 _ = _loggingService.LogErrorAsync(
-                    "Error opening character monitor window", 
-                    ex, 
+                    "Error opening character monitor window",
+                    ex,
                     "EmbeddedCharacterMonitorViewModel");
             }
         }
@@ -145,14 +143,14 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         {
             if (_disposed)
                 return;
-            
+
             // Unsubscribe from events
             if (CollectionViewModel != null)
             {
                 CollectionViewModel.PropertyChanged -= OnCollectionPropertyChanged;
                 CollectionViewModel.Dispose();
             }
-            
+
             _disposed = true;
             GC.SuppressFinalize(this);
         }

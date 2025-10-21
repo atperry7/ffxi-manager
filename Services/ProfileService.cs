@@ -1,11 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Text;
+﻿using FFXIManager.Configuration;
 using FFXIManager.Models;
-using FFXIManager.Configuration;
+using System.IO;
+using System.Text;
 
 namespace FFXIManager.Services
 {

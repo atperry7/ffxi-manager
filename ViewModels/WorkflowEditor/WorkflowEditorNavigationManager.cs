@@ -1,8 +1,7 @@
-using System;
-using System.Collections.ObjectModel;
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 using FFXIManager.Models.AutoLogin;
 using FFXIManager.Services;
+using System.Collections.ObjectModel;
 
 namespace FFXIManager.ViewModels.WorkflowEditor
 {

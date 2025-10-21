@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using FFXIManager.Infrastructure;
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 
 namespace FFXIManager.Services
 {
@@ -17,30 +12,30 @@ namespace FFXIManager.Services
         private readonly ILoggingService _loggingService;
         private readonly List<PlayOnlineCharacter> _orderedCharacters = new();
         private readonly object _lock = new object();
-        
+
         private bool _disposed;
         private IPlayOnlineMonitorService? _connectedMonitor;
-        
+
         public event EventHandler<CharacterCacheUpdatedEventArgs>? CharacterCacheUpdated;
-        
-        #pragma warning disable CS0067 // Event is never used - keeping for interface compatibility
+
+#pragma warning disable CS0067 // Event is never used - keeping for interface compatibility
         public event EventHandler? CharacterOrderProviderChanged;
-        #pragma warning restore CS0067
+#pragma warning restore CS0067
 
         public CharacterOrderingService(ILoggingService loggingService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
-            
+
             _ = _loggingService.LogInfoAsync("CharacterOrderingService initialized - waiting for monitor to connect", "CharacterOrderingService");
         }
-        
+
         /// <summary>
         /// Called by the monitor service to establish the connection
         /// </summary>
         public async Task ConnectToMonitorAsync(IPlayOnlineMonitorService monitorService)
         {
             if (monitorService == null || _disposed) return;
-            
+
             try
             {
                 // Subscribe to monitor events
@@ -48,9 +43,9 @@ namespace FFXIManager.Services
                 _connectedMonitor.CharacterDetected += OnCharacterDetected;
                 _connectedMonitor.CharacterUpdated += OnCharacterUpdated;
                 _connectedMonitor.CharacterRemoved += OnCharacterRemoved;
-                
+
                 await _loggingService.LogInfoAsync("CharacterOrderingService connected to monitor", "CharacterOrderingService");
-                
+
                 // Load any existing characters synchronously to ensure UI gets them
                 try
                 {
@@ -58,7 +53,7 @@ namespace FFXIManager.Services
                     if (existingCharacters?.Count > 0)
                     {
                         await _loggingService.LogInfoAsync($"Loading {existingCharacters.Count} existing characters", "CharacterOrderingService");
-                        
+
                         lock (_lock)
                         {
                             foreach (var character in existingCharacters)
@@ -69,7 +64,7 @@ namespace FFXIManager.Services
                                 }
                             }
                         }
-                        
+
                         NotifyOrderChanged();
                     }
                 }
@@ -83,7 +78,7 @@ namespace FFXIManager.Services
                 await _loggingService.LogErrorAsync("Error connecting to monitor", ex, "CharacterOrderingService");
             }
         }
-        
+
 
         /// <summary>
         /// Gets the ordered list of characters. This is THE source of truth for character order.
@@ -105,7 +100,7 @@ namespace FFXIManager.Services
             {
                 if (slotIndex < 0 || slotIndex >= _orderedCharacters.Count)
                     return Task.FromResult<PlayOnlineCharacter?>(null);
-                    
+
                 return Task.FromResult<PlayOnlineCharacter?>(_orderedCharacters[slotIndex]);
             }
         }
@@ -116,28 +111,28 @@ namespace FFXIManager.Services
         public Task<bool> MoveCharacterToSlotAsync(PlayOnlineCharacter character, int newSlotIndex)
         {
             if (character == null) return Task.FromResult(false);
-            
+
             lock (_lock)
             {
                 // Find current position by PID
                 var currentIndex = _orderedCharacters.FindIndex(c => c.ProcessId == character.ProcessId);
                 if (currentIndex < 0) return Task.FromResult(false);
-                
+
                 // Validate new position
                 if (newSlotIndex < 0 || newSlotIndex >= _orderedCharacters.Count)
                     return Task.FromResult(false);
-                
+
                 if (currentIndex == newSlotIndex)
                     return Task.FromResult(true); // Already in position
-                
+
                 // Move the character
                 var movingCharacter = _orderedCharacters[currentIndex];
                 _orderedCharacters.RemoveAt(currentIndex);
                 _orderedCharacters.Insert(newSlotIndex, movingCharacter);
-                
+
                 _ = _loggingService.LogInfoAsync($"Moved {character.DisplayName} from slot {currentIndex} to {newSlotIndex}", "CharacterOrderingService");
             }
-            
+
             // Notify after releasing lock
             NotifyOrderChanged();
             return Task.FromResult(true);
@@ -196,22 +191,22 @@ namespace FFXIManager.Services
         private void OnCharacterDetected(object? sender, PlayOnlineCharacterEventArgs e)
         {
             if (e?.Character == null) return;
-            
+
             bool added = false;
-            
+
             lock (_lock)
             {
                 // Check if already exists by PID
                 if (_orderedCharacters.Any(c => c.ProcessId == e.Character.ProcessId))
                     return;
-                
+
                 // Add new character to end of ordered list
                 _orderedCharacters.Add(e.Character);
                 added = true;
-                
+
                 _ = _loggingService.LogInfoAsync($"Added {e.Character.DisplayName} to slot {_orderedCharacters.Count - 1}", "CharacterOrderingService");
             }
-            
+
             if (added)
             {
                 NotifyOrderChanged();
@@ -224,7 +219,7 @@ namespace FFXIManager.Services
         private void OnCharacterUpdated(object? sender, PlayOnlineCharacterEventArgs e)
         {
             if (e?.Character == null) return;
-            
+
             lock (_lock)
             {
                 // Find and update character by PID, preserving position
@@ -234,7 +229,7 @@ namespace FFXIManager.Services
                     _orderedCharacters[index] = e.Character; // Update health/status in-place
                 }
             }
-            
+
             // Note: No order change notification needed for health updates
         }
 
@@ -244,9 +239,9 @@ namespace FFXIManager.Services
         private void OnCharacterRemoved(object? sender, PlayOnlineCharacterEventArgs e)
         {
             if (e?.Character == null) return;
-            
+
             bool removed = false;
-            
+
             lock (_lock)
             {
                 var index = _orderedCharacters.FindIndex(c => c.ProcessId == e.Character.ProcessId);
@@ -254,11 +249,11 @@ namespace FFXIManager.Services
                 {
                     _orderedCharacters.RemoveAt(index);
                     removed = true;
-                    
+
                     _ = _loggingService.LogInfoAsync($"Removed {e.Character.DisplayName} from slot {index}", "CharacterOrderingService");
                 }
             }
-            
+
             if (removed)
             {
                 NotifyOrderChanged();
@@ -284,7 +279,7 @@ namespace FFXIManager.Services
         {
             if (_disposed) return;
             _disposed = true;
-            
+
             try
             {
                 // Unsubscribe from monitor events
@@ -301,7 +296,7 @@ namespace FFXIManager.Services
                 // Log but don't throw during dispose
                 _ = _loggingService.LogErrorAsync("Error during CharacterOrderingService disposal", ex, "CharacterOrderingService");
             }
-            
+
             GC.SuppressFinalize(this);
         }
     }

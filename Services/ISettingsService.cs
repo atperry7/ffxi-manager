@@ -1,5 +1,4 @@
-﻿using System.Threading.Tasks;
-using FFXIManager.Models.Settings;
+﻿using FFXIManager.Models.Settings;
 
 namespace FFXIManager.Services
 {

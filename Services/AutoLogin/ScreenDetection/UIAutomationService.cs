@@ -1,11 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Drawing;
+﻿using System.Drawing;
 using System.Runtime.InteropServices;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using FFXIManager.Services;
 
 namespace FFXIManager.Services.AutoLogin.ScreenDetection
 {
@@ -566,7 +560,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                             await Task.Delay(action.DelayAfterMs, cancellationToken);
                             break;
 
-                        // Add more action types as needed
+                            // Add more action types as needed
                     }
                 }
                 catch (Exception ex)

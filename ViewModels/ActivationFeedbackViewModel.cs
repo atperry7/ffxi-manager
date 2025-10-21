@@ -1,13 +1,9 @@
-using System;
+﻿using FFXIManager.Services;
+using FFXIManager.ViewModels.Base;
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
-using FFXIManager.Infrastructure;
-using FFXIManager.Models;
-using FFXIManager.Services;
-using FFXIManager.ViewModels.Base;
 
 namespace FFXIManager.ViewModels
 {
@@ -22,17 +18,17 @@ namespace FFXIManager.ViewModels
         private double _averageActivationTime;
         private int _successCount;
         private int _failureCount;
-        
+
         public ActivationFeedbackViewModel(IHotkeyActivationService activationService)
         {
             _activationService = activationService ?? throw new ArgumentNullException(nameof(activationService));
-            
+
             RecentActivations = new ObservableCollection<ActivationFeedback>();
             ClearHistoryCommand = new RelayCommand(() => RecentActivations.Clear());
-            
+
             // Subscribe to activation events
             _activationService.CharacterActivated += OnCharacterActivated;
-            
+
             // Setup cleanup timer to remove old notifications
             _cleanupTimer = new DispatcherTimer
             {
@@ -41,14 +37,14 @@ namespace FFXIManager.ViewModels
             _cleanupTimer.Tick += CleanupOldNotifications;
             _cleanupTimer.Start();
         }
-        
+
         #region Properties
-        
+
         /// <summary>
         /// Recent activation attempts for display in UI
         /// </summary>
         public ObservableCollection<ActivationFeedback> RecentActivations { get; }
-        
+
         /// <summary>
         /// Last activation status for status bar
         /// </summary>
@@ -57,7 +53,7 @@ namespace FFXIManager.ViewModels
             get => _lastStatus;
             private set => SetProperty(ref _lastStatus, value);
         }
-        
+
         /// <summary>
         /// Average activation time in milliseconds
         /// </summary>
@@ -66,21 +62,21 @@ namespace FFXIManager.ViewModels
             get => _averageActivationTime;
             private set => SetProperty(ref _averageActivationTime, value);
         }
-        
+
         /// <summary>
         /// Success rate percentage
         /// </summary>
-        public double SuccessRate => 
-            (_successCount + _failureCount) > 0 
-                ? (_successCount * 100.0) / (_successCount + _failureCount) 
+        public double SuccessRate =>
+            (_successCount + _failureCount) > 0
+                ? (_successCount * 100.0) / (_successCount + _failureCount)
                 : 100.0;
-        
+
         public ICommand ClearHistoryCommand { get; }
-        
+
         #endregion
-        
+
         #region Event Handlers
-        
+
         private void OnCharacterActivated(object? sender, HotkeyActivationResult result)
         {
             // Update on UI thread
@@ -98,14 +94,14 @@ namespace FFXIManager.ViewModels
                     Message = GetMessage(result),
                     Severity = GetSeverity(result)
                 };
-                
+
                 // Add to collection (limit to 10 recent)
                 RecentActivations.Insert(0, feedback);
                 while (RecentActivations.Count > 10)
                 {
                     RecentActivations.RemoveAt(RecentActivations.Count - 1);
                 }
-                
+
                 // Update statistics
                 if (result.Success)
                 {
@@ -115,48 +111,48 @@ namespace FFXIManager.ViewModels
                 {
                     _failureCount++;
                 }
-                
+
                 // Update average time
                 var recentTimes = RecentActivations
                     .Where(a => a.Success)
                     .Select(a => a.Duration.TotalMilliseconds)
                     .Take(5);
-                    
+
                 if (recentTimes.Any())
                 {
                     AverageActivationTime = recentTimes.Average();
                 }
-                
+
                 // Update status
                 LastStatus = feedback.Message;
                 OnPropertyChanged(nameof(SuccessRate));
             });
         }
-        
+
         private void CleanupOldNotifications(object? sender, EventArgs e)
         {
             var cutoff = DateTime.Now.AddSeconds(-30);
             var toRemove = RecentActivations
                 .Where(a => a.Timestamp < cutoff)
                 .ToList();
-                
+
             foreach (var item in toRemove)
             {
                 RecentActivations.Remove(item);
             }
         }
-        
+
         #endregion
-        
+
         #region Helpers
-        
+
         private static string GetIcon(HotkeyActivationResult result)
         {
             if (result.Success) return "✅";
-            
+
             // Parse error message to determine icon
             var errorMessage = result.ErrorMessage?.ToLowerInvariant() ?? "";
-            
+
             if (errorMessage.Contains("not responding") || errorMessage.Contains("hung"))
                 return "🔴";
             if (errorMessage.Contains("access denied"))
@@ -167,45 +163,45 @@ namespace FFXIManager.ViewModels
                 return "🖥️";
             if (errorMessage.Contains("timeout"))
                 return "⏱️";
-                
+
             return "⚠️";
         }
-        
+
         private static string GetMessage(HotkeyActivationResult result)
         {
             if (result.Success)
             {
                 return $"{result.Character?.DisplayName} activated in {result.Duration.TotalMilliseconds:F0}ms";
             }
-            
+
             var characterName = result.Character?.DisplayName ?? "Character";
             var errorMessage = result.ErrorMessage ?? "Activation failed";
-            
+
             return $"{characterName}: {errorMessage}";
         }
-        
+
         private static FeedbackSeverity GetSeverity(HotkeyActivationResult result)
         {
             if (result.Success)
             {
-                return result.Duration.TotalMilliseconds < 50 
-                    ? FeedbackSeverity.Success 
+                return result.Duration.TotalMilliseconds < 50
+                    ? FeedbackSeverity.Success
                     : FeedbackSeverity.Info;
             }
-            
+
             // Parse error message to determine severity
             var errorMessage = result.ErrorMessage?.ToLowerInvariant() ?? "";
-            
+
             if (errorMessage.Contains("not responding") || errorMessage.Contains("hung"))
                 return FeedbackSeverity.Critical;
             if (errorMessage.Contains("access denied") || errorMessage.Contains("administrator"))
                 return FeedbackSeverity.Error;
-                
+
             return FeedbackSeverity.Warning;
         }
-        
+
         #endregion
-        
+
         public void Dispose()
         {
             _cleanupTimer?.Stop();
@@ -216,7 +212,7 @@ namespace FFXIManager.ViewModels
             GC.SuppressFinalize(this);
         }
     }
-    
+
     /// <summary>
     /// Represents a single activation feedback item
     /// </summary>
@@ -230,7 +226,7 @@ namespace FFXIManager.ViewModels
         public string Icon { get; init; } = string.Empty;
         public string Message { get; init; } = string.Empty;
         public FeedbackSeverity Severity { get; init; }
-        
+
         public string TimeAgo
         {
             get
@@ -242,7 +238,7 @@ namespace FFXIManager.ViewModels
             }
         }
     }
-    
+
     public enum FeedbackSeverity
     {
         Success,

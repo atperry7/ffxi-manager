@@ -1,8 +1,4 @@
-using System;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
 
 namespace FFXIManager.Services.AutoLogin.ActionExecutors

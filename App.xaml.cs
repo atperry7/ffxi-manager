@@ -1,20 +1,12 @@
-using System;
-using System.Configuration;
-using System.Data;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.DependencyInjection;
-using Serilog;
-using Serilog.Extensions.Logging;
-using Serilog.Extensions.Hosting;
-using FFXIManager.Infrastructure;
-using FFXIManager.Models;
+﻿using FFXIManager.Infrastructure;
 using FFXIManager.Models.Settings;
 using FFXIManager.Services;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Serilog;
+using System.IO;
+using System.Windows;
 
 namespace FFXIManager
 {
@@ -34,7 +26,7 @@ namespace FFXIManager
                 // Design-time safety: return null if not our App type
                 if (Current is not App app)
                     return null;
-                    
+
                 return app._host?.Services;
             }
         }
@@ -49,7 +41,7 @@ namespace FFXIManager
                 // Enable self-diagnostics to a fallback file
                 var tempPath = Path.GetTempPath();
                 var selfLogPath = Path.Combine(tempPath, "FFXIManager-serilog-selflog.txt");
-                Serilog.Debugging.SelfLog.Enable(msg => 
+                Serilog.Debugging.SelfLog.Enable(msg =>
                 {
                     try { File.AppendAllText(selfLogPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {msg}{Environment.NewLine}"); }
                     catch { /* Ignore self-log failures */ }
@@ -76,7 +68,7 @@ namespace FFXIManager
                     Log.Logger = new LoggerConfiguration()
                         .ReadFrom.Configuration(configuration)
                         .CreateLogger();
-                    
+
                     Log.Information("Bootstrap Serilog logger configured from appsettings");
                 }
                 else
@@ -98,7 +90,7 @@ namespace FFXIManager
                     .Enrich.WithThreadId()
                     .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
                     .CreateLogger();
-                    
+
                 Log.Warning(ex, "Failed to configure logger from appsettings, using fallback configuration");
             }
         }
@@ -113,7 +105,7 @@ namespace FFXIManager
                 // Try to load settings to get DiagnosticsOptions
                 var settingsFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FFXIManager", "settings.json");
                 DiagnosticsOptions? diagnostics = null;
-                
+
                 if (File.Exists(settingsFilePath))
                 {
                     try
@@ -130,7 +122,7 @@ namespace FFXIManager
 
                 // Apply DiagnosticsOptions mapping
                 diagnostics ??= new Models.Settings.DiagnosticsOptions();
-                
+
                 var logConfig = new LoggerConfiguration()
                     .Enrich.FromLogContext()
                     .Enrich.WithMachineName()
@@ -150,7 +142,7 @@ namespace FFXIManager
                 {
                     logConfig.MinimumLevel.Information();
                 }
-                
+
                 // Always suppress noisy Microsoft/System logs
                 logConfig.MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning);
                 logConfig.MinimumLevel.Override("System", Serilog.Events.LogEventLevel.Warning);
@@ -186,7 +178,7 @@ namespace FFXIManager
         {
             // Configure early bootstrap Serilog logger
             ConfigureBootstrapLogging();
-            
+
             base.OnStartup(e);
 
             _host = Host.CreateDefaultBuilder()
@@ -209,7 +201,7 @@ namespace FFXIManager
 
                 // At this point we know Services is not null since settingsService was resolved
                 var services = Services!;
-                
+
                 // Centralize global hotkey registration at app startup so it works regardless of UI windows
                 services.GetRequiredService<GlobalHotkeyManager>().RegisterHotkeysFromSettings();
 
@@ -271,7 +263,7 @@ namespace FFXIManager
                     {
                         // Handle cycle hotkey
                         var cycleResult = await services.GetRequiredService<IHotkeyActivationService>().CycleToNextCharacterAsync();
-                        
+
                         if (!cycleResult.Success && IsUnexpectedHotkeyError(cycleResult.ErrorMessage))
                         {
                             _ = services.GetRequiredService<INotificationServiceEnhanced>()?.ShowToastAsync($"Cycle failed: {cycleResult.ErrorMessage}", NotificationType.Error);
@@ -281,14 +273,14 @@ namespace FFXIManager
                     {
                         // **UNIFIED PIPELINE**: All hotkey activation through optimized service
                         var result = await services.GetRequiredService<IHotkeyActivationService>().ActivateCharacterByHotkeyAsync(e.HotkeyId);
-                        
+
                         if (!result.Success && IsUnexpectedHotkeyError(result.ErrorMessage))
                         {
                             _ = services.GetRequiredService<INotificationServiceEnhanced>()?.ShowToastAsync($"Hotkey failed: {result.ErrorMessage}", NotificationType.Error);
                         }
                     }
                 };
-                
+
                 // **PERFORMANCE**: Initialize hotkey mappings at startup
                 _ = Task.Run(async () =>
                 {
@@ -301,7 +293,7 @@ namespace FFXIManager
                         _ = services.GetRequiredService<ILoggingService>().LogErrorAsync("Error initializing hotkey mappings", ex, "App");
                     }
                 });
-                
+
                 // Refresh hotkeys and mappings when settings change
                 ViewModels.DiscoverySettingsViewModel.HotkeySettingsChanged += (_, __) =>
                 {
@@ -329,7 +321,7 @@ namespace FFXIManager
             }
             window.Show();
         }
-        
+
 
         /// <summary>
         /// Determines if a hotkey error is unexpected and should be shown to the user.
@@ -337,7 +329,7 @@ namespace FFXIManager
         private static bool IsUnexpectedHotkeyError(string? errorMessage)
         {
             if (string.IsNullOrEmpty(errorMessage)) return false;
-            
+
             // Don't show notifications for expected/common errors
             return !errorMessage.Contains("No character mapped") &&
                    !errorMessage.Contains("Invalid window handle") &&
@@ -389,14 +381,14 @@ namespace FFXIManager
             catch { }
 
             _host?.Dispose();
-            
+
             // Ensure all logs are flushed before exit
             try
             {
                 Log.CloseAndFlush();
             }
             catch { }
-            
+
             base.OnExit(e);
         }
     }

@@ -1,5 +1,4 @@
-using System;
-using FFXIManager.Services;
+﻿using FFXIManager.Services;
 
 namespace FFXIManager.Models
 {

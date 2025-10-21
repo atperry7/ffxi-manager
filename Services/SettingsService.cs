@@ -1,9 +1,6 @@
-﻿using System;
+﻿using FFXIManager.Models.Settings;
 using System.IO;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Models.Settings;
 
 namespace FFXIManager.Services
 {
@@ -193,49 +190,49 @@ namespace FFXIManager.Services
         private static bool MigrateSettings(ApplicationSettings settings)
         {
             bool migrationPerformed = false;
-            
+
             // ========== MIGRATION v0/v1 → v2 (Added 2025-08, Remove after 2026-02) ==========
             // Handle both missing SettingsVersion (v0) and explicit v1 settings
             // For existing users without SettingsVersion, detect need for migration by checking timing values
-            bool needsV2Migration = settings.SettingsVersion < 2 || 
+            bool needsV2Migration = settings.SettingsVersion < 2 ||
                                    (settings.SettingsVersion == 2 && // Default value, but actual file might be missing version
-                                    (settings.HotkeyDebounceIntervalMs > 10 || 
-                                     settings.ActivationDebounceIntervalMs > 10 || 
+                                    (settings.HotkeyDebounceIntervalMs > 10 ||
+                                     settings.ActivationDebounceIntervalMs > 10 ||
                                      settings.MinActivationIntervalMs > 10));
-            
+
             if (needsV2Migration)
             {
                 // Critical gaming performance fix: upgrade all activation timings to ultra-responsive 5ms
                 // This helps users stuck with legacy slow settings get optimal gaming performance
-                
+
                 // Upgrade hotkey debounce (anything > 10ms gets set to 5ms)
                 if (settings.HotkeyDebounceIntervalMs > 10)
                 {
                     settings.HotkeyDebounceIntervalMs = 5;
                     migrationPerformed = true;
                 }
-                
+
                 // Upgrade activation debounce (anything > 10ms gets set to 5ms)
                 if (settings.ActivationDebounceIntervalMs > 10)
                 {
                     settings.ActivationDebounceIntervalMs = 5;
                     migrationPerformed = true;
                 }
-                
+
                 // Upgrade minimum activation interval (anything > 10ms gets set to 5ms)
                 if (settings.MinActivationIntervalMs > 10)
                 {
                     settings.MinActivationIntervalMs = 5;
                     migrationPerformed = true;
                 }
-                
+
                 settings.SettingsVersion = 2;
                 migrationPerformed = true;
             }
             // ========== END v1 → v2 MIGRATION (Remove this block after 2026-02) ==========
-            
+
             // Future migrations go here with similar comment blocks and removal dates
-            
+
             return migrationPerformed;
         }
 

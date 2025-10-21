@@ -1,11 +1,11 @@
-﻿using FFXIManager.Models;
+﻿using FFXIManager.Infrastructure;
+using FFXIManager.Models;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 using FFXIManager.Views;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Input;
-using FFXIManager.Infrastructure;
 
 namespace FFXIManager.ViewModels
 {
@@ -305,24 +305,24 @@ namespace FFXIManager.ViewModels
                 };
 
                 // Create and show dialog on UI thread
-            var dialogResult = await _uiDispatcher.InvokeAsync(() =>
-                {
-                    try
+                var dialogResult = await _uiDispatcher.InvokeAsync(() =>
                     {
-                        var dialog = new ApplicationConfigDialog(newApplication)
+                        try
                         {
-                            Owner = Application.Current.MainWindow
-                        };
-                        return dialog.ShowDialog();
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"Error opening application dialog: {ex.Message}", "Dialog Error",
-                                      MessageBoxButton.OK, MessageBoxImage.Error);
-                        _statusService.SetMessage($"Failed to open application dialog: {ex.Message}");
-                        return (bool?)false;
-                    }
-                });
+                            var dialog = new ApplicationConfigDialog(newApplication)
+                            {
+                                Owner = Application.Current.MainWindow
+                            };
+                            return dialog.ShowDialog();
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"Error opening application dialog: {ex.Message}", "Dialog Error",
+                                          MessageBoxButton.OK, MessageBoxImage.Error);
+                            _statusService.SetMessage($"Failed to open application dialog: {ex.Message}");
+                            return (bool?)false;
+                        }
+                    });
 
                 // Process result
                 if (dialogResult == true)

@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using FFXIManager.Models;
-using FFXIManager.Models.Settings;
+﻿using FFXIManager.Models;
 
 namespace FFXIManager.Services
 {

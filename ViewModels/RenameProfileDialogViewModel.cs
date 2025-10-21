@@ -1,7 +1,7 @@
-﻿using System.ComponentModel;
+﻿using FFXIManager.ViewModels;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
-using FFXIManager.ViewModels;
 
 namespace FFXIManager.Views
 {

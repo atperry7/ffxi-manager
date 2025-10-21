@@ -1,6 +1,6 @@
+﻿using FFXIManager.ViewModels;
 using System.Windows;
 using System.Windows.Controls;
-using FFXIManager.ViewModels;
 
 namespace FFXIManager.Views
 {

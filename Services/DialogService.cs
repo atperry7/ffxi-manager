@@ -1,8 +1,6 @@
-﻿using System;
-using System.Threading.Tasks;
-using System.Windows;
+﻿using FFXIManager.Infrastructure;
 using FFXIManager.Views;
-using FFXIManager.Infrastructure;
+using System.Windows;
 
 namespace FFXIManager.Services
 {

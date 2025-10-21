@@ -1,8 +1,7 @@
-using System.ComponentModel;
-using System.Windows;
-using System.Windows.Controls;
-using FFXIManager.ViewModels.CharacterMonitor;
+﻿using FFXIManager.ViewModels.CharacterMonitor;
 using Microsoft.Extensions.DependencyInjection;
+using System.ComponentModel;
+using System.Windows.Controls;
 
 namespace FFXIManager.Views
 {
@@ -15,7 +14,7 @@ namespace FFXIManager.Views
         public EmbeddedCharacterMonitorView()
         {
             InitializeComponent();
-            
+
             // Resolve and set the view model - skip in design time
             if (!DesignerProperties.GetIsInDesignMode(this) && App.Services != null)
             {

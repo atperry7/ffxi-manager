@@ -1,8 +1,7 @@
-using System;
-using System.Windows;
-using Microsoft.Extensions.DependencyInjection;
-using FFXIManager.Services;
+﻿using FFXIManager.Services;
 using FFXIManager.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
+using System.Windows;
 
 namespace FFXIManager.Views
 {
@@ -28,7 +27,7 @@ namespace FFXIManager.Views
                     // Window already exists, bring it to front
                     if (_currentWindow.WindowState == WindowState.Minimized)
                         _currentWindow.WindowState = WindowState.Normal;
-                    
+
                     _currentWindow.Activate();
                     _currentWindow.Focus();
                     return;
@@ -40,21 +39,21 @@ namespace FFXIManager.Views
                     _currentWindow = new CharacterMonitorWindowV2();
                     _currentWindow.Closed += OnWindowClosed;
                     _currentWindow.Show();
-                    
+
                     var loggingService = App.Services?.GetRequiredService<ILoggingService>();
                     if (loggingService != null)
-                    _ = loggingService.LogInfoAsync(
-                        "Character Monitor window opened (new architecture)", 
-                        "CharacterMonitorHelper");
+                        _ = loggingService.LogInfoAsync(
+                            "Character Monitor window opened (new architecture)",
+                            "CharacterMonitorHelper");
                 }
                 catch (Exception ex)
                 {
                     var loggingService = App.Services?.GetRequiredService<ILoggingService>();
                     _ = loggingService?.LogErrorAsync(
-                        "Failed to open Character Monitor window", 
-                        ex, 
+                        "Failed to open Character Monitor window",
+                        ex,
                         "CharacterMonitorHelper");
-                    
+
                     MessageBox.Show(
                         $"Failed to open Character Monitor: {ex.Message}",
                         "Error",

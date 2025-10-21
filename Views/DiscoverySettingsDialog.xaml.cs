@@ -1,9 +1,7 @@
-using System;
-using System.Threading.Tasks;
+﻿using FFXIManager.Services;
+using Microsoft.Extensions.DependencyInjection;
 using System.Windows;
 using System.Windows.Threading;
-using FFXIManager.Services;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace FFXIManager.Views
 {
@@ -14,9 +12,9 @@ namespace FFXIManager.Views
         public DiscoverySettingsDialog()
         {
             InitializeComponent();
-            
+
             // Check controller status after UI loads and start periodic updates
-            Loaded += async (s, e) => 
+            Loaded += async (s, e) =>
             {
                 await UpdateControllerStatusAsync();
                 StartControllerStatusTimer();
@@ -46,16 +44,16 @@ namespace FFXIManager.Views
                 // Use dedicated ControllerInputService for detection
                 var loggingService = App.Services?.GetRequiredService<ILoggingService>();
                 if (loggingService == null) return;
-                
+
                 using var controllerService = new ControllerInputService(loggingService);
-                
+
                 // Allow time for XInput detection (controllers can take a moment to enumerate)
                 await Task.Delay(500);
-                
+
                 var isConnected = controllerService.IsAnyControllerConnected;
-                
-                ControllerStatusText.Text = isConnected ? 
-                    "Controller: Connected ✅" : 
+
+                ControllerStatusText.Text = isConnected ?
+                    "Controller: Connected ✅" :
                     "Controller: Not detected";
             }
             catch (Exception ex)

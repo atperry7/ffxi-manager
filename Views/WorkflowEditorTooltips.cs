@@ -1,6 +1,4 @@
-using System.Collections.Generic;
-
-namespace FFXIManager.Views
+﻿namespace FFXIManager.Views
 {
     /// <summary>
     /// Centralized tooltip and help text for Workflow Editor UI fields.

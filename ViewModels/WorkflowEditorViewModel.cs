@@ -1,14 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Windows.Input;
-using System.Windows.Media.Imaging;
-using System.Diagnostics;
-using FFXIManager.Infrastructure;
+﻿using FFXIManager.Infrastructure;
 using FFXIManager.Models;
 using FFXIManager.Models.AutoLogin;
 using FFXIManager.Services;
@@ -16,6 +6,11 @@ using FFXIManager.Services.AutoLogin;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
 using FFXIManager.ViewModels.Base;
 using FFXIManager.ViewModels.WorkflowEditor;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Windows.Input;
+using System.Windows.Media.Imaging;
 
 namespace FFXIManager.ViewModels
 {
@@ -1846,7 +1841,7 @@ namespace FFXIManager.ViewModels
             }
         }
 
-        
+
 
         private async Task SelectActionTemplateImageAsync()
         {

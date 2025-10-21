@@ -1,8 +1,7 @@
-﻿using System;
+﻿using FFXIManager.Models;
+using Microsoft.Win32;
 using System.IO;
 using System.Windows;
-using Microsoft.Win32;
-using FFXIManager.Models;
 
 namespace FFXIManager.Views
 {

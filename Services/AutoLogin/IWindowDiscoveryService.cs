@@ -1,8 +1,4 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-
-namespace FFXIManager.Services.AutoLogin
+﻿namespace FFXIManager.Services.AutoLogin
 {
     /// <summary>
     /// Result of window discovery containing both PID and window handle.

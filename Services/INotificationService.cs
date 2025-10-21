@@ -1,6 +1,4 @@
-using System;
-using System.Threading.Tasks;
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 
 namespace FFXIManager.Services
 {
@@ -13,28 +11,28 @@ namespace FFXIManager.Services
         /// Shows a non-blocking toast notification that auto-dismisses
         /// </summary>
         Task ShowToastAsync(string message, NotificationType type = NotificationType.Info, int durationMs = 8000);
-        
+
         /// <summary>
         /// Shows a detailed window activation failure notification
         /// </summary>
         Task ShowActivationFailureAsync(WindowActivationResult result, string characterName);
-        
+
         /// <summary>
         /// Updates status bar with activation result
         /// </summary>
         void UpdateStatusBar(string message, NotificationType type = NotificationType.Info);
-        
+
         /// <summary>
         /// Batches multiple notifications to prevent spam
         /// </summary>
         void QueueNotification(string message, NotificationType type);
-        
+
         /// <summary>
         /// Flushes queued notifications as a single summary
         /// </summary>
         Task FlushNotificationQueueAsync();
     }
-    
+
     /// <summary>
     /// Non-blocking notification options
     /// </summary>

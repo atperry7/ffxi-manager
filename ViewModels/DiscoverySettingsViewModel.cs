@@ -1,14 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
-using System.Windows;
-using System.Windows.Input;
-using FFXIManager.Infrastructure;
-using FFXIManager.Models.Settings;
+﻿using FFXIManager.Models.Settings;
 using FFXIManager.Services;
-using FFXIManager.ViewModels;
 using FFXIManager.Views;
+using System.Collections.ObjectModel;
+using System.Windows.Input;
 
 namespace FFXIManager.ViewModels
 {
@@ -136,10 +130,10 @@ namespace FFXIManager.ViewModels
             var settings = _settingsService.LoadSettings();
             settings.CharacterSwitchShortcuts.Clear();
             settings.CharacterSwitchShortcuts.AddRange(CharacterHotkeys);
-            
+
             // Save cycle hotkey
             settings.CycleHotkey = CycleHotkey;
-            
+
             // Validate and save debounce interval (minimum 1ms, maximum 1000ms for sanity)
             var validDebounceInterval = Math.Max(1, Math.Min(1000, HotkeyDebounceIntervalMs));
             settings.HotkeyDebounceIntervalMs = validDebounceInterval;
@@ -162,7 +156,7 @@ namespace FFXIManager.ViewModels
                 {
                     shortcut.IsEnabled = false;
                 }
-                
+
                 // Also disable cycle hotkey
                 if (settings.CycleHotkey != null)
                 {

@@ -1,8 +1,4 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using FFXIManager.Models;
-
-namespace FFXIManager.Services.AutoLogin.ScreenDetection
+﻿namespace FFXIManager.Services.AutoLogin.ScreenDetection
 {
     /// <summary>
     /// Service for managing UI element templates
@@ -70,7 +66,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         /// <returns>True if the template exists and is valid</returns>
         Task<bool> ValidateTemplateAsync(string templatePath);
 
-        
+
 
         /// <summary>
         /// Replaces the PNG image file for an existing template.
@@ -93,5 +89,5 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         Task<bool> CropAndReplaceTemplateImageAsync(string templatePath, string newImagePath, System.Drawing.Rectangle? cropRectangle);
     }
 
-    
+
 }

@@ -1,12 +1,7 @@
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using FFXIManager.Infrastructure;
 using FFXIManager.Models;
-using FFXIManager.Infrastructure;
+using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 
 namespace FFXIManager.Services
 {
@@ -36,7 +31,7 @@ namespace FFXIManager.Services
         private readonly Dictionary<IntPtr, string> _lastPolTitles = new();
         private DateTime _lastActivationAttempt = DateTime.MinValue;
         private int _lastActivatedCharacterSlotIndex = -1; // Track last activated character slot for smart debouncing
-        
+
         // **EMERGENCY CIRCUIT BREAKER**: Prevents system lockup during excessive switching
         private static int _globalActivationCount;
         private static DateTime _lastGlobalReset = DateTime.UtcNow;
@@ -110,7 +105,7 @@ namespace FFXIManager.Services
 
             // Initialize activation debounce timer (initially disabled)
             _activationDebounceTimer = new Timer(DebouncedActivationCallback, null, Timeout.Infinite, Timeout.Infinite);
-            
+
             // **POL-SPECIFIC**: Initialize POL title checking timer (every 10 seconds - reduced to avoid Windows protection)
             _polTitleCheckTimer = new Timer(CheckPolTitlesCallback, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10));
 
@@ -150,7 +145,7 @@ namespace FFXIManager.Services
             foreach (var process in processes)
             {
                 await _logging.LogInfoAsync($"[DEBUG_UNIFIED] Process PID {process.ProcessId}, Name: '{process.ProcessName}', Windows: {process.Windows.Count}", "PlayOnlineMonitorService");
-                
+
                 // Convert each window to a character
                 foreach (var window in process.Windows)
                 {
@@ -169,14 +164,14 @@ namespace FFXIManager.Services
             await _logging.LogInfoAsync($"[DEBUG_UNIFIED] GetCharactersAsync: Returning {characters.Count} characters total", "PlayOnlineMonitorService");
             return characters;
         }
-        
+
         /// <summary>
         /// **EMERGENCY PROTECTION**: Checks and manages global activation rate limiting
         /// </summary>
         private bool IsEmergencyThrottleActive()
         {
             var now = DateTime.UtcNow;
-            
+
             // Reset counter every second
             if ((now - _lastGlobalReset).TotalMilliseconds >= 1000)
             {
@@ -184,26 +179,26 @@ namespace FFXIManager.Services
                 _lastGlobalReset = now;
                 _emergencyThrottleActive = false;
             }
-            
+
             // Check if we're over the limit
             var currentCount = Interlocked.Increment(ref _globalActivationCount);
-            
+
             if (currentCount > MAX_ACTIVATIONS_PER_SECOND && !_emergencyThrottleActive)
             {
                 _emergencyThrottleActive = true;
-                
+
                 // Schedule throttle reset
-                Task.Delay(EMERGENCY_THROTTLE_DURATION_MS).ContinueWith(_ => 
+                Task.Delay(EMERGENCY_THROTTLE_DURATION_MS).ContinueWith(_ =>
                 {
                     _emergencyThrottleActive = false;
                     Interlocked.Exchange(ref _globalActivationCount, 0);
                     _ = _logging.LogInfoAsync("Emergency throttle deactivated - normal switching resumed", "PlayOnlineMonitorService");
                 });
-                
+
                 _ = _logging.LogWarningAsync("**EMERGENCY THROTTLE ACTIVATED**: {ActivationCount} activations/sec exceeded limit ({MaxActivationsPerSecond})", "PlayOnlineMonitorService", currentCount, MAX_ACTIVATIONS_PER_SECOND);
                 return true;
             }
-            
+
             return _emergencyThrottleActive;
         }
 
@@ -211,14 +206,14 @@ namespace FFXIManager.Services
         {
             // **PERFORMANCE**: Start timing immediately
             var activationStopwatch = System.Diagnostics.Stopwatch.StartNew();
-            
+
             // **EMERGENCY CIRCUIT BREAKER**: Check global activation throttle
             if (IsEmergencyThrottleActive())
             {
                 await _logging.LogWarningAsync("Character activation blocked: emergency throttle active", "PlayOnlineMonitorService");
                 return false;
             }
-            
+
             if (character == null || character.WindowHandle == IntPtr.Zero)
             {
                 await _logging.LogWarningAsync("Cannot activate character: invalid window handle", "PlayOnlineMonitorService");
@@ -227,9 +222,9 @@ namespace FFXIManager.Services
 
             // **CRITICAL FIX**: Validate window handle is still valid
             if (!_processUtility.IsWindowValid(character.WindowHandle))
-                {
+            {
                 await _logging.LogWarningAsync("Cannot activate {CharacterName}: window handle 0x{WindowHandle:X} is no longer valid (process may have updated window title)", "PlayOnlineMonitorService", character.DisplayName, character.WindowHandle.ToInt64());
-                
+
                 // Try to refresh character data to get updated window handle
                 await RefreshCharactersAsync();
                 return false;
@@ -249,23 +244,23 @@ namespace FFXIManager.Services
                 RequestDebouncedActivation(character);
                 return true;
             }
-            
+
             // **PERFORMANCE**: Log after decision to avoid delays
             if (!isSameCharacter && activationStopwatch.ElapsedMilliseconds > 10)
             {
                 System.Diagnostics.Debug.WriteLine($"[PERF WARNING] Pre-activation took {activationStopwatch.ElapsedMilliseconds}ms");
             }
-            
+
             _lastActivatedCharacterSlotIndex = currentSlotIndex;
             var result = await PerformImmediateActivationAsync(character, cancellationToken);
-            
+
             // **PERFORMANCE**: Log total time
             activationStopwatch.Stop();
             if (activationStopwatch.ElapsedMilliseconds > 100)
             {
                 await _logging.LogWarningAsync("[PERFORMANCE] Character activation took {ElapsedMs}ms for {CharacterName}", "PlayOnlineMonitorService", activationStopwatch.ElapsedMilliseconds, character.DisplayName);
             }
-            
+
             return result;
         }
 
@@ -315,8 +310,8 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-            // **IMPROVED**: Use safe logging that won't throw
-            await SafeLogErrorAsync("Error in debounced activation for {CharacterName}", characterToActivate.DisplayName, ex);
+                // **IMPROVED**: Use safe logging that won't throw
+                await SafeLogErrorAsync("Error in debounced activation for {CharacterName}", characterToActivate.DisplayName, ex);
             }
         }
 
@@ -338,7 +333,7 @@ namespace FFXIManager.Services
 
                 // **PERFORMANCE**: Use shorter timeout for faster response
                 var fastTimeoutMs = Math.Min(_activationTimeoutMs, 500); // Cap at 500ms
-                
+
                 // **PERFORMANCE**: Skip info logging to reduce overhead
                 System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Starting for {character.DisplayName}");
 
@@ -368,7 +363,7 @@ namespace FFXIManager.Services
                         WindowActivationFailureReason.Timeout => "Activation timed out after " + fastTimeoutMs + "ms",
                         _ => result.DiagnosticInfo ?? "Unknown failure reason"
                     };
-                    
+
                     await _logging.LogWarningAsync("Failed to activate window for {CharacterName}: {Diagnostic}", "PlayOnlineMonitorService", character.DisplayName, diagnostic);
                 }
 
@@ -508,16 +503,16 @@ namespace FFXIManager.Services
         {
             // **FIX**: Window title IS the character name - no extraction needed
             var windowTitle = window?.Title ?? process.ProcessName;
-            
+
             _ = _logging.LogDebugAsync("ConvertToCharacter: Process {ProcessId} ({ProcessName}), Window Title: '{WindowTitle}', Handle: 0x{WindowHandle:X}", "PlayOnlineMonitorService", process.ProcessId, process.ProcessName, windowTitle, window?.Handle.ToInt64() ?? 0);
-            
+
             // **FIX**: Additional protection against null/empty/invalid titles
             if (string.IsNullOrWhiteSpace(windowTitle) || windowTitle.Equals("NULL", StringComparison.OrdinalIgnoreCase))
             {
                 windowTitle = "FFXI Process " + process.ProcessId;
                 _ = _logging.LogDebugAsync("ConvertToCharacter: Using fallback title '{WindowTitle}' for process {ProcessId}", "PlayOnlineMonitorService", windowTitle, process.ProcessId);
             }
-            
+
             return new PlayOnlineCharacter
             {
                 ProcessId = process.ProcessId,
@@ -592,7 +587,7 @@ namespace FFXIManager.Services
                     // The CharacterCollectionViewModel will handle updating the existing character
                     SafeDispatchEvent(() => CharacterUpdated?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
                 }
-                
+
                 // If no windows, still fire update for the process
                 if (e.Process.Windows.Count == 0)
                 {
@@ -749,8 +744,8 @@ namespace FFXIManager.Services
                         IsValid = true
                     };
 
-                _characterCache[cacheKey] = cached;
-                _ = SafeLogInfoAsync("Updated character cache: {CharacterName} (PID: {ProcessId})", character.CharacterName, character.ProcessId);
+                    _characterCache[cacheKey] = cached;
+                    _ = SafeLogInfoAsync("Updated character cache: {CharacterName} (PID: {ProcessId})", character.CharacterName, character.ProcessId);
                 }
             }
             catch (Exception ex)
@@ -920,25 +915,25 @@ namespace FFXIManager.Services
                             await _logging.LogDebugAsync("🔍 POL Title Check: Skipping non-running process {ProcessId}", "PlayOnlineMonitorService", character.ProcessId);
                             continue;
                         }
-                        
+
                         // If we don't have a window handle, try to get windows for this process
                         if (character.WindowHandle == IntPtr.Zero)
                         {
                             await _logging.LogDebugAsync("🔍 POL Title Check: Process {ProcessId} has no window handle, trying to find windows", "PlayOnlineMonitorService", character.ProcessId);
-                            
+
                             // Get windows directly from ProcessUtilityService
                             var windows = await _processUtility.GetProcessWindowsAsync(character.ProcessId);
-                            
+
                             if (windows.Count > 0)
                             {
                                 var mainWindow = windows.FirstOrDefault(w => w.IsMainWindow) ?? windows.First();
                                 await _logging.LogInfoAsync("🔍 POL Title Check: Found window for process {ProcessId}: Handle 0x{WindowHandle:X}, Title: '{WindowTitle}'", "PlayOnlineMonitorService", character.ProcessId, mainWindow.Handle.ToInt64(), mainWindow.Title);
-                                
+
                                 // Update the character with the found window
                                 character.WindowHandle = mainWindow.Handle;
                                 character.WindowTitle = mainWindow.Title;
                                 character.CharacterName = mainWindow.Title;
-                                
+
                                 // Fire update event
                                 UpdateCharacterCache(character);
                                 SafeDispatchEvent(() => CharacterUpdated?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
@@ -960,7 +955,7 @@ namespace FFXIManager.Services
                         if (!_lastPolTitles.TryGetValue(character.WindowHandle, out var lastTitle) || lastTitle != currentTitle)
                         {
                             await _logging.LogInfoAsync("📊 POL TITLE CHANGE: PID {ProcessId}, Handle 0x{WindowHandle:X}, '{OldTitle}' → '{NewTitle}'", "PlayOnlineMonitorService", character.ProcessId, character.WindowHandle.ToInt64(), lastTitle ?? "<unknown>", currentTitle);
-                            
+
                             _lastPolTitles[character.WindowHandle] = currentTitle;
 
                             // Create updated character with new title
@@ -1005,24 +1000,24 @@ namespace FFXIManager.Services
                 const int maxLength = 512; // Increased buffer size
                 var buffer = new char[maxLength];
                 int length = GetWindowText(windowHandle, buffer, maxLength);
-                
+
                 if (length <= 0)
                 {
                     var error = Marshal.GetLastWin32Error();
                     _ = _logging.LogDebugAsync("GetWindowTitle: GetWindowText returned {Length} for handle 0x{WindowHandle:X}, Win32 Error: {ErrorCode}", "PlayOnlineMonitorService", length, windowHandle.ToInt64(), error);
                     return string.Empty;
                 }
-                
+
                 // **FIX**: Handle null terminators and clean up the string
                 var title = new string(buffer, 0, length).Trim('\0').Trim();
-                
+
                 // **FIX**: If title is literally "NULL" or empty, return empty string
                 if (string.IsNullOrWhiteSpace(title) || title.Equals("NULL", StringComparison.OrdinalIgnoreCase))
                 {
                     _ = _logging.LogDebugAsync("GetWindowTitle: Filtered out invalid title '{Title}' for handle 0x{WindowHandle:X}", "PlayOnlineMonitorService", title, windowHandle.ToInt64());
                     return string.Empty;
                 }
-                
+
                 _ = _logging.LogDebugAsync("GetWindowTitle: Successfully retrieved '{Title}' for handle 0x{WindowHandle:X}", "PlayOnlineMonitorService", title, windowHandle.ToInt64());
                 return title;
             }

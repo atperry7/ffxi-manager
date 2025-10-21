@@ -1,6 +1,4 @@
-﻿using System.Threading.Tasks;
-
-namespace FFXIManager.Services
+﻿namespace FFXIManager.Services
 {
     /// <summary>
     /// Interface for dialog operations

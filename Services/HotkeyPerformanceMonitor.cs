@@ -1,10 +1,4 @@
-using System;
-using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Infrastructure;
+﻿using System.Collections.Concurrent;
 
 namespace FFXIManager.Services
 {
@@ -18,22 +12,22 @@ namespace FFXIManager.Services
         /// Records a hotkey activation performance measurement.
         /// </summary>
         void RecordActivation(HotkeyActivationMetrics metrics);
-        
+
         /// <summary>
         /// Gets current performance statistics.
         /// </summary>
         HotkeyPerformanceStats GetStatistics();
-        
+
         /// <summary>
         /// Resets all performance counters.
         /// </summary>
         void ResetCounters();
-        
+
         /// <summary>
         /// Gets detailed performance history for diagnostics.
         /// </summary>
         HotkeyPerformanceHistory GetPerformanceHistory(int maxEntries = 100);
-        
+
         /// <summary>
         /// Event raised when performance thresholds are exceeded.
         /// </summary>
@@ -49,7 +43,7 @@ namespace FFXIManager.Services
         private readonly ISettingsService _settingsService;
         private readonly ConcurrentQueue<HotkeyActivationMetrics> _recentActivations = new();
         private readonly object _statsLock = new object();
-        
+
         // Performance counters
         private int _totalActivations;
         private int _successfulActivations;
@@ -57,22 +51,22 @@ namespace FFXIManager.Services
         private double _totalActivationTimeMs;
         private double _minActivationTimeMs = double.MaxValue;
         private double _maxActivationTimeMs;
-        
+
         // Settings-driven performance thresholds
         private double _warningThresholdMs = 50;  // Default: 50ms
         private double _criticalThresholdMs = 200; // Default: 200ms
         private int _recentActivationHistorySize = 1000; // Default: 1000
-        
+
         public event EventHandler<PerformanceThresholdEventArgs>? ThresholdExceeded;
 
         public HotkeyPerformanceMonitor(ILoggingService loggingService, ISettingsService settingsService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-            
+
             // **SETTINGS-DRIVEN**: Load performance thresholds from configuration
             LoadPerformanceSettingsFromConfiguration();
-            
+
             _ = _loggingService.LogInfoAsync($"HotkeyPerformanceMonitor initialized - Warning: {_warningThresholdMs}ms, Critical: {_criticalThresholdMs}ms", "HotkeyPerformanceMonitor");
         }
 
@@ -87,7 +81,7 @@ namespace FFXIManager.Services
             {
                 // Update counters
                 Interlocked.Increment(ref _totalActivations);
-                
+
                 if (metrics.Success)
                 {
                     Interlocked.Increment(ref _successfulActivations);
@@ -100,12 +94,12 @@ namespace FFXIManager.Services
                 // Update timing statistics
                 var activationTime = metrics.TotalTimeMs;
                 _totalActivationTimeMs += activationTime;
-                
+
                 if (activationTime < _minActivationTimeMs)
                 {
                     _minActivationTimeMs = activationTime;
                 }
-                
+
                 if (activationTime > _maxActivationTimeMs)
                 {
                     _maxActivationTimeMs = activationTime;
@@ -113,7 +107,7 @@ namespace FFXIManager.Services
 
                 // Store recent activation for history
                 _recentActivations.Enqueue(metrics);
-                
+
                 // Limit history size
                 while (_recentActivations.Count > _recentActivationHistorySize)
                 {
@@ -132,12 +126,12 @@ namespace FFXIManager.Services
         {
             lock (_statsLock)
             {
-                var successRate = _totalActivations > 0 
-                    ? (_successfulActivations / (double)_totalActivations) * 100 
+                var successRate = _totalActivations > 0
+                    ? (_successfulActivations / (double)_totalActivations) * 100
                     : 0;
 
-                var avgActivationTime = _totalActivations > 0 
-                    ? _totalActivationTimeMs / _totalActivations 
+                var avgActivationTime = _totalActivations > 0
+                    ? _totalActivationTimeMs / _totalActivations
                     : 0;
 
                 // Calculate 95th percentile from recent data
@@ -173,9 +167,9 @@ namespace FFXIManager.Services
                 _totalActivationTimeMs = 0;
                 _minActivationTimeMs = double.MaxValue;
                 _maxActivationTimeMs = 0;
-                
+
                 while (_recentActivations.TryDequeue(out _)) { }
-                
+
                 _ = _loggingService.LogInfoAsync("Performance counters reset", "HotkeyPerformanceMonitor");
             }
         }
@@ -190,7 +184,7 @@ namespace FFXIManager.Services
                 .ToList();
 
             var timingBreakdown = new HotkeyTimingBreakdown();
-            
+
             if (recentMetrics.Count > 0)
             {
                 timingBreakdown.AverageCharacterLookupMs = recentMetrics.Average(m => m.CharacterLookupTimeMs);
@@ -212,7 +206,7 @@ namespace FFXIManager.Services
         private void CheckPerformanceThresholds(HotkeyActivationMetrics metrics)
         {
             var activationTime = metrics.TotalTimeMs;
-            
+
             if (activationTime > _criticalThresholdMs)
             {
                 var args = new PerformanceThresholdEventArgs
@@ -222,11 +216,11 @@ namespace FFXIManager.Services
                     ThresholdMs = _criticalThresholdMs,
                     Metrics = metrics
                 };
-                
+
                 ThresholdExceeded?.Invoke(this, args);
-                
+
                 _ = _loggingService.LogWarningAsync(
-                    $"CRITICAL: Hotkey activation took {activationTime:F1}ms (threshold: {_criticalThresholdMs}ms) for character '{metrics.CharacterName}'", 
+                    $"CRITICAL: Hotkey activation took {activationTime:F1}ms (threshold: {_criticalThresholdMs}ms) for character '{metrics.CharacterName}'",
                     "HotkeyPerformanceMonitor");
             }
             else if (activationTime > _warningThresholdMs)
@@ -238,11 +232,11 @@ namespace FFXIManager.Services
                     ThresholdMs = _warningThresholdMs,
                     Metrics = metrics
                 };
-                
+
                 ThresholdExceeded?.Invoke(this, args);
-                
+
                 _ = _loggingService.LogDebugAsync(
-                    $"WARNING: Hotkey activation took {activationTime:F1}ms (threshold: {_warningThresholdMs}ms) for character '{metrics.CharacterName}'", 
+                    $"WARNING: Hotkey activation took {activationTime:F1}ms (threshold: {_warningThresholdMs}ms) for character '{metrics.CharacterName}'",
                     "HotkeyPerformanceMonitor");
             }
         }
@@ -255,11 +249,11 @@ namespace FFXIManager.Services
             try
             {
                 var settings = _settingsService.LoadSettings();
-                
+
                 _warningThresholdMs = settings.PerformanceWarningThresholdMs;
                 _criticalThresholdMs = settings.PerformanceCriticalThresholdMs;
                 _recentActivationHistorySize = settings.PerformanceHistorySize;
-                
+
                 _ = _loggingService.LogDebugAsync($"Performance settings loaded - Warning: {_warningThresholdMs}ms, Critical: {_criticalThresholdMs}ms, History: {_recentActivationHistorySize}", "HotkeyPerformanceMonitor");
             }
             catch (Exception ex)
@@ -272,9 +266,9 @@ namespace FFXIManager.Services
         {
             // Clear event handlers
             ThresholdExceeded = null;
-            
+
             _ = _loggingService?.LogInfoAsync("HotkeyPerformanceMonitor disposed", "HotkeyPerformanceMonitor");
-            
+
             GC.SuppressFinalize(this);
         }
     }

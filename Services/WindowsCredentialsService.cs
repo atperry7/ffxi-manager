@@ -1,11 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Linq;
+﻿using FFXIManager.Models;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
-using FFXIManager.Models;
 
 namespace FFXIManager.Services
 {

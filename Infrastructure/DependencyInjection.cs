@@ -1,14 +1,12 @@
-using System;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Serilog;
+﻿using FFXIManager.Configuration;
 using FFXIManager.Services;
 using FFXIManager.Services.AutoLogin;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
-using FFXIManager.Configuration;
 using FFXIManager.ViewModels;
-using FFXIManager;
 using FFXIManager.ViewModels.CharacterMonitor;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Serilog;
 
 namespace FFXIManager.Infrastructure
 {

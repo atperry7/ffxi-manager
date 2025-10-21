@@ -1,5 +1,4 @@
-using System.Drawing;
-using System.Threading.Tasks;
+﻿using System.Drawing;
 
 namespace FFXIManager.Services
 {

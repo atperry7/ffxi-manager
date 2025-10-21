@@ -1,6 +1,4 @@
-using System;
-
-namespace FFXIManager.Services.AutoLogin
+﻿namespace FFXIManager.Services.AutoLogin
 {
     /// <summary>
     /// Provides type-safe, standardized context keys for auto-login workflow execution.

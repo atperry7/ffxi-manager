@@ -1,15 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Windows.Input;
-using System.Windows.Threading;
-using FFXIManager.Infrastructure;
+﻿using FFXIManager.Infrastructure;
 using FFXIManager.Models;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
+using System.Collections.ObjectModel;
+using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace FFXIManager.ViewModels
 {

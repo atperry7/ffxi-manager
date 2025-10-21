@@ -1,7 +1,4 @@
-using System;
-using System.Threading.Tasks;
-
-namespace FFXIManager.Services
+﻿namespace FFXIManager.Services
 {
     /// <summary>
     /// Interface for OTP (One-Time Password) operations using TOTP algorithm

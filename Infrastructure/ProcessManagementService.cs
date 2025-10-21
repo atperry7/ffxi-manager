@@ -1,16 +1,10 @@
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
+﻿using FFXIManager.Services;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Linq;
+using System.Diagnostics.CodeAnalysis;
+using System.Management;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Management;
-using System.Diagnostics.CodeAnalysis;
-using FFXIManager.Services;
 
 namespace FFXIManager.Infrastructure
 {
@@ -117,7 +111,7 @@ namespace FFXIManager.Infrastructure
         private bool _disposed;
         private CancellationTokenSource? _monitoringCts;
         private int _monitorIntervalMs = GLOBAL_MONITOR_INTERVAL_MS;
-        
+
         // **GAMING FIX**: Removed thread input attachment tracking fields
         // The current implementation avoids AttachThreadInput entirely to prevent resource leaks
         // during rapid character switching, using simpler window activation methods instead
@@ -595,7 +589,7 @@ namespace FFXIManager.Infrastructure
 
                 // Attempt 1: Direct foreground activation
                 success = SetForegroundWindow(windowHandle);
-                
+
                 if (!success)
                 {
                     // Attempt 2: Bring to top then activate

@@ -1,14 +1,9 @@
-﻿using System;
+﻿using FFXIManager.Models;
+using FFXIManager.Services;
+using FFXIManager.ViewModels.Base;
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows.Input;
 using System.Windows.Threading;
-using FFXIManager.Infrastructure;
-using FFXIManager.Services;
-using FFXIManager.Models;
-using FFXIManager.ViewModels.Base;
 
 namespace FFXIManager.ViewModels
 {

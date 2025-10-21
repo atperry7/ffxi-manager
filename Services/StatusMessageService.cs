@@ -1,9 +1,6 @@
-using System;
-using System.Collections.Generic;
+﻿using FFXIManager.Models;
 using System.Collections.ObjectModel;
 using System.Windows.Threading;
-using FFXIManager.Models;
-using FFXIManager.Services;
 
 namespace FFXIManager.Services
 {

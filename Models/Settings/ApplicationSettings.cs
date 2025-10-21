@@ -1,6 +1,4 @@
-﻿
-using System.Collections.Generic;
-using System.Windows.Input;
+﻿using System.Windows.Input;
 
 namespace FFXIManager.Models.Settings
 {
@@ -120,14 +118,14 @@ namespace FFXIManager.Models.Settings
         /// Default: 1000 provides good balance between detail and memory usage.
         /// </summary>
         public int PerformanceHistorySize { get; set; } = 1000;
-        
+
         /// <summary>
         /// Hotkey cooldown period in milliseconds to prevent rapid-fire activation spam.
         /// Minimum time between hotkey activations for the same character.
         /// Default: 100ms prevents resource contention while maintaining responsiveness.
         /// </summary>
         public int HotkeySpamCooldownMs { get; set; } = 100;
-        
+
         /// <summary>
         /// Enable predictive caching for frequently accessed characters.
         /// When enabled, keeps recently used characters in cache longer.

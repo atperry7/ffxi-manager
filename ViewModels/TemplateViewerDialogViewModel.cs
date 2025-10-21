@@ -1,14 +1,10 @@
-using System;
-using System.Collections.ObjectModel;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using FFXIManager.Infrastructure;
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 using FFXIManager.Services;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
 using FFXIManager.ViewModels.Base;
+using System.Collections.ObjectModel;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace FFXIManager.ViewModels
 {

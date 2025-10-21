@@ -1,11 +1,8 @@
-using System;
+﻿using FFXIManager.Models;
+using FFXIManager.ViewModels.Base;
 using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using System.Windows.Media;
-using FFXIManager.Infrastructure;
-using FFXIManager.Models;
-using FFXIManager.ViewModels.Base;
 
 namespace FFXIManager.ViewModels.CharacterMonitor
 {
@@ -25,10 +22,10 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         {
             _character = character ?? throw new ArgumentNullException(nameof(character));
             _slotIndex = slotIndex;
-            
+
             // Subscribe to character property changes
             _character.PropertyChanged += OnCharacterPropertyChanged;
-            
+
             InitializeCommands();
         }
 
@@ -113,7 +110,7 @@ namespace FFXIManager.ViewModels.CharacterMonitor
                 {
                     if (value)
                         _lastActivatedTime = DateTime.Now;
-                    
+
                     OnPropertyChanged(nameof(StatusText));
                     OnPropertyChanged(nameof(StatusBrush));
                     OnPropertyChanged(nameof(BorderBrush));
@@ -131,7 +128,7 @@ namespace FFXIManager.ViewModels.CharacterMonitor
             {
                 if (IsActivating)
                     return "Activating...";
-                
+
                 if (IsLastActivated && _lastActivatedTime.HasValue)
                 {
                     var elapsed = DateTime.Now - _lastActivatedTime.Value;
@@ -142,7 +139,7 @@ namespace FFXIManager.ViewModels.CharacterMonitor
                     else
                         return "Active";
                 }
-                
+
                 return _character.IsRunning ? "Running" : "Stopped";
             }
         }
@@ -156,12 +153,12 @@ namespace FFXIManager.ViewModels.CharacterMonitor
             {
                 if (IsActivating)
                     return System.Windows.Media.Brushes.Orange;
-                
+
                 if (IsLastActivated)
                     return System.Windows.Media.Brushes.LimeGreen;
-                
-                return _character.IsRunning 
-                    ? System.Windows.Media.Brushes.Green 
+
+                return _character.IsRunning
+                    ? System.Windows.Media.Brushes.Green
                     : System.Windows.Media.Brushes.Red;
             }
         }
@@ -175,10 +172,10 @@ namespace FFXIManager.ViewModels.CharacterMonitor
             {
                 if (IsLastActivated)
                     return System.Windows.Media.Brushes.LimeGreen;
-                
+
                 if (IsActivating)
                     return System.Windows.Media.Brushes.Orange;
-                
+
                 return System.Windows.Media.Brushes.Gray;
             }
         }

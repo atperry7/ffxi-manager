@@ -1,11 +1,8 @@
-﻿using System;
-using System.ComponentModel;
-using System.Linq;
-using System.Windows.Input;
-using FFXIManager.Infrastructure;
+﻿using FFXIManager.Infrastructure;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 using Microsoft.Extensions.DependencyInjection;
+using System.Windows.Input;
 
 namespace FFXIManager.ViewModels
 {

@@ -1,18 +1,8 @@
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
+﻿using System.Collections.Concurrent;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Models;
-using FFXIManager.Services;
-using FFXIManager.Services.AutoLogin.ScreenDetection;
 
 namespace FFXIManager.Services.AutoLogin.ScreenDetection
 {
@@ -371,7 +361,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             }
         }
 
-        
+
         private string GetTemplateFilePath(string templatePath)
         {
             // Template paths are now simple filenames (e.g., "member_selection_screen" or "member_selection_screen.png")
@@ -393,8 +383,8 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
         // Legacy deprecation diagnostics for JSON metadata removed
 
-        
-        
+
+
         private async Task<byte[]> ConvertBitmapToByteArrayAsync(Bitmap bitmap)
         {
             var bmpData = bitmap.LockBits(

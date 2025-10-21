@@ -1,8 +1,7 @@
-﻿using System;
+﻿using FFXIManager.Configuration;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using FFXIManager.Configuration;
 
 namespace FFXIManager.Services
 {

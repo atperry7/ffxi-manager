@@ -1,6 +1,4 @@
-using System;
-using System.Threading.Tasks;
-using FFXIManager.Infrastructure;
+﻿using FFXIManager.Infrastructure;
 using FFXIManager.Models.AutoLogin;
 using FFXIManager.Services;
 

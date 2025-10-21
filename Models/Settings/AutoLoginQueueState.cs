@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
-
-namespace FFXIManager.Models.Settings
+﻿namespace FFXIManager.Models.Settings
 {
     /// <summary>
     /// Persistent state for the auto-login queue that survives application restarts

@@ -1,8 +1,4 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-
-namespace FFXIManager.Services.AutoLogin.ScreenDetection
+﻿namespace FFXIManager.Services.AutoLogin.ScreenDetection
 {
     /// <summary>
     /// Service for matching UI element templates within screenshots

@@ -1,6 +1,4 @@
-using System;
-
-namespace FFXIManager.Models
+﻿namespace FFXIManager.Models
 {
     /// <summary>
     /// Represents a credential stored in Windows Credential Manager that is not linked to any current account

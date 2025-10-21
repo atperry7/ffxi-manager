@@ -1,10 +1,10 @@
-﻿using FFXIManager.Models;
+﻿using FFXIManager.Infrastructure;
+using FFXIManager.Models;
 using FFXIManager.Models.Settings;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
-using FFXIManager.Infrastructure;
 
 namespace FFXIManager.ViewModels
 {
@@ -256,7 +256,7 @@ namespace FFXIManager.ViewModels
                 if (success)
                 {
                     await _notificationService.ShowToastAsync($"Switched to '{profile.Name}' profile", NotificationType.Success);
-                    
+
                     _settings.LastUsedProfile = profile.Name;
                     _settings.LastActiveProfileName = profile.Name;
                     _settingsService.SaveSettings(_settings);
@@ -380,7 +380,7 @@ namespace FFXIManager.ViewModels
                 if (success)
                 {
                     await _notificationService.ShowToastAsync($"Renamed '{oldName}' to '{newName}'", NotificationType.Info);
-                    
+
                     if (_settings.LastUsedProfile == oldName)
                     {
                         _settings.LastUsedProfile = newName;

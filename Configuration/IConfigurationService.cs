@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace FFXIManager.Configuration
+﻿namespace FFXIManager.Configuration
 {
     /// <summary>
     /// Interface for application configuration management

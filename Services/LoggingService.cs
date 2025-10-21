@@ -1,12 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Serilog;
-using Serilog.Events;
-using FFXIManager.Models.Settings;
+﻿using Microsoft.Extensions.Logging;
 
 namespace FFXIManager.Services
 {
@@ -24,13 +16,13 @@ namespace FFXIManager.Services
         Task LogErrorAsync(string messageTemplate, string? category, Exception? exception = null, params object[] args);
         Task LogDebugAsync(string messageTemplate, params object[] args);
         Task LogDebugAsync(string messageTemplate, string? category, params object[] args);
-        
+
         // Legacy methods for backward compatibility
         Task LogInfoAsync(string message, string? category = null);
         Task LogWarningAsync(string message, string? category = null);
         Task LogErrorAsync(string message, Exception? exception = null, string? category = null);
         Task LogDebugAsync(string message, string? category = null);
-        
+
         Task<List<LogEntry>> GetRecentLogsAsync(int count = 100);
         Task ClearLogsAsync();
     }
@@ -104,19 +96,19 @@ namespace FFXIManager.Services
             AddToBuffer(FFXIManagerLogLevel.Info, SafeFormat(messageTemplate, args), null, null);
             return Task.CompletedTask;
         }
-        
+
         public Task LogInfoAsync(string messageTemplate, string? category, params object[] args)
         {
-            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
+            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> { { "Category", category } }) : null;
             _logger.LogInformation(messageTemplate, args);
             AddToBuffer(FFXIManagerLogLevel.Info, SafeFormat(messageTemplate, args), null, category);
             return Task.CompletedTask;
         }
-        
+
         // Legacy method for backward compatibility
         public Task LogInfoAsync(string message, string? category = null)
         {
-            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
+            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> { { "Category", category } }) : null;
             _logger.LogInformation("{Message}", message);
             AddToBuffer(FFXIManagerLogLevel.Info, message, null, category);
             return Task.CompletedTask;
@@ -128,19 +120,19 @@ namespace FFXIManager.Services
             AddToBuffer(FFXIManagerLogLevel.Warning, SafeFormat(messageTemplate, args), null, null);
             return Task.CompletedTask;
         }
-        
+
         public Task LogWarningAsync(string messageTemplate, string? category, params object[] args)
         {
-            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
+            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> { { "Category", category } }) : null;
             _logger.LogWarning(messageTemplate, args);
             AddToBuffer(FFXIManagerLogLevel.Warning, SafeFormat(messageTemplate, args), null, category);
             return Task.CompletedTask;
         }
-        
+
         // Legacy method for backward compatibility
         public Task LogWarningAsync(string message, string? category = null)
         {
-            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
+            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> { { "Category", category } }) : null;
             _logger.LogWarning("{Message}", message);
             AddToBuffer(FFXIManagerLogLevel.Warning, message, null, category);
             return Task.CompletedTask;
@@ -152,19 +144,19 @@ namespace FFXIManager.Services
             AddToBuffer(FFXIManagerLogLevel.Error, SafeFormat(messageTemplate, args), exception, null);
             return Task.CompletedTask;
         }
-        
+
         public Task LogErrorAsync(string messageTemplate, string? category, Exception? exception = null, params object[] args)
         {
-            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
+            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> { { "Category", category } }) : null;
             _logger.LogError(exception, messageTemplate, args);
             AddToBuffer(FFXIManagerLogLevel.Error, SafeFormat(messageTemplate, args), exception, category);
             return Task.CompletedTask;
         }
-        
+
         // Legacy method for backward compatibility
         public Task LogErrorAsync(string message, Exception? exception = null, string? category = null)
         {
-            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
+            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> { { "Category", category } }) : null;
             _logger.LogError(exception, "{Message}", message);
             AddToBuffer(FFXIManagerLogLevel.Error, message, exception, category);
             return Task.CompletedTask;
@@ -176,10 +168,10 @@ namespace FFXIManager.Services
             AddToBuffer(FFXIManagerLogLevel.Debug, SafeFormat(messageTemplate, args), null, null);
             return Task.CompletedTask;
         }
-        
+
         public Task LogDebugAsync(string messageTemplate, string? category, params object[] args)
         {
-            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
+            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> { { "Category", category } }) : null;
             _logger.LogDebug(messageTemplate, args);
             AddToBuffer(FFXIManagerLogLevel.Debug, SafeFormat(messageTemplate, args), null, category);
             return Task.CompletedTask;
@@ -207,11 +199,11 @@ namespace FFXIManager.Services
                 }
             }
         }
-        
+
         // Legacy method for backward compatibility
         public Task LogDebugAsync(string message, string? category = null)
         {
-            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> {{ "Category", category }}) : null;
+            using var scope = !string.IsNullOrEmpty(category) ? _logger.BeginScope(new Dictionary<string, object> { { "Category", category } }) : null;
             _logger.LogDebug("{Message}", message);
             AddToBuffer(FFXIManagerLogLevel.Debug, message, null, category);
             return Task.CompletedTask;
@@ -234,7 +226,7 @@ namespace FFXIManager.Services
             lock (_lock)
             {
                 _logBuffer.Add(entry);
-                
+
                 // Keep buffer size manageable
                 if (_logBuffer.Count > _maxLogEntries)
                 {
@@ -261,7 +253,7 @@ namespace FFXIManager.Services
             {
                 _logBuffer.Clear();
             }
-            
+
             // Note: We don't clear Serilog's files directly as they're managed by Serilog sinks
             // If file clearing is needed, it should be done through Serilog configuration
             _logger.LogInformation("Log buffer cleared via ClearLogsAsync");

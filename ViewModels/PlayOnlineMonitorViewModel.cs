@@ -1,12 +1,8 @@
 ﻿using FFXIManager.Models;
-using FFXIManager.Models.Settings;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 using System.Collections.ObjectModel;
-using System.Collections.Generic;
-using System.Threading;
 using System.Windows.Input;
-using FFXIManager.Infrastructure;
 
 namespace FFXIManager.ViewModels
 {
@@ -52,7 +48,7 @@ namespace FFXIManager.ViewModels
 
             // Subscribe to character ordering service changes (the source of truth)
             _characterOrderingService.CharacterCacheUpdated += OnCharacterOrderChanged;
-            
+
             // Load initial character order from service
             _ = LoadCharactersFromServiceAsync();
 
@@ -60,13 +56,13 @@ namespace FFXIManager.ViewModels
             _monitorService.CharacterDetected += OnCharacterDetected;
             _monitorService.CharacterUpdated += OnCharacterUpdated;
             _monitorService.CharacterRemoved += OnCharacterRemoved;
-            
+
             // Subscribe to hotkey activation service for persistent green border updates
             _hotkeyActivationService.CharacterActivated += OnCharacterActivatedViaHotkey;
-            
+
             // Start monitoring AFTER UI is ready to receive events
             _monitorService.StartMonitoring();
-            
+
             // **NEW FEATURE**: Start timer to refresh LastActivated status display
             _statusRefreshTimer = new System.Windows.Threading.DispatcherTimer
             {
@@ -79,7 +75,7 @@ namespace FFXIManager.ViewModels
         #region Properties
 
         public ObservableCollection<PlayOnlineCharacter> Characters { get; }
-        
+
         /// <summary>
         /// Loads characters from the ordering service (source of truth)
         /// </summary>
@@ -90,11 +86,11 @@ namespace FFXIManager.ViewModels
             {
                 return; // Another update is in progress
             }
-            
+
             try
             {
                 var orderedCharacters = await _characterOrderingService.GetOrderedCharactersAsync();
-                
+
                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     Characters.Clear();
@@ -103,11 +99,11 @@ namespace FFXIManager.ViewModels
                         Characters.Add(character);
                     }
                     OnPropertyChanged(nameof(CharacterCount));
-                    
+
                     // Refresh command states after UI update
                     RefreshMoveCommandStates();
                 });
-                
+
                 await _loggingService.LogDebugAsync($"Loaded {orderedCharacters.Count} characters from ordering service", "PlayOnlineMonitorViewModel");
             }
             catch (Exception ex)
@@ -119,7 +115,7 @@ namespace FFXIManager.ViewModels
                 _updateSemaphore.Release();
             }
         }
-        
+
         /// <summary>
         /// Called when character order changes in the service
         /// </summary>
@@ -224,7 +220,7 @@ namespace FFXIManager.ViewModels
                     _ = _loggingService.LogWarningAsync("Application dispatcher not available during character loading", "PlayOnlineMonitorViewModel");
                     return;
                 }
-                
+
                 await dispatcher.InvokeAsync(() =>
                 {
                     // Ensure newly discovered characters are appended to the session order by CharacterName (stable within session)
@@ -270,7 +266,7 @@ namespace FFXIManager.ViewModels
 
                 // Apply ordering after load/merge
                 ApplyPreferredOrder();
-                
+
                 // Refresh move command states after loading/merging characters
                 RefreshMoveCommandStates();
 
@@ -371,7 +367,7 @@ namespace FFXIManager.ViewModels
                 if (result.Success)
                 {
                     _statusService.SetMessage($"Activated {character.DisplayName} ({result.Duration.TotalMilliseconds:F0}ms)");
-                    
+
                     // **USER FEEDBACK**: Update persistent activation indicator
                     await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                     {
@@ -381,11 +377,11 @@ namespace FFXIManager.ViewModels
                             if (c != character)
                                 c.IsLastActivated = false;
                         }
-                        
+
                         // Set the activated character as last activated
                         character.IsLastActivated = true;
                     });
-                    
+
                     // **PERFORMANCE FEEDBACK**: Update UI with performance metrics
                     await UpdatePerformanceMetricsAsync();
                 }
@@ -410,18 +406,18 @@ namespace FFXIManager.ViewModels
             {
                 var stats = _hotkeyActivationService.GetPerformanceStats();
                 var cacheStats = _characterOrderingService.GetCacheStatistics();
-                
+
                 AverageActivationTimeMs = stats.AverageActivationTimeMs;
                 CacheHitRate = (int)cacheStats.HitRate;
-                
+
                 PerformanceStatus = stats.AverageActivationTimeMs switch
                 {
                     < 50 => "⚡ Excellent",
-                    < 100 => "✅ Good", 
+                    < 100 => "✅ Good",
                     < 200 => "⚠️ Fair",
                     _ => "🐌 Slow"
                 };
-                
+
                 OnPropertyChanged(nameof(AverageActivationTimeMs));
                 OnPropertyChanged(nameof(PerformanceStatus));
                 OnPropertyChanged(nameof(CacheHitRate));
@@ -443,10 +439,10 @@ namespace FFXIManager.ViewModels
             try
             {
                 _statusService.SetMessage("Opening character monitor window...");
-                
+
                 // Use the new Character Monitor architecture via helper
                 Views.CharacterMonitorHelper.ShowCharacterMonitor();
-                
+
                 _statusService.SetMessage("Character monitor window opened");
             }
             catch (Exception ex)
@@ -465,7 +461,7 @@ namespace FFXIManager.ViewModels
                 _ = _loggingService.LogWarningAsync("Application dispatcher not available during character detection", "PlayOnlineMonitorViewModel");
                 return;
             }
-            
+
             dispatcher.Invoke(() =>
             {
                 // Maintain session order stickiness by CharacterName on detection
@@ -482,7 +478,7 @@ namespace FFXIManager.ViewModels
                     OnPropertyChanged(nameof(CharacterCount));
                     OnPropertyChanged(nameof(MonitoringStatus));
                     _statusService.SetMessage($"PlayOnline character detected: {character.DisplayName}");
-                    
+
                     // **IMMEDIATE AVAILABILITY**: Ensure new characters are immediately switchable
                     _ = Task.Run(async () =>
                     {
@@ -490,10 +486,10 @@ namespace FFXIManager.ViewModels
                         {
                             // Force immediate cache invalidation so hotkey system sees new character
                             await _characterOrderingService.InvalidateCacheAsync();
-                            
+
                             // Refresh hotkey mappings so new character gets proper hotkey assignment
                             await _hotkeyMappingService.RefreshMappingsAsync();
-                            
+
                             await _loggingService.LogInfoAsync($"✅ Character '{character.DisplayName}' is now available for hotkey switching", "PlayOnlineMonitorViewModel");
                         }
                         catch (Exception ex)
@@ -504,7 +500,7 @@ namespace FFXIManager.ViewModels
                 }
                 // Re-apply ordering after changes
                 ApplyPreferredOrder();
-                
+
                 // Refresh move command states since collection changed
                 RefreshMoveCommandStates();
             });
@@ -519,7 +515,7 @@ namespace FFXIManager.ViewModels
                 _ = _loggingService.LogWarningAsync("Application dispatcher not available during character update", "PlayOnlineMonitorViewModel");
                 return;
             }
-            
+
             dispatcher.Invoke(() =>
             {
                 // Attempt to preserve slot by CharacterName on update (handle/name changes)
@@ -567,7 +563,7 @@ namespace FFXIManager.ViewModels
                 }
                 // Re-apply ordering after update
                 ApplyPreferredOrder();
-                
+
                 // Refresh move command states since collection or ordering may have changed
                 RefreshMoveCommandStates();
             });
@@ -582,7 +578,7 @@ namespace FFXIManager.ViewModels
                 _ = _loggingService.LogWarningAsync("Application dispatcher not available during character removal", "PlayOnlineMonitorViewModel");
                 return;
             }
-            
+
             dispatcher.Invoke(() =>
             {
                 // Keep sticky order for the session: do NOT remove the key from _preferredOrder here.
@@ -598,7 +594,7 @@ namespace FFXIManager.ViewModels
 
                 // Re-apply ordering after removal
                 ApplyPreferredOrder();
-                
+
                 // Refresh move command states since collection changed
                 RefreshMoveCommandStates();
             });
@@ -611,14 +607,14 @@ namespace FFXIManager.ViewModels
         {
             // Only handle successful activations
             if (!e.Success || e.Character == null) return;
-            
+
             var dispatcher = System.Windows.Application.Current?.Dispatcher;
             if (dispatcher == null)
             {
                 _ = _loggingService.LogWarningAsync("Application dispatcher not available during hotkey activation", "PlayOnlineMonitorViewModel");
                 return;
             }
-            
+
             dispatcher.Invoke(() =>
             {
                 // Find the activated character in our collection
@@ -631,10 +627,10 @@ namespace FFXIManager.ViewModels
                         if (c != activatedCharacter)
                             c.IsLastActivated = false;
                     }
-                    
+
                     // Set the activated character as last activated (persistent green border)
                     activatedCharacter.IsLastActivated = true;
-                    
+
                     _ = _loggingService.LogDebugAsync($"Updated persistent green border: {activatedCharacter.DisplayName} (activated via {e.Source})", "PlayOnlineMonitorViewModel");
                 }
             });
@@ -652,7 +648,7 @@ namespace FFXIManager.ViewModels
                 _monitorService.CharacterUpdated -= OnCharacterUpdated;
                 _monitorService.CharacterRemoved -= OnCharacterRemoved;
                 _hotkeyActivationService.CharacterActivated -= OnCharacterActivatedViaHotkey;
-                
+
                 // Stop monitoring
                 _monitorService.StopMonitoring();
 
@@ -669,30 +665,30 @@ namespace FFXIManager.ViewModels
         private bool CanMoveCharacter(PlayOnlineCharacter? character, int direction)
         {
             if (character == null || Characters.Count <= 1) return false;
-            
+
             // Find the character's current position in the UI (should reflect service state)
             var currentIndex = Characters.IndexOf(character);
             if (currentIndex < 0) return false;
-            
+
             // Check if movement in the specified direction is valid
             if (direction < 0 && currentIndex == 0)
                 return false; // Can't move up from first position
-                
+
             if (direction > 0 && currentIndex == Characters.Count - 1)
                 return false; // Can't move down from last position
-            
+
             return true;
         }
 
         private async void MoveCharacter(PlayOnlineCharacter? character, int direction)
         {
             if (character == null) return;
-            
+
             try
             {
                 // Get current character order from service (source of truth)
                 var serviceCharacters = await _characterOrderingService.GetOrderedCharactersAsync();
-                
+
                 // Find the character's current position in the service
                 var currentIndex = serviceCharacters.FindIndex(c => c.ProcessId == character.ProcessId);
                 if (currentIndex < 0)
@@ -703,17 +699,17 @@ namespace FFXIManager.ViewModels
 
                 // Calculate the target index
                 var targetIndex = currentIndex + direction;
-                
+
                 // Validate target index
                 if (targetIndex < 0 || targetIndex >= serviceCharacters.Count)
                 {
                     await _loggingService.LogDebugAsync($"Cannot move {character.DisplayName} to slot {targetIndex} (out of range)", "PlayOnlineMonitorViewModel");
                     return;
                 }
-                
+
                 // Update the service (source of truth) - UI will automatically reflect the change
                 var success = await _characterOrderingService.MoveCharacterToSlotAsync(character, targetIndex);
-                
+
                 if (!success)
                 {
                     await _loggingService.LogWarningAsync($"Failed to move {character.DisplayName} to slot {targetIndex}", "PlayOnlineMonitorViewModel");
@@ -776,12 +772,12 @@ namespace FFXIManager.ViewModels
             // reflect the current valid positions. While this refreshes all commands globally,
             // it's acceptable for small-to-medium character counts (1-12 characters) and ensures
             // UI consistency. For larger lists, consider per-character command refresh optimization.
-            
+
             if (MoveCharacterUpCommand is RelayCommandWithParameter<PlayOnlineCharacter> upCommand)
             {
                 upCommand.RaiseCanExecuteChanged();
             }
-            
+
             if (MoveCharacterDownCommand is RelayCommandWithParameter<PlayOnlineCharacter> downCommand)
             {
                 downCommand.RaiseCanExecuteChanged();

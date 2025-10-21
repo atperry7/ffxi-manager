@@ -1,5 +1,4 @@
-﻿using System;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
 
@@ -83,7 +82,7 @@ namespace FFXIManager.Models
         /// <summary>
         /// Indicates if this character was recently activated (within last 10 seconds)
         /// </summary>
-        public bool IsRecentlyActivated => LastActivated.HasValue && 
+        public bool IsRecentlyActivated => LastActivated.HasValue &&
             (DateTime.UtcNow - LastActivated.Value).TotalSeconds < 10;
 
         /// <summary>
@@ -103,13 +102,13 @@ namespace FFXIManager.Models
             get
             {
                 if (!LastActivated.HasValue) return "Running";
-                
+
                 var timeSinceActivation = DateTime.UtcNow - LastActivated.Value;
                 if (timeSinceActivation.TotalSeconds < 10)
                     return "Recently Active";
                 if (timeSinceActivation.TotalMinutes < 5)
                     return $"Last Active {(int)timeSinceActivation.TotalMinutes}m ago";
-                    
+
                 return "Running";
             }
         }

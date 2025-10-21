@@ -1,14 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Management;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Infrastructure;
+﻿using FFXIManager.Infrastructure;
 using FFXIManager.Models;
+using System.Management;
 
 namespace FFXIManager.Services
 {
@@ -60,7 +52,7 @@ namespace FFXIManager.Services
             _logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
             _windowEventTracker = windowEventTracker ?? throw new ArgumentNullException(nameof(windowEventTracker));
-            
+
             // Subscribe to real-time window events
             _windowEventTracker.WindowTitleChanged += OnWindowTitleChanged;
             _windowEventTracker.WindowCreated += OnWindowCreated;
@@ -417,11 +409,11 @@ namespace FFXIManager.Services
                         if (window != null)
                         {
                             var oldTitle = window.Title;
-                            
+
                             // **FIX**: Only update title if the new title is valid
                             // Don't overwrite good titles with empty/null/garbage
                             var shouldUpdate = false;
-                            if (!string.IsNullOrWhiteSpace(e.NewTitle) && 
+                            if (!string.IsNullOrWhiteSpace(e.NewTitle) &&
                                 !e.NewTitle.Equals("NULL", StringComparison.OrdinalIgnoreCase))
                             {
                                 // Good title - always update
@@ -452,7 +444,7 @@ namespace FFXIManager.Services
                         else
                         {
                             // **FIX**: Only add new windows if they have valid titles
-                            if (!string.IsNullOrWhiteSpace(e.NewTitle) && 
+                            if (!string.IsNullOrWhiteSpace(e.NewTitle) &&
                                 !e.NewTitle.Equals("NULL", StringComparison.OrdinalIgnoreCase))
                             {
                                 // Window not in our tracking - might be newly created
@@ -688,17 +680,17 @@ namespace FFXIManager.Services
                     }
 
                     _processes[processInfo.ProcessId] = monitoredProcess;
-                    
+
                     // **NEW**: Start real-time window event tracking for this process
-                    trackingMessage = profile.TrackWindowTitles ? 
+                    trackingMessage = profile.TrackWindowTitles ?
                         $"🔍 Starting window event tracking for PID {processInfo.ProcessId} ({processInfo.ProcessName}) - Profile: {profile.Name}" :
                         $"⚠️ Profile '{profile.Name}' has TrackWindowTitles=false - NOT starting event tracking for PID {processInfo.ProcessId}";
-                    
+
                     if (profile.TrackWindowTitles)
                     {
                         _windowEventTracker.StartTrackingProcess(processInfo.ProcessId, processInfo.ProcessName);
                     }
-                    
+
                     isNew = true;
                 }
 
@@ -910,7 +902,7 @@ namespace FFXIManager.Services
             _disposed = true;
 
             StopMonitoring();
-            
+
             // **NEW**: Dispose window event tracker
             _windowEventTracker?.Dispose();
 

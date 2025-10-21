@@ -1,8 +1,4 @@
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Infrastructure;
+﻿using FFXIManager.Infrastructure;
 
 namespace FFXIManager.Services.AutoLogin
 {

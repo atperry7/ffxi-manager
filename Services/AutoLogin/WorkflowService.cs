@@ -1,13 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Configuration;
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 using FFXIManager.Models.AutoLogin;
+using System.IO;
+using System.Text.Json;
 
 namespace FFXIManager.Services.AutoLogin
 {

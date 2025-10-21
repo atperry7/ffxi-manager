@@ -1,12 +1,7 @@
-using System;
+﻿using FFXIManager.Infrastructure;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Infrastructure;
 
 namespace FFXIManager.Services
 {
@@ -19,7 +14,7 @@ namespace FFXIManager.Services
         private readonly ILoggingService _logging;
         private readonly IUiDispatcher _uiDispatcher;
         private readonly ConcurrentDictionary<int, ProcessWindowTracker> _trackers = new();
-        
+
         private bool _disposed;
 
         // Win32 Event Hook constants
@@ -82,7 +77,7 @@ namespace FFXIManager.Services
             {
                 // Log tracking attempts
                 _ = _logging.LogInfoAsync($"Starting event tracking for PID {processId} ({processName})", "WindowEventTracker");
-                
+
                 var tracker = new ProcessWindowTracker(processId, processName, this);
                 if (_trackers.TryAdd(processId, tracker))
                 {
@@ -112,7 +107,7 @@ namespace FFXIManager.Services
         public void StopAllTracking()
         {
             var trackersToDispose = new List<ProcessWindowTracker>();
-            
+
             foreach (var kvp in _trackers)
             {
                 if (_trackers.TryRemove(kvp.Key, out var tracker))
@@ -178,17 +173,17 @@ namespace FFXIManager.Services
 
                 var buffer = new char[length + 1];
                 int result = GetWindowText(hWnd, buffer, buffer.Length);
-                
+
                 if (result <= 0)
                     return string.Empty;
-                
+
                 // **FIX**: Handle null terminators and clean up the string
                 var title = new string(buffer, 0, result).Trim('\0').Trim();
-                
+
                 // **FIX**: If title is literally "NULL" or empty, return empty string
                 if (string.IsNullOrWhiteSpace(title) || title.Equals("NULL", StringComparison.OrdinalIgnoreCase))
                     return string.Empty;
-                
+
                 return title;
             }
             catch
@@ -217,12 +212,12 @@ namespace FFXIManager.Services
         private readonly string _processName;
         private readonly WindowEventTracker _parent;
         private readonly WinEventDelegate _eventDelegate;
-        
+
         private IntPtr _titleChangeHook;
         private IntPtr _createHook;
         private IntPtr _destroyHook;
         private bool _disposed;
-        
+
         // **FALLBACK**: Polling for processes that don't generate events
         private readonly Dictionary<IntPtr, string> _lastKnownTitles = new();
         private DateTime _lastEventTime = DateTime.UtcNow;
@@ -232,16 +227,16 @@ namespace FFXIManager.Services
             _processId = processId;
             _processName = processName;
             _parent = parent;
-            
+
             // Keep delegate alive to prevent garbage collection
             _eventDelegate = WinEventCallback;
-            
+
             SetupEventHooks();
-            
+
             // **DISABLED**: Fallback polling was causing race conditions
             // Will implement a cleaner solution focused specifically on POL processes
         }
-        
+
         private static bool IsGameProcess(string processName)
         {
             // Known processes that may not generate proper window events
@@ -290,7 +285,7 @@ namespace FFXIManager.Services
                 bool titleHookOk = _titleChangeHook != IntPtr.Zero;
                 bool createHookOk = _createHook != IntPtr.Zero;
                 bool destroyHookOk = _destroyHook != IntPtr.Zero;
-                
+
                 if (!titleHookOk || !createHookOk || !destroyHookOk)
                 {
                     var lastError = Marshal.GetLastWin32Error();
@@ -303,7 +298,7 @@ namespace FFXIManager.Services
             }
         }
 
-        private void WinEventCallback(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, 
+        private void WinEventCallback(IntPtr hWinEventHook, uint eventType, IntPtr hwnd,
             int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
         {
             try
@@ -316,7 +311,7 @@ namespace FFXIManager.Services
                 // Only handle window events (idObject == 0)
                 if (idObject != 0 || hwnd == IntPtr.Zero)
                 {
-                        return;
+                    return;
                 }
 
                 // Verify this is our process
@@ -325,7 +320,7 @@ namespace FFXIManager.Services
                 {
                     return;
                 }
-                
+
                 if (windowProcessId != _processId)
                 {
                     return;
@@ -359,7 +354,7 @@ namespace FFXIManager.Services
                         _lastKnownTitles.Remove(hwnd); // Remove from cache
                         _parent.OnWindowEvent(_processId, hwnd, WindowEventType.Destroyed);
                         break;
-                        
+
                     default:
                         break;
                 }
@@ -369,7 +364,7 @@ namespace FFXIManager.Services
                 // Ignore callback exceptions to prevent destabilizing the event system
             }
         }
-        
+
         private static List<WindowInfo> GetProcessWindows(int processId)
         {
             var windows = new List<WindowInfo>();
@@ -378,25 +373,25 @@ namespace FFXIManager.Services
                 var process = Process.GetProcessById(processId);
                 if (process.HasExited)
                     return windows;
-                    
+
                 // Get main window
                 if (process.MainWindowHandle != IntPtr.Zero)
                 {
-                    windows.Add(new WindowInfo 
-                    { 
+                    windows.Add(new WindowInfo
+                    {
                         Handle = process.MainWindowHandle,
                         Title = GetWindowTitle(process.MainWindowHandle),
                         IsMainWindow = true,
                         IsVisible = IsWindowVisible(process.MainWindowHandle)
                     });
                 }
-                
+
                 // For now, just check main window - can be expanded if needed
             }
             catch (Exception)
             {
             }
-            
+
             return windows;
         }
 
@@ -446,17 +441,17 @@ namespace FFXIManager.Services
 
                 var buffer = new char[length + 1];
                 int result = GetWindowText(hWnd, buffer, buffer.Length);
-                
+
                 if (result <= 0)
                     return string.Empty;
-                
+
                 // **FIX**: Handle null terminators and clean up the string
                 var title = new string(buffer, 0, result).Trim('\0').Trim();
-                
+
                 // **FIX**: If title is literally "NULL" or empty, return empty string
                 if (string.IsNullOrWhiteSpace(title) || title.Equals("NULL", StringComparison.OrdinalIgnoreCase))
                     return string.Empty;
-                
+
                 return title;
             }
             catch

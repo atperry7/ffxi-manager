@@ -1,13 +1,7 @@
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Infrastructure;
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 using FFXIManager.Models.Settings;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 
 namespace FFXIManager.Services
 {
@@ -21,17 +15,17 @@ namespace FFXIManager.Services
         /// Gets a character by hotkey ID with O(1) performance.
         /// </summary>
         Task<PlayOnlineCharacter?> GetCharacterByHotkeyAsync(int hotkeyId);
-        
+
         /// <summary>
         /// Refreshes all hotkey mappings from current settings and character data.
         /// </summary>
         Task RefreshMappingsAsync();
-        
+
         /// <summary>
         /// Gets current mapping statistics for diagnostics.
         /// </summary>
         HotkeyMappingStatistics GetStatistics();
-        
+
         /// <summary>
         /// Event raised when hotkey mappings are updated.
         /// </summary>
@@ -46,35 +40,35 @@ namespace FFXIManager.Services
         private readonly ICharacterOrderingService _characterOrdering;
         private readonly ISettingsService _settingsService;
         private readonly ILoggingService _loggingService;
-        
+
         // **GAMING OPTIMIZATION**: O(1) hotkey lookups
         private volatile ConcurrentDictionary<int, MappedCharacter> _hotkeyMappings = new();
         private DateTime _lastMappingUpdate = DateTime.MinValue;
         private readonly SemaphoreSlim _mappingUpdateSemaphore = new(1, 1);
         private readonly Stopwatch _performanceStopwatch = Stopwatch.StartNew();
-        
+
         // Performance counters
         private int _lookupHitCount;
         private int _lookupMissCount;
         private int _mappingRefreshCount;
-        
+
         // Settings subscription
         private bool _disposed;
-        
+
         public event EventHandler<HotkeyMappingsUpdatedEventArgs>? MappingsUpdated;
 
         public HotkeyMappingService(
-            ICharacterOrderingService characterOrdering, 
+            ICharacterOrderingService characterOrdering,
             ISettingsService settingsService,
             ILoggingService loggingService)
         {
             _characterOrdering = characterOrdering ?? throw new ArgumentNullException(nameof(characterOrdering));
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
-            
+
             // Subscribe to cache updates for automatic refresh
             _characterOrdering.CharacterCacheUpdated += OnCharacterCacheUpdated;
-            
+
             _ = _loggingService.LogInfoAsync("HotkeyMappingService initialized", "HotkeyMappingService");
         }
 
@@ -84,34 +78,34 @@ namespace FFXIManager.Services
         public async Task<PlayOnlineCharacter?> GetCharacterByHotkeyAsync(int hotkeyId)
         {
             var startTime = _performanceStopwatch.Elapsed;
-            
+
             try
             {
                 // **FAST PATH**: O(1) lookup in pre-validated mappings
                 if (_hotkeyMappings.TryGetValue(hotkeyId, out var mappedCharacter))
                 {
                     Interlocked.Increment(ref _lookupHitCount);
-                    
+
                     var lookupTime = (_performanceStopwatch.Elapsed - startTime).TotalMicroseconds;
                     await _loggingService.LogDebugAsync($"Hotkey {hotkeyId} → {mappedCharacter.Character.DisplayName} ({lookupTime:F1}μs)", "HotkeyMappingService");
-                    
+
                     return mappedCharacter.Character;
                 }
 
                 // **CACHE MISS**: Mapping might be stale, try refreshing
                 Interlocked.Increment(ref _lookupMissCount);
                 await _loggingService.LogDebugAsync($"Hotkey {hotkeyId} mapping miss, refreshing...", "HotkeyMappingService");
-                
+
                 // Refresh mappings and try again
                 await RefreshMappingsAsync();
-                
+
                 if (_hotkeyMappings.TryGetValue(hotkeyId, out mappedCharacter))
                 {
                     var totalTime = (_performanceStopwatch.Elapsed - startTime).TotalMilliseconds;
                     await _loggingService.LogDebugAsync($"Hotkey {hotkeyId} resolved after refresh → {mappedCharacter.Character.DisplayName} ({totalTime:F1}ms)", "HotkeyMappingService");
                     return mappedCharacter.Character;
                 }
-                
+
                 // **FINAL FALLBACK**: Hotkey ID not found
                 await _loggingService.LogWarningAsync($"Hotkey {hotkeyId} has no valid character mapping", "HotkeyMappingService");
                 return null;
@@ -129,31 +123,31 @@ namespace FFXIManager.Services
         public async Task RefreshMappingsAsync()
         {
             if (_disposed) return;
-            
+
             // **THREAD SAFETY**: Only allow one mapping refresh at a time
             if (!await _mappingUpdateSemaphore.WaitAsync(200))
             {
                 await _loggingService.LogDebugAsync("Mapping refresh already in progress", "HotkeyMappingService");
                 return;
             }
-            
+
             try
             {
                 var refreshStart = _performanceStopwatch.Elapsed;
-                
+
                 // Get current settings and characters
                 var settings = _settingsService.LoadSettings();
                 var characters = await _characterOrdering.GetOrderedCharactersAsync();
-                
+
                 var newMappings = new ConcurrentDictionary<int, MappedCharacter>();
                 int validMappings = 0;
                 int invalidMappings = 0;
-                
+
                 // Create mappings for all enabled shortcuts
                 foreach (var shortcut in settings.CharacterSwitchShortcuts.Where(s => s.IsEnabled))
                 {
                     var slotIndex = KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(shortcut.HotkeyId);
-                    
+
                     if (slotIndex >= 0 && slotIndex < characters.Count)
                     {
                         var character = characters[slotIndex];
@@ -173,16 +167,16 @@ namespace FFXIManager.Services
                         invalidMappings++;
                     }
                 }
-                
+
                 // **ATOMIC UPDATE**: Replace mappings atomically
                 _hotkeyMappings = newMappings;
                 _lastMappingUpdate = DateTime.UtcNow;
                 Interlocked.Increment(ref _mappingRefreshCount);
-                
+
                 var refreshTime = (_performanceStopwatch.Elapsed - refreshStart).TotalMilliseconds;
-                
+
                 await _loggingService.LogInfoAsync($"Hotkey mappings refreshed: {validMappings} valid, {invalidMappings} invalid ({refreshTime:F1}ms)", "HotkeyMappingService");
-                
+
                 // Notify subscribers
                 MappingsUpdated?.Invoke(this, new HotkeyMappingsUpdatedEventArgs
                 {
@@ -209,7 +203,7 @@ namespace FFXIManager.Services
         {
             var totalLookups = _lookupHitCount + _lookupMissCount;
             var hitRate = totalLookups > 0 ? (_lookupHitCount / (double)totalLookups) * 100 : 0;
-            
+
             return new HotkeyMappingStatistics
             {
                 ActiveMappings = _hotkeyMappings.Count,
@@ -244,7 +238,7 @@ namespace FFXIManager.Services
         {
             if (_disposed) return;
             _disposed = true;
-            
+
             try
             {
                 _characterOrdering.CharacterCacheUpdated -= OnCharacterCacheUpdated;
@@ -255,7 +249,7 @@ namespace FFXIManager.Services
             {
                 // Ignore disposal errors
             }
-            
+
             GC.SuppressFinalize(this);
         }
     }

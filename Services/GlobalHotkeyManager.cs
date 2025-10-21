@@ -1,10 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using FFXIManager.Models.Settings;
 using System.Windows.Input;
-using FFXIManager.Models.Settings;
 
 namespace FFXIManager.Services
 {

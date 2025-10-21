@@ -1,5 +1,5 @@
-﻿using System.Windows;
-using FFXIManager.Models.Settings;
+﻿using FFXIManager.Models.Settings;
+using System.Windows;
 
 namespace FFXIManager.Views
 {
@@ -28,7 +28,7 @@ namespace FFXIManager.Views
 
             // Initialize the key recorder with the current shortcut (keyboard + controller)
             KeyRecorder.SetShortcut(shortcut.Modifiers, shortcut.Key, shortcut.ControllerButton);
-            
+
             // Initialize EditedShortcut with the current values in case user doesn't record a new one
             EditedShortcut = new KeyboardShortcutConfig(
                 shortcut.SlotIndex,

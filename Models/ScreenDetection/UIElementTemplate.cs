@@ -1,6 +1,4 @@
-using System;
-using System.Drawing;
-using FFXIManager.Models;
+﻿using System.Drawing;
 
 namespace FFXIManager.Services.AutoLogin.ScreenDetection
 {

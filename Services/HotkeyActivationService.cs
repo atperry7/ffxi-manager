@@ -1,11 +1,6 @@
-using System;
+﻿using FFXIManager.Models;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Infrastructure;
-using FFXIManager.Models;
 
 namespace FFXIManager.Services
 {
@@ -19,33 +14,33 @@ namespace FFXIManager.Services
         /// Activates a character by hotkey ID using the optimized pipeline.
         /// </summary>
         Task<HotkeyActivationResult> ActivateCharacterByHotkeyAsync(int hotkeyId, CancellationToken cancellationToken = default);
-        
+
         /// <summary>
         /// Activates a character directly using the optimized pipeline.
         /// Performs reverse lookup to find hotkey mapping if available.
         /// </summary>
         Task<HotkeyActivationResult> ActivateCharacterDirectAsync(PlayOnlineCharacter character, CancellationToken cancellationToken = default);
-        
+
         /// <summary>
         /// Cycles to the next active character.
         /// </summary>
         Task<HotkeyActivationResult> CycleToNextCharacterAsync(CancellationToken cancellationToken = default);
-        
+
         /// <summary>
         /// Gets the hotkey ID associated with a character (reverse lookup).
         /// </summary>
         Task<int?> GetHotkeyIdForCharacterAsync(PlayOnlineCharacter character);
-        
+
         /// <summary>
         /// Refreshes all hotkey mappings from current settings.
         /// </summary>
         Task RefreshMappingsAsync();
-        
+
         /// <summary>
         /// Gets current performance statistics for all activation operations.
         /// </summary>
         HotkeyPerformanceStats GetPerformanceStats();
-        
+
         /// <summary>
         /// Event raised when any character activation completes (success or failure).
         /// </summary>
@@ -65,7 +60,7 @@ namespace FFXIManager.Services
         public string? ErrorMessage { get; init; }
         public ActivationSource Source { get; init; }
         public DateTime Timestamp { get; init; } = DateTime.UtcNow;
-        
+
         public static HotkeyActivationResult NotMapped(int hotkeyId) => new()
         {
             HotkeyId = hotkeyId,
@@ -73,7 +68,7 @@ namespace FFXIManager.Services
             ErrorMessage = "No character mapped to hotkey",
             Source = ActivationSource.Hotkey
         };
-        
+
         public static HotkeyActivationResult Failed(PlayOnlineCharacter character, string error, ActivationSource source) => new()
         {
             Character = character,
@@ -81,7 +76,7 @@ namespace FFXIManager.Services
             ErrorMessage = error,
             Source = source
         };
-        
+
         /// <summary>
         /// Converts to HotkeyActivationMetrics for performance monitoring.
         /// </summary>
@@ -165,7 +160,7 @@ namespace FFXIManager.Services
         public async Task<HotkeyActivationResult> ActivateCharacterByHotkeyAsync(int hotkeyId, CancellationToken cancellationToken = default)
         {
             var stopwatch = Stopwatch.StartNew();
-            
+
             try
             {
                 // **SPAM PREVENTION**: Check cooldown to prevent rapid-fire hotkey spam
@@ -174,7 +169,7 @@ namespace FFXIManager.Services
                 {
                     var settings = _settingsService.LoadSettings();
                     var timeSinceLastMs = (now - lastActivation).TotalMilliseconds;
-                    
+
                     if (timeSinceLastMs < settings.HotkeySpamCooldownMs)
                     {
                         var cooldownResult = new HotkeyActivationResult
@@ -185,38 +180,38 @@ namespace FFXIManager.Services
                             ErrorMessage = $"Hotkey on cooldown ({settings.HotkeySpamCooldownMs - timeSinceLastMs:F0}ms remaining)",
                             Source = ActivationSource.Hotkey
                         };
-                        
+
                         // Don't log this as it would be spam, just return
                         return cooldownResult;
                     }
                 }
-                
+
                 // **FAST PATH**: O(1) character lookup from pre-validated mappings
                 var character = await _mappingService.GetCharacterByHotkeyAsync(hotkeyId);
-                
+
                 if (character == null)
                 {
                     var notMappedResult = HotkeyActivationResult.NotMapped(hotkeyId);
                     await _loggingService.LogDebugAsync("No character mapped to hotkey {HotkeyId}", "HotkeyActivationService", hotkeyId);
-                    
+
                     // Record metrics and fire event
                     _performanceMonitor.RecordActivation(notMappedResult.ToMetrics());
                     CharacterActivated?.Invoke(this, notMappedResult);
-                    
+
                     return notMappedResult;
                 }
-                
+
                 // **SPAM PREVENTION**: Update last activation time for successful lookup
                 _lastActivationTimes.AddOrUpdate(hotkeyId, now, (key, oldValue) => now);
 
                 // Perform activation with smart retry logic
                 var result = await PerformActivationWithMetrics(character, hotkeyId, ActivationSource.Hotkey, stopwatch, cancellationToken);
-                
+
                 // Show toast notification for activation result
                 await ShowActivationToastAsync(result);
-                
+
                 await _loggingService.LogInfoAsync("Hotkey {HotkeyId} → {CharacterName}: {Result} ({DurationMs:F0}ms)", "HotkeyActivationService", hotkeyId, character.DisplayName, result.Success ? "✓" : "✗", result.Duration.TotalMilliseconds);
-                
+
                 return result;
             }
             catch (Exception ex)
@@ -230,12 +225,12 @@ namespace FFXIManager.Services
                     ErrorMessage = ex.Message,
                     Source = ActivationSource.Hotkey
                 };
-                
+
                 await _loggingService.LogErrorAsync("Error activating hotkey {HotkeyId}", "HotkeyActivationService", ex, hotkeyId);
-                
+
                 _performanceMonitor.RecordActivation(errorResult.ToMetrics());
                 CharacterActivated?.Invoke(this, errorResult);
-                
+
                 return errorResult;
             }
         }
@@ -249,31 +244,31 @@ namespace FFXIManager.Services
             {
                 throw new ArgumentNullException(nameof(character));
             }
-            
+
             var stopwatch = Stopwatch.StartNew();
-            
+
             try
             {
                 // **OPTIMIZATION**: Check if character has a hotkey mapping for unified metrics
                 var hotkeyId = await GetHotkeyIdForCharacterAsync(character);
-                
+
                 if (hotkeyId.HasValue)
                 {
                     // Use hotkey pipeline for consistency
                     return await ActivateCharacterByHotkeyAsync(hotkeyId.Value, cancellationToken);
                 }
-                
+
                 // **FALLBACK**: Direct activation for characters without hotkey mappings
                 var result = await PerformActivationWithMetrics(character, null, ActivationSource.UI, stopwatch, cancellationToken);
-                
+
                 // Show toast for UI activation (less prominent)
                 if (!result.Success)
                 {
                     await ShowActivationToastAsync(result);
                 }
-                
+
                 await _loggingService.LogInfoAsync("Direct activation: {CharacterName}: {Result} ({DurationMs:F0}ms)", "HotkeyActivationService", character.DisplayName, result.Success ? "✓" : "✗", result.Duration.TotalMilliseconds);
-                
+
                 return result;
             }
             catch (Exception ex)
@@ -287,12 +282,12 @@ namespace FFXIManager.Services
                     ErrorMessage = ex.Message,
                     Source = ActivationSource.UI
                 };
-                
+
                 await _loggingService.LogErrorAsync("Error activating character {CharacterName}", "HotkeyActivationService", ex, character.DisplayName);
-                
+
                 _performanceMonitor.RecordActivation(errorResult.ToMetrics());
                 CharacterActivated?.Invoke(this, errorResult);
-                
+
                 return errorResult;
             }
         }
@@ -303,13 +298,13 @@ namespace FFXIManager.Services
         public async Task<HotkeyActivationResult> CycleToNextCharacterAsync(CancellationToken cancellationToken = default)
         {
             var stopwatch = Stopwatch.StartNew();
-            
+
             try
             {
                 // Get characters in user-defined order
                 var characterOrdering = _characterOrderingService;
                 var orderedCharacters = await characterOrdering.GetOrderedCharactersAsync();
-                
+
                 if (orderedCharacters == null || orderedCharacters.Count == 0)
                 {
                     var noCharactersResult = new HotkeyActivationResult
@@ -319,32 +314,32 @@ namespace FFXIManager.Services
                         ErrorMessage = "No active characters to cycle through",
                         Source = ActivationSource.Hotkey
                     };
-                    
+
                     await _loggingService.LogDebugAsync("Cycle hotkey pressed but no active characters found", "HotkeyActivationService");
                     await _notificationService.ShowToastAsync("No active characters to cycle", NotificationType.Warning);
                     return noCharactersResult;
                 }
-                
+
                 if (orderedCharacters.Count == 1)
                 {
                     // Only one character, just activate it
                     return await ActivateCharacterDirectAsync(orderedCharacters[0], cancellationToken);
                 }
-                
+
                 lock (_cycleLock)
                 {
                     // Check if we need to reset the cycle (timeout or first use)
                     bool cycleReset = false;
                     bool isFirstUse = (_lastCycleTime == DateTime.MinValue);
                     var timeSinceLastCycle = isFirstUse ? 0 : (DateTime.UtcNow - _lastCycleTime).TotalSeconds;
-                    
+
                     if (_currentCycleIndex == -1 || (!isFirstUse && timeSinceLastCycle > CYCLE_TIMEOUT_SECONDS))
                     {
                         // Reset cycle - find the currently active character to start from
                         var currentActiveIndex = -1;
                         PlayOnlineCharacter? lastActivatedChar = null;
                         DateTime mostRecentActivation = DateTime.MinValue;
-                        
+
                         for (int i = 0; i < orderedCharacters.Count; i++)
                         {
                             var char_ = orderedCharacters[i];
@@ -355,7 +350,7 @@ namespace FFXIManager.Services
                                 currentActiveIndex = i;
                             }
                         }
-                        
+
                         // If we found a last activated character, start from the next one
                         // Otherwise start from the beginning
                         if (currentActiveIndex >= 0)
@@ -366,9 +361,9 @@ namespace FFXIManager.Services
                         {
                             _currentCycleIndex = 0;
                         }
-                        
+
                         cycleReset = true;
-                        
+
                         // Notify user of cycle reset only if it was due to timeout (not first use)
                         if (!isFirstUse && timeSinceLastCycle > CYCLE_TIMEOUT_SECONDS)
                         {
@@ -380,34 +375,34 @@ namespace FFXIManager.Services
                         // Continue cycling - move to next character
                         _currentCycleIndex = (_currentCycleIndex + 1) % orderedCharacters.Count;
                     }
-                    
+
                     _lastCycleTime = DateTime.UtcNow;
-                    
+
                     // Activate the next character
                     var targetCharacter = orderedCharacters[_currentCycleIndex];
-                    
+
                     // Capture variables for the async task
                     var showReset = cycleReset && !isFirstUse && timeSinceLastCycle > CYCLE_TIMEOUT_SECONDS;
                     var cycleIndex = _currentCycleIndex;
                     var totalCount = orderedCharacters.Count;
-                    
+
                     _ = Task.Run(async () =>
                     {
                         var result = await ActivateCharacterDirectAsync(targetCharacter, cancellationToken);
-                        
+
                         // Show which character we cycled to
                         var positionText = $"Character {cycleIndex + 1}/{totalCount}: {targetCharacter.DisplayName}";
-                        
+
                         // Only show [Reset] if it was an actual timeout reset, not first use
                         if (showReset)
                         {
                             positionText = $"[Reset] {positionText}";
                         }
-                        
+
                         await _notificationService.ShowToastAsync(positionText, NotificationType.Success);
                         await _loggingService.LogInfoAsync("Cycled to {PositionText}", "HotkeyActivationService", positionText);
                     });
-                    
+
                     stopwatch.Stop();
                     return new HotkeyActivationResult
                     {
@@ -428,13 +423,13 @@ namespace FFXIManager.Services
                     ErrorMessage = $"Error cycling characters: {ex.Message}",
                     Source = ActivationSource.Hotkey
                 };
-                
+
                 await _loggingService.LogErrorAsync("Error cycling to next character", ex, "HotkeyActivationService");
                 await _notificationService.ShowToastAsync($"Cycle error: {ex.Message}", NotificationType.Error);
-                
+
                 _performanceMonitor.RecordActivation(errorResult.ToMetrics());
                 CharacterActivated?.Invoke(this, errorResult);
-                
+
                 return errorResult;
             }
         }
@@ -445,30 +440,30 @@ namespace FFXIManager.Services
         public async Task<int?> GetHotkeyIdForCharacterAsync(PlayOnlineCharacter character)
         {
             if (character == null) return null;
-            
+
             try
             {
                 var stats = _mappingService.GetStatistics();
                 // This is a simplified reverse lookup - in a full implementation,
                 // we'd add a reverse mapping cache to HotkeyMappingService
-                
+
                 // For now, we'll use the character's position in the ordered list
                 var characterOrdering = _characterOrderingService;
                 var characters = await characterOrdering.GetOrderedCharactersAsync();
-                
+
                 for (int i = 0; i < characters.Count; i++)
                 {
                     if (characters[i].ProcessId == character.ProcessId)
                     {
                         // Convert slot index to hotkey ID using the same logic as hotkey registration
                         var settings = _settingsService.LoadSettings();
-                        var hotkeyMapping = settings.CharacterSwitchShortcuts.FirstOrDefault(s => 
+                        var hotkeyMapping = settings.CharacterSwitchShortcuts.FirstOrDefault(s =>
                             Models.Settings.KeyboardShortcutConfig.GetSlotIndexFromHotkeyId(s.HotkeyId) == i && s.IsEnabled);
-                        
+
                         return hotkeyMapping?.HotkeyId;
                     }
                 }
-                
+
                 return null;
             }
             catch (Exception ex)
@@ -506,32 +501,32 @@ namespace FFXIManager.Services
         /// Performs character activation with comprehensive metrics collection.
         /// </summary>
         private async Task<HotkeyActivationResult> PerformActivationWithMetrics(
-            PlayOnlineCharacter character, 
-            int? hotkeyId, 
+            PlayOnlineCharacter character,
+            int? hotkeyId,
             ActivationSource source,
-            Stopwatch totalStopwatch, 
+            Stopwatch totalStopwatch,
             CancellationToken cancellationToken)
         {
             const int maxRetries = 3;
             const int baseDelayMs = 25;
-            
+
             int retryCount = 0;
             Exception? lastException = null;
-            
+
             for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
                 try
                 {
                     var success = await _monitorService.ActivateCharacterWindowAsync(character, cancellationToken);
-                    
+
                     totalStopwatch.Stop();
-                    
+
                     // **NEW FEATURE**: Track last activation time for successful activations
                     if (success)
                     {
                         character.MarkAsActivated();
                     }
-                    
+
                     var result = new HotkeyActivationResult
                     {
                         HotkeyId = hotkeyId,
@@ -541,11 +536,11 @@ namespace FFXIManager.Services
                         RetryCount = retryCount,
                         Source = source
                     };
-                    
+
                     // Record metrics and fire event
                     _performanceMonitor.RecordActivation(result.ToMetrics());
                     CharacterActivated?.Invoke(this, result);
-                    
+
                     return result;
                 }
                 catch (ArgumentException ex)
@@ -579,10 +574,10 @@ namespace FFXIManager.Services
                     break;
                 }
             }
-            
+
             // All attempts failed
             totalStopwatch.Stop();
-            
+
             var failedResult = new HotkeyActivationResult
             {
                 HotkeyId = hotkeyId,
@@ -593,10 +588,10 @@ namespace FFXIManager.Services
                 ErrorMessage = lastException?.Message ?? "Activation failed after all retries",
                 Source = source
             };
-            
+
             _performanceMonitor.RecordActivation(failedResult.ToMetrics());
             CharacterActivated?.Invoke(this, failedResult);
-            
+
             return failedResult;
         }
 
@@ -608,13 +603,13 @@ namespace FFXIManager.Services
             try
             {
                 var characterName = result.Character?.DisplayName ?? "Character";
-                
+
                 if (result.Success)
                 {
                     // Success toast with performance feedback
                     var durationMs = result.Duration.TotalMilliseconds;
                     var message = $"{characterName} activated ({durationMs:F0}ms)";
-                    
+
                     // Color-code by performance
                     var notificationType = durationMs switch
                     {
@@ -622,7 +617,7 @@ namespace FFXIManager.Services
                         < 100 => NotificationType.Info,   // Good performance  
                         _ => NotificationType.Warning     // Slow but working
                     };
-                    
+
                     // Only show success toasts for slow activations or errors
                     if (durationMs > 50 || result.Source == ActivationSource.Hotkey)
                     {
@@ -646,10 +641,10 @@ namespace FFXIManager.Services
         {
             if (_disposed) return;
             _disposed = true;
-            
+
             CharacterActivated = null;
             _ = _loggingService?.LogInfoAsync("HotkeyActivationService disposed", "HotkeyActivationService");
-            
+
             GC.SuppressFinalize(this);
         }
     }

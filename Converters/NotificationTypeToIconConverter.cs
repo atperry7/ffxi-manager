@@ -1,7 +1,6 @@
-using System;
+﻿using FFXIManager.Services;
 using System.Globalization;
 using System.Windows.Data;
-using FFXIManager.Services;
 
 namespace FFXIManager.Converters
 {

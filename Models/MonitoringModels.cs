@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace FFXIManager.Models
+﻿namespace FFXIManager.Models
 {
     /// <summary>
     /// Monitoring profile that defines what a consumer wants to track

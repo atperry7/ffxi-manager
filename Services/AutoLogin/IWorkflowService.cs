@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 using FFXIManager.Models.AutoLogin;
 
 namespace FFXIManager.Services.AutoLogin

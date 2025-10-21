@@ -1,8 +1,7 @@
-using System;
+﻿using FFXIManager.Services;
+using FFXIManager.ViewModels.Base;
 using System.ComponentModel;
 using System.Windows.Input;
-using FFXIManager.Services;
-using FFXIManager.ViewModels.Base;
 
 namespace FFXIManager.ViewModels.CharacterMonitor
 {
@@ -102,7 +101,7 @@ namespace FFXIManager.ViewModels.CharacterMonitor
                     // Update auto-hide state
                     WindowViewModel.UpdateAutoHideState(CharacterCount);
                     break;
-                    
+
                 case nameof(CollectionViewModel.PerformanceStatus):
                     OnPropertyChanged(nameof(PerformanceStatus));
                     break;
@@ -126,19 +125,19 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         {
             if (_disposed)
                 return;
-            
+
             // Unsubscribe from events
             if (WindowViewModel != null)
             {
                 WindowViewModel.OnCloseRequested -= OnWindowCloseRequested;
             }
-            
+
             if (CollectionViewModel != null)
             {
                 CollectionViewModel.PropertyChanged -= OnCollectionPropertyChanged;
                 CollectionViewModel.Dispose();
             }
-            
+
             _disposed = true;
             GC.SuppressFinalize(this);
         }

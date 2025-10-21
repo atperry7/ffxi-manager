@@ -1,17 +1,10 @@
-using System;
+﻿using FFXIManager.Services;
+using FFXIManager.ViewModels.Base;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using System.ComponentModel;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
-using FFXIManager.Infrastructure;
-using FFXIManager.Models;
-using FFXIManager.Services;
-using FFXIManager.ViewModels.Base;
 
 namespace FFXIManager.ViewModels.CharacterMonitor
 {
@@ -26,7 +19,7 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         private readonly IHotkeyActivationService _activationService;
         private readonly IStatusMessageService _statusService;
         private readonly ILoggingService _loggingService;
-        
+
         private readonly SemaphoreSlim _updateSemaphore = new(1, 1);
         private readonly DispatcherTimer _statusRefreshTimer;
         private CancellationTokenSource _cts = new();
@@ -44,13 +37,13 @@ namespace FFXIManager.ViewModels.CharacterMonitor
             _activationService = activationService ?? throw new ArgumentNullException(nameof(activationService));
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
-            
+
             Characters = new ObservableCollection<CharacterItemViewModel>();
             Characters.CollectionChanged += OnCharactersCollectionChanged;
-            
+
             InitializeCommands();
             SubscribeToServices();
-            
+
             // Start status refresh timer
             _statusRefreshTimer = new DispatcherTimer
             {
@@ -58,7 +51,7 @@ namespace FFXIManager.ViewModels.CharacterMonitor
             };
             _statusRefreshTimer.Tick += (s, e) => RefreshStatusDisplays();
             _statusRefreshTimer.Start();
-            
+
             // Load initial characters
             _ = LoadCharactersAsync();
         }
@@ -99,15 +92,15 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         private void InitializeCommands()
         {
             RefreshCommand = new RelayCommand(async () => await RefreshCharactersAsync());
-            
+
             ActivateCharacterCommand = new RelayCommandWithParameter<CharacterItemViewModel>(
                 async vm => await ActivateCharacterAsync(vm),
                 vm => vm != null && vm.IsRunning && !vm.IsActivating);
-            
+
             MoveCharacterUpCommand = new RelayCommandWithParameter<CharacterItemViewModel>(
                 async vm => await MoveCharacterAsync(vm, -1),
                 vm => vm != null && vm.CanMoveUp);
-            
+
             MoveCharacterDownCommand = new RelayCommandWithParameter<CharacterItemViewModel>(
                 async vm => await MoveCharacterAsync(vm, 1),
                 vm => vm != null && vm.CanMoveDown);
@@ -124,7 +117,7 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         {
             if (slotIndex < 0 || slotIndex >= Characters.Count)
                 return false;
-            
+
             var characterVm = Characters[slotIndex];
             return await ActivateCharacterAsync(characterVm);
         }
@@ -145,27 +138,27 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         {
             if (characterVm == null || characterVm.IsActivating)
                 return false;
-            
+
             try
             {
                 characterVm.IsActivating = true;
                 _statusService.SetMessage($"Activating {characterVm.DisplayName}...");
-                
+
                 var result = await _activationService.ActivateCharacterDirectAsync(
-                    characterVm.Character, 
+                    characterVm.Character,
                     _cts.Token);
-                
+
                 if (result.Success)
                 {
                     // Update last activated state
                     UpdateLastActivatedCharacter(characterVm);
-                    
+
                     _statusService.SetMessage(
                         $"Activated {characterVm.DisplayName} ({result.Duration.TotalMilliseconds:F0}ms)");
-                    
+
                     // Update performance metrics
                     await UpdatePerformanceMetricsAsync();
-                    
+
                     return true;
                 }
                 else
@@ -178,8 +171,8 @@ namespace FFXIManager.ViewModels.CharacterMonitor
             catch (Exception ex)
             {
                 await _loggingService.LogErrorAsync(
-                    $"Error activating character {characterVm.DisplayName}", 
-                    ex, 
+                    $"Error activating character {characterVm.DisplayName}",
+                    ex,
                     "CharacterCollectionViewModel");
                 return false;
             }
@@ -193,30 +186,30 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         {
             if (characterVm == null)
                 return;
-            
+
             var currentIndex = Characters.IndexOf(characterVm);
             if (currentIndex < 0)
                 return;
-            
+
             var targetIndex = currentIndex + direction;
             if (targetIndex < 0 || targetIndex >= Characters.Count)
                 return;
-            
+
             // Update in the ordering service (source of truth)
             var success = await _orderingService.MoveCharacterToSlotAsync(
-                characterVm.Character, 
+                characterVm.Character,
                 targetIndex);
-            
+
             if (success)
             {
                 // Move in our collection
                 Characters.Move(currentIndex, targetIndex);
-                
+
                 // Update slot indices
                 UpdateSlotIndices();
-                
+
                 await _loggingService.LogInfoAsync(
-                    $"Moved {characterVm.DisplayName} to slot {targetIndex + 1}", 
+                    $"Moved {characterVm.DisplayName} to slot {targetIndex + 1}",
                     "CharacterCollectionViewModel");
             }
         }
@@ -252,10 +245,10 @@ namespace FFXIManager.ViewModels.CharacterMonitor
             {
                 var stats = _activationService.GetPerformanceStats();
                 var cacheStats = _orderingService.GetCacheStatistics();
-                
+
                 AverageActivationTimeMs = stats.AverageActivationTimeMs;
                 CacheHitRate = (int)cacheStats.HitRate;
-                
+
                 PerformanceStatus = stats.AverageActivationTimeMs switch
                 {
                     < 50 => "Excellent",
@@ -263,7 +256,7 @@ namespace FFXIManager.ViewModels.CharacterMonitor
                     < 200 => "Fair",
                     _ => "Slow"
                 };
-                
+
                 OnPropertyChanged(nameof(AverageActivationTimeMs));
                 OnPropertyChanged(nameof(CacheHitRate));
                 OnPropertyChanged(nameof(PerformanceStatus));
@@ -271,8 +264,8 @@ namespace FFXIManager.ViewModels.CharacterMonitor
             catch (Exception ex)
             {
                 await _loggingService.LogErrorAsync(
-                    "Error updating performance metrics", 
-                    ex, 
+                    "Error updating performance metrics",
+                    ex,
                     "CharacterCollectionViewModel");
             }
         }
@@ -285,11 +278,11 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         {
             if (!await _updateSemaphore.WaitAsync(100))
                 return; // Another update in progress
-            
+
             try
             {
                 var orderedCharacters = await _orderingService.GetOrderedCharactersAsync();
-                
+
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     // Unsubscribe from old view models
@@ -298,9 +291,9 @@ namespace FFXIManager.ViewModels.CharacterMonitor
                         vm.OnActivateRequested -= OnCharacterActivateRequested;
                         vm.Dispose();
                     }
-                    
+
                     Characters.Clear();
-                    
+
                     // Create new view models
                     for (int i = 0; i < orderedCharacters.Count; i++)
                     {
@@ -308,24 +301,24 @@ namespace FFXIManager.ViewModels.CharacterMonitor
                         {
                             CanMoveDown = (i < orderedCharacters.Count - 1)
                         };
-                        
+
                         vm.OnActivateRequested += OnCharacterActivateRequested;
                         Characters.Add(vm);
                     }
-                    
+
                     OnPropertyChanged(nameof(CharacterCount));
                     OnPropertyChanged(nameof(HasRunningCharacters));
                 });
-                
+
                 await _loggingService.LogDebugAsync(
-                    $"Loaded {orderedCharacters.Count} characters", 
+                    $"Loaded {orderedCharacters.Count} characters",
                     "CharacterCollectionViewModel");
             }
             catch (Exception ex)
             {
                 await _loggingService.LogErrorAsync(
-                    "Failed to load characters", 
-                    ex, 
+                    "Failed to load characters",
+                    ex,
                     "CharacterCollectionViewModel");
             }
             finally
@@ -342,15 +335,15 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         {
             // Subscribe to ordering service updates
             _orderingService.CharacterCacheUpdated += OnOrderingServiceUpdated;
-            
+
             // Subscribe to monitor service events
             _monitorService.CharacterDetected += OnCharacterDetected;
             _monitorService.CharacterUpdated += OnCharacterUpdated;
             _monitorService.CharacterRemoved += OnCharacterRemoved;
-            
+
             // Subscribe to activation service for status updates
             _activationService.CharacterActivated += OnCharacterActivated;
-            
+
             // Start monitoring
             _monitorService.StartMonitoring();
         }
@@ -379,7 +372,7 @@ namespace FFXIManager.ViewModels.CharacterMonitor
                     vm.Character.ServerName = e.Character.ServerName;
                     vm.Character.WindowHandle = e.Character.WindowHandle;
                     vm.Character.LastSeen = e.Character.LastSeen;
-                    
+
                     // Refresh the status display
                     vm.RefreshStatusDisplay();
                 }
@@ -395,7 +388,7 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         {
             if (!e.Success || e.Character == null)
                 return;
-            
+
             Application.Current.Dispatcher.Invoke(() =>
             {
                 var vm = Characters.FirstOrDefault(c => c.ProcessId == e.Character.ProcessId);
@@ -428,32 +421,32 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         {
             if (_disposed)
                 return;
-            
+
             // Stop services
             _monitorService.StopMonitoring();
             _statusRefreshTimer?.Stop();
-            
+
             // Unsubscribe from events
             _orderingService.CharacterCacheUpdated -= OnOrderingServiceUpdated;
             _monitorService.CharacterDetected -= OnCharacterDetected;
             _monitorService.CharacterUpdated -= OnCharacterUpdated;
             _monitorService.CharacterRemoved -= OnCharacterRemoved;
             _activationService.CharacterActivated -= OnCharacterActivated;
-            
+
             // Dispose view models
             foreach (var vm in Characters)
             {
                 vm.OnActivateRequested -= OnCharacterActivateRequested;
                 vm.Dispose();
             }
-            
+
             Characters.CollectionChanged -= OnCharactersCollectionChanged;
-            
+
             // Dispose resources
             _updateSemaphore?.Dispose();
             _cts?.Cancel();
             _cts?.Dispose();
-            
+
             _disposed = true;
             GC.SuppressFinalize(this);
         }

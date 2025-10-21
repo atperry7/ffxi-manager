@@ -1,6 +1,4 @@
-using System;
-using System.Linq;
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 using FFXIManager.Models.AutoLogin;
 
 namespace FFXIManager.Services.AutoLogin

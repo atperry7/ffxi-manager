@@ -1,5 +1,4 @@
-﻿using System;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 
@@ -118,7 +117,7 @@ namespace FFXIManager.Models.Settings
         {
             return ControllerButton == ControllerButton.None ? "None" : ControllerButton.GetDescription();
         }
-        
+
         /// <summary>
         /// Gets a user-friendly display name for keys, including extended peripheral keys.
         /// </summary>

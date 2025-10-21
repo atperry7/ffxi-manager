@@ -1,19 +1,14 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Collections.Specialized;
-using System.ComponentModel;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows.Input;
-using System.Windows.Threading;
-using FFXIManager.Infrastructure;
+﻿using FFXIManager.Infrastructure;
 using FFXIManager.Models;
 using FFXIManager.Models.AutoLogin;
 using FFXIManager.Services;
 using FFXIManager.Services.AutoLogin;
 using FFXIManager.ViewModels.Base;
 using FFXIManager.Views;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace FFXIManager.ViewModels
 {

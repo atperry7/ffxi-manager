@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
-namespace FFXIManager.Services.AutoLogin
+﻿namespace FFXIManager.Services.AutoLogin
 {
     /// <summary>
     /// Factory for resolving workflow action executors based on action type.

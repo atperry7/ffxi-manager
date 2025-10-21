@@ -1,14 +1,12 @@
-using System;
-using System.Drawing;
-using System.IO;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 using FFXIManager.Models.AutoLogin;
 using FFXIManager.Services;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
+using System.Drawing;
+using System.IO;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace FFXIManager.ViewModels.WorkflowEditor
 {

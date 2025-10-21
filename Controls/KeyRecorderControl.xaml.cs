@@ -1,10 +1,9 @@
-using System;
+﻿using FFXIManager.Models.Settings;
+using FFXIManager.Services;
+using Microsoft.Extensions.DependencyInjection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using FFXIManager.Models.Settings;
-using FFXIManager.Services;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace FFXIManager.Controls
 {
@@ -95,7 +94,7 @@ namespace FFXIManager.Controls
                 RecordButton.Content = "⏹ Stop";
                 RecordButton.Background = System.Windows.Media.Brushes.Orange;
                 KeyDisplayText.Text = "Recording... Press keyboard or controller";
-                StatusText.Text = _tempControllerService?.IsAnyControllerConnected == true ? 
+                StatusText.Text = _tempControllerService?.IsAnyControllerConnected == true ?
                     "Press any keyboard key or controller button. Recording will stop automatically." :
                     "Press any keyboard key. (No controller detected)";
 
@@ -225,7 +224,7 @@ namespace FFXIManager.Controls
         private void OnControllerButtonPressed(object? sender, ControllerButtonPressedEventArgs e)
         {
             // Ignore if not recording or disposed
-            if (!_isRecording || _disposed) 
+            if (!_isRecording || _disposed)
             {
                 System.Diagnostics.Debug.WriteLine($"🎮 Controller button ignored: Recording={_isRecording}, Disposed={_disposed}");
                 return;
@@ -336,7 +335,7 @@ namespace FFXIManager.Controls
                 // Use a unique temporary ID for each button during recording
                 var tempId = TempRecordingHotkeyId + (int)button;
                 var success = _tempControllerService.RegisterButton(tempId, button);
-                
+
                 System.Diagnostics.Debug.WriteLine($"🎮 Registered {button.GetDescription()}: {(success ? "✅" : "❌")}");
             }
 

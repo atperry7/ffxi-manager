@@ -1,6 +1,4 @@
-using System;
-
-namespace FFXIManager.Services.AutoLogin;
+﻿namespace FFXIManager.Services.AutoLogin;
 
 /// <summary>
 /// Configuration options for screenshot detection operations.

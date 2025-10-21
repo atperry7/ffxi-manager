@@ -1,7 +1,5 @@
-﻿using System;
+﻿using FFXIManager.Configuration;
 using System.IO;
-using System.Linq;
-using FFXIManager.Configuration;
 
 namespace FFXIManager.Services
 {

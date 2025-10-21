@@ -1,5 +1,5 @@
+﻿using FFXIManager.ViewModels;
 using System.Windows;
-using FFXIManager.ViewModels;
 
 namespace FFXIManager.Views
 {

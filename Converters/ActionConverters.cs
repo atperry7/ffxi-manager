@@ -1,7 +1,6 @@
-using System;
+﻿using FFXIManager.Models;
 using System.Globalization;
 using System.Windows.Data;
-using FFXIManager.Models;
 
 namespace FFXIManager.Converters
 {
@@ -71,7 +70,7 @@ namespace FFXIManager.Converters
                 : $"App: {appName}";
         }
 
-                        private static string GetClickSummary(KeyboardAction action)
+        private static string GetClickSummary(KeyboardAction action)
         {
             var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", null);
             var n = points?.Count ?? 0;
@@ -82,7 +81,8 @@ namespace FFXIManager.Converters
             return n == 1
                 ? $"Points: 1 \u0007 Delay: {action.DelayMs}ms"
                 : $"Points: {n} \u0007 Delay: {action.DelayMs}ms";
-        }private static string GetWaitSummary(KeyboardAction action)
+        }
+        private static string GetWaitSummary(KeyboardAction action)
         {
             return $"Duration: {action.DelayMs}ms ({action.DelayMs / 1000.0:F1}s)";
         }

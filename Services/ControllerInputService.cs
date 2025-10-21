@@ -1,10 +1,6 @@
-using System;
+﻿using FFXIManager.Models.Settings;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Models.Settings;
-using FFXIManager.Infrastructure;
 
 namespace FFXIManager.Services
 {
@@ -42,7 +38,7 @@ namespace FFXIManager.Services
         private readonly CancellationTokenSource _cancellationTokenSource = new();
         private Task? _pollingTask;
         private volatile bool _disposed;
-        
+
         // DirectInput support for PlayStation controllers
         private DirectInputControllerService? _directInputService;
 
@@ -55,22 +51,22 @@ namespace FFXIManager.Services
         /// Gets whether any controller is currently connected
         /// </summary>
         public bool IsAnyControllerConnected => IsXInputControllerConnected || IsDirectInputControllerConnected;
-        
+
         private bool IsXInputControllerConnected { get; set; }
         private bool IsDirectInputControllerConnected => _directInputService?.IsAnyControllerConnected ?? false;
 
         public ControllerInputService(ILoggingService loggingService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
-            
+
             // Initialize XInput for Xbox controllers
             CheckInitialControllerConnection();
-            
+
             // Initialize DirectInput for PlayStation controllers
             InitializeDirectInput();
-            
+
             StartPolling();
-            
+
             var inputTypes = _directInputService != null ? "XInput and DirectInput" : "XInput only";
             _loggingService.LogInfoAsync("🎮 ControllerInputService initialized with {InputTypes} polling", "ControllerInputService", inputTypes);
         }
@@ -89,10 +85,10 @@ namespace FFXIManager.Services
             try
             {
                 _registeredButtons.TryAdd(button, hotkeyId);
-                
+
                 // Also register with DirectInput service if available
                 _directInputService?.RegisterButton(hotkeyId, button);
-                
+
                 _loggingService.LogInfoAsync("✓ Registered controller button: {ButtonDescription} (ID: {HotkeyId})", "ControllerInputService", button.GetDescription(), hotkeyId);
                 return true;
             }
@@ -114,10 +110,10 @@ namespace FFXIManager.Services
             {
                 _registeredButtons.Clear();
                 _lastButtonStates.Clear();
-                
+
                 // Also unregister from DirectInput service
                 _directInputService?.UnregisterAll();
-                
+
                 _loggingService.LogInfoAsync("All controller buttons unregistered", "ControllerInputService");
             }
             catch (Exception ex)
@@ -192,7 +188,7 @@ namespace FFXIManager.Services
         private async Task ProcessControllerInputAsync(int controllerId, XINPUT_GAMEPAD gamepad, CancellationToken cancellationToken)
         {
             var currentButtons = GetPressedButtons(gamepad);
-            
+
             if (!_lastButtonStates.TryGetValue(controllerId, out var lastState))
             {
                 lastState = new ControllerButtonPressState();
@@ -212,7 +208,7 @@ namespace FFXIManager.Services
                 if (!lastState.WasPressed(button))
                 {
                     System.Diagnostics.Debug.WriteLine($"🎮 New button press detected: {button.GetDescription()}");
-                    
+
                     if (_registeredButtons.TryGetValue(button, out var hotkeyId))
                     {
                         // Button was just pressed - fire event
@@ -283,10 +279,10 @@ namespace FFXIManager.Services
                 _cancellationTokenSource.Cancel();
                 _pollingTask?.Wait(TimeSpan.FromSeconds(2));
                 _cancellationTokenSource.Dispose();
-                
+
                 // Dispose DirectInput service
                 _directInputService?.Dispose();
-                
+
                 _loggingService.LogInfoAsync("ControllerInputService disposed", "ControllerInputService");
             }
             catch (Exception ex)
@@ -307,19 +303,19 @@ namespace FFXIManager.Services
                 _loggingService.LogInfoAsync("🔍 Starting initial controller detection...", "ControllerInputService");
                 _loggingService.LogInfoAsync("🔍 Windows Version: {WindowsVersion}", "ControllerInputService", Environment.OSVersion);
                 _loggingService.LogInfoAsync("🔍 XInput version being used: {XInputVersion}", "ControllerInputService", GetXInputVersionInfo());
-                
+
                 // Windows 11 specific check
                 if (IsWindows11())
                 {
                     _loggingService.LogInfoAsync("🪟 Windows 11 detected - checking Gaming Services and Xbox Game Bar", "ControllerInputService");
                     CheckWindows11GamingServices();
                 }
-                
+
                 for (int controllerId = 0; controllerId < CONTROLLER_COUNT; controllerId++)
                 {
                     var state = new XINPUT_STATE();
                     var result = XInputGetState(controllerId, ref state);
-                    
+
                     _loggingService.LogInfoAsync("🎮 XInput slot {ControllerId}: Result={Result} (0=connected, 1167=disconnected)", "ControllerInputService", controllerId, result);
 
                     if (result == 0) // ERROR_SUCCESS
@@ -341,7 +337,7 @@ namespace FFXIManager.Services
                         _loggingService.LogInfoAsync("🔍 XInput slot {ControllerId} details: {ErrorMessage}", "ControllerInputService", controllerId, errorMessage);
                     }
                 }
-                
+
                 IsXInputControllerConnected = false;
                 _loggingService.LogInfoAsync("🎮 No XInput controllers detected during initial check", "ControllerInputService");
                 _loggingService.LogInfoAsync("🔍 Note: PlayStation controllers will be detected via DirectInput", "ControllerInputService");
@@ -361,7 +357,7 @@ namespace FFXIManager.Services
             return _workingXInputVersion switch
             {
                 1 => "XInput 1.4 (Windows 8+)",
-                2 => "XInput 1.3 (Windows Vista/7)", 
+                2 => "XInput 1.3 (Windows Vista/7)",
                 3 => "XInput 9.1.0 (Windows XP)",
                 -1 => "No XInput runtime available",
                 _ => "XInput version not yet determined"
@@ -385,12 +381,12 @@ namespace FFXIManager.Services
             try
             {
                 _loggingService.LogInfoAsync("🎮 Initializing DirectInput for PlayStation controller support...", "ControllerInputService");
-                
+
                 _directInputService = new DirectInputControllerService(_loggingService);
-                
+
                 // Subscribe to DirectInput button press events
                 _directInputService.ButtonPressed += OnDirectInputButtonPressed;
-                
+
                 if (_directInputService.IsAnyControllerConnected)
                 {
                     _loggingService.LogInfoAsync("✅ DirectInput service initialized with PlayStation controller(s) detected", "ControllerInputService");
@@ -406,7 +402,7 @@ namespace FFXIManager.Services
                 _directInputService = null;
             }
         }
-        
+
         /// <summary>
         /// Handles button press events from DirectInput controllers
         /// </summary>
@@ -416,7 +412,7 @@ namespace FFXIManager.Services
             var args = new ControllerButtonPressedEventArgs(e.HotkeyId, e.Button, -1); // Use -1 for DirectInput controllers
             ButtonPressed?.Invoke(this, args);
         }
-        
+
         /// <summary>
         /// Performs Windows 11 specific gaming services checks
         /// </summary>

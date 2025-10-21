@@ -1,12 +1,10 @@
-using System;
+﻿using FFXIManager.Services;
 using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
-using FFXIManager.Infrastructure;
-using FFXIManager.Services;
 
 namespace FFXIManager.ViewModels
 {

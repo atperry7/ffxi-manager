@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 
 namespace FFXIManager.Services
 {
@@ -30,7 +27,7 @@ namespace FFXIManager.Services
         /// Forces immediate cache refresh. Useful after settings changes or process updates.
         /// </summary>
         Task InvalidateCacheAsync();
-        
+
         /// <summary>
         /// Moves a character to a new slot position (for drag-and-drop support).
         /// </summary>

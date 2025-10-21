@@ -1,12 +1,8 @@
-﻿using System;
+﻿using FFXIManager.Controls;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Input;
-using FFXIManager.Controls;
 
 namespace FFXIManager.Services
 {
@@ -31,7 +27,7 @@ namespace FFXIManager.Services
         /// Return value to suppress key event from being passed to other applications.
         /// </summary>
         private const int SUPPRESS_KEY_EVENT = 1;
-        
+
         // **EMERGENCY SAFEGUARDS**: Critical system protection
         private static readonly object _emergencyLock = new object();
         private static volatile bool _emergencyMode;
@@ -139,7 +135,7 @@ namespace FFXIManager.Services
         private static IntPtr SetHookWithRetry(LowLevelKeyboardProc proc, int maxRetries = 3)
         {
             Exception? lastException = null;
-            
+
             for (int attempt = 0; attempt < maxRetries; attempt++)
             {
                 try
@@ -149,7 +145,7 @@ namespace FFXIManager.Services
                     {
                         return hookId;
                     }
-                    
+
                     // Hook installation returned zero - capture error
                     var error = Marshal.GetLastWin32Error();
                     lastException = new InvalidOperationException($"Hook installation attempt {attempt + 1} failed. Win32 error: {error}");
@@ -158,7 +154,7 @@ namespace FFXIManager.Services
                 {
                     lastException = ex;
                 }
-                
+
                 // Don't delay on the last attempt
                 if (attempt < maxRetries - 1)
                 {
@@ -167,12 +163,12 @@ namespace FFXIManager.Services
                     Thread.Sleep(delayMs);
                 }
             }
-            
+
             // All attempts failed - log the final error but return IntPtr.Zero to let caller handle
             System.Diagnostics.Debug.WriteLine($"Hook installation failed after {maxRetries} attempts: {lastException?.Message}");
             return IntPtr.Zero;
         }
-        
+
         private static IntPtr SetHook(LowLevelKeyboardProc proc)
         {
             using (Process curProcess = Process.GetCurrentProcess())
@@ -194,7 +190,7 @@ namespace FFXIManager.Services
             {
                 return CallNextHookEx(_hookId, nCode, wParam, lParam);
             }
-            
+
             if (nCode >= HC_ACTION && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN))
             {
                 try
@@ -202,22 +198,22 @@ namespace FFXIManager.Services
                     var hookStruct = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
                     var vkCode = (int)hookStruct.vkCode;
 
-                // **GAMING OPTIMIZATION**: Inline modifier key state for performance
-                var modifiers = ModifierKeys.None;
-                if (GetAsyncKeyState(VK_SHIFT) < 0) modifiers |= ModifierKeys.Shift;
-                if (GetAsyncKeyState(VK_CONTROL) < 0) modifiers |= ModifierKeys.Control;
-                if (GetAsyncKeyState(VK_MENU) < 0) modifiers |= ModifierKeys.Alt;
-                if (GetAsyncKeyState(VK_LWIN) < 0 || GetAsyncKeyState(VK_RWIN) < 0) modifiers |= ModifierKeys.Windows;
+                    // **GAMING OPTIMIZATION**: Inline modifier key state for performance
+                    var modifiers = ModifierKeys.None;
+                    if (GetAsyncKeyState(VK_SHIFT) < 0) modifiers |= ModifierKeys.Shift;
+                    if (GetAsyncKeyState(VK_CONTROL) < 0) modifiers |= ModifierKeys.Control;
+                    if (GetAsyncKeyState(VK_MENU) < 0) modifiers |= ModifierKeys.Alt;
+                    if (GetAsyncKeyState(VK_LWIN) < 0 || GetAsyncKeyState(VK_RWIN) < 0) modifiers |= ModifierKeys.Windows;
 
-                var key = KeyInterop.KeyFromVirtualKey(vkCode);
+                    var key = KeyInterop.KeyFromVirtualKey(vkCode);
 
-                // Special case: if we have the temp recording hotkey registered, fire for ALL keys
-                if (_registeredHotkeys.ContainsKey(KeyRecorderControl.TempRecordingHotkeyId))
-                {
-                    HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(KeyRecorderControl.TempRecordingHotkeyId, modifiers, key));
-                    // Don't consume the key in recording mode to allow normal processing
-                    return CallNextHookEx(_hookId, nCode, wParam, lParam);
-                }
+                    // Special case: if we have the temp recording hotkey registered, fire for ALL keys
+                    if (_registeredHotkeys.ContainsKey(KeyRecorderControl.TempRecordingHotkeyId))
+                    {
+                        HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(KeyRecorderControl.TempRecordingHotkeyId, modifiers, key));
+                        // Don't consume the key in recording mode to allow normal processing
+                        return CallNextHookEx(_hookId, nCode, wParam, lParam);
+                    }
 
                     // **GAMING OPTIMIZATION**: O(1) hotkey lookup instead of linear search
                     var hotkeyKey = new HotkeyKey(modifiers, key);
@@ -227,13 +223,13 @@ namespace FFXIManager.Services
                         if (_registeredHotkeys.TryGetValue(hotkeyId, out var hotkeyInfo) && hotkeyInfo.IsRegistered)
                         {
                             // **EMERGENCY PROTECTION**: Non-blocking event fire with timeout protection
-                            Task.Run(() => 
+                            Task.Run(() =>
                             {
-                                try 
+                                try
                                 {
                                     HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(hotkeyId, modifiers, key));
                                     ResetFailureCount();
-                                } 
+                                }
                                 catch (Exception ex)
                                 {
                                     IncrementFailureCount();
@@ -263,7 +259,7 @@ namespace FFXIManager.Services
             // Pass the key to other applications
             return CallNextHookEx(_hookId, nCode, wParam, lParam);
         }
-        
+
         /// <summary>
         /// **EMERGENCY SAFEGUARD**: Increments failure count and enters emergency mode if threshold exceeded
         /// </summary>
@@ -273,14 +269,14 @@ namespace FFXIManager.Services
             {
                 _consecutiveFailures++;
                 _lastFailureTime = DateTime.UtcNow;
-                
+
                 if (_consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && !_emergencyMode)
                 {
                     _emergencyMode = true;
                     System.Diagnostics.Debug.WriteLine($"**EMERGENCY MODE ACTIVATED**: {_consecutiveFailures} consecutive failures detected. Keyboard hooks disabled for {EMERGENCY_COOLDOWN_MS}ms.");
-                    
+
                     // Schedule emergency mode reset
-                    Task.Delay(EMERGENCY_COOLDOWN_MS).ContinueWith(_ => 
+                    Task.Delay(EMERGENCY_COOLDOWN_MS).ContinueWith(_ =>
                     {
                         lock (_emergencyLock)
                         {
@@ -292,7 +288,7 @@ namespace FFXIManager.Services
                 }
             }
         }
-        
+
         /// <summary>
         /// **EMERGENCY SAFEGUARD**: Resets failure count on successful operations
         /// </summary>

@@ -1,12 +1,7 @@
-using System;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
+﻿using FFXIManager.Services;
+using FFXIManager.ViewModels.Base;
 using System.Windows;
 using System.Windows.Input;
-using FFXIManager.Infrastructure;
-using FFXIManager.Models.Settings;
-using FFXIManager.Services;
-using FFXIManager.ViewModels.Base;
 
 namespace FFXIManager.ViewModels.CharacterMonitor
 {
@@ -18,7 +13,7 @@ namespace FFXIManager.ViewModels.CharacterMonitor
     {
         private readonly ISettingsService _settingsService;
         private readonly ILoggingService _loggingService;
-        
+
         private double _windowOpacity = 0.95;
         private bool _isAlwaysOnTop;
         private bool _isAutoHideEnabled;
@@ -36,7 +31,7 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         {
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
-            
+
             LoadSettings();
             InitializeCommands();
         }
@@ -164,12 +159,12 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         public ICommand SetMediumSizeCommand { get; private set; } = null!;
         public ICommand SetLargeSizeCommand { get; private set; } = null!;
         public ICommand SetWideSizeCommand { get; private set; } = null!;
-        
+
         public ICommand DockTopLeftCommand { get; private set; } = null!;
         public ICommand DockTopRightCommand { get; private set; } = null!;
         public ICommand DockBottomLeftCommand { get; private set; } = null!;
         public ICommand DockBottomRightCommand { get; private set; } = null!;
-        
+
         public ICommand MinimizeCommand { get; private set; } = null!;
         public ICommand CloseCommand { get; private set; } = null!;
         public ICommand ToggleMenuCommand { get; private set; } = null!;
@@ -182,13 +177,13 @@ namespace FFXIManager.ViewModels.CharacterMonitor
             SetMediumSizeCommand = new RelayCommand(() => SetPresetSize(200, 400, "Medium"));
             SetLargeSizeCommand = new RelayCommand(() => SetPresetSize(250, 500, "Large"));
             SetWideSizeCommand = new RelayCommand(() => SetPresetSize(400, 150, "Wide"));
-            
+
             // Docking commands
             DockTopLeftCommand = new RelayCommand(() => DockToPosition(DockPosition.TopLeft));
             DockTopRightCommand = new RelayCommand(() => DockToPosition(DockPosition.TopRight));
             DockBottomLeftCommand = new RelayCommand(() => DockToPosition(DockPosition.BottomLeft));
             DockBottomRightCommand = new RelayCommand(() => DockToPosition(DockPosition.BottomRight));
-            
+
             // Window commands
             MinimizeCommand = new RelayCommand(() => WindowState = WindowState.Minimized);
             CloseCommand = new RelayCommand(() => OnCloseRequested?.Invoke(this, EventArgs.Empty));
@@ -215,9 +210,9 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         {
             Width = width;
             Height = height;
-            
+
             _ = _loggingService.LogInfoAsync(
-                $"Character monitor resized to {sizeName} ({width}x{height})", 
+                $"Character monitor resized to {sizeName} ({width}x{height})",
                 "CharacterMonitorWindowViewModel");
         }
 
@@ -228,32 +223,32 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         {
             var workArea = SystemParameters.WorkArea;
             const int margin = 10;
-            
+
             switch (position)
             {
                 case DockPosition.TopLeft:
                     Left = workArea.Left + margin;
                     Top = workArea.Top + margin;
                     break;
-                    
+
                 case DockPosition.TopRight:
                     Left = workArea.Right - Width - margin;
                     Top = workArea.Top + margin;
                     break;
-                    
+
                 case DockPosition.BottomLeft:
                     Left = workArea.Left + margin;
                     Top = workArea.Bottom - Height - margin;
                     break;
-                    
+
                 case DockPosition.BottomRight:
                     Left = workArea.Right - Width - margin;
                     Top = workArea.Bottom - Height - margin;
                     break;
             }
-            
+
             _ = _loggingService.LogInfoAsync(
-                $"Window docked to {position} at ({Left}, {Top})", 
+                $"Window docked to {position} at ({Left}, {Top})",
                 "CharacterMonitorWindowViewModel");
         }
 
@@ -263,19 +258,19 @@ namespace FFXIManager.ViewModels.CharacterMonitor
         public void UpdateAutoHideState(int characterCount)
         {
             if (!IsAutoHideEnabled) return;
-            
+
             if (characterCount == 0 && WindowState != WindowState.Minimized)
             {
                 WindowState = WindowState.Minimized;
                 _ = _loggingService.LogInfoAsync(
-                    "Character monitor auto-hidden (no characters running)", 
+                    "Character monitor auto-hidden (no characters running)",
                     "CharacterMonitorWindowViewModel");
             }
             else if (characterCount > 0 && WindowState == WindowState.Minimized)
             {
                 WindowState = WindowState.Normal;
                 _ = _loggingService.LogInfoAsync(
-                    $"Character monitor auto-restored ({characterCount} characters detected)", 
+                    $"Character monitor auto-restored ({characterCount} characters detected)",
                     "CharacterMonitorWindowViewModel");
             }
         }
@@ -293,8 +288,8 @@ namespace FFXIManager.ViewModels.CharacterMonitor
             catch (Exception ex)
             {
                 _ = _loggingService.LogErrorAsync(
-                    "Failed to load character monitor settings", 
-                    ex, 
+                    "Failed to load character monitor settings",
+                    ex,
                     "CharacterMonitorWindowViewModel");
             }
         }
@@ -313,8 +308,8 @@ namespace FFXIManager.ViewModels.CharacterMonitor
             catch (Exception ex)
             {
                 _ = _loggingService.LogErrorAsync(
-                    "Failed to save opacity setting", 
-                    ex, 
+                    "Failed to save opacity setting",
+                    ex,
                     "CharacterMonitorWindowViewModel");
             }
         }

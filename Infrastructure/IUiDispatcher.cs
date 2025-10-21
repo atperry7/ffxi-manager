@@ -1,7 +1,4 @@
-﻿using System;
-using System.Threading.Tasks;
-
-namespace FFXIManager.Infrastructure
+﻿namespace FFXIManager.Infrastructure
 {
     public interface IUiDispatcher
     {

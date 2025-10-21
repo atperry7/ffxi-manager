@@ -1,12 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using FFXIManager.Infrastructure;
 using FFXIManager.Models;
 using FFXIManager.Models.Settings;
-using FFXIManager.Infrastructure;
+using System.Diagnostics;
+using System.IO;
 
 namespace FFXIManager.Services
 {
@@ -621,11 +617,11 @@ namespace FFXIManager.Services
                 return null;
 
             var applications = await GetApplicationsAsync();
-            
+
             // First, try to match by name patterns
             foreach (var pattern in namePatterns)
             {
-                var match = applications.FirstOrDefault(app => 
+                var match = applications.FirstOrDefault(app =>
                     app.Name.Contains(pattern, StringComparison.OrdinalIgnoreCase));
                 if (match != null)
                     return match;
@@ -636,7 +632,7 @@ namespace FFXIManager.Services
             {
                 foreach (var pattern in pathPatterns)
                 {
-                    var match = applications.FirstOrDefault(app => 
+                    var match = applications.FirstOrDefault(app =>
                         app.ExecutablePath.Contains(pattern, StringComparison.OrdinalIgnoreCase));
                     if (match != null)
                         return match;

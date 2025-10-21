@@ -1,12 +1,6 @@
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Infrastructure;
-using FFXIManager.Models.Settings;
+﻿using FFXIManager.Models.Settings;
 using SharpDX.DirectInput;
+using System.Collections.Concurrent;
 
 namespace FFXIManager.Services
 {
@@ -18,7 +12,7 @@ namespace FFXIManager.Services
     {
         private const int POLLING_INTERVAL_MS = 16; // ~60fps polling
         private const int DEADZONE = 5000; // Analog stick deadzone
-        
+
         // Known PlayStation controller GUIDs
         private static readonly Guid PS5_DUALSENSE_GUID = new Guid("054c0ce5-0000-0000-0000-504944564944");
 
@@ -42,7 +36,7 @@ namespace FFXIManager.Services
         private readonly CancellationTokenSource _cancellationTokenSource = new();
         private readonly ConcurrentDictionary<ControllerButton, int> _registeredButtons = new();
         private readonly ConcurrentDictionary<Guid, ControllerButtonPressState> _lastButtonStates = new();
-        
+
         private DirectInput? _directInput;
         private readonly List<Joystick> _joysticks = new();
         private Task? _pollingTask;
@@ -62,26 +56,26 @@ namespace FFXIManager.Services
             try
             {
                 _loggingService.LogInfoAsync("🎮 Initializing DirectInput for PlayStation controller support...", "DirectInputController");
-                
+
                 _directInput = new DirectInput();
-                
+
                 // Find all game controllers
                 var devices = _directInput.GetDevices(DeviceClass.GameControl, DeviceEnumerationFlags.AttachedOnly);
-                
+
                 foreach (var deviceInstance in devices)
                 {
                     try
                     {
                         // Check if it's a PlayStation controller
                         var name = deviceInstance.ProductName.ToLower();
-                        var isPlayStation = name.Contains("playstation") || 
-                                          name.Contains("dualsense") || 
+                        var isPlayStation = name.Contains("playstation") ||
+                                          name.Contains("dualsense") ||
                                           name.Contains("dualshock") ||
-                                          name.Contains("ps5") || 
+                                          name.Contains("ps5") ||
                                           name.Contains("ps4") ||
                                           name.Contains("wireless controller") || // Generic PS controller name
                                           deviceInstance.ProductGuid == PS5_DUALSENSE_GUID;
-                        
+
                         if (!isPlayStation)
                         {
                             _loggingService.LogInfoAsync("⏭️ Skipping non-PlayStation controller: {ProductName}", "DirectInputController", deviceInstance.ProductName);
@@ -89,16 +83,16 @@ namespace FFXIManager.Services
                         }
 
                         var joystick = new Joystick(_directInput, deviceInstance.InstanceGuid);
-                        
+
                         // Set buffer size for input
                         joystick.Properties.BufferSize = 128;
-                        
+
                         // Acquire the joystick
                         joystick.Acquire();
-                        
+
                         _joysticks.Add(joystick);
                         IsAnyControllerConnected = true;
-                        
+
                         _loggingService.LogInfoAsync("✅ PlayStation controller detected: {ProductName} (GUID: {InstanceGuid})", "DirectInputController", deviceInstance.ProductName, deviceInstance.InstanceGuid);
                         _loggingService.LogInfoAsync("   Type: {Type}, Subtype: {Subtype}", "DirectInputController", deviceInstance.Type, deviceInstance.Subtype);
                     }
@@ -194,7 +188,7 @@ namespace FFXIManager.Services
                 {
                     joystick.Poll();
                     var state = joystick.GetCurrentState();
-                    
+
                     await ProcessControllerInputAsync(joystick.Information.InstanceGuid, state, cancellationToken);
                 }
                 catch (SharpDX.SharpDXException ex) when ((uint)ex.HResult == 0x8007001E) // DIERR_INPUTLOST
@@ -215,7 +209,7 @@ namespace FFXIManager.Services
         private async Task ProcessControllerInputAsync(Guid controllerId, JoystickState state, CancellationToken cancellationToken)
         {
             var currentButtons = GetPressedButtons(state);
-            
+
             if (!_lastButtonStates.TryGetValue(controllerId, out var lastState))
             {
                 lastState = new ControllerButtonPressState();
@@ -248,29 +242,29 @@ namespace FFXIManager.Services
 
             // Map PlayStation buttons to our ControllerButton enum
             var buttons = state.Buttons;
-            
+
             // Face buttons
             if (buttons[PS5_BUTTON_CROSS]) pressed.Add(ControllerButton.FaceButtonA);     // Cross -> A
             if (buttons[PS5_BUTTON_CIRCLE]) pressed.Add(ControllerButton.FaceButtonB);    // Circle -> B
             if (buttons[PS5_BUTTON_SQUARE]) pressed.Add(ControllerButton.FaceButtonX);    // Square -> X
             if (buttons[PS5_BUTTON_TRIANGLE]) pressed.Add(ControllerButton.FaceButtonY);  // Triangle -> Y
-            
+
             // Shoulder buttons
             if (buttons[PS5_BUTTON_L1]) pressed.Add(ControllerButton.LeftBumper);
             if (buttons[PS5_BUTTON_R1]) pressed.Add(ControllerButton.RightBumper);
-            
+
             // Triggers (on PS5, these are also digital buttons)
             if (buttons[PS5_BUTTON_L2]) pressed.Add(ControllerButton.LeftTrigger);
             if (buttons[PS5_BUTTON_R2]) pressed.Add(ControllerButton.RightTrigger);
-            
+
             // System buttons
             if (buttons[PS5_BUTTON_OPTIONS]) pressed.Add(ControllerButton.Start);
             if (buttons[PS5_BUTTON_CREATE]) pressed.Add(ControllerButton.Select);
-            
+
             // Thumbstick clicks
             if (buttons[PS5_BUTTON_L3]) pressed.Add(ControllerButton.LeftThumbstickClick);
             if (buttons[PS5_BUTTON_R3]) pressed.Add(ControllerButton.RightThumbstickClick);
-            
+
             // D-Pad (using POV hat)
             var pov = state.PointOfViewControllers[0];
             if (pov != -1)
@@ -342,7 +336,7 @@ namespace FFXIManager.Services
                 _joysticks.Clear();
 
                 _directInput?.Dispose();
-                
+
                 _loggingService?.LogInfoAsync("DirectInputControllerService disposed", "DirectInputController");
             }
             catch (Exception ex)

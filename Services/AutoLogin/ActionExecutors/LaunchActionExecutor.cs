@@ -1,10 +1,4 @@
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using FFXIManager.Models;
-using FFXIManager.Models.AutoLogin;
-using FFXIManager.Models.Settings;
+﻿using FFXIManager.Models;
 
 namespace FFXIManager.Services.AutoLogin.ActionExecutors
 {

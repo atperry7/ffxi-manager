@@ -1,7 +1,7 @@
-﻿using System.Windows.Controls;
-using System.Windows.Input;
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 using FFXIManager.ViewModels;
+using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace FFXIManager.Views
 {
