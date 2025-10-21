@@ -246,6 +246,67 @@ namespace FFXIManager.Services
 
         #endregion
 
+        #region Immediate Login
+
+        public async Task StartImmediateLoginAsync(PlayOnlineMemberAccount account, ProfileInfo profile, CancellationToken cancellationToken = default)
+        {
+            if (account == null) throw new ArgumentNullException(nameof(account));
+            if (profile == null) throw new ArgumentNullException(nameof(profile));
+
+            // If queue is already executing, do not interrupt
+            if (IsExecuting)
+            {
+                throw new InvalidOperationException("Queue is already executing");
+            }
+
+            // Ensure item exists in queue
+            var targetItem = QueueItems.FirstOrDefault(i => i.Account.Id == account.Id);
+            if (targetItem == null)
+            {
+                targetItem = await AddToQueueAsync(account, profile);
+            }
+
+            await PrioritizeSingleItemAndStartAsync(targetItem, cancellationToken);
+        }
+
+        public async Task StartImmediateLoginAsync(AutoLoginQueueItem item, CancellationToken cancellationToken = default)
+        {
+            if (item == null) throw new ArgumentNullException(nameof(item));
+
+            if (IsExecuting)
+            {
+                throw new InvalidOperationException("Queue is already executing");
+            }
+
+            await PrioritizeSingleItemAndStartAsync(item, cancellationToken);
+        }
+
+        private async Task PrioritizeSingleItemAndStartAsync(AutoLoginQueueItem item, CancellationToken cancellationToken)
+        {
+            // Mark all other pending items as completed (skipped)
+            foreach (var qi in QueueItems.ToList())
+            {
+                if (qi.Id != item.Id && qi.Status == AutoLoginQueueStatus.Pending)
+                {
+                    qi.Status = AutoLoginQueueStatus.Completed;
+                    qi.StatusMessage = "Skipped - Login Now used for another account";
+                    qi.EndTime = DateTime.Now;
+                }
+            }
+
+            // Ensure the selected item is pending
+            if (item.Status != AutoLoginQueueStatus.Pending)
+            {
+                item.Status = AutoLoginQueueStatus.Pending;
+                item.StatusMessage = "Prioritized for immediate login";
+                item.EndTime = null;
+            }
+
+            await StartQueueAsync(cancellationToken);
+        }
+
+        #endregion
+
         #region Persistence - Delegated to Persistence Service
 
         public async Task SaveQueueStateAsync()

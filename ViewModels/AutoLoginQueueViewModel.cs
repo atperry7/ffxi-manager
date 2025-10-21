@@ -462,6 +462,7 @@ namespace FFXIManager.ViewModels
         // Parameter-based commands
         public ICommand RemoveItemParameterCommand { get; private set; } = null!;
         public ICommand RetryItemParameterCommand { get; private set; } = null!;
+        public ICommand LoginNowParameterCommand { get; private set; } = null!;
 
         private void InitializeCommands()
         {
@@ -527,6 +528,9 @@ namespace FFXIManager.ViewModels
 
             RetryItemParameterCommand = new RelayCommandWithParameter<AutoLoginQueueItem>(
                 async item => await RetryItemAsync(item));
+
+            LoginNowParameterCommand = new RelayCommandWithParameter<AutoLoginQueueItem>(
+                async item => await LoginNowAsync(item));
         }
 
         #endregion
@@ -765,6 +769,46 @@ namespace FFXIManager.ViewModels
             {
                 await _loggingService.LogErrorAsync("Error retrying item", ex);
                 _statusService.SetTemporaryMessage("Failed to retry item", TimeSpan.FromSeconds(3));
+            }
+        }
+
+        private async Task LoginNowAsync(AutoLoginQueueItem item)
+        {
+            if (item == null)
+                return;
+
+            var account = item.Account;
+            var profile = item.Profile;
+
+            if (account == null || profile == null)
+            {
+                _statusService.SetTemporaryMessage("Invalid queue item selected", TimeSpan.FromSeconds(3));
+                return;
+            }
+
+            if (!account.HasStoredPassword)
+            {
+                _statusService.SetTemporaryMessage($"Cannot login {account.DisplayName} - no password stored. Edit the account to set a password first.", TimeSpan.FromSeconds(5));
+                await _loggingService.LogWarningAsync($"Attempted immediate login for {account.DisplayName} without stored password");
+                return;
+            }
+
+            if (_queueService.IsExecuting)
+            {
+                _statusService.SetTemporaryMessage("Cannot start login now - queue is already executing", TimeSpan.FromSeconds(3));
+                return;
+            }
+
+            try
+            {
+                await _queueService.StartImmediateLoginAsync(item, _cancellationTokenSource.Token);
+                _statusService.SetTemporaryMessage($"Starting immediate login for {account.DisplayName}", TimeSpan.FromSeconds(3));
+                await _loggingService.LogInfoAsync($"Started immediate login for {account.DisplayName} from profile {profile.Name} via queue view");
+            }
+            catch (Exception ex)
+            {
+                _statusService.SetTemporaryMessage($"Failed to start immediate login for {account.DisplayName}", TimeSpan.FromSeconds(3));
+                await _loggingService.LogErrorAsync($"Error starting immediate login for {account.DisplayName}", ex);
             }
         }
 

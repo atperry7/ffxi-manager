@@ -243,6 +243,27 @@ namespace FFXIManager.Services
 
         #endregion
 
+        #region Immediate Login
+
+        /// <summary>
+        /// Prioritizes a specific account for immediate login by adjusting the queue
+        /// and starting execution so only that account is processed.
+        /// </summary>
+        /// <param name="account">Account to login immediately</param>
+        /// <param name="profile">Profile that owns the account</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        Task StartImmediateLoginAsync(PlayOnlineMemberAccount account, ProfileInfo profile, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Prioritizes an existing queue item for immediate login by adjusting the queue
+        /// and starting execution so only that item is processed.
+        /// </summary>
+        /// <param name="item">Queue item to login immediately</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        Task StartImmediateLoginAsync(AutoLoginQueueItem item, CancellationToken cancellationToken = default);
+
+        #endregion
+
         // No explicit synchronization API required when account instances are canonical
     }
 

@@ -684,78 +684,11 @@ namespace FFXIManager.ViewModels
                 return;
             }
 
-            if (_queueService.IsExecuting)
-            {
-                _statusService.SetTemporaryMessage("Cannot start login now - queue is already executing", TimeSpan.FromSeconds(3));
-                return;
-            }
-
             try
             {
-                // Store original queue item statuses for potential restoration
-                var originalStatuses = new Dictionary<Guid, AutoLoginQueueStatus>();
-                var queueItems = _queueService.QueueItems.ToList();
-
-                // Check if the account is already in the queue
-                var existingItem = queueItems.FirstOrDefault(item => item.Account.Id == account.Id);
-
-                if (existingItem != null)
-                {
-                    // Account is already in queue
-                    await _loggingService.LogInfoAsync($"Account {account.DisplayName} already in queue, prioritizing for immediate login");
-
-                    // Mark all other pending items as completed (acknowledged but not processed)
-                    foreach (var item in queueItems)
-                    {
-                        if (item.Id != existingItem.Id && item.Status == AutoLoginQueueStatus.Pending)
-                        {
-                            originalStatuses[item.Id] = item.Status;
-                            item.Status = AutoLoginQueueStatus.Completed;
-                            item.StatusMessage = "Skipped - Login Now used for another account";
-                            item.EndTime = DateTime.Now;
-                        }
-                    }
-
-                    // Ensure the selected item is pending
-                    if (existingItem.Status != AutoLoginQueueStatus.Pending)
-                    {
-                        existingItem.Status = AutoLoginQueueStatus.Pending;
-                        existingItem.StatusMessage = "Prioritized for immediate login";
-                    }
-                }
-                else
-                {
-                    // Account is not in queue, need to add it
-                    await _loggingService.LogInfoAsync($"Adding {account.DisplayName} to queue for immediate login");
-
-                    // Mark all existing pending items as completed (acknowledged but not processed)
-                    foreach (var item in queueItems)
-                    {
-                        if (item.Status == AutoLoginQueueStatus.Pending)
-                        {
-                            originalStatuses[item.Id] = item.Status;
-                            item.Status = AutoLoginQueueStatus.Completed;
-                            item.StatusMessage = "Skipped - Login Now used for another account";
-                            item.EndTime = DateTime.Now;
-                        }
-                    }
-
-                    // Add the account to the queue
-                    await _queueService.AddToQueueAsync(account, CurrentProfile);
-                }
-
-                // Start the queue immediately (will process only the selected/added item)
-                await _queueService.StartQueueAsync();
-
-                _statusService.SetTemporaryMessage($"Starting immediate login for {account.DisplayName} (queue preserved)", TimeSpan.FromSeconds(3));
-                await _loggingService.LogInfoAsync($"Started immediate login for account {account.DisplayName} from profile {CurrentProfile.Name} - queue preserved");
-
-                // Store the original statuses for potential future restoration
-                // This could be used in a future enhancement to restore the queue after login completes
-                if (originalStatuses.Count > 0)
-                {
-                    await _loggingService.LogDebugAsync($"Preserved {originalStatuses.Count} queue items that were temporarily skipped");
-                }
+                await _queueService.StartImmediateLoginAsync(account, CurrentProfile);
+                _statusService.SetTemporaryMessage($"Starting immediate login for {account.DisplayName}", TimeSpan.FromSeconds(3));
+                await _loggingService.LogInfoAsync($"Started immediate login for account {account.DisplayName} from profile {CurrentProfile.Name}");
             }
             catch (Exception ex)
             {

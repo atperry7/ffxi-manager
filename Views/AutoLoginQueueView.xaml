@@ -32,9 +32,44 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Profile Row Style for Queue Items -->
+        <!-- Profile Row Style for Queue Items with hover/selection highlighting -->
         <Style x:Key="ProfileAwareRowStyle" TargetType="DataGridRow">
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="ValidationErrorTemplate">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <TextBlock Foreground="Red" Margin="2,0,0,0" Text="!" VerticalAlignment="Center"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
             <Style.Triggers>
+                <!-- Hover highlight -->
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource PillBackgroundBrush}"/>
+                </Trigger>
+
+                <!-- Selection highlight -->
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource DataGridSelectionBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource DataGridSelectionBorderBrush}"/>
+                    <Setter Property="BorderThickness" Value="2,0,0,0"/>
+                    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+                </Trigger>
+
+                <!-- Selected + Hover -->
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsSelected" Value="True"/>
+                        <Condition Property="IsMouseOver" Value="True"/>
+                    </MultiTrigger.Conditions>
+                    <Setter Property="Background" Value="{DynamicResource DataGridSelectionBrush}"/>
+                    <Setter Property="Opacity" Value="1.0"/>
+                    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+                </MultiTrigger>
+
+                <!-- In-progress row styling overrides -->
                 <DataTrigger Binding="{Binding Status}" Value="InProgress">
                     <Setter Property="Background" Value="{DynamicResource InfoBrush}"/>
                     <Setter Property="Foreground" Value="White"/>
@@ -317,14 +352,14 @@
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <!-- Retry Button -->
-                                        <Button Content="🔄"
+                                        <!-- Login Now Button -->
+                                        <Button Content="🚀"
                                                 Style="{StaticResource CircularSmallButton}"
-                                                Background="{DynamicResource InfoBrush}"
-                                                Command="{Binding DataContext.RetryItemParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                Background="{DynamicResource SuccessBrush}"
+                                                Command="{Binding DataContext.LoginNowParameterCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                 CommandParameter="{Binding}"
-                                                ToolTip="Retry Failed Item"
-                                                Visibility="{Binding HasError, Converter={StaticResource BoolToVisConverter}}"
+                                                ToolTip="Login Now (immediate single account login)"
+                                                AutomationProperties.Name="Login Now"
                                                 Margin="2"/>
 
                                         <!-- Remove Button -->
