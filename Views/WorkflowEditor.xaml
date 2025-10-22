@@ -750,6 +750,7 @@
                                                         <RowDefinition Height="Auto"/>
                                                         <RowDefinition Height="Auto"/>
                                                         <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
                                                     </Grid.RowDefinitions>
 
                                                     <!-- Template Path -->
@@ -889,6 +890,22 @@
                                                             </Style>
                                                         </ComboBox.ItemContainerStyle>
                                                     </ComboBox>
+
+                                                    <!-- Confidence Threshold -->
+                                                    <TextBlock Grid.Row="4" Grid.Column="0"
+                                                   Text="Confidence:"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                                    <Grid Grid.Row="4" Grid.Column="1">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="80"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Slider Grid.Column="0" Minimum="0.0" Maximum="1.0" TickFrequency="0.05" IsSnapToTickEnabled="True"
+                                                                Value="{Binding SelectedStep.ConfidenceThreshold, Mode=TwoWay}" Margin="0,0,8,0"
+                                                                ToolTip="Template match confidence threshold (0.0-1.0)&#x0a;Higher = more strict matching&#x0a;&#x0a;Recommended: 0.7-0.85&#x0a;Default: 0.80"/>
+                                                        <TextBox Grid.Column="1" Text="{Binding SelectedStep.ConfidenceThreshold, StringFormat=F2, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    </Grid>
                                                 </Grid>
                                             </GroupBox>
 

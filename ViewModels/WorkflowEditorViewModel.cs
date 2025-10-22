@@ -600,7 +600,7 @@ namespace FFXIManager.ViewModels
 
         public float ActionConfidenceThreshold
         {
-            get => SelectedNavigationAction?.GetParameter<float>("ConfidenceThreshold", 0.8f) ?? 0.8f;
+            get => SelectedNavigationAction?.GetParameter<float>("ConfidenceThreshold", SelectedStep?.ConfidenceThreshold ?? 0.8f) ?? (SelectedStep?.ConfidenceThreshold ?? 0.8f);
             set
             {
                 if (SelectedNavigationAction != null)
@@ -614,7 +614,7 @@ namespace FFXIManager.ViewModels
 
         public int ActionTolerance
         {
-            get => SelectedNavigationAction?.GetParameter<int>("Tolerance", 5) ?? 5;
+            get => SelectedNavigationAction?.GetParameter<int>("Tolerance", SelectedStep?.Tolerance ?? 5) ?? (SelectedStep?.Tolerance ?? 5);
             set
             {
                 if (SelectedNavigationAction != null)
@@ -628,7 +628,7 @@ namespace FFXIManager.ViewModels
 
         public int ActionRetryAttempts
         {
-            get => SelectedNavigationAction?.GetParameter<int>("RetryAttempts", 30) ?? 30;
+            get => SelectedNavigationAction?.GetParameter<int>("RetryAttempts", SelectedStep?.RetryAttempts ?? 30) ?? (SelectedStep?.RetryAttempts ?? 30);
             set
             {
                 if (SelectedNavigationAction != null)
@@ -642,7 +642,7 @@ namespace FFXIManager.ViewModels
 
         public int ActionRetryDelayMs
         {
-            get => SelectedNavigationAction?.GetParameter<int>("RetryDelayMs", 500) ?? 500;
+            get => SelectedNavigationAction?.GetParameter<int>("RetryDelayMs", SelectedStep?.RetryDelayMs ?? 500) ?? (SelectedStep?.RetryDelayMs ?? 500);
             set
             {
                 if (SelectedNavigationAction != null)
@@ -656,7 +656,7 @@ namespace FFXIManager.ViewModels
 
         public int ActionTimeoutSeconds
         {
-            get => SelectedNavigationAction?.GetParameter<int>("TimeoutSeconds", 30) ?? 30;
+            get => SelectedNavigationAction?.GetParameter<int>("TimeoutSeconds", SelectedStep?.EstimatedDurationSeconds ?? 30) ?? (SelectedStep?.EstimatedDurationSeconds ?? 30);
             set
             {
                 if (SelectedNavigationAction != null)
