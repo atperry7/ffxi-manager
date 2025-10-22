@@ -139,11 +139,6 @@
 
                 <!-- Action Buttons -->
                 <StackPanel Grid.Column="1" Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4">
-                    <Button Content="Guide"
-                        Command="{Binding OpenWorkflowGuideCommand}"
-                        Margin="0,0,4,0"
-                        Style="{StaticResource PrimaryButton}"
-                        ToolTip="Open the workflows/README.md guide"/>
                     <Button Content="💾"
                             Command="{Binding SaveWorkflowCommand}"
                             Margin="0,0,4,0"
@@ -177,32 +172,6 @@
                                FontSize="12"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource PrimaryTextBrush}"/>
-                </Border>
-
-                <!-- Recommendations Pill (uses theme brushes) -->
-                <Border Grid.ColumnSpan="2" Grid.Row="1"
-                        Background="{DynamicResource PillBackgroundBrush}"
-                        BorderBrush="{DynamicResource BorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        Padding="10,6"
-                        Margin="0,8,0,0"
-                        VerticalAlignment="Top"
-                        Visibility="{Binding Recommendations, Converter={StaticResource NullToVisibilityConverter}}">
-                    <StackPanel>
-                        <TextBlock Text="Recommendations"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource PrimaryTextBrush}"/>
-                        <ItemsControl ItemsSource="{Binding Recommendations}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="•  {Binding}"
-                                               Foreground="{DynamicResource SecondaryTextBrush}"
-                                               TextWrapping="Wrap"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
                 </Border>
             </Grid>
         </Border>
