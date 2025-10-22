@@ -204,57 +204,37 @@ namespace FFXIManager.Services
 
         public async Task<bool> ActivateCharacterWindowAsync(PlayOnlineCharacter character, CancellationToken cancellationToken = default)
         {
-            // **PERFORMANCE**: Start timing immediately
             var activationStopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-            // **EMERGENCY CIRCUIT BREAKER**: Check global activation throttle
+            // Emergency throttle check
             if (IsEmergencyThrottleActive())
             {
                 await _logging.LogWarningAsync("Character activation blocked: emergency throttle active", "PlayOnlineMonitorService");
                 return false;
             }
 
-            if (character == null || character.WindowHandle == IntPtr.Zero)
+            // Validation
+            if (!IsCharacterValidForActivation(character))
             {
                 await _logging.LogWarningAsync("Cannot activate character: invalid window handle", "PlayOnlineMonitorService");
                 return false;
             }
 
-            // **CRITICAL FIX**: Validate window handle is still valid
-            if (!_processUtility.IsWindowValid(character.WindowHandle))
-            {
-                await _logging.LogWarningAsync("Cannot activate {CharacterName}: window handle 0x{WindowHandle:X} is no longer valid (process may have updated window title)", "PlayOnlineMonitorService", character.DisplayName, character.WindowHandle.ToInt64());
-
-                // Try to refresh character data to get updated window handle
-                await RefreshCharactersAsync();
-                return false;
-            }
-
-            // **PERFORMANCE OPTIMIZATION**: Skip rate limiting for fast switching
+            // Rate limiting check
             var currentSlotIndex = GetCharacterSlotIndexFast(character);
             var timeSinceLastAttempt = DateTime.UtcNow - _lastActivationAttempt;
-
-            // Only apply rate limiting if switching to the SAME character within 50ms
             bool isSameCharacter = (currentSlotIndex == _lastActivatedCharacterSlotIndex && currentSlotIndex != -1);
-            bool tooFrequent = timeSinceLastAttempt.TotalMilliseconds < 50; // Reduced from _minActivationIntervalMs
-
-            if (isSameCharacter && tooFrequent)
+            
+            if (isSameCharacter && timeSinceLastAttempt.TotalMilliseconds < 50)
             {
-                // Skip logging for performance
                 RequestDebouncedActivation(character);
                 return true;
-            }
-
-            // **PERFORMANCE**: Log after decision to avoid delays
-            if (!isSameCharacter && activationStopwatch.ElapsedMilliseconds > 10)
-            {
-                System.Diagnostics.Debug.WriteLine($"[PERF WARNING] Pre-activation took {activationStopwatch.ElapsedMilliseconds}ms");
             }
 
             _lastActivatedCharacterSlotIndex = currentSlotIndex;
             var result = await PerformImmediateActivationAsync(character, cancellationToken);
 
-            // **PERFORMANCE**: Log total time
+            // Performance logging
             activationStopwatch.Stop();
             if (activationStopwatch.ElapsedMilliseconds > 100)
             {
@@ -262,6 +242,24 @@ namespace FFXIManager.Services
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Validates character is suitable for window activation
+        /// </summary>
+        private bool IsCharacterValidForActivation(PlayOnlineCharacter character)
+        {
+            if (character == null || character.WindowHandle == IntPtr.Zero)
+                return false;
+
+            if (!_processUtility.IsWindowValid(character.WindowHandle))
+            {
+                _ = _logging.LogWarningAsync("Window handle 0x{WindowHandle:X} for {CharacterName} is no longer valid", "PlayOnlineMonitorService", character.WindowHandle.ToInt64(), character.DisplayName);
+                _ = RefreshCharactersAsync();
+                return false;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -310,8 +308,7 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                // **IMPROVED**: Use safe logging that won't throw
-                await SafeLogErrorAsync("Error in debounced activation for {CharacterName}", characterToActivate.DisplayName, ex);
+                await _logging.LogErrorAsync("Error in debounced activation for {CharacterName}", "PlayOnlineMonitorService", ex, characterToActivate.DisplayName);
             }
         }
 
@@ -411,7 +408,7 @@ namespace FFXIManager.Services
                 if (preferredProcessId.HasValue)
                 {
                     var preferredChar = characters.FirstOrDefault(c => c.ProcessId == preferredProcessId.Value);
-                    if (preferredChar?.WindowHandle != IntPtr.Zero && _processUtility.IsWindowValid(preferredChar.WindowHandle))
+                    if (preferredChar != null && preferredChar.WindowHandle != IntPtr.Zero && _processUtility.IsWindowValid(preferredChar.WindowHandle))
                     {
                         await _logging.LogInfoAsync($"[POL-WINDOW] Using preferred PID {preferredProcessId}: Handle 0x{preferredChar.WindowHandle.ToInt64():X}", "PlayOnlineMonitorService");
                         return preferredChar.WindowHandle;
@@ -420,12 +417,11 @@ namespace FFXIManager.Services
                     // If preferred character has no window yet, try to find one
                     if (preferredChar != null)
                     {
-                        var windows = await _processUtility.GetProcessWindowsAsync(preferredProcessId.Value);
-                        var mainWindow = windows.FirstOrDefault(w => w.IsMainWindow) ?? windows.FirstOrDefault();
-                        if (mainWindow != null)
+                        var windowHandle = await GetMainWindowHandleAsync(preferredProcessId.Value);
+                        if (windowHandle != IntPtr.Zero)
                         {
-                            await _logging.LogInfoAsync($"[POL-WINDOW] Found new window for preferred PID {preferredProcessId}: Handle 0x{mainWindow.Handle.ToInt64():X}", "PlayOnlineMonitorService");
-                            return mainWindow.Handle;
+                            await _logging.LogInfoAsync($"[POL-WINDOW] Found new window for preferred PID {preferredProcessId}: Handle 0x{windowHandle.ToInt64():X}", "PlayOnlineMonitorService");
+                            return windowHandle;
                         }
                         else
                         {
@@ -451,13 +447,12 @@ namespace FFXIManager.Services
                 foreach (var character in charactersWithoutWindows)
                 {
                     await _logging.LogDebugAsync($"[POL-WINDOW] Checking PID {character.ProcessId} for new windows", "PlayOnlineMonitorService");
-                    
-                    var windows = await _processUtility.GetProcessWindowsAsync(character.ProcessId);
-                    var mainWindow = windows.FirstOrDefault(w => w.IsMainWindow) ?? windows.FirstOrDefault();
-                    if (mainWindow != null)
+                    var windowHandle = await GetMainWindowHandleAsync(character.ProcessId);
+                    if (windowHandle != IntPtr.Zero)
                     {
-                        await _logging.LogInfoAsync($"[POL-WINDOW] Found NEW window for PID {character.ProcessId}: Handle 0x{mainWindow.Handle.ToInt64():X}, Title: '{mainWindow.Title}'", "PlayOnlineMonitorService");
-                        return mainWindow.Handle;
+                        var title = GetWindowTitleSafe(windowHandle);
+                        await _logging.LogInfoAsync($"[POL-WINDOW] Found NEW window for PID {character.ProcessId}: Handle 0x{windowHandle.ToInt64():X}, Title: '{title}'", "PlayOnlineMonitorService");
+                        return windowHandle;
                     }
                 }
 
@@ -525,8 +520,14 @@ namespace FFXIManager.Services
             };
         }
 
-        // **REMOVED**: Character name extraction methods no longer needed
-        // Window title IS the character name - no extraction required
+        /// <summary>
+        /// Fires character event on UI thread with cache update
+        /// </summary>
+        private void RaiseCharacterEvent(PlayOnlineCharacter character, EventHandler<PlayOnlineCharacterEventArgs>? eventHandler)
+        {
+            UpdateCharacterCache(character);
+            _uiDispatcher.BeginInvoke(() => eventHandler?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
+        }
 
         private void OnProcessDetected(object? sender, MonitoredProcessEventArgs e)
         {
@@ -534,33 +535,21 @@ namespace FFXIManager.Services
 
             try
             {
-                // Convert and fire events for each window
-                foreach (var window in e.Process.Windows)
+                if (e.Process.Windows.Count > 0)
                 {
-                    var character = ConvertToCharacter(e.Process, window);
-
-                    // **GAMING OPTIMIZATION**: Update character cache for fast lookups
-                    UpdateCharacterCache(character);
-
-                    SafeDispatchEvent(() => CharacterDetected?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
+                    foreach (var window in e.Process.Windows)
+                        RaiseCharacterEvent(ConvertToCharacter(e.Process, window), CharacterDetected);
                 }
-
-                // If no windows yet, fire event for the process itself
-                if (e.Process.Windows.Count == 0)
+                else
                 {
-                    var character = ConvertToCharacter(e.Process, null);
-
-                    // **GAMING OPTIMIZATION**: Update character cache for fast lookups
-                    UpdateCharacterCache(character);
-
-                    SafeDispatchEvent(() => CharacterDetected?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
+                    RaiseCharacterEvent(ConvertToCharacter(e.Process, null), CharacterDetected);
                 }
 
                 _ = _logging.LogInfoAsync("PlayOnline process detected: {ProcessName} (PID: {ProcessId})", "PlayOnlineMonitorService", e.Process.ProcessName, e.Process.ProcessId);
             }
             catch (Exception ex)
             {
-                _ = SafeLogErrorAsync("Error in OnProcessDetected", ex);
+                _ = _logging.LogErrorAsync("Error in OnProcessDetected", "PlayOnlineMonitorService", ex);
             }
         }
 
@@ -572,32 +561,22 @@ namespace FFXIManager.Services
             {
                 _ = _logging.LogInfoAsync("[PlayOnline] Process updated: {ProcessName} (PID: {ProcessId}) with {WindowCount} windows", "PlayOnlineMonitorService", e.Process.ProcessName, e.Process.ProcessId, e.Process.Windows.Count);
 
-                // Fire update events for windows with title changes
-                foreach (var window in e.Process.Windows)
+                if (e.Process.Windows.Count > 0)
                 {
-                    _ = _logging.LogInfoAsync("[PlayOnline] Window title updated: '{WindowTitle}' (Handle: 0x{WindowHandle:X})", "PlayOnlineMonitorService", window.Title, window.Handle.ToInt64());
-
-                    var character = ConvertToCharacter(e.Process, window);
-
-                    // **GAMING OPTIMIZATION**: Update character cache with latest information
-                    UpdateCharacterCache(character);
-
-                    // **FIX**: Fire the update event with the updated character data
-                    // The CharacterCollectionViewModel will handle updating the existing character
-                    SafeDispatchEvent(() => CharacterUpdated?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
+                    foreach (var window in e.Process.Windows)
+                    {
+                        _ = _logging.LogInfoAsync("[PlayOnline] Window title updated: '{WindowTitle}' (Handle: 0x{WindowHandle:X})", "PlayOnlineMonitorService", window.Title, window.Handle.ToInt64());
+                        RaiseCharacterEvent(ConvertToCharacter(e.Process, window), CharacterUpdated);
+                    }
                 }
-
-                // If no windows, still fire update for the process
-                if (e.Process.Windows.Count == 0)
+                else
                 {
-                    var character = ConvertToCharacter(e.Process, null);
-                    UpdateCharacterCache(character);
-                    SafeDispatchEvent(() => CharacterUpdated?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
+                    RaiseCharacterEvent(ConvertToCharacter(e.Process, null), CharacterUpdated);
                 }
             }
             catch (Exception ex)
             {
-                _ = SafeLogErrorAsync("Error in OnProcessUpdated", ex);
+                _ = _logging.LogErrorAsync("Error in OnProcessUpdated", "PlayOnlineMonitorService", ex);
             }
         }
 
@@ -607,22 +586,18 @@ namespace FFXIManager.Services
 
             try
             {
-                // **GAMING OPTIMIZATION**: Remove character from cache when process dies
                 RemoveFromCharacterCache(e.Process.ProcessId);
-
-                // Need to create a character object for removal
                 var character = new PlayOnlineCharacter
                 {
                     ProcessId = e.Process.ProcessId,
                     ProcessName = e.Process.ProcessName
                 };
-                SafeDispatchEvent(() => CharacterRemoved?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
-
+                _uiDispatcher.BeginInvoke(() => CharacterRemoved?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
                 _ = _logging.LogInfoAsync("PlayOnline process removed: {ProcessName} (PID: {ProcessId})", "PlayOnlineMonitorService", e.Process.ProcessName, e.Process.ProcessId);
             }
             catch (Exception ex)
             {
-                _ = SafeLogErrorAsync("Error in OnProcessRemoved", ex);
+                _ = _logging.LogErrorAsync("Error in OnProcessRemoved", "PlayOnlineMonitorService", ex);
             }
         }
 
@@ -662,7 +637,7 @@ namespace FFXIManager.Services
             catch (Exception ex)
             {
                 // Log disposal errors but don't throw
-                _ = SafeLogErrorAsync("Error during PlayOnlineMonitorService disposal", ex);
+                _ = _logging.LogErrorAsync("Error during PlayOnlineMonitorService disposal", "PlayOnlineMonitorService", ex);
             }
 
             GC.SuppressFinalize(this);
@@ -701,7 +676,6 @@ namespace FFXIManager.Services
         {
             try
             {
-                // **GAMING OPTIMIZATION**: Use cached character lookup instead of expensive GetCharactersAsync()
                 lock (_cacheLock)
                 {
                     var cachedChars = _characterCache.Values.Where(c => c.IsValid).OrderBy(c => c.ProcessId).ToList();
@@ -717,10 +691,10 @@ namespace FFXIManager.Services
             }
             catch (Exception ex)
             {
-                _ = SafeLogErrorAsync("Error getting cached character slot index for {CharacterName}", character.DisplayName, ex);
+                _ = _logging.LogErrorAsync("Error getting cached character slot index for {CharacterName}", "PlayOnlineMonitorService", ex, character.DisplayName);
             }
 
-            return -1; // Not found or error
+            return -1;
         }
 
         /// <summary>
@@ -733,7 +707,7 @@ namespace FFXIManager.Services
                 lock (_cacheLock)
                 {
                     var cacheKey = GetCharacterCacheKey(character.ProcessId, character.WindowHandle);
-                    var cached = new CachedCharacterInfo
+                    _characterCache[cacheKey] = new CachedCharacterInfo
                     {
                         ProcessId = character.ProcessId,
                         WindowHandle = character.WindowHandle,
@@ -742,14 +716,11 @@ namespace FFXIManager.Services
                         LastUpdated = DateTime.UtcNow,
                         IsValid = true
                     };
-
-                    _characterCache[cacheKey] = cached;
-                    _ = SafeLogInfoAsync("Updated character cache: {CharacterName} (PID: {ProcessId})", character.CharacterName, character.ProcessId);
                 }
             }
             catch (Exception ex)
             {
-                _ = SafeLogErrorAsync("Error updating character cache for {CharacterName}", character.DisplayName, ex);
+                _ = _logging.LogErrorAsync("Error updating character cache for {CharacterName}", "PlayOnlineMonitorService", ex, character.DisplayName);
             }
         }
 
@@ -769,12 +740,11 @@ namespace FFXIManager.Services
                     {
                         _characterCache.TryRemove(key, out _);
                     }
-                    _ = SafeLogInfoAsync("Removed character from cache (PID: {ProcessId})", processId);
                 }
             }
             catch (Exception ex)
             {
-                _ = SafeLogErrorAsync("Error removing character from cache (PID: {ProcessId})", processId.ToString(), ex);
+                _ = _logging.LogErrorAsync("Error removing character from cache (PID: {ProcessId})", "PlayOnlineMonitorService", ex, processId);
             }
         }
 
@@ -801,87 +771,64 @@ namespace FFXIManager.Services
 
         #endregion
 
-        #region Safe Helper Methods
+        #region Win32 API and Helper Methods
 
         /// <summary>
-        /// Safely dispatches an event to the UI thread with exception handling
+        /// Retrieves window title with comprehensive error handling and validation
         /// </summary>
-        private void SafeDispatchEvent(Action eventHandler)
+        private string GetWindowTitleSafe(IntPtr windowHandle)
         {
+            if (windowHandle == IntPtr.Zero)
+                return string.Empty;
+
             try
             {
-                if (!_disposed)
-                {
-                    _uiDispatcher.BeginInvoke(eventHandler);
-                }
+                const int maxLength = 512;
+                var buffer = new char[maxLength];
+                int length = GetWindowText(windowHandle, buffer, maxLength);
+
+                if (length <= 0)
+                    return string.Empty;
+
+                var title = new string(buffer, 0, length).Trim('\0').Trim();
+                
+                // Filter out invalid titles
+                if (string.IsNullOrWhiteSpace(title) || title.Equals("NULL", StringComparison.OrdinalIgnoreCase))
+                    return string.Empty;
+
+                return title;
             }
-            catch (Exception ex)
+            catch
             {
-                // If dispatcher fails, log but don't crash
-                _ = SafeLogErrorAsync("Error dispatching event to UI thread", ex);
+                return string.Empty;
             }
         }
 
         /// <summary>
-        /// Safe logging that won't throw exceptions
+        /// Gets main window handle for a process, preferring main window over other visible windows
         /// </summary>
-        private async Task SafeLogInfoAsync(string message)
+        private async Task<IntPtr> GetMainWindowHandleAsync(int processId)
         {
-            try
-            {
-                await _logging.LogInfoAsync(message, "PlayOnlineMonitorService");
-            }
-            catch
-            {
-                // Ignore logging errors to prevent cascading failures
-            }
+            var windows = await _processUtility.GetProcessWindowsAsync(processId);
+            var mainWindow = windows.FirstOrDefault(w => w.IsMainWindow) ?? windows.FirstOrDefault();
+            return mainWindow?.Handle ?? IntPtr.Zero;
         }
 
         /// <summary>
-        /// Safe structured logging that won't throw exceptions
+        /// Creates updated character with new window information
         /// </summary>
-        private async Task SafeLogInfoAsync(string messageTemplate, params object[] args)
+        private PlayOnlineCharacter UpdateCharacterWindowInfo(PlayOnlineCharacter source, IntPtr windowHandle, string windowTitle)
         {
-            try
+            return new PlayOnlineCharacter
             {
-                await _logging.LogInfoAsync(messageTemplate, "PlayOnlineMonitorService", args);
-            }
-            catch
-            {
-                // Ignore logging errors to prevent cascading failures
-            }
-        }
-
-        /// <summary>
-        /// Safe error logging that won't throw exceptions
-        /// </summary>
-        private async Task SafeLogErrorAsync(string message, Exception ex)
-        {
-            try
-            {
-                await _logging.LogErrorAsync(message, ex, "PlayOnlineMonitorService");
-            }
-            catch
-            {
-                // Last resort - could write to Debug output or Event Log
-                // But for now, fail silently to prevent crashes
-            }
-        }
-
-        /// <summary>
-        /// Safe structured error logging that won't throw exceptions
-        /// </summary>
-        private async Task SafeLogErrorAsync(string messageTemplate, string arg, Exception ex)
-        {
-            try
-            {
-                await _logging.LogErrorAsync(messageTemplate, "PlayOnlineMonitorService", ex, arg);
-            }
-            catch
-            {
-                // Last resort - could write to Debug output or Event Log
-                // But for now, fail silently to prevent crashes
-            }
+                ProcessId = source.ProcessId,
+                ProcessName = source.ProcessName,
+                WindowHandle = windowHandle,
+                WindowTitle = windowTitle,
+                CharacterName = windowTitle,
+                ServerName = string.Empty,
+                LastSeen = DateTime.UtcNow
+            };
         }
 
         /// <summary>
@@ -919,23 +866,16 @@ namespace FFXIManager.Services
                         if (character.WindowHandle == IntPtr.Zero)
                         {
                             await _logging.LogDebugAsync("🔍 POL Title Check: Process {ProcessId} has no window handle, trying to find windows", "PlayOnlineMonitorService", character.ProcessId);
-
-                            // Get windows directly from ProcessUtilityService
-                            var windows = await _processUtility.GetProcessWindowsAsync(character.ProcessId);
-
-                            if (windows.Count > 0)
+                            var windowHandle = await GetMainWindowHandleAsync(character.ProcessId);
+                            
+                            if (windowHandle != IntPtr.Zero)
                             {
-                                var mainWindow = windows.FirstOrDefault(w => w.IsMainWindow) ?? windows.First();
-                                await _logging.LogInfoAsync("🔍 POL Title Check: Found window for process {ProcessId}: Handle 0x{WindowHandle:X}, Title: '{WindowTitle}'", "PlayOnlineMonitorService", character.ProcessId, mainWindow.Handle.ToInt64(), mainWindow.Title);
-
-                                // Update the character with the found window
-                                character.WindowHandle = mainWindow.Handle;
-                                character.WindowTitle = mainWindow.Title;
-                                character.CharacterName = mainWindow.Title;
-
-                                // Fire update event
-                                UpdateCharacterCache(character);
-                                SafeDispatchEvent(() => CharacterUpdated?.Invoke(this, new PlayOnlineCharacterEventArgs(character)));
+                                var title = GetWindowTitleSafe(windowHandle);
+                                await _logging.LogInfoAsync("🔍 POL Title Check: Found window for process {ProcessId}: Handle 0x{WindowHandle:X}, Title: '{WindowTitle}'", "PlayOnlineMonitorService", character.ProcessId, windowHandle.ToInt64(), title);
+                                
+                                var updatedCharacter = UpdateCharacterWindowInfo(character, windowHandle, title);
+                                UpdateCharacterCache(updatedCharacter);
+                                _uiDispatcher.BeginInvoke(() => CharacterUpdated?.Invoke(this, new PlayOnlineCharacterEventArgs(updatedCharacter)));
                                 continue;
                             }
                             else
@@ -946,7 +886,7 @@ namespace FFXIManager.Services
                         }
 
                         // Get current window title
-                        var currentTitle = GetWindowTitle(character.WindowHandle);
+                        var currentTitle = GetWindowTitleSafe(character.WindowHandle);
                         if (string.IsNullOrEmpty(currentTitle))
                             continue;
 
@@ -956,75 +896,17 @@ namespace FFXIManager.Services
                             await _logging.LogInfoAsync("📊 POL TITLE CHANGE: PID {ProcessId}, Handle 0x{WindowHandle:X}, '{OldTitle}' → '{NewTitle}'", "PlayOnlineMonitorService", character.ProcessId, character.WindowHandle.ToInt64(), lastTitle ?? "<unknown>", currentTitle);
 
                             _lastPolTitles[character.WindowHandle] = currentTitle;
-
-                            // Create updated character with new title
-                            // **FIX**: Window title IS the character name - no extraction needed
-                            var updatedCharacter = new PlayOnlineCharacter
-                            {
-                                ProcessId = character.ProcessId,
-                                ProcessName = character.ProcessName,
-                                WindowHandle = character.WindowHandle,
-                                WindowTitle = currentTitle,
-                                CharacterName = currentTitle,  // Window title IS the character name
-                                ServerName = string.Empty,      // Server info not needed
-                                LastSeen = DateTime.UtcNow
-                            };
-
-                            // Update cache and fire event
+                            var updatedCharacter = UpdateCharacterWindowInfo(character, character.WindowHandle, currentTitle);
                             UpdateCharacterCache(updatedCharacter);
-                            SafeDispatchEvent(() => CharacterUpdated?.Invoke(this, new PlayOnlineCharacterEventArgs(updatedCharacter)));
+                            _uiDispatcher.BeginInvoke(() => CharacterUpdated?.Invoke(this, new PlayOnlineCharacterEventArgs(updatedCharacter)));
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    await _logging.LogErrorAsync("Error in POL title checking", ex, "PlayOnlineMonitorService");
+                    await _logging.LogErrorAsync("Error in POL title checking", "PlayOnlineMonitorService", ex);
                 }
             });
-        }
-
-        /// <summary>
-        /// Get window title using Win32 API with enhanced error handling
-        /// </summary>
-        private string GetWindowTitle(IntPtr windowHandle)
-        {
-            try
-            {
-                if (windowHandle == IntPtr.Zero)
-                {
-                    _ = _logging.LogDebugAsync("GetWindowTitle: Invalid window handle (IntPtr.Zero)", "PlayOnlineMonitorService");
-                    return string.Empty;
-                }
-
-                const int maxLength = 512; // Increased buffer size
-                var buffer = new char[maxLength];
-                int length = GetWindowText(windowHandle, buffer, maxLength);
-
-                if (length <= 0)
-                {
-                    var error = Marshal.GetLastWin32Error();
-                    _ = _logging.LogDebugAsync("GetWindowTitle: GetWindowText returned {Length} for handle 0x{WindowHandle:X}, Win32 Error: {ErrorCode}", "PlayOnlineMonitorService", length, windowHandle.ToInt64(), error);
-                    return string.Empty;
-                }
-
-                // **FIX**: Handle null terminators and clean up the string
-                var title = new string(buffer, 0, length).Trim('\0').Trim();
-
-                // **FIX**: If title is literally "NULL" or empty, return empty string
-                if (string.IsNullOrWhiteSpace(title) || title.Equals("NULL", StringComparison.OrdinalIgnoreCase))
-                {
-                    _ = _logging.LogDebugAsync("GetWindowTitle: Filtered out invalid title '{Title}' for handle 0x{WindowHandle:X}", "PlayOnlineMonitorService", title, windowHandle.ToInt64());
-                    return string.Empty;
-                }
-
-                _ = _logging.LogDebugAsync("GetWindowTitle: Successfully retrieved '{Title}' for handle 0x{WindowHandle:X}", "PlayOnlineMonitorService", title, windowHandle.ToInt64());
-                return title;
-            }
-            catch (Exception ex)
-            {
-                _ = _logging.LogErrorAsync("GetWindowTitle: Exception for handle 0x{WindowHandle:X}", "PlayOnlineMonitorService", ex, windowHandle.ToInt64());
-                return string.Empty;
-            }
         }
 
         [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]

@@ -453,17 +453,6 @@
                             ToolTip="Toggle between Session and All-Time statistics"
                             Padding="8,4"/>
                 </Grid>
-
-                <!-- Scope Description -->
-                <TextBlock Grid.Row="1"
-                           Foreground="{DynamicResource SecondaryTextBrush}"
-                           FontSize="11"
-                           Margin="0,8,0,0"
-                           VerticalAlignment="Center">
-                    <Run Text="Showing"/>
-                    <Run Text="{Binding StatsScopeLabel, Mode=OneWay}" FontWeight="SemiBold"/>
-                    <Run Text="statistics"/>
-                </TextBlock>
             </Grid>
         </GroupBox>
 
