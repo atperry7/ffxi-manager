@@ -125,6 +125,15 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                     context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchProcessId(stepId), skippedPid);
                     context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchSkipped(stepId), true);
                     context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchApplicationName(stepId), app.Name);
+
+                    // **SPECIAL CASE**: If skipping PlayOnline launch, also store in well-known PlayOnlineProcessId key
+                    if (app.Name.Contains("playonline", StringComparison.OrdinalIgnoreCase) ||
+                        app.Name.Contains("pol", StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.AutoLoginContext?.SetData(AutoLoginContextKeys.WellKnown.PlayOnlineProcessId, skippedPid);
+                        await _loggingService.LogDebugAsync($"[LAUNCH] Stored existing PlayOnline PID {skippedPid} in well-known context key (skip case)");
+                    }
+
                     return true; // Skipping is considered success
                 }
 
@@ -184,6 +193,15 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchProcessId(stepIdForContext), processId);
             context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchApplicationName(stepIdForContext), app.Name);
             context.AutoLoginContext?.SetData(AutoLoginContextKeys.LaunchTimestamp(stepIdForContext), DateTime.UtcNow);
+
+            // **SPECIAL CASE**: If launching PlayOnline, also store in well-known PlayOnlineProcessId key
+            // This enables CharacterOrderingService integration for auto-login instance detection
+            if (app.Name.Contains("playonline", StringComparison.OrdinalIgnoreCase) ||
+                app.Name.Contains("pol", StringComparison.OrdinalIgnoreCase))
+            {
+                context.AutoLoginContext?.SetData(AutoLoginContextKeys.WellKnown.PlayOnlineProcessId, processId);
+                await _loggingService.LogDebugAsync($"[LAUNCH] Stored PlayOnline PID {processId} in well-known context key");
+            }
 
             // Update action context with PID for subsequent actions
             context.ProcessId = processId;

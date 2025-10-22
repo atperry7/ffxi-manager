@@ -13,17 +13,20 @@ namespace FFXIManager.Services.AutoLogin
         private readonly IExternalApplicationService _externalApplicationService;
         private readonly IProcessUtilityService _processUtilityService;
         private readonly ILoggingService _loggingService;
+        private readonly ICharacterOrderingService _characterOrderingService;
 
         public WindowDiscoveryService(
             IPlayOnlineMonitorService polMonitorService,
             IExternalApplicationService externalApplicationService,
             IProcessUtilityService processUtilityService,
-            ILoggingService loggingService)
+            ILoggingService loggingService,
+            ICharacterOrderingService characterOrderingService)
         {
             _polMonitorService = polMonitorService ?? throw new ArgumentNullException(nameof(polMonitorService));
             _externalApplicationService = externalApplicationService ?? throw new ArgumentNullException(nameof(externalApplicationService));
             _processUtilityService = processUtilityService ?? throw new ArgumentNullException(nameof(processUtilityService));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            _characterOrderingService = characterOrderingService ?? throw new ArgumentNullException(nameof(characterOrderingService));
         }
 
         public async Task<ProcessWindowInfo> DiscoverPlayOnlineWindowInfoAsync(
@@ -32,8 +35,41 @@ namespace FFXIManager.Services.AutoLogin
         {
             await _loggingService.LogDebugAsync("[WINDOW-DISCOVERY] Requesting valid POL window from PlayOnlineMonitorService");
 
-            // Extract PID hint from context
-            int? preferredProcessId = ExtractPidHintFromContext(context);
+            // **PRIMARY STRATEGY**: Query CharacterOrderingService for newest PlayOnline instance
+            // This is the most reliable way to find the instance being logged in (newest = last in ordered list)
+            int? preferredProcessId = null;
+            try
+            {
+                var orderedCharacters = await _characterOrderingService.GetOrderedCharactersAsync();
+                if (orderedCharacters.Count > 0)
+                {
+                    var newestCharacter = orderedCharacters[^1]; // Last in list = newest instance
+                    preferredProcessId = newestCharacter.ProcessId;
+
+                    await _loggingService.LogInfoAsync($"[WINDOW-DISCOVERY] Using newest PlayOnline instance from CharacterOrderingService (PID: {preferredProcessId})");
+
+                    // Store in context using well-known key for downstream steps
+                    if (context != null && preferredProcessId > 0)
+                    {
+                        context.SetData(AutoLoginContextKeys.WellKnown.PlayOnlineProcessId, preferredProcessId.Value);
+                        await _loggingService.LogDebugAsync($"[WINDOW-DISCOVERY] Stored PID {preferredProcessId} in context key '{AutoLoginContextKeys.WellKnown.PlayOnlineProcessId}'");
+                    }
+                }
+                else
+                {
+                    await _loggingService.LogDebugAsync("[WINDOW-DISCOVERY] CharacterOrderingService has no characters yet");
+                }
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogWarningAsync($"[WINDOW-DISCOVERY] Error querying CharacterOrderingService: {ex.Message}");
+            }
+
+            // **FALLBACK STRATEGY**: Extract PID hint from context (existing behavior)
+            if (!preferredProcessId.HasValue && context != null)
+            {
+                preferredProcessId = ExtractPidHintFromContext(context);
+            }
 
             if (preferredProcessId.HasValue)
             {
@@ -212,6 +248,8 @@ namespace FFXIManager.Services.AutoLogin
 
         /// <summary>
         /// Extracts PID hint from context by checking well-known launch step context keys.
+        /// Note: CharacterOrderingService fallback is handled by caller (DiscoverPlayOnlineWindowInfoAsync)
+        /// to avoid async complexity in this helper method.
         /// </summary>
         private int? ExtractPidHintFromContext(IAutoLoginContext context)
         {
