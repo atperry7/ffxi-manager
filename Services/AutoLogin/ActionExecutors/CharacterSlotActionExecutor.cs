@@ -4,32 +4,29 @@ using FFXIManager.Services.AutoLogin.ScreenDetection;
 namespace FFXIManager.Services.AutoLogin.ActionExecutors
 {
     /// <summary>
-    /// Executes character slot selection actions by navigating to the correct FFXI character slot.
-    /// Supports both keyboard navigation and click-based selection.
+    /// Executes character slot selection actions by clicking the correct FFXI character slot.
+    /// Uses template matching combined with relative click coordinates.
     /// </summary>
     /// <remarks>
-    /// **Navigation Methods:**
-    /// - Keyboard: Use arrow keys to navigate to the target slot (default)
-    /// - Click: Use template matching + relative click to select slot
-    ///
-    /// **Hybrid Detection Support:**
-    /// - Optional template detection before navigation (if action has TemplatePath parameter)
-    /// - Can execute blindly without template detection
+    /// **Navigation Method (Click-Only):**
+    /// - Template detection to locate character selection screen
+    /// - Click on specific slot using relative coordinates (0.0-1.0)
     ///
     /// **Requirements:**
     /// - Account context must be available via QueueItem
     /// - Account.FFXICharacterSlot must be set (1-16)
     /// - Window must have focus before navigation
+    /// - Action must have TemplatePath parameter for screen detection
+    /// - Action must have ClickPoints parameter with 16 click coordinates
     ///
     /// **Parameters:**
-    /// - NavigationMethod: "Keyboard" or "Click" (default: "Keyboard")
-    /// - TemplatePath: Optional template for slot detection (hybrid mode)
-    /// - ClickPoints: Array of relative click coordinates when using click navigation
+    /// - TemplatePath: Template for character selection screen detection (required)
+    /// - ClickPoints: Array of 16 relative click coordinates for slots 1-16 (required)
     ///
-    /// **Keyboard Navigation Layout:**
-    /// Character slots are typically arranged in a 4x4 grid:
-    /// - Row 1: Slots 1-4 (Right arrow: slot++)
-    /// - Row 2: Slots 5-8 (Down arrow: slot += 4)
+    /// **Character Slot Layout:**
+    /// Slots are arranged in a 4x4 grid:
+    /// - Row 1: Slots 1-4
+    /// - Row 2: Slots 5-8
     /// - Row 3: Slots 9-12
     /// - Row 4: Slots 13-16
     /// </remarks>
@@ -79,18 +76,16 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             try
             {
-                // Ensure window has focus
-                if (context.WindowHandle != IntPtr.Zero)
+                // Click-only navigation (requires prior template detection)
+                var clicked = await NavigateWithClickAsync(action, context, targetSlot, cancellationToken);
+                if (clicked)
                 {
-                    await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
-                    await Task.Delay(100, cancellationToken);
+                    await _loggingService.LogInfoAsync($"[CHARACTER-SLOT] Successfully clicked character slot {targetSlot}");
+                    return true;
                 }
 
-                // MVP: Keyboard-only navigation
-                await NavigateWithKeyboardAsync(action, context, targetSlot, cancellationToken);
-
-                await _loggingService.LogInfoAsync($"[CHARACTER-SLOT] Successfully navigated to character slot {targetSlot}");
-                return true;
+                await _loggingService.LogErrorAsync("[CHARACTER-SLOT] Click navigation failed or not available (missing template match or click points)");
+                return false;
             }
             catch (Exception ex)
             {
@@ -99,57 +94,47 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             }
         }
 
-        /// <summary>
-        /// Navigates to the target slot using keyboard arrow keys.
-        /// Assumes a 4x4 grid layout: slots arranged as rows of 4 columns.
-        /// </summary>
-        private async Task NavigateWithKeyboardAsync(
+        private async Task<bool> NavigateWithClickAsync(
             KeyboardAction action,
             WorkflowActionContext context,
             int targetSlot,
             CancellationToken cancellationToken)
         {
-            await _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Using keyboard navigation to slot {targetSlot}");
+            // Need a detected template region to compute relative click
+            var match = context.TemplateMatch;
+            if (match == null)
+            {
+                await _loggingService.LogWarningAsync("[CHARACTER-SLOT] No template match in context; cannot perform click-based navigation");
+                return false;
+            }
 
-            // Ensure window has focus to receive keyboard input
+            // Ensure window focus
             if (context.WindowHandle != IntPtr.Zero)
             {
                 await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
                 await Task.Delay(100, cancellationToken);
             }
 
-            // Character selection defaults focus on slot 1 in DX9; no Home/reset needed
-
-            // Calculate grid position (0-indexed)
-            int rowSize = Math.Max(1, action.GetParameter<int>("RowSize", 4));
-            int colSize = Math.Max(1, action.GetParameter<int>("ColumnSize", 4));
-            int slotIndex = targetSlot - 1; // Convert to 0-idx
-            int row = slotIndex / colSize; // rows determined by columns per row
-            int column = slotIndex % colSize;
-
-            await _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Target grid position: Row {row}, Column {column}");
-
-            // Navigate down to the target row
-            for (int i = 0; i < row; i++)
+            // Get configured click points from action parameters (JSON array)
+            var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
+            if (points == null || points.Count < 16)
             {
-                await _automationService.SendKeyAsync(ConsoleKey.DownArrow, cancellationToken);
-                await Task.Delay(action.DelayMs, cancellationToken);
+                await _loggingService.LogWarningAsync($"[CHARACTER-SLOT] ClickPoints missing or fewer than 16 (found {points?.Count ?? 0}); cannot click");
+                return false;
             }
+            var rel = points[Math.Clamp(targetSlot - 1, 0, points.Count - 1)];
 
-            // Navigate right to the target column
-            for (int i = 0; i < column; i++)
-            {
-                await _automationService.SendKeyAsync(ConsoleKey.RightArrow, cancellationToken);
-                await Task.Delay(action.DelayMs, cancellationToken);
-            }
+            // Convert relative (0-1) to window-relative coordinates within matched region
+            var rect = match.GetBoundingRectangle();
+            var wx = rect.Left + (int)Math.Round(rel.X * rect.Width);
+            var wy = rect.Top + (int)Math.Round(rel.Y * rect.Height);
 
-            // Confirm selection
-            await _automationService.SendKeyAsync(ConsoleKey.Enter, cancellationToken);
-            await Task.Delay(action.DelayMs, cancellationToken);
+            await _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Clicking slot {targetSlot} at rel=({rel.X:F2},{rel.Y:F2}) -> window=({wx},{wy})");
 
-            await _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Keyboard navigation completed: {row} down, {column} right + Enter");
+            await _automationService.ClickWindowRelativeAsync(context.WindowHandle, new System.Drawing.Point(wx, wy), cancellationToken);
+            await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
+
+            return true;
         }
-
-        // Click navigation removed in MVP; keyboard-only supported
     }
 }

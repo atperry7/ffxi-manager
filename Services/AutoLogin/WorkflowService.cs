@@ -23,7 +23,8 @@ namespace FFXIManager.Services.AutoLogin
         {
             WriteIndented = true,
             PropertyNameCaseInsensitive = true,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+            NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString
         };
 
         public WorkflowService(

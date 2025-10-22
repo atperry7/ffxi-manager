@@ -126,6 +126,8 @@ namespace FFXIManager.Models
                             return (T)(object)jsonElement.GetInt32();
                         else if (typeof(T) == typeof(bool))
                             return (T)(object)jsonElement.GetBoolean();
+                        else if (typeof(T) == typeof(float))
+                            return (T)(object)(float)jsonElement.GetDouble();
                         else if (typeof(T) == typeof(double))
                             return (T)(object)jsonElement.GetDouble();
                         else

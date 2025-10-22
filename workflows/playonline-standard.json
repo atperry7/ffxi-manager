@@ -568,13 +568,31 @@
             "Action": "CharacterSlot",
             "Count": 0,
             "DelayMs": 200,
-            "Description": "Navigate to desired character slot (dynamic count based on slot number)",
+            "Description": "Click desired character slot (uses account FFXICharacterSlot property)",
             "Parameters": {
-              "NavigationMethod": "Keyboard"
+              "TemplatePath": "action_ffxi_character_slot_0",
+              "ClickPoints": [
+                { "X": 0.2, "Y": 0.2, "Description": "Slot 1" },
+                { "X": 0.4, "Y": 0.2, "Description": "Slot 2" },
+                { "X": 0.6, "Y": 0.2, "Description": "Slot 3" },
+                { "X": 0.8, "Y": 0.2, "Description": "Slot 4" },
+                { "X": 0.2, "Y": 0.4, "Description": "Slot 5" },
+                { "X": 0.4, "Y": 0.4, "Description": "Slot 6" },
+                { "X": 0.6, "Y": 0.4, "Description": "Slot 7" },
+                { "X": 0.8, "Y": 0.4, "Description": "Slot 8" },
+                { "X": 0.2, "Y": 0.6, "Description": "Slot 9" },
+                { "X": 0.4, "Y": 0.6, "Description": "Slot 10" },
+                { "X": 0.6, "Y": 0.6, "Description": "Slot 11" },
+                { "X": 0.8, "Y": 0.6, "Description": "Slot 12" },
+                { "X": 0.2, "Y": 0.8, "Description": "Slot 13" },
+                { "X": 0.4, "Y": 0.8, "Description": "Slot 14" },
+                { "X": 0.6, "Y": 0.8, "Description": "Slot 15" },
+                { "X": 0.8, "Y": 0.8, "Description": "Slot 16" }
+              ]
             }
           }
         ],
-        "Description": "Navigate to character slot and confirm selection (slot number determines arrow count)",
+        "Description": "Click character slot to select (slot number read from account configuration)",
         "PostNavigationDelayMs": 2000
       },
       "MaxRetryAttempts": 3,

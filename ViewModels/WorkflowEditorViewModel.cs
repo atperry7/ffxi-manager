@@ -870,6 +870,8 @@ namespace FFXIManager.ViewModels
         public ICommand ShowLargeActionTemplateImageCommand { get; private set; } = null!;
         public ICommand PickMemberSlotClickPointsCommand { get; private set; } = null!;
         public ICommand PreviewMemberSlotClickPointsCommand { get; private set; } = null!;
+        public ICommand PickCharacterSlotClickPointsCommand { get; private set; } = null!;
+        public ICommand PreviewCharacterSlotClickPointsCommand { get; private set; } = null!;
 
         private void InitializeCommands()
         {
@@ -1000,6 +1002,31 @@ namespace FFXIManager.ViewModels
                     }
                 },
                 () => IsMemberSlotActionSelected && SelectedStep != null && !string.IsNullOrWhiteSpace(SelectedStep.TemplatePath));
+
+            PickCharacterSlotClickPointsCommand = new RelayCommand(
+                async () =>
+                {
+                    if (SelectedStep != null && SelectedNavigationAction != null)
+                    {
+                        var changed = await _templateManager.PickCharacterSlotClickPositionsForActionAsync(SelectedStep, SelectedNavigationAction);
+                        if (changed)
+                        {
+                            HasUnsavedChanges = true;
+                            OnPropertyChanged(nameof(SelectedStep));
+                        }
+                    }
+                },
+                () => IsCharacterSlotActionSelected && SelectedStep != null && !string.IsNullOrWhiteSpace(SelectedStep.TemplatePath));
+
+            PreviewCharacterSlotClickPointsCommand = new RelayCommand(
+                async () =>
+                {
+                    if (SelectedStep != null && SelectedNavigationAction != null)
+                    {
+                        await _templateManager.ShowCharacterSlotClickPositionsAsync(SelectedStep, SelectedNavigationAction);
+                    }
+                },
+                () => IsCharacterSlotActionSelected && SelectedStep != null && !string.IsNullOrWhiteSpace(SelectedStep.TemplatePath));
 
         }
 
@@ -1873,6 +1900,18 @@ namespace FFXIManager.ViewModels
                     }
                 }
             }
+            else if (IsCharacterSlotActionSelected)
+            {
+                if (SelectedStep != null && SelectedNavigationAction != null)
+                {
+                    var changed = await _templateManager.PickCharacterSlotClickPositionsForActionAsync(SelectedStep, SelectedNavigationAction);
+                    if (changed)
+                    {
+                        HasUnsavedChanges = true;
+                        OnPropertyChanged(nameof(SelectedStep));
+                    }
+                }
+            }
             else
             {
                 await _templateManager.ShowLargeActionTemplateAsync(SelectedNavigationAction);
@@ -2034,6 +2073,16 @@ namespace FFXIManager.ViewModels
             if (IsMemberSlotActionSelected && SelectedNavigationAction != null)
             {
                 var changed = await _templateManager.PickMemberSlotClickPositionsForActionAsync(SelectedStep, SelectedNavigationAction);
+                if (changed)
+                {
+                    HasUnsavedChanges = true;
+                    OnPropertyChanged(nameof(SelectedStep));
+                }
+            }
+            // If CharacterSlot action is selected, use the 16-point picker directly from step preview
+            else if (IsCharacterSlotActionSelected && SelectedNavigationAction != null)
+            {
+                var changed = await _templateManager.PickCharacterSlotClickPositionsForActionAsync(SelectedStep, SelectedNavigationAction);
                 if (changed)
                 {
                     HasUnsavedChanges = true;

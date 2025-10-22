@@ -124,14 +124,27 @@ namespace FFXIManager.Views
 
         private static Brush GetColorForIndex(int index)
         {
-            switch (index)
+            // Extended color palette for up to 16 character slots
+            return (index % 16) switch
             {
-                case 0: return Brushes.Red;
-                case 1: return Brushes.DodgerBlue;
-                case 2: return Brushes.Orange;
-                case 3: return Brushes.LimeGreen;
-                default: return Brushes.Purple;
-            }
+                0 => Brushes.Red,
+                1 => Brushes.DodgerBlue,
+                2 => Brushes.Orange,
+                3 => Brushes.LimeGreen,
+                4 => Brushes.Purple,
+                5 => Brushes.DeepPink,
+                6 => Brushes.Cyan,
+                7 => Brushes.Gold,
+                8 => Brushes.Crimson,
+                9 => Brushes.RoyalBlue,
+                10 => Brushes.DarkOrange,
+                11 => Brushes.ForestGreen,
+                12 => Brushes.MediumPurple,
+                13 => Brushes.HotPink,
+                14 => Brushes.Teal,
+                15 => Brushes.Yellow,
+                _ => Brushes.Gray
+            };
         }
     }
 }

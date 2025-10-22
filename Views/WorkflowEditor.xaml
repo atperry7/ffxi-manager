@@ -1447,6 +1447,36 @@
                                                             </StackPanel>
                                                         </StackPanel>
                                                     </Border>
+
+                                                    <!-- CharacterSlot Click Configuration -->
+                                                    <Border Visibility="{Binding IsCharacterSlotActionSelected, Converter={StaticResource BoolToVisConverter}}"
+                                                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12"
+                                                            Background="{DynamicResource SurfaceBrush}">
+                                                        <StackPanel>
+                                                            <TextBlock FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8">
+                                                                <TextBlock.Text>
+                                                                    <MultiBinding StringFormat="{}{0} Navigation">
+                                                                        <Binding Path="SelectedNavigationAction.Action"/>
+                                                                    </MultiBinding>
+                                                                </TextBlock.Text>
+                                                            </TextBlock>
+
+                                                            <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8">
+                                                                Navigates to the character slot number defined in the account settings (FFXICharacterSlot) by clicking the configured points.
+                                                            </TextBlock>
+
+                                                            <!-- CharacterSlot Click configuration -->
+                                                            <StackPanel Margin="0,8,0,0">
+                                                                <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,6">
+                                                                    Configure sixteen click points for Character Slots 1-16 by clicking the template preview image above.
+                                                                </TextBlock>
+                                                                <TextBlock FontSize="10" Foreground="{DynamicResource WarningBrush}" Margin="0,6,0,0"
+                                                                           Visibility="{Binding HasTemplateImage, Converter={StaticResource BoolToVisConverter}}">
+                                                                    Uses the step's template image; add one above if missing.
+                                                                </TextBlock>
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </Border>
                                                 </StackPanel>
                                             </ScrollViewer>
                                         </GroupBox>

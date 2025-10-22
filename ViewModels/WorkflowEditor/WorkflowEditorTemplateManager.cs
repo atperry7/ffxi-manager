@@ -739,6 +739,222 @@ namespace FFXIManager.ViewModels.WorkflowEditor
             }
         }
 
+        /// <summary>
+        /// Opens the template viewer in multi-pick mode to select sixteen click positions
+        /// for FFXI character slots 1-16. Applies chosen coordinates to the action's
+        /// ClickPoints parameter.
+        /// </summary>
+        public async Task<bool> PickCharacterSlotClickPositionsForActionAsync(WorkflowStepDefinition step, KeyboardAction action)
+        {
+            if (step == null || action == null)
+                return false;
+
+            try
+            {
+                // Prefer action-level template if provided; fallback to step-level template
+                var actionTemplate = action.GetParameter<string>("TemplatePath", string.Empty);
+                var preferred = !string.IsNullOrWhiteSpace(actionTemplate) ? actionTemplate : step.TemplatePath;
+                if (string.IsNullOrWhiteSpace(preferred))
+                {
+                    await _dialogService.ShowMessageDialogAsync("No Template", "Add a template to the CharacterSlot action or the step before setting slot click points.");
+                    return false;
+                }
+
+                var templateFileName = preferred.EndsWith(".png") ? preferred : $"{preferred}.png";
+                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var templatesPath = Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
+                var templateFilePath = Path.Combine(templatesPath, templateFileName);
+
+                if (!File.Exists(templateFilePath))
+                {
+                    await _dialogService.ShowMessageDialogAsync("Template Not Found", $"Template file not found:\n{templateFilePath}");
+                    return false;
+                }
+
+                var vm = _serviceProvider.GetService(typeof(FFXIManager.ViewModels.TemplateViewerDialogViewModel)) as FFXIManager.ViewModels.TemplateViewerDialogViewModel;
+                var dlg = _serviceProvider.GetService(typeof(FFXIManager.Views.TemplateViewerDialog)) as Window;
+
+                if (vm == null || dlg is not FFXIManager.Views.TemplateViewerDialog typedDlg)
+                {
+                    await _dialogService.ShowMessageDialogAsync("Service Error", "Template viewer is not available.");
+                    return false;
+                }
+
+                // Prepare viewmodel
+                vm.IsPickMode = true;
+                vm.IsMultiPickMode = true;
+                vm.MultiPickCount = 16;
+                vm.ResetMultiPick();
+
+                // Preload any existing markers
+                await vm.LoadTemplateAsync(templateFileName, null);
+                vm.ClickMarkers.Clear();
+
+                var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new System.Collections.Generic.List<RelativeClickOffset>())
+                             ?? new System.Collections.Generic.List<RelativeClickOffset>();
+                // Ensure at least 16 placeholders
+                while (points.Count < 16) points.Add(new RelativeClickOffset { X = 0.5, Y = 0.5, Description = $"Slot {points.Count + 1}" });
+
+                for (int i = 0; i < 16; i++)
+                {
+                    // Use extended color palette from TemplateViewerDialog
+                    var color = (i % 16) switch
+                    {
+                        0 => System.Windows.Media.Brushes.Red,
+                        1 => System.Windows.Media.Brushes.DodgerBlue,
+                        2 => System.Windows.Media.Brushes.Orange,
+                        3 => System.Windows.Media.Brushes.LimeGreen,
+                        4 => System.Windows.Media.Brushes.Purple,
+                        5 => System.Windows.Media.Brushes.DeepPink,
+                        6 => System.Windows.Media.Brushes.Cyan,
+                        7 => System.Windows.Media.Brushes.Gold,
+                        8 => System.Windows.Media.Brushes.Crimson,
+                        9 => System.Windows.Media.Brushes.RoyalBlue,
+                        10 => System.Windows.Media.Brushes.DarkOrange,
+                        11 => System.Windows.Media.Brushes.ForestGreen,
+                        12 => System.Windows.Media.Brushes.MediumPurple,
+                        13 => System.Windows.Media.Brushes.HotPink,
+                        14 => System.Windows.Media.Brushes.Teal,
+                        15 => System.Windows.Media.Brushes.Yellow,
+                        _ => System.Windows.Media.Brushes.Gray
+                    };
+
+                    double px = (points[i].X) * vm.TemplateImageWidth;
+                    double py = (points[i].Y) * vm.TemplateImageHeight;
+                    vm.ClickMarkers.Add(new ClickMarker
+                    {
+                        X = px,
+                        Y = py,
+                        Label = (i + 1).ToString(),
+                        Description = $"Slot {i + 1}",
+                        MarkerColor = color,
+                        StepIndex = i
+                    });
+                }
+
+                // Live update to action as picks occur
+                void OnMultiPick(int index, double x, double y)
+                {
+                    if (index >= 0 && index < 16)
+                    {
+                        points[index] = new RelativeClickOffset { X = x, Y = y, Description = $"Slot {index + 1}" };
+                    }
+                }
+
+                vm.MultiPickChanged += OnMultiPick;
+                typedDlg.Owner = Application.Current?.MainWindow;
+                typedDlg.DataContext = vm;
+                typedDlg.Title = "Pick Character Slot Click Points";
+
+                var result = typedDlg.ShowDialog();
+                vm.MultiPickChanged -= OnMultiPick;
+
+                if (result == true)
+                {
+                    // Persist 16 points directly as an array in parameters
+                    action.SetParameter("ClickPoints", points);
+                    return true;
+                }
+                return false;
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error picking character slot click positions", ex);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Shows the step template with the configured character slot click points overlaid.
+        /// </summary>
+        public async Task ShowCharacterSlotClickPositionsAsync(WorkflowStepDefinition step, KeyboardAction action)
+        {
+            if (step == null || action == null) return;
+            try
+            {
+                if (string.IsNullOrWhiteSpace(step.TemplatePath))
+                {
+                    await _dialogService.ShowMessageDialogAsync("No Template", "Add a step template to preview click points.");
+                    return;
+                }
+
+                var actionTemplate = action.GetParameter<string>("TemplatePath", string.Empty);
+                var preferred = !string.IsNullOrWhiteSpace(actionTemplate) ? actionTemplate : step.TemplatePath;
+                var templateFileName = preferred.EndsWith(".png") ? preferred : $"{preferred}.png";
+                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var templatesPath = Path.Combine(appDataPath, "FFXIManager", "workflows", "templates");
+                var templateFilePath = Path.Combine(templatesPath, templateFileName);
+
+                if (!File.Exists(templateFilePath))
+                {
+                    await _dialogService.ShowMessageDialogAsync("Template Not Found", $"Template file not found:\n{templateFilePath}");
+                    return;
+                }
+
+                var vm = _serviceProvider.GetService(typeof(FFXIManager.ViewModels.TemplateViewerDialogViewModel)) as FFXIManager.ViewModels.TemplateViewerDialogViewModel;
+                var dlg = _serviceProvider.GetService(typeof(FFXIManager.Views.TemplateViewerDialog)) as Window;
+
+                if (vm == null || dlg is not FFXIManager.Views.TemplateViewerDialog typedDlg)
+                {
+                    await _dialogService.ShowMessageDialogAsync("Service Error", "Template viewer is not available.");
+                    return;
+                }
+
+                vm.IsPickMode = false;
+                await vm.LoadTemplateAsync(templateFileName, null);
+                vm.ClickMarkers.Clear();
+
+                var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new System.Collections.Generic.List<RelativeClickOffset>())
+                             ?? new System.Collections.Generic.List<RelativeClickOffset>();
+                while (points.Count < 16) points.Add(new RelativeClickOffset { X = 0.5, Y = 0.5, Description = $"Slot {points.Count + 1}" });
+
+                for (int i = 0; i < 16; i++)
+                {
+                    // Use extended color palette
+                    var color = (i % 16) switch
+                    {
+                        0 => System.Windows.Media.Brushes.Red,
+                        1 => System.Windows.Media.Brushes.DodgerBlue,
+                        2 => System.Windows.Media.Brushes.Orange,
+                        3 => System.Windows.Media.Brushes.LimeGreen,
+                        4 => System.Windows.Media.Brushes.Purple,
+                        5 => System.Windows.Media.Brushes.DeepPink,
+                        6 => System.Windows.Media.Brushes.Cyan,
+                        7 => System.Windows.Media.Brushes.Gold,
+                        8 => System.Windows.Media.Brushes.Crimson,
+                        9 => System.Windows.Media.Brushes.RoyalBlue,
+                        10 => System.Windows.Media.Brushes.DarkOrange,
+                        11 => System.Windows.Media.Brushes.ForestGreen,
+                        12 => System.Windows.Media.Brushes.MediumPurple,
+                        13 => System.Windows.Media.Brushes.HotPink,
+                        14 => System.Windows.Media.Brushes.Teal,
+                        15 => System.Windows.Media.Brushes.Yellow,
+                        _ => System.Windows.Media.Brushes.Gray
+                    };
+                    double px = (points[i].X) * vm.TemplateImageWidth;
+                    double py = (points[i].Y) * vm.TemplateImageHeight;
+                    vm.ClickMarkers.Add(new ClickMarker
+                    {
+                        X = px,
+                        Y = py,
+                        Label = (i + 1).ToString(),
+                        Description = $"Slot {i + 1}",
+                        MarkerColor = color,
+                        StepIndex = i
+                    });
+                }
+
+                typedDlg.Owner = Application.Current?.MainWindow;
+                typedDlg.DataContext = vm;
+                typedDlg.Title = "Character Slot Click Points";
+                typedDlg.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error showing character slot click positions", ex);
+            }
+        }
+
         #endregion
     }
 }
