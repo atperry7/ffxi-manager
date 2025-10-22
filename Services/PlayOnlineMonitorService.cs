@@ -224,7 +224,7 @@ namespace FFXIManager.Services
             var currentSlotIndex = GetCharacterSlotIndexFast(character);
             var timeSinceLastAttempt = DateTime.UtcNow - _lastActivationAttempt;
             bool isSameCharacter = (currentSlotIndex == _lastActivatedCharacterSlotIndex && currentSlotIndex != -1);
-            
+
             if (isSameCharacter && timeSinceLastAttempt.TotalMilliseconds < 50)
             {
                 RequestDebouncedActivation(character);
@@ -403,7 +403,7 @@ namespace FFXIManager.Services
 
                 // Get current live characters
                 var characters = await GetCharactersAsync();
-                
+
                 // If we have a preferred PID, try it first
                 if (preferredProcessId.HasValue)
                 {
@@ -413,7 +413,7 @@ namespace FFXIManager.Services
                         await _logging.LogInfoAsync($"[POL-WINDOW] Using preferred PID {preferredProcessId}: Handle 0x{preferredChar.WindowHandle.ToInt64():X}", "PlayOnlineMonitorService");
                         return preferredChar.WindowHandle;
                     }
-                    
+
                     // If preferred character has no window yet, try to find one
                     if (preferredChar != null)
                     {
@@ -791,7 +791,7 @@ namespace FFXIManager.Services
                     return string.Empty;
 
                 var title = new string(buffer, 0, length).Trim('\0').Trim();
-                
+
                 // Filter out invalid titles
                 if (string.IsNullOrWhiteSpace(title) || title.Equals("NULL", StringComparison.OrdinalIgnoreCase))
                     return string.Empty;
@@ -867,12 +867,12 @@ namespace FFXIManager.Services
                         {
                             await _logging.LogDebugAsync("🔍 POL Title Check: Process {ProcessId} has no window handle, trying to find windows", "PlayOnlineMonitorService", character.ProcessId);
                             var windowHandle = await GetMainWindowHandleAsync(character.ProcessId);
-                            
+
                             if (windowHandle != IntPtr.Zero)
                             {
                                 var title = GetWindowTitleSafe(windowHandle);
                                 await _logging.LogInfoAsync("🔍 POL Title Check: Found window for process {ProcessId}: Handle 0x{WindowHandle:X}, Title: '{WindowTitle}'", "PlayOnlineMonitorService", character.ProcessId, windowHandle.ToInt64(), title);
-                                
+
                                 var updatedCharacter = UpdateCharacterWindowInfo(character, windowHandle, title);
                                 UpdateCharacterCache(updatedCharacter);
                                 _uiDispatcher.BeginInvoke(() => CharacterUpdated?.Invoke(this, new PlayOnlineCharacterEventArgs(updatedCharacter)));

@@ -1,7 +1,6 @@
 ﻿using FFXIManager.Models;
 using FFXIManager.Models.AutoLogin;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
-using FFXIManager.Services;
 
 namespace FFXIManager.Services.AutoLogin
 {

@@ -1,10 +1,9 @@
-using FFXIManager.Infrastructure;
+﻿using FFXIManager.Infrastructure;
 using FFXIManager.Models;
+using FFXIManager.Models.Settings;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 using System.Collections.ObjectModel;
-using FFXIManager.Models.Settings;
-using System.Linq;
 using System.Windows.Input;
 using System.Windows.Threading;
 
@@ -1179,7 +1178,7 @@ namespace FFXIManager.ViewModels
                 _durationUpdateTimer.Stop();
             }
             OnPropertyChanged(nameof(IdleStepMessage));
-                    }
+        }
 
         private void UpdateCommandStates()
         {

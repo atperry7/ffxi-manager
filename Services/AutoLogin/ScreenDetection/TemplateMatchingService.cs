@@ -145,7 +145,7 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                             break;
                     }
 
-finish_scales: ;
+                    finish_scales:;
                 }
                 else
                 {
@@ -252,7 +252,7 @@ finish_scales: ;
                                 break;
                         }
 
-finish_gray_scales: ;
+                        finish_gray_scales:;
 
                         if (bestGray != null && bestGray.IsSuccess)
                         {
