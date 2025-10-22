@@ -49,27 +49,183 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                     return TemplateMatchResult.Failed(template);
                 }
 
-                // Perform template matching using standardized processor
-                var matchResult = await _imageProcessor.PerformTemplateMatchingAsync(
-                    screenshotMat, templateMat, template.ConfidenceThreshold,
-                    $"template '{template.TemplatePath ?? template.Name}'", cancellationToken);
+                // Perform template matching (with optional multi-scale search)
+                var description = $"template '{template.TemplatePath ?? template.Name}'";
+
+                ImageMatchResult? best = null;
+                float bestScale = 1.0f;
+
+                // Helper local function to evaluate one scale
+                async Task EvaluateScaleAsync(float scale)
+                {
+                    // Skip invalid sizes
+                    int scaledW = (int)Math.Round(templateMat.Width * scale);
+                    int scaledH = (int)Math.Round(templateMat.Height * scale);
+                    if (scaledW <= 1 || scaledH <= 1) return;
+                    if (scaledW > screenshotMat.Width || scaledH > screenshotMat.Height) return;
+
+                    using var scaledTemplate = new OpenCvSharp.Mat();
+                    OpenCvSharp.Cv2.Resize(templateMat, scaledTemplate, new OpenCvSharp.Size(scaledW, scaledH), 0, 0, OpenCvSharp.InterpolationFlags.Area);
+
+                    var result = await _imageProcessor.PerformTemplateMatchingAsync(
+                        screenshotMat, scaledTemplate, template.ConfidenceThreshold, description, cancellationToken);
+
+                    if (best == null || result.Confidence > best.Confidence)
+                    {
+                        best = result;
+                        bestScale = scale;
+                    }
+                }
+
+                if (template.SupportsMultiScale)
+                {
+                    // Iterate scales from MinScale..MaxScale in small steps, testing the nominal scale first
+                    var min = Math.Max(0.2f, template.MinScale);
+                    var max = Math.Min(3.0f, template.MaxScale);
+                    var step = 0.10f; // fewer checks, faster; early-exit remains
+
+                    // Try nominal scale first for fast exit
+                    await EvaluateScaleAsync(1.0f);
+
+                    // Heuristic: on very large windows (e.g., 4K), try 2.0x early
+                    if (screenshotMat.Width >= 3000 || screenshotMat.Height >= 1800)
+                    {
+                        if (2.0f >= min && 2.0f <= max)
+                        {
+                            await EvaluateScaleAsync(2.0f);
+                            if (best != null && best.Confidence >= template.ConfidenceThreshold)
+                            {
+                                // strong enough already
+                                goto finish_scales;
+                            }
+                        }
+                    }
+
+                    // Sweep outward from 1.0 alternately +/- step for better early exits
+                    for (float delta = step; delta <= (max - min); delta += step)
+                    {
+                        var up = 1.0f + delta;
+                        var down = 1.0f - delta;
+                        if (up <= max) await EvaluateScaleAsync(up);
+                        if (down >= min) await EvaluateScaleAsync(down);
+
+                        // Early exit if we already exceed threshold by a healthy margin
+                        if (best != null && best.Confidence >= template.ConfidenceThreshold)
+                            break;
+                    }
+
+finish_scales: ;
+                }
+                else
+                {
+                    // Single-scale matching
+                    best = await _imageProcessor.PerformTemplateMatchingAsync(
+                        screenshotMat, templateMat, template.ConfidenceThreshold, description, cancellationToken);
+                    bestScale = 1.0f;
+                }
 
                 // Convert ImageMatchResult to TemplateMatchResult
-                if (matchResult.IsSuccess)
+                if (best != null && best.IsSuccess)
                 {
                     var result = TemplateMatchResult.Success(
                         template,
-                        new System.Drawing.Point(matchResult.Location.X, matchResult.Location.Y),
-                        new System.Drawing.Size(matchResult.TemplateSize.Width, matchResult.TemplateSize.Height),
-                        matchResult.Confidence);
+                        new System.Drawing.Point(best.Location.X, best.Location.Y),
+                        new System.Drawing.Size(best.TemplateSize.Width, best.TemplateSize.Height),
+                        best.Confidence,
+                        bestScale);
 
-                    result.MatchTimeMs = matchResult.MatchTimeMs;
+                    result.MatchTimeMs = best.MatchTimeMs;
                     return result;
                 }
 
+                // If color match failed to meet threshold, try a single grayscale fallback pass (lean processing)
+                // This helps with AA/gamma differences on fullscreen DX without many extra steps.
+                if (best == null || best.Confidence < template.ConfidenceThreshold)
+                {
+                    await _loggingService.LogInfoAsync($"[DETECTION] Grayscale fallback matching for {description} (previous best: {(best?.Confidence ?? 0):P})");
+
+                    using var screenshotGray = await _imageProcessor.ConvertToGrayscaleAsync(screenshotMat, "screenshot");
+                    using var templateGrayBase = await _imageProcessor.ConvertToGrayscaleAsync(templateMat, description);
+
+                    ImageMatchResult? bestGray = null;
+                    float bestGrayScale = 1.0f;
+
+                    async Task EvaluateGrayScaleAsync(float scale)
+                    {
+                        int scaledW = (int)Math.Round(templateGrayBase.Width * scale);
+                        int scaledH = (int)Math.Round(templateGrayBase.Height * scale);
+                        if (scaledW <= 1 || scaledH <= 1) return;
+                        if (scaledW > screenshotGray.Width || scaledH > screenshotGray.Height) return;
+
+                        using var scaledTemplate = new OpenCvSharp.Mat();
+                        OpenCvSharp.Cv2.Resize(templateGrayBase, scaledTemplate, new OpenCvSharp.Size(scaledW, scaledH), 0, 0, OpenCvSharp.InterpolationFlags.Area);
+
+                        var result = await _imageProcessor.PerformTemplateMatchingAsync(
+                            screenshotGray, scaledTemplate, template.ConfidenceThreshold, description + " [grayscale]", cancellationToken);
+
+                        if (bestGray == null || result.Confidence > bestGray.Confidence)
+                        {
+                            bestGray = result;
+                            bestGrayScale = scale;
+                        }
+                    }
+
+                    if (!screenshotGray.Empty() && !templateGrayBase.Empty())
+                    {
+                        var min = Math.Max(0.2f, template.MinScale);
+                        var max = Math.Min(3.0f, template.MaxScale);
+                        var step = 0.10f;
+
+                        await EvaluateGrayScaleAsync(1.0f);
+                        if (screenshotMat.Width >= 3000 || screenshotMat.Height >= 1800)
+                        {
+                            if (2.0f >= min && 2.0f <= max)
+                            {
+                                await EvaluateGrayScaleAsync(2.0f);
+                                if (bestGray != null && bestGray.Confidence >= template.ConfidenceThreshold)
+                                    goto finish_gray_scales;
+                            }
+                        }
+
+                        for (float delta = step; delta <= (max - min); delta += step)
+                        {
+                            var up = 1.0f + delta;
+                            var down = 1.0f - delta;
+                            if (up <= max) await EvaluateGrayScaleAsync(up);
+                            if (down >= min) await EvaluateGrayScaleAsync(down);
+                            if (bestGray != null && bestGray.Confidence >= template.ConfidenceThreshold)
+                                break;
+                        }
+
+finish_gray_scales: ;
+
+                        if (bestGray != null && bestGray.IsSuccess)
+                        {
+                            var result = TemplateMatchResult.Success(
+                                template,
+                                new System.Drawing.Point(bestGray.Location.X, bestGray.Location.Y),
+                                new System.Drawing.Size(bestGray.TemplateSize.Width, bestGray.TemplateSize.Height),
+                                bestGray.Confidence,
+                                bestGrayScale);
+                            result.MatchTimeMs = bestGray.MatchTimeMs;
+                            return result;
+                        }
+                        else if (bestGray != null && bestGray.Confidence > (best?.Confidence ?? 0))
+                        {
+                            // keep improved confidence even if below threshold for diagnostics
+                            best = bestGray;
+                            bestScale = bestGrayScale;
+                        }
+                    }
+                }
+
                 var failedResult = TemplateMatchResult.Failed(template);
-                failedResult.Confidence = matchResult.Confidence;
-                failedResult.MatchTimeMs = matchResult.MatchTimeMs;
+                if (best != null)
+                {
+                    failedResult.Confidence = best.Confidence;
+                    failedResult.MatchTimeMs = best.MatchTimeMs;
+                    failedResult.Scale = bestScale;
+                }
                 return failedResult;
             }
             catch (OperationCanceledException)

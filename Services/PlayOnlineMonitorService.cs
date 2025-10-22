@@ -395,7 +395,6 @@ namespace FFXIManager.Services
 
         /// <summary>
         /// Gets a valid PlayOnline window handle with optional PID preference.
-        /// Uses cached character data and validates window is still alive.
         /// </summary>
         /// <param name="preferredProcessId">Optional PID hint from launch step</param>
         /// <returns>Valid window handle or IntPtr.Zero if none found</returns>
@@ -405,60 +404,60 @@ namespace FFXIManager.Services
             {
                 await _logging.LogDebugAsync($"[POL-WINDOW] Looking for valid POL window (Preferred PID: {preferredProcessId?.ToString() ?? "none"})", "PlayOnlineMonitorService");
 
-                // Get all characters from cache (fast lookup) - extract outside lock for async operations
-                List<CachedCharacterInfo> validCharacters;
-                lock (_cacheLock)
-                {
-                    validCharacters = _characterCache.Values
-                        .Where(c => c.IsValid && c.WindowHandle != IntPtr.Zero)
-                        .ToList();
-                }
-
-                await _logging.LogDebugAsync($"[POL-WINDOW] Found {validCharacters.Count} cached characters with valid window handles", "PlayOnlineMonitorService");
-
-                // If preferred PID provided, try to find matching character first
+                // Get current live characters
+                var characters = await GetCharactersAsync();
+                
+                // If we have a preferred PID, try it first
                 if (preferredProcessId.HasValue)
                 {
-                    var preferredChar = validCharacters.FirstOrDefault(c => c.ProcessId == preferredProcessId.Value);
+                    var preferredChar = characters.FirstOrDefault(c => c.ProcessId == preferredProcessId.Value);
+                    if (preferredChar?.WindowHandle != IntPtr.Zero && _processUtility.IsWindowValid(preferredChar.WindowHandle))
+                    {
+                        await _logging.LogInfoAsync($"[POL-WINDOW] Using preferred PID {preferredProcessId}: Handle 0x{preferredChar.WindowHandle.ToInt64():X}", "PlayOnlineMonitorService");
+                        return preferredChar.WindowHandle;
+                    }
+                    
+                    // If preferred character has no window yet, try to find one
                     if (preferredChar != null)
                     {
-                        // Validate window is still alive
-                        if (_processUtility.IsWindowValid(preferredChar.WindowHandle))
+                        var windows = await _processUtility.GetProcessWindowsAsync(preferredProcessId.Value);
+                        var mainWindow = windows.FirstOrDefault(w => w.IsMainWindow) ?? windows.FirstOrDefault();
+                        if (mainWindow != null)
                         {
-                            await _logging.LogInfoAsync($"[POL-WINDOW] Found valid window for preferred PID {preferredProcessId}: Handle 0x{preferredChar.WindowHandle.ToInt64():X}, Character: '{preferredChar.CharacterName}'", "PlayOnlineMonitorService");
-                            return preferredChar.WindowHandle;
+                            await _logging.LogInfoAsync($"[POL-WINDOW] Found new window for preferred PID {preferredProcessId}: Handle 0x{mainWindow.Handle.ToInt64():X}", "PlayOnlineMonitorService");
+                            return mainWindow.Handle;
                         }
                         else
                         {
-                            await _logging.LogWarningAsync($"[POL-WINDOW] Preferred PID {preferredProcessId} window handle is stale, will try other windows", "PlayOnlineMonitorService");
+                            await _logging.LogDebugAsync($"[POL-WINDOW] Preferred PID {preferredProcessId} has no windows yet", "PlayOnlineMonitorService");
                         }
                     }
-                    else
-                    {
-                        await _logging.LogDebugAsync($"[POL-WINDOW] Preferred PID {preferredProcessId} not found in cache", "PlayOnlineMonitorService");
-                    }
                 }
 
-                // Fallback: Find first valid window (ordered by PID for consistency)
-                foreach (var character in validCharacters.OrderBy(c => c.ProcessId))
-                {
-                    if (_processUtility.IsWindowValid(character.WindowHandle))
-                    {
-                        await _logging.LogInfoAsync($"[POL-WINDOW] Found valid fallback window: PID {character.ProcessId}, Handle 0x{character.WindowHandle.ToInt64():X}, Character: '{character.CharacterName}'", "PlayOnlineMonitorService");
-                        return character.WindowHandle;
-                    }
-                }
+                // **FIX**: Split characters into those with windows vs those without
+                var charactersWithWindows = characters
+                    .Where(c => c.WindowHandle != IntPtr.Zero && _processUtility.IsWindowValid(c.WindowHandle))
+                    .OrderByDescending(c => c.ProcessId) // Higher PIDs = newer processes
+                    .ToList();
 
-                // Cache miss or all windows invalid - try live discovery
-                await _logging.LogDebugAsync("[POL-WINDOW] No valid cached windows, attempting live discovery", "PlayOnlineMonitorService");
-                var liveCharacters = await GetCharactersAsync();
+                var charactersWithoutWindows = characters
+                    .Where(c => c.WindowHandle == IntPtr.Zero)
+                    .OrderByDescending(c => c.ProcessId) // Higher PIDs = newer processes  
+                    .ToList();
 
-                foreach (var character in liveCharacters.Where(c => c.WindowHandle != IntPtr.Zero))
+                await _logging.LogDebugAsync($"[POL-WINDOW] Found {charactersWithWindows.Count} characters with windows, {charactersWithoutWindows.Count} without windows", "PlayOnlineMonitorService");
+
+                // **STRATEGY 1**: Try characters without windows first (these are likely the newest instances)
+                foreach (var character in charactersWithoutWindows)
                 {
-                    if (_processUtility.IsWindowValid(character.WindowHandle))
+                    await _logging.LogDebugAsync($"[POL-WINDOW] Checking PID {character.ProcessId} for new windows", "PlayOnlineMonitorService");
+                    
+                    var windows = await _processUtility.GetProcessWindowsAsync(character.ProcessId);
+                    var mainWindow = windows.FirstOrDefault(w => w.IsMainWindow) ?? windows.FirstOrDefault();
+                    if (mainWindow != null)
                     {
-                        await _logging.LogInfoAsync($"[POL-WINDOW] Found valid window via live discovery: PID {character.ProcessId}, Handle 0x{character.WindowHandle.ToInt64():X}", "PlayOnlineMonitorService");
-                        return character.WindowHandle;
+                        await _logging.LogInfoAsync($"[POL-WINDOW] Found NEW window for PID {character.ProcessId}: Handle 0x{mainWindow.Handle.ToInt64():X}, Title: '{mainWindow.Title}'", "PlayOnlineMonitorService");
+                        return mainWindow.Handle;
                     }
                 }
 

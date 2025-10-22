@@ -84,6 +84,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Queue Status Header -->
@@ -402,7 +403,71 @@
             </Grid>
         </GroupBox>
 
-        
+        <!-- Statistics Panel -->
+        <GroupBox Grid.Row="3" Header="Statistics" Margin="0,0,0,10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Statistics Display -->
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Total Logins -->
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding TotalLoginsDisplay}"
+                               FontWeight="SemiBold"
+                               FontSize="13"
+                               Margin="0,0,10,0"
+                               VerticalAlignment="Center"/>
+
+                    <!-- Success Rate -->
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding SuccessRateDisplay}"
+                               FontWeight="SemiBold"
+                               FontSize="13"
+                               Foreground="{DynamicResource SuccessBrush}"
+                               Margin="0,0,10,0"
+                               VerticalAlignment="Center"/>
+
+                    <!-- Average Time -->
+                    <TextBlock Grid.Column="2"
+                               Text="{Binding AverageTimeDisplay}"
+                               FontWeight="SemiBold"
+                               FontSize="13"
+                               Margin="0,0,10,0"
+                               VerticalAlignment="Center"/>
+
+                    <!-- Toggle Button -->
+                    <Button Grid.Column="3"
+                            Content="{Binding StatsScopeLabel}"
+                            Style="{StaticResource CircularInfoButton}"
+                            Command="{Binding ToggleStatsScopeCommand}"
+                            ToolTip="Toggle between Session and All-Time statistics"
+                            Padding="8,4"/>
+                </Grid>
+
+                <!-- Scope Description -->
+                <TextBlock Grid.Row="1"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           FontSize="11"
+                           Margin="0,8,0,0"
+                           VerticalAlignment="Center">
+                    <Run Text="Showing"/>
+                    <Run Text="{Binding StatsScopeLabel, Mode=OneWay}" FontWeight="SemiBold"/>
+                    <Run Text="statistics"/>
+                </TextBlock>
+            </Grid>
+        </GroupBox>
+
+
 
     </Grid>
 </UserControl>

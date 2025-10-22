@@ -190,6 +190,11 @@ namespace FFXIManager.Models.Settings
         public AutoLoginQueueState? QueueState { get; set; }
 
         /// <summary>
+        /// All-time execution statistics - cumulative statistics across all queue executions
+        /// </summary>
+        public QueueExecutionStatistics? AllTimeStatistics { get; set; }
+
+        /// <summary>
         /// Gets the default keyboard shortcuts for character switching (Win+F1 through Win+F11)
         /// Uses Windows key to avoid conflicts with FFXI's Ctrl/Alt macro system
         /// Note: F12 is reserved for the cycle hotkey by default

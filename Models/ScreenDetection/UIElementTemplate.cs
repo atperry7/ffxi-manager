@@ -80,12 +80,12 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         /// <summary>
         /// Minimum scale factor for multi-scale matching
         /// </summary>
-        public float MinScale { get; set; } = 0.8f;
+        public float MinScale { get; set; } = 0.5f;
 
         /// <summary>
         /// Maximum scale factor for multi-scale matching
         /// </summary>
-        public float MaxScale { get; set; } = 1.2f;
+        public float MaxScale { get; set; } = 2.5f;
 
         /// <summary>
         /// Additional metadata as JSON

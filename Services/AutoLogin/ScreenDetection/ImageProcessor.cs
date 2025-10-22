@@ -89,6 +89,68 @@ public class ImageProcessor : IImageProcessor
         }
     }
 
+    public async Task<Mat> ConvertToGrayscaleAsync(Mat sourceMat, string description)
+    {
+        try
+        {
+            if (sourceMat.Empty())
+            {
+                await _loggingService.LogWarningAsync($"[ImageProcessor] Invalid Mat for grayscale conversion: {description}");
+                return new Mat();
+            }
+
+            Mat gray = new();
+            if (sourceMat.Channels() == 1)
+            {
+                // Already grayscale; clone to keep ownership clear
+                gray = sourceMat.Clone();
+            }
+            else if (sourceMat.Channels() == 3)
+            {
+                Cv2.CvtColor(sourceMat, gray, ColorConversionCodes.BGR2GRAY);
+            }
+            else if (sourceMat.Channels() == 4)
+            {
+                Cv2.CvtColor(sourceMat, gray, ColorConversionCodes.BGRA2GRAY);
+            }
+            else
+            {
+                await _loggingService.LogWarningAsync($"[ImageProcessor] Unsupported channel count {sourceMat.Channels()} for grayscale: {description}");
+                return new Mat();
+            }
+
+            await _loggingService.LogDebugAsync($"[ImageProcessor] Converted to grayscale for {description}: {gray.Width}x{gray.Height}");
+            return gray;
+        }
+        catch (Exception ex)
+        {
+            await _loggingService.LogErrorAsync($"[ImageProcessor] Grayscale conversion failed for {description}: {ex.Message}", ex);
+            return new Mat();
+        }
+    }
+
+    public async Task<Mat> ComputeCannyEdgesAsync(Mat grayMat, double threshold1, double threshold2, string description)
+    {
+        try
+        {
+            if (grayMat.Empty() || grayMat.Channels() != 1)
+            {
+                await _loggingService.LogWarningAsync($"[ImageProcessor] Invalid grayscale Mat for Canny: {description}");
+                return new Mat();
+            }
+
+            var edges = new Mat();
+            Cv2.Canny(grayMat, edges, threshold1, threshold2);
+            await _loggingService.LogDebugAsync($"[ImageProcessor] Computed Canny edges for {description}: {edges.Width}x{edges.Height}");
+            return edges;
+        }
+        catch (Exception ex)
+        {
+            await _loggingService.LogErrorAsync($"[ImageProcessor] Canny failed for {description}: {ex.Message}", ex);
+            return new Mat();
+        }
+    }
+
     public async Task<ImageMatchResult> PerformTemplateMatchingAsync(
         Mat screenshotMat,
         Mat templateMat,

@@ -140,6 +140,35 @@ namespace FFXIManager.Services
             }
         }
 
+        public async Task SaveAllTimeStatisticsAsync(QueueExecutionStatistics statistics)
+        {
+            try
+            {
+                var settings = _settingsService.LoadSettings();
+                settings.AllTimeStatistics = statistics;
+                _settingsService.SaveSettings(settings);
+                await _loggingService.LogDebugAsync("Saved all-time statistics");
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error saving all-time statistics", ex);
+            }
+        }
+
+        public async Task<QueueExecutionStatistics?> LoadAllTimeStatisticsAsync()
+        {
+            try
+            {
+                var settings = _settingsService.LoadSettings();
+                return settings.AllTimeStatistics;
+            }
+            catch (Exception ex)
+            {
+                await _loggingService.LogErrorAsync("Error loading all-time statistics", ex);
+                return null;
+            }
+        }
+
         #endregion
 
         #region Helper Methods

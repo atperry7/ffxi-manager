@@ -38,6 +38,24 @@ public interface IImageProcessor
     Task<Mat> ConvertBgraToBlrAsync(Mat sourceMat, string description);
 
     /// <summary>
+    /// Converts a Mat (BGR or BGRA) to single-channel grayscale.
+    /// </summary>
+    /// <param name="sourceMat">Source Mat</param>
+    /// <param name="description">Description for logging</param>
+    /// <returns>Grayscale Mat (CV_8UC1) or empty Mat on failure</returns>
+    Task<Mat> ConvertToGrayscaleAsync(Mat sourceMat, string description);
+
+    /// <summary>
+    /// Computes Canny edges from a grayscale Mat.
+    /// </summary>
+    /// <param name="grayMat">Grayscale source Mat</param>
+    /// <param name="threshold1">Lower hysteresis threshold</param>
+    /// <param name="threshold2">Upper hysteresis threshold</param>
+    /// <param name="description">Description for logging</param>
+    /// <returns>Edge Mat (CV_8UC1) or empty Mat on failure</returns>
+    Task<Mat> ComputeCannyEdgesAsync(Mat grayMat, double threshold1, double threshold2, string description);
+
+    /// <summary>
     /// Performs template matching with comprehensive error handling and logging.
     /// </summary>
     /// <param name="screenshotMat">Screenshot Mat</param>

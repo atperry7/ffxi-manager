@@ -1,5 +1,6 @@
 ﻿using FFXIManager.Infrastructure;
 using FFXIManager.Models;
+using FFXIManager.Models.Settings;
 using System.Collections.ObjectModel;
 
 namespace FFXIManager.Services
@@ -317,11 +318,21 @@ namespace FFXIManager.Services
                 IsPaused,
                 null, // Original profile path is managed by orchestrator
                 _statisticsService.GetExecutionStatistics());
+
+            // Save all-time statistics
+            await _persistenceService.SaveAllTimeStatisticsAsync(_statisticsService.GetAllTimeStatistics());
         }
 
         public async Task LoadQueueStateAsync()
         {
             var (items, originalProfilePath) = await _persistenceService.LoadQueueStateAsync();
+
+            // Load all-time statistics
+            var allTimeStats = await _persistenceService.LoadAllTimeStatisticsAsync();
+            if (allTimeStats != null)
+            {
+                _statisticsService.LoadAllTimeStatistics(allTimeStats);
+            }
 
             // Add restored items to collection manager using UI dispatcher
             await _uiDispatcher.InvokeAsync(() =>
@@ -336,6 +347,16 @@ namespace FFXIManager.Services
         public QueueStatistics GetStatistics()
         {
             return _statisticsService.CalculateStatistics(QueueItems);
+        }
+
+        public QueueExecutionStatistics GetExecutionStatistics()
+        {
+            return _statisticsService.GetExecutionStatistics();
+        }
+
+        public QueueExecutionStatistics GetAllTimeStatistics()
+        {
+            return _statisticsService.GetAllTimeStatistics();
         }
 
         #endregion

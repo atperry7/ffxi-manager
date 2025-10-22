@@ -18,10 +18,16 @@ namespace FFXIManager.Services
         QueueStatistics CalculateStatistics(IEnumerable<AutoLoginQueueItem> queueItems);
 
         /// <summary>
-        /// Gets internal execution statistics for persistence
+        /// Gets internal execution statistics for persistence (session only)
         /// </summary>
-        /// <returns>Internal execution statistics</returns>
+        /// <returns>Session execution statistics</returns>
         QueueExecutionStatistics GetExecutionStatistics();
+
+        /// <summary>
+        /// Gets all-time execution statistics (persistent across sessions)
+        /// </summary>
+        /// <returns>All-time execution statistics</returns>
+        QueueExecutionStatistics GetAllTimeStatistics();
 
         #endregion
 
@@ -49,10 +55,16 @@ namespace FFXIManager.Services
         void ResetExecutionStatistics();
 
         /// <summary>
-        /// Loads execution statistics from persistence
+        /// Loads session execution statistics from persistence
         /// </summary>
         /// <param name="statistics">Statistics to load</param>
         void LoadExecutionStatistics(QueueExecutionStatistics statistics);
+
+        /// <summary>
+        /// Loads all-time execution statistics from persistence
+        /// </summary>
+        /// <param name="statistics">All-time statistics to load</param>
+        void LoadAllTimeStatistics(QueueExecutionStatistics statistics);
 
         #endregion
 

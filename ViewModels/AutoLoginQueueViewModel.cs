@@ -29,6 +29,7 @@ namespace FFXIManager.ViewModels
         private PlayOnlineMemberAccount? _selectedAccount;
         private bool _isLoading;
         private bool _disposed;
+        private bool _isShowingSessionStats = true;
         private CancellationTokenSource _cancellationTokenSource = new();
 
         // Duration update timer
@@ -444,6 +445,83 @@ namespace FFXIManager.ViewModels
 
         // IdleProgressValue removed. Bind directly to OverallProgress.
 
+        #region Statistics Display
+
+        /// <summary>
+        /// Whether session statistics (vs all-time) are being displayed
+        /// </summary>
+        public bool IsShowingSessionStats
+        {
+            get => _isShowingSessionStats;
+            set
+            {
+                if (SetProperty(ref _isShowingSessionStats, value))
+                {
+                    // Notify all statistics properties to refresh
+                    OnPropertyChanged(nameof(TotalLoginsDisplay));
+                    OnPropertyChanged(nameof(SuccessRateDisplay));
+                    OnPropertyChanged(nameof(AverageTimeDisplay));
+                    OnPropertyChanged(nameof(StatsScopeLabel));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Label for the statistics scope toggle
+        /// </summary>
+        public string StatsScopeLabel => IsShowingSessionStats ? "Session" : "All-Time";
+
+        /// <summary>
+        /// Display text for total logins
+        /// </summary>
+        public string TotalLoginsDisplay
+        {
+            get
+            {
+                var stats = IsShowingSessionStats
+                    ? _queueService.GetExecutionStatistics()
+                    : _queueService.GetAllTimeStatistics();
+                return $"Total Logins: {stats.TotalExecutions}";
+            }
+        }
+
+        /// <summary>
+        /// Display text for success rate
+        /// </summary>
+        public string SuccessRateDisplay
+        {
+            get
+            {
+                var stats = IsShowingSessionStats
+                    ? _queueService.GetExecutionStatistics()
+                    : _queueService.GetAllTimeStatistics();
+                return $"Success Rate: {stats.SuccessRate:P1}";
+            }
+        }
+
+        /// <summary>
+        /// Display text for average time per login
+        /// </summary>
+        public string AverageTimeDisplay
+        {
+            get
+            {
+                var stats = IsShowingSessionStats
+                    ? _queueService.GetExecutionStatistics()
+                    : _queueService.GetAllTimeStatistics();
+
+                if (stats.AverageItemTime.TotalSeconds < 1)
+                    return "Avg Time: --";
+
+                if (stats.AverageItemTime.TotalMinutes < 1)
+                    return $"Avg Time: {stats.AverageItemTime.TotalSeconds:F0}s";
+
+                return $"Avg Time: {stats.AverageItemTime.TotalMinutes:F0}m {stats.AverageItemTime.Seconds}s";
+            }
+        }
+
+        #endregion
+
         #endregion
 
         #region Commands
@@ -462,6 +540,7 @@ namespace FFXIManager.ViewModels
         public ICommand ResetQueueCommand { get; private set; } = null!;
         public ICommand RefreshAccountsCommand { get; private set; } = null!;
         public ICommand OpenWorkflowEditorCommand { get; private set; } = null!;
+        public ICommand ToggleStatsScopeCommand { get; private set; } = null!;
 
         // Parameter-based commands
         public ICommand RemoveItemParameterCommand { get; private set; } = null!;
@@ -525,6 +604,9 @@ namespace FFXIManager.ViewModels
 
             OpenWorkflowEditorCommand = new RelayCommand(
                 () => OpenWorkflowEditor());
+
+            ToggleStatsScopeCommand = new RelayCommand(
+                () => IsShowingSessionStats = !IsShowingSessionStats);
 
             // Parameter-based commands
             RemoveItemParameterCommand = new RelayCommandWithParameter<AutoLoginQueueItem>(
@@ -1081,6 +1163,9 @@ namespace FFXIManager.ViewModels
             OnPropertyChanged(nameof(QueueStatusDisplay));
             OnPropertyChanged(nameof(QueueProgressDisplay));
             OnPropertyChanged(nameof(IdleStateMessage));
+            OnPropertyChanged(nameof(TotalLoginsDisplay));
+            OnPropertyChanged(nameof(SuccessRateDisplay));
+            OnPropertyChanged(nameof(AverageTimeDisplay));
 
             // Manage duration update timer based on execution state
             var isExecuting = ExecutionState is QueueExecutionState.Starting or QueueExecutionState.Processing

@@ -44,6 +44,18 @@ namespace FFXIManager.Services
         /// </summary>
         Task ClearSavedStateAsync();
 
+        /// <summary>
+        /// Saves all-time statistics to settings
+        /// </summary>
+        /// <param name="statistics">All-time statistics to save</param>
+        Task SaveAllTimeStatisticsAsync(QueueExecutionStatistics statistics);
+
+        /// <summary>
+        /// Loads all-time statistics from settings
+        /// </summary>
+        /// <returns>All-time statistics or null if none saved</returns>
+        Task<QueueExecutionStatistics?> LoadAllTimeStatisticsAsync();
+
         #endregion
 
         #region Helper Methods

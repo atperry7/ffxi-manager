@@ -9,11 +9,13 @@ namespace FFXIManager.Services
     public class QueueStatisticsService : IQueueStatisticsService
     {
         private QueueExecutionStatistics _executionStatistics;
+        private QueueExecutionStatistics _allTimeStatistics;
         private readonly Dictionary<Guid, DateTime> _stepStartTimes = new();
 
         public QueueStatisticsService()
         {
             _executionStatistics = new QueueExecutionStatistics();
+            _allTimeStatistics = new QueueExecutionStatistics();
         }
 
         #region Statistics Calculation
@@ -49,6 +51,11 @@ namespace FFXIManager.Services
             return _executionStatistics;
         }
 
+        public QueueExecutionStatistics GetAllTimeStatistics()
+        {
+            return _allTimeStatistics;
+        }
+
         #endregion
 
         #region Execution Tracking
@@ -56,16 +63,19 @@ namespace FFXIManager.Services
         public void RecordExecutionStart()
         {
             _executionStatistics.UpdateExecutionStart();
+            _allTimeStatistics.UpdateExecutionStart();
         }
 
         public void RecordExecutionEnd()
         {
             _executionStatistics.UpdateExecutionEnd();
+            _allTimeStatistics.UpdateExecutionEnd();
         }
 
         public void UpdateWithCompletedItem(AutoLoginQueueItem item)
         {
             _executionStatistics.UpdateWithCompletedItem(item);
+            _allTimeStatistics.UpdateWithCompletedItem(item);
         }
 
         public void ResetExecutionStatistics()
@@ -76,6 +86,11 @@ namespace FFXIManager.Services
         public void LoadExecutionStatistics(QueueExecutionStatistics statistics)
         {
             _executionStatistics = statistics ?? new QueueExecutionStatistics();
+        }
+
+        public void LoadAllTimeStatistics(QueueExecutionStatistics statistics)
+        {
+            _allTimeStatistics = statistics ?? new QueueExecutionStatistics();
         }
 
         #endregion
@@ -110,6 +125,7 @@ namespace FFXIManager.Services
             if (subtask?.WorkflowStep == null) return;
             var key = subtask.WorkflowStep.StepId ?? subtask.Name;
 
+            // Update session statistics
             if (!_executionStatistics.StepPerformance.TryGetValue(key, out var entry))
             {
                 entry = new Models.Settings.StepPerformanceEntry
@@ -123,11 +139,27 @@ namespace FFXIManager.Services
             entry.Runs++;
             if (success) entry.Successes++; else entry.Failures++;
 
+            // Update all-time statistics
+            if (!_allTimeStatistics.StepPerformance.TryGetValue(key, out var allTimeEntry))
+            {
+                allTimeEntry = new Models.Settings.StepPerformanceEntry
+                {
+                    StepId = key,
+                    DisplayName = subtask.WorkflowStep.DisplayName
+                };
+                _allTimeStatistics.StepPerformance[key] = allTimeEntry;
+            }
+
+            allTimeEntry.Runs++;
+            if (success) allTimeEntry.Successes++; else allTimeEntry.Failures++;
+
             if (_stepStartTimes.TryGetValue(subtask.Id, out var started))
             {
                 var dur = DateTime.UtcNow - started;
                 entry.TotalDuration += dur;
                 entry.AverageDuration = TimeSpan.FromTicks(entry.TotalDuration.Ticks / entry.Runs);
+                allTimeEntry.TotalDuration += dur;
+                allTimeEntry.AverageDuration = TimeSpan.FromTicks(allTimeEntry.TotalDuration.Ticks / allTimeEntry.Runs);
                 _stepStartTimes.Remove(subtask.Id);
             }
         }
@@ -135,6 +167,8 @@ namespace FFXIManager.Services
         public void RecordDetectionResult(string stepId, string displayName, double confidence, double detectionSeconds)
         {
             var key = string.IsNullOrWhiteSpace(stepId) ? displayName : stepId;
+
+            // Update session statistics
             if (!_executionStatistics.StepPerformance.TryGetValue(key, out var entry))
             {
                 entry = new Models.Settings.StepPerformanceEntry
@@ -150,6 +184,23 @@ namespace FFXIManager.Services
             entry.AverageDetectionSeconds = entry.Detections > 0 ? entry.TotalDetectionSeconds / entry.Detections : 0.0;
             entry.TotalConfidence += Math.Clamp(confidence, 0.0, 1.0);
             entry.AverageConfidence = entry.Detections > 0 ? entry.TotalConfidence / entry.Detections : 0.0;
+
+            // Update all-time statistics
+            if (!_allTimeStatistics.StepPerformance.TryGetValue(key, out var allTimeEntry))
+            {
+                allTimeEntry = new Models.Settings.StepPerformanceEntry
+                {
+                    StepId = key,
+                    DisplayName = displayName
+                };
+                _allTimeStatistics.StepPerformance[key] = allTimeEntry;
+            }
+
+            allTimeEntry.Detections++;
+            allTimeEntry.TotalDetectionSeconds += Math.Max(0.0, detectionSeconds);
+            allTimeEntry.AverageDetectionSeconds = allTimeEntry.Detections > 0 ? allTimeEntry.TotalDetectionSeconds / allTimeEntry.Detections : 0.0;
+            allTimeEntry.TotalConfidence += Math.Clamp(confidence, 0.0, 1.0);
+            allTimeEntry.AverageConfidence = allTimeEntry.Detections > 0 ? allTimeEntry.TotalConfidence / allTimeEntry.Detections : 0.0;
         }
 
         #endregion

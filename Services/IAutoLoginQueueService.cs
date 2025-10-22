@@ -1,4 +1,5 @@
 ﻿using FFXIManager.Models;
+using FFXIManager.Models.Settings;
 using System.Collections.ObjectModel;
 
 namespace FFXIManager.Services
@@ -216,6 +217,16 @@ namespace FFXIManager.Services
         /// Gets queue statistics
         /// </summary>
         QueueStatistics GetStatistics();
+
+        /// <summary>
+        /// Gets session execution statistics
+        /// </summary>
+        QueueExecutionStatistics GetExecutionStatistics();
+
+        /// <summary>
+        /// Gets all-time execution statistics
+        /// </summary>
+        QueueExecutionStatistics GetAllTimeStatistics();
 
         #endregion
 
