@@ -8,17 +8,20 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         private readonly ILoggingService _loggingService;
         private readonly IScreenshotCaptureService _screenshotService;
         private readonly ITemplateMatchingService _templateService;
+        private readonly ITemplateManagementService _templateManagementService;
         private readonly IProcessUtilityService _processUtility;
 
         public ScreenDetectionCoordinator(
             ILoggingService loggingService,
             IScreenshotCaptureService screenshotService,
             ITemplateMatchingService templateService,
+            ITemplateManagementService templateManagementService,
             IProcessUtilityService processUtility)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _screenshotService = screenshotService ?? throw new ArgumentNullException(nameof(screenshotService));
             _templateService = templateService ?? throw new ArgumentNullException(nameof(templateService));
+            _templateManagementService = templateManagementService ?? throw new ArgumentNullException(nameof(templateManagementService));
             _processUtility = processUtility ?? throw new ArgumentNullException(nameof(processUtility));
         }
 
@@ -67,7 +70,9 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                     continue;
                 }
 
-                var match = await _templateService.FindElementAsync(screenshot, templatePath, cancellationToken);
+                // Load template with workflow-defined thresholds (not template defaults)
+                var template = await _templateManagementService.LoadTemplateAsync(templatePath, confidenceThreshold, tolerance, cancellationToken);
+                var match = await _templateService.FindElementAsync(screenshot, template!, cancellationToken);
                 await _loggingService.LogDebugAsync($"{screenDescription} detection attempt {attempt}/{maxAttempts}: confidence={match.Confidence:P}, threshold={confidenceThreshold:P}");
 
                 if (match.Confidence >= confidenceThreshold)
@@ -90,7 +95,8 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             try
             {
                 var finalScreenshot = await CaptureScreenshotWithLogging(windowHandle, $"final {screenDescription}", cancellationToken, retryCount: 0);
-                var finalMatch = await _templateService.FindElementAsync(finalScreenshot, templatePath, cancellationToken);
+                var finalTemplate = await _templateManagementService.LoadTemplateAsync(templatePath, confidenceThreshold, tolerance, cancellationToken);
+                var finalMatch = await _templateService.FindElementAsync(finalScreenshot, finalTemplate!, cancellationToken);
                 await _loggingService.LogWarningAsync($"{screenDescription} detection timed out after {options.Timeout.TotalSeconds}s. Final confidence: {finalMatch.Confidence:P}");
                 throw new TimeoutException($"Failed to detect {screenDescription} after {options.Timeout.TotalSeconds}s (final confidence: {finalMatch.Confidence:P})");
             }
@@ -173,7 +179,9 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                     continue;
                 }
 
-                var match = await _templateService.FindElementAsync(screenshot, templatePath, cancellationToken);
+                // Load template with workflow-defined thresholds (not template defaults)
+                var template = await _templateManagementService.LoadTemplateAsync(templatePath, confidenceThreshold, tolerance, cancellationToken);
+                var match = await _templateService.FindElementAsync(screenshot, template!, cancellationToken);
                 await _loggingService.LogDebugAsync($"{screenDescription} detection attempt {attempt}/{maxAttempts}: confidence={match.Confidence:P}, threshold={confidenceThreshold:P}");
 
                 if (match.Confidence >= confidenceThreshold)
@@ -196,7 +204,8 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
             try
             {
                 var finalScreenshot = await CaptureScreenshotWithLogging(currentHandle, $"final {screenDescription}", cancellationToken, retryCount: 0);
-                var finalMatch = await _templateService.FindElementAsync(finalScreenshot, templatePath, cancellationToken);
+                var finalTemplate = await _templateManagementService.LoadTemplateAsync(templatePath, confidenceThreshold, tolerance, cancellationToken);
+                var finalMatch = await _templateService.FindElementAsync(finalScreenshot, finalTemplate!, cancellationToken);
                 await _loggingService.LogWarningAsync($"{screenDescription} detection timed out after {options.Timeout.TotalSeconds}s. Final confidence: {finalMatch.Confidence:P}");
                 throw new TimeoutException($"Failed to detect {screenDescription} after {options.Timeout.TotalSeconds}s (final confidence: {finalMatch.Confidence:P})");
             }

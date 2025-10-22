@@ -12,6 +12,12 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         private readonly IImageProcessor _imageProcessor;
         private float _defaultConfidenceThreshold = 0.80f;
 
+        // Smart downsampling configuration
+        private const int TARGET_MAX_DIMENSION = 1920; // Downsample screenshots larger than this
+        private const bool ENABLE_SMART_DOWNSAMPLING = true;
+        private const bool ENABLE_DPI_SCALE_PREDICTION = true;
+        private const float DPI_SCALE_TOLERANCE = 0.3f; // ±0.3 around predicted scale
+
         public TemplateMatchingService(
             ILoggingService loggingService,
             ITemplateManagementService templateManagementService,
@@ -39,14 +45,29 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                 }
 
                 // Create Mats using standardized image processor
-                using var screenshotMat = await _imageProcessor.CreateMatFromImageDataAsync(
+                using var screenshotMatOriginal = await _imageProcessor.CreateMatFromImageDataAsync(
                     screenshot.ImageData, screenshot.Width, screenshot.Height, screenshot.Channels, "screenshot");
 
-                using var templateMat = await CreateTemplateMat(template);
+                using var templateMatOriginal = await CreateTemplateMat(template);
 
-                if (screenshotMat.Empty() || templateMat.Empty())
+                if (screenshotMatOriginal.Empty() || templateMatOriginal.Empty())
                 {
                     return TemplateMatchResult.Failed(template);
+                }
+
+                // Apply smart downsampling for performance optimization
+                var downsampleResult = DownsampleForMatching(
+                    screenshotMatOriginal, templateMatOriginal, screenshot.DpiScale);
+                using var screenshotMat = downsampleResult.downsampledScreenshot;
+                using var templateMat = downsampleResult.downsampledTemplate;
+                var downsampleFactor = downsampleResult.scaleFactor;
+
+                if (downsampleFactor < 1.0f)
+                {
+                    await _loggingService.LogInfoAsync(
+                        $"[OPTIMIZATION] Downsampled for matching: {screenshotMatOriginal.Width}x{screenshotMatOriginal.Height} → " +
+                        $"{screenshotMat.Width}x{screenshotMat.Height} (factor: {downsampleFactor:F3}, " +
+                        $"memory saved: {(1 - downsampleFactor * downsampleFactor) * 100:F1}%)");
                 }
 
                 // Perform template matching (with optional multi-scale search)
@@ -79,9 +100,19 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
                 if (template.SupportsMultiScale)
                 {
-                    // Iterate scales from MinScale..MaxScale in small steps, testing the nominal scale first
-                    var min = Math.Max(0.2f, template.MinScale);
-                    var max = Math.Min(3.0f, template.MaxScale);
+                    // Calculate DPI-aware scale range (or use full range if DPI prediction disabled)
+                    var baseMin = Math.Max(0.2f, template.MinScale);
+                    var baseMax = Math.Min(3.0f, template.MaxScale);
+                    var (min, max) = CalculateScaleRange(screenshot.DpiScale, baseMin, baseMax);
+
+                    // Log scale range for diagnostics
+                    if (ENABLE_DPI_SCALE_PREDICTION && screenshot.DpiScale > 0.1f)
+                    {
+                        await _loggingService.LogInfoAsync(
+                            $"[OPTIMIZATION] DPI-aware scale prediction: DPI={screenshot.DpiScale:F2}, " +
+                            $"predicted range [{min:F2}, {max:F2}] (base: [{baseMin:F2}, {baseMax:F2}])");
+                    }
+
                     var step = 0.10f; // fewer checks, faster; early-exit remains
 
                     // Try nominal scale first for fast exit
@@ -127,14 +158,36 @@ finish_scales: ;
                 // Convert ImageMatchResult to TemplateMatchResult
                 if (best != null && best.IsSuccess)
                 {
+                    // Scale coordinates back to original size if downsampling was applied
+                    var scaledLocation = downsampleFactor < 1.0f
+                        ? new System.Drawing.Point(
+                            (int)Math.Round(best.Location.X / downsampleFactor),
+                            (int)Math.Round(best.Location.Y / downsampleFactor))
+                        : new System.Drawing.Point(best.Location.X, best.Location.Y);
+
+                    var scaledTemplateSize = downsampleFactor < 1.0f
+                        ? new System.Drawing.Size(
+                            (int)Math.Round(best.TemplateSize.Width / downsampleFactor),
+                            (int)Math.Round(best.TemplateSize.Height / downsampleFactor))
+                        : new System.Drawing.Size(best.TemplateSize.Width, best.TemplateSize.Height);
+
                     var result = TemplateMatchResult.Success(
                         template,
-                        new System.Drawing.Point(best.Location.X, best.Location.Y),
-                        new System.Drawing.Size(best.TemplateSize.Width, best.TemplateSize.Height),
+                        scaledLocation,
+                        scaledTemplateSize,
                         best.Confidence,
                         bestScale);
 
                     result.MatchTimeMs = best.MatchTimeMs;
+
+                    // Log optimization metrics
+                    if (downsampleFactor < 1.0f)
+                    {
+                        await _loggingService.LogInfoAsync(
+                            $"[OPTIMIZATION] Match coordinates scaled from downsampled space: " +
+                            $"({best.Location.X},{best.Location.Y}) → ({scaledLocation.X},{scaledLocation.Y})");
+                    }
+
                     return result;
                 }
 
@@ -172,8 +225,10 @@ finish_scales: ;
 
                     if (!screenshotGray.Empty() && !templateGrayBase.Empty())
                     {
-                        var min = Math.Max(0.2f, template.MinScale);
-                        var max = Math.Min(3.0f, template.MaxScale);
+                        // Use same DPI-aware scale range for grayscale fallback
+                        var baseMin = Math.Max(0.2f, template.MinScale);
+                        var baseMax = Math.Min(3.0f, template.MaxScale);
+                        var (min, max) = CalculateScaleRange(screenshot.DpiScale, baseMin, baseMax);
                         var step = 0.10f;
 
                         await EvaluateGrayScaleAsync(1.0f);
@@ -201,13 +256,34 @@ finish_gray_scales: ;
 
                         if (bestGray != null && bestGray.IsSuccess)
                         {
+                            // Scale grayscale match coordinates back to original size
+                            var scaledGrayLocation = downsampleFactor < 1.0f
+                                ? new System.Drawing.Point(
+                                    (int)Math.Round(bestGray.Location.X / downsampleFactor),
+                                    (int)Math.Round(bestGray.Location.Y / downsampleFactor))
+                                : new System.Drawing.Point(bestGray.Location.X, bestGray.Location.Y);
+
+                            var scaledGrayTemplateSize = downsampleFactor < 1.0f
+                                ? new System.Drawing.Size(
+                                    (int)Math.Round(bestGray.TemplateSize.Width / downsampleFactor),
+                                    (int)Math.Round(bestGray.TemplateSize.Height / downsampleFactor))
+                                : new System.Drawing.Size(bestGray.TemplateSize.Width, bestGray.TemplateSize.Height);
+
                             var result = TemplateMatchResult.Success(
                                 template,
-                                new System.Drawing.Point(bestGray.Location.X, bestGray.Location.Y),
-                                new System.Drawing.Size(bestGray.TemplateSize.Width, bestGray.TemplateSize.Height),
+                                scaledGrayLocation,
+                                scaledGrayTemplateSize,
                                 bestGray.Confidence,
                                 bestGrayScale);
                             result.MatchTimeMs = bestGray.MatchTimeMs;
+
+                            if (downsampleFactor < 1.0f)
+                            {
+                                await _loggingService.LogInfoAsync(
+                                    $"[OPTIMIZATION] Grayscale match coordinates scaled: " +
+                                    $"({bestGray.Location.X},{bestGray.Location.Y}) → ({scaledGrayLocation.X},{scaledGrayLocation.Y})");
+                            }
+
                             return result;
                         }
                         else if (bestGray != null && bestGray.Confidence > (best?.Confidence ?? 0))
@@ -398,6 +474,102 @@ finish_gray_scales: ;
         public float GetDefaultConfidenceThreshold()
         {
             return _defaultConfidenceThreshold;
+        }
+
+        /// <summary>
+        /// Calculates the optimal downsample factor for a screenshot based on its dimensions.
+        /// Returns 1.0 if no downsampling is needed, or a value less than 1.0 to downsample.
+        /// </summary>
+        private float CalculateDownsampleFactor(int width, int height)
+        {
+            if (!ENABLE_SMART_DOWNSAMPLING)
+                return 1.0f;
+
+            var maxDimension = Math.Max(width, height);
+
+            if (maxDimension <= TARGET_MAX_DIMENSION)
+                return 1.0f; // No downsampling needed
+
+            return (float)TARGET_MAX_DIMENSION / maxDimension;
+        }
+
+        /// <summary>
+        /// Downsamples both screenshot and template proportionally for faster matching.
+        /// Returns downsampled Mats and the scale factor used.
+        /// </summary>
+        private (Mat downsampledScreenshot, Mat downsampledTemplate, float scaleFactor)
+            DownsampleForMatching(Mat screenshot, Mat template, float screenshotDpiScale)
+        {
+            var downsampleFactor = CalculateDownsampleFactor(screenshot.Width, screenshot.Height);
+
+            if (downsampleFactor >= 1.0f)
+            {
+                // No downsampling needed - return clones
+                return (screenshot.Clone(), template.Clone(), 1.0f);
+            }
+
+            // Calculate new dimensions
+            var newScreenshotSize = new OpenCvSharp.Size(
+                (int)Math.Round(screenshot.Width * downsampleFactor),
+                (int)Math.Round(screenshot.Height * downsampleFactor));
+
+            var newTemplateSize = new OpenCvSharp.Size(
+                (int)Math.Round(template.Width * downsampleFactor),
+                (int)Math.Round(template.Height * downsampleFactor));
+
+            // Validate downsampled template won't be too small
+            if (newTemplateSize.Width < 10 || newTemplateSize.Height < 10)
+            {
+                // Template would be too small, skip downsampling
+                return (screenshot.Clone(), template.Clone(), 1.0f);
+            }
+
+            // Perform downsampling
+            var downsampledScreenshot = new Mat();
+            var downsampledTemplate = new Mat();
+
+            OpenCvSharp.Cv2.Resize(screenshot, downsampledScreenshot, newScreenshotSize,
+                0, 0, OpenCvSharp.InterpolationFlags.Area); // Area interpolation is best for downsampling
+
+            OpenCvSharp.Cv2.Resize(template, downsampledTemplate, newTemplateSize,
+                0, 0, OpenCvSharp.InterpolationFlags.Area);
+
+            return (downsampledScreenshot, downsampledTemplate, downsampleFactor);
+        }
+
+        /// <summary>
+        /// Calculates narrowed scale search range based on DPI scale prediction.
+        /// Uses DPI information to dramatically reduce the number of scale iterations needed.
+        /// </summary>
+        private (float minScale, float maxScale) CalculateScaleRange(
+            float dpiScale,
+            float baseMinScale,
+            float baseMaxScale)
+        {
+            if (!ENABLE_DPI_SCALE_PREDICTION || dpiScale <= 0.1f)
+            {
+                // DPI not available or disabled, use full range
+                return (baseMinScale, baseMaxScale);
+            }
+
+            // Predict likely scale based on DPI
+            // DPI 1.0 (96 DPI) → look near scale 1.0
+            // DPI 1.5 (144 DPI) → look near scale 0.67
+            // DPI 2.0 (192 DPI) → look near scale 0.5
+            var predictedScale = 1.0f / Math.Max(0.1f, dpiScale);
+
+            // Narrow search range around predicted scale
+            var minScale = Math.Max(baseMinScale, predictedScale - DPI_SCALE_TOLERANCE);
+            var maxScale = Math.Min(baseMaxScale, predictedScale + DPI_SCALE_TOLERANCE);
+
+            // Ensure we have a valid range
+            if (minScale >= maxScale)
+            {
+                // Fallback to full range if prediction is problematic
+                return (baseMinScale, baseMaxScale);
+            }
+
+            return (minScale, maxScale);
         }
 
     }
