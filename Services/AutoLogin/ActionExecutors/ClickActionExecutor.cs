@@ -79,6 +79,13 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 return false;
             }
 
+            // Diagnostic logging for coordinate debugging
+            await _loggingService.LogInfoAsync($"[CLICK_DEBUG] Screenshot dimensions: {screenshot.Width}x{screenshot.Height}");
+            await _loggingService.LogInfoAsync($"[CLICK_DEBUG] Window bounds: {screenshot.WindowBounds} (size: {screenshot.WindowBounds.Width}x{screenshot.WindowBounds.Height})");
+            await _loggingService.LogInfoAsync($"[CLICK_DEBUG] DPI scale: {screenshot.DpiScale}");
+            await _loggingService.LogInfoAsync($"[CLICK_DEBUG] Template match position: {context.TemplateMatch.WindowRelativePosition}");
+            await _loggingService.LogInfoAsync($"[CLICK_DEBUG] Template match size: {context.TemplateMatch.MatchSize}");
+
             // Activate window first
             await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
             await Task.Delay(100, cancellationToken);
@@ -88,7 +95,12 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             {
                 var p = multiPoints[i];
                 var absolute = CalculateRelativeClickPoint(context.TemplateMatch, p.X, p.Y);
+                await _loggingService.LogInfoAsync($"[CLICK_DEBUG] Point {i + 1}: relative offset=({p.X}, {p.Y})");
+                await _loggingService.LogInfoAsync($"[CLICK_DEBUG] Point {i + 1}: absolute window-relative=({absolute.X}, {absolute.Y})");
+
                 var screenPoint = screenshot.ToScreenCoordinates(absolute);
+                await _loggingService.LogInfoAsync($"[CLICK_DEBUG] Point {i + 1}: final screen coordinates=({screenPoint.X}, {screenPoint.Y})");
+
                 if (!IsReasonable(screenPoint))
                 {
                     await _loggingService.LogWarningAsync($"[CLICK] Skipping out-of-bounds point {i + 1}: ({screenPoint.X}, {screenPoint.Y})");

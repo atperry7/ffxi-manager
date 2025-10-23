@@ -6,7 +6,7 @@
   "IsDefault": true,
   "IsReadOnly": false,
   "CreatedDate": "2025-01-15T00:00:00Z",
-  "LastModifiedDate": "2025-10-22T22:42:29.8250826Z",
+  "LastModifiedDate": "2025-10-22T23:04:50.7732467Z",
   "Steps": [
     {
       "StepId": "launch_pol_proxy",
@@ -74,7 +74,7 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 1000,
+            "DelayMs": 100,
             "Description": "Click Launch Arrow",
             "Parameters": {
               "TemplatePath": "launch_arrow",
@@ -93,7 +93,7 @@
           }
         ],
         "Description": "Launch Windower and click the Launch Arrow button to start PlayOnline",
-        "PostNavigationDelayMs": 3000
+        "PostNavigationDelayMs": 4000
       },
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
@@ -148,7 +148,7 @@
           }
         ],
         "Description": "Navigate to and select member slot using Tab\u002BEnter",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 100
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -172,7 +172,7 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 100,
+            "DelayMs": 0,
             "Description": "Navigate to next field",
             "Parameters": {
               "TemplatePath": "action_pol_login_information_screen_0",
@@ -196,7 +196,7 @@
     },
     {
       "StepId": "pol_connect_screen",
-      "DisplayName": "Connect to PlayOnline Screen",
+      "DisplayName": "Open Virtual Keyboard",
       "Description": "Detect the Connect to PlayOnline screen and prepare for password entry",
       "Order": 4,
       "TemplatePath": "connect_to_playonline_screen",
@@ -209,7 +209,7 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 100,
+            "DelayMs": 0,
             "Description": "Navigate to next field",
             "Parameters": {
               "TemplatePath": "password_otp_fields",
@@ -224,7 +224,7 @@
           }
         ],
         "Description": "Focus password field on connection screen",
-        "PostNavigationDelayMs": 500
+        "PostNavigationDelayMs": 100
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -248,7 +248,7 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 500,
+            "DelayMs": 50,
             "Description": "Click center of virtual keyboard password field",
             "Parameters": {
               "TemplatePath": "virtual_keyboard_password_input_screen",
@@ -278,7 +278,7 @@
             }
           }
         ],
-        "Description": "Activate virtual keyboard password field (explicit click)",
+        "Description": "Activate virtual keyboard password field",
         "PostNavigationDelayMs": 100
       },
       "MaxRetryAttempts": 3,
@@ -305,7 +305,7 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 500,
+            "DelayMs": 50,
             "Description": "Click the confirmation",
             "Parameters": {
               "TemplatePath": "circle_confirmation_password",
@@ -321,7 +321,7 @@
           }
         ],
         "Description": "Confirm password using circle button",
-        "PostNavigationDelayMs": 500
+        "PostNavigationDelayMs": 100
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -345,7 +345,7 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 100,
+            "DelayMs": 50,
             "Description": "Tab to OTP field",
             "Parameters": {
               "TemplatePath": "password_otp_fields",
@@ -414,7 +414,7 @@
           }
         ],
         "Description": "Activate Connect button",
-        "PostNavigationDelayMs": 10000
+        "PostNavigationDelayMs": 12000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -494,7 +494,7 @@
           }
         ],
         "Description": "Navigate to Final Fantasy XI in game list",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 500
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -556,9 +556,9 @@
       "Navigation": {
         "Sequence": [
           {
-            "Action": "Click",
-            "Count": 1,
-            "DelayMs": 500,
+            "Action": "Enter",
+            "Count": 2,
+            "DelayMs": 100,
             "Description": "Accept FFXI Terms of Service",
             "Parameters": {
               "TemplatePath": "ffxi_accept_terms",
@@ -574,7 +574,7 @@
           }
         ],
         "Description": "Accept terms with Enter key",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 500
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -596,9 +596,9 @@
       "Navigation": {
         "Sequence": [
           {
-            "Action": "Click",
-            "Count": 1,
-            "DelayMs": 500,
+            "Action": "Enter",
+            "Count": 2,
+            "DelayMs": 100,
             "Description": "Select Character option",
             "Parameters": {
               "TemplatePath": "ffxi_main_screen",
@@ -614,7 +614,7 @@
           }
         ],
         "Description": "Select Character menu option",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 500
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -729,7 +729,7 @@
           }
         ],
         "Description": "Click character slot to select (slot number read from account configuration)",
-        "PostNavigationDelayMs": 2000
+        "PostNavigationDelayMs": 200
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -754,10 +754,12 @@
         "Sequence": [
           {
             "Action": "Enter",
-            "Count": 1,
-            "DelayMs": 500,
-            "Description": "Confirm login to game world",
-            "Parameters": {}
+            "Count": 2,
+            "DelayMs": 100,
+            "Description": "Enter on Yes",
+            "Parameters": {
+              "TemplatePath": "ffxi_character_confirmation"
+            }
           },
           {
             "Action": "Wait",
@@ -769,11 +771,9 @@
           {
             "Action": "Enter",
             "Count": 1,
-            "DelayMs": 100,
-            "Description": "Enter on Yes",
-            "Parameters": {
-              "TemplatePath": "ffxi_character_confirmation"
-            }
+            "DelayMs": 500,
+            "Description": "Confirm login to game world",
+            "Parameters": {}
           }
         ],
         "Description": "Final confirmation to enter game world",

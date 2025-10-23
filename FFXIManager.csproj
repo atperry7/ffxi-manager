@@ -11,10 +11,10 @@
 
     <!-- Version Information -->
     <!-- Note: AssemblyVersion must be numeric (four-part version) -->
-    <Version>1.4.0-beta</Version>
-    <AssemblyVersion>1.4.0.0</AssemblyVersion>
-    <FileVersion>1.4.0.0</FileVersion>
-    <AssemblyInformationalVersion>1.4.0.0</AssemblyInformationalVersion>
+    <Version>2.0.0-beta</Version>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
+    <AssemblyInformationalVersion>2.0.0.0</AssemblyInformationalVersion>
 
     <!-- Strong name signing -->
     <SignAssembly>true</SignAssembly>

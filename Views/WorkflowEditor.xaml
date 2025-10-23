@@ -945,7 +945,7 @@
                                                 <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal">
                                                     <TextBlock Text="Post-Sequence Delay (ms):" VerticalAlignment="Center" Margin="0,0,6,0"/>
                                                     <TextBox Width="100"
-                                                             Text="{Binding SelectedStep.Navigation.PostNavigationDelayMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                             Text="{Binding SelectedStep.Navigation.PostNavigationDelayMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
                                                              ToolTip="Delay after completing navigation sequence. Allows UI to settle before next step. Recommended: 500-1500ms"/>
                                                 </StackPanel>
                                             </Grid>
@@ -1139,23 +1139,23 @@
                                                                 <!-- Row 0 -->
                                                                 <StackPanel Grid.Row="0" Grid.Column="0" Margin="4">
                                                                     <TextBlock Text="Repeat Count:" FontSize="10" Margin="0,0,0,2"/>
-                                                                    <TextBox Text="{Binding SelectedNavigationAction.Count, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                    <TextBox Text="{Binding SelectedNavigationAction.Count, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"/>
                                                                 </StackPanel>
 
                                                                 <StackPanel Grid.Row="0" Grid.Column="1" Margin="4">
                                                                     <TextBlock Text="Delay After (ms):" FontSize="10" Margin="0,0,0,2"/>
-                                                                    <TextBox Text="{Binding SelectedNavigationAction.DelayMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                                    <TextBox Text="{Binding SelectedNavigationAction.DelayMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"/>
                                                                 </StackPanel>
 
                                                                 <StackPanel Grid.Row="0" Grid.Column="2" Margin="4">
                                                                     <TextBlock Text="Retry Attempts:" FontSize="10" Margin="0,0,0,2"/>
-                                                                    <TextBox Text="{Binding ActionRetryAttempts, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                    <TextBox Text="{Binding ActionRetryAttempts, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
                  ToolTip="Number of detection attempts before giving up&#x0a;Example: 30 attempts = check screen 30 times&#x0a;&#x0a;Recommended: 10-30 for UI detection, 30-60 for app launches"/>
                                                                 </StackPanel>
 
                                                                 <StackPanel Grid.Row="0" Grid.Column="3" Margin="4">
                                                                     <TextBlock Text="Retry Delay (ms):" FontSize="10" Margin="0,0,0,2"/>
-                                                                    <TextBox Text="{Binding ActionRetryDelayMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                    <TextBox Text="{Binding ActionRetryDelayMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
                  ToolTip="Milliseconds to wait between retry attempts&#x0a;Example: 500ms = half second between checks&#x0a;&#x0a;Recommended: 500-1000ms"/>
                                                                 </StackPanel>
                                                             </Grid>
