@@ -1092,6 +1092,9 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedWorkflow == null) return;
 
+            // Store current selections to restore after reload
+            var currentStepId = SelectedStep?.StepId;
+
             // Delegate to helper
             var (success, savedWorkflowId, savedWorkflowName) = await _workflowManager.SaveWorkflowAsync(
                 SelectedWorkflow,
@@ -1106,12 +1109,23 @@ namespace FFXIManager.ViewModels
                 await LoadWorkflowsAsync();
 
                 // Reselect the workflow by its ID (may have changed if converted from default)
+                // Also restore the selected step to maintain user's place in the editor
                 await _uiDispatcher.InvokeAsync(() =>
                 {
                     var reloadedWorkflow = Workflows.FirstOrDefault(w => w != null && w.WorkflowId == savedWorkflowId);
                     if (reloadedWorkflow != null)
                     {
                         SelectedWorkflow = reloadedWorkflow;
+
+                        // Restore step selection if we had one before saving
+                        if (!string.IsNullOrEmpty(currentStepId) && reloadedWorkflow.Steps != null)
+                        {
+                            var reloadedStep = reloadedWorkflow.Steps.FirstOrDefault(s => s.StepId == currentStepId);
+                            if (reloadedStep != null)
+                            {
+                                SelectedStep = reloadedStep;
+                            }
+                        }
                     }
                 });
             }
@@ -1375,6 +1389,9 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedStep == null) return;
 
+            // Store current template image to restore if operation is canceled
+            var previousTemplateImage = TemplateImageSource;
+
             try
             {
                 // Open file dialog to select image
@@ -1386,7 +1403,11 @@ namespace FFXIManager.ViewModels
                 };
 
                 if (dialog.ShowDialog() != true)
+                {
+                    // Restore previous image on cancel
+                    TemplateImageSource = previousTemplateImage;
                     return;
+                }
 
                 // Open image cropper dialog
                 var cropViewModel = new ImageCropperDialogViewModel(dialog.FileName, _loggingService);
@@ -1396,7 +1417,11 @@ namespace FFXIManager.ViewModels
                 };
 
                 if (cropDialog.ShowDialog() != true)
+                {
+                    // Restore previous image on cancel
+                    TemplateImageSource = previousTemplateImage;
                     return;
+                }
 
                 // Validate crop rectangle
                 if (cropViewModel.CropRectangle == null)
@@ -1435,6 +1460,9 @@ namespace FFXIManager.ViewModels
             if (SelectedStep == null || string.IsNullOrEmpty(SelectedStep.TemplatePath))
                 return;
 
+            // Store current template image to restore if operation is canceled
+            var previousTemplateImage = TemplateImageSource;
+
             try
             {
                 // Open file dialog to select new image
@@ -1446,7 +1474,11 @@ namespace FFXIManager.ViewModels
                 };
 
                 if (dialog.ShowDialog() != true)
+                {
+                    // Restore previous image on cancel
+                    TemplateImageSource = previousTemplateImage;
                     return;
+                }
 
                 // Open image cropper dialog
                 var cropViewModel = new ImageCropperDialogViewModel(dialog.FileName, _loggingService);
@@ -1456,7 +1488,11 @@ namespace FFXIManager.ViewModels
                 };
 
                 if (cropDialog.ShowDialog() != true)
+                {
+                    // Restore previous image on cancel
+                    TemplateImageSource = previousTemplateImage;
                     return;
+                }
 
                 // Delegate to helper
                 var success = await _templateManager.ReplaceStepTemplateAsync(
@@ -1922,6 +1958,9 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedNavigationAction == null) return;
 
+            // Store current action template image to restore if operation is canceled
+            var previousActionTemplateImage = ActionTemplateImageSource;
+
             try
             {
                 var dialog = new Microsoft.Win32.OpenFileDialog
@@ -1932,7 +1971,11 @@ namespace FFXIManager.ViewModels
                 };
 
                 if (dialog.ShowDialog() != true)
+                {
+                    // Restore previous image on cancel
+                    ActionTemplateImageSource = previousActionTemplateImage;
                     return;
+                }
 
                 var cropViewModel = new ImageCropperDialogViewModel(dialog.FileName, _loggingService);
                 var cropDialog = new Views.ImageCropperDialog(cropViewModel)
@@ -1941,7 +1984,11 @@ namespace FFXIManager.ViewModels
                 };
 
                 if (cropDialog.ShowDialog() != true)
+                {
+                    // Restore previous image on cancel
+                    ActionTemplateImageSource = previousActionTemplateImage;
                     return;
+                }
 
                 if (cropViewModel.CropRectangle == null)
                 {
@@ -1974,6 +2021,9 @@ namespace FFXIManager.ViewModels
             if (SelectedNavigationAction == null)
                 return;
 
+            // Store current action template image to restore if operation is canceled
+            var previousActionTemplateImage = ActionTemplateImageSource;
+
             try
             {
                 var dialog = new Microsoft.Win32.OpenFileDialog
@@ -1983,7 +2033,12 @@ namespace FFXIManager.ViewModels
                     Multiselect = false
                 };
 
-                if (dialog.ShowDialog() != true) return;
+                if (dialog.ShowDialog() != true)
+                {
+                    // Restore previous image on cancel
+                    ActionTemplateImageSource = previousActionTemplateImage;
+                    return;
+                }
 
                 var cropViewModel = new ImageCropperDialogViewModel(dialog.FileName, _loggingService);
                 var cropDialog = new Views.ImageCropperDialog(cropViewModel)
@@ -1991,7 +2046,12 @@ namespace FFXIManager.ViewModels
                     Owner = System.Windows.Application.Current.MainWindow
                 };
 
-                if (cropDialog.ShowDialog() != true) return;
+                if (cropDialog.ShowDialog() != true)
+                {
+                    // Restore previous image on cancel
+                    ActionTemplateImageSource = previousActionTemplateImage;
+                    return;
+                }
 
                 // Delegate to helper
                 var success = await _templateManager.ReplaceActionTemplateAsync(
