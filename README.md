@@ -1,24 +1,23 @@
 # ⚔️ FFXI Manager - The Ultimate Multi-Box Arsenal
 
-*"Because managing 18 characters shouldn't be harder than beating Absolute Virtue pre-nerf"*
-
 Welcome, Adventurer! Are you tired of manually logging in your army of characters like some Level 1 noob? **FFXI Manager** is here to turn you into the most efficient Taru overlord Vana'diel has ever seen!
 
 <img width="1058" height="705" alt="ffxi-manager-showcase" src="Assets\ffxi-manager-showcase.png" />
 
 ## 🎯 What This Bad Boy Does
 
-- 🚀 **Auto-Login System** *(The Crown Jewel)*
+- 🚀 **Auto-Login System** *(The Crown Jewel - Workflow-Driven & Resolution Independent)*
+- 🔧 **Workflow Editor** *(Visual Login Automation Designer - No Code Required)*
 - 🏠 **Profile Management** *(login_w.bin Swapping Made Easy)*
 - 🎮 **Controller Support** *(Now We're Talking)*
 - 👑 **Character Hotkeys** *(Win+F1 to Win+F9, Baby!)*
 - 📱 **Character Monitor Window** *(The Command Center)*
-- 🛠️ **Application Management** *(Who has time to find those?)*
+- 🛠️ **Application Management** *(Launch POL Proxy, Windower, or Custom Apps)*
 
 ## 🎮 System Requirements
 
 ### Essential (The Bare Minimum)
-- **Windows 10/11** (because let's be real, it's 2024)
+- **Windows 10/11** (because let's be real, it's 2025)
 - **.NET 9 Runtime** (the latest and greatest)
 - **PlayOnline/FFXI Installation** (obviously)
 - **100MB disk space** (less than a single Dynamis run's screenshots)
@@ -50,17 +49,58 @@ Welcome, Adventurer! Are you tired of manually logging in your army of character
 ### 🤖 Auto-Login Queue System
 The crown jewel of FFXI Manager - because manually logging in 6+ characters is content nobody asked for.
 
+**Workflow-Driven Architecture:**
+FFXI Manager uses a revolutionary **data-driven workflow system** that separates login sequences from hardcoded logic. This means:
+- **100% Customizable**: Every login step is defined in JSON workflows - no code changes needed
+- **Resolution Independent**: Works across different screen resolutions and aspect ratios
+- **OpenCV-Powered**: Uses advanced template matching for reliable screen detection
+- **Smart Navigation**: Hybrid keyboard/click navigation adapts to your setup
+
 **How It Works:**
-- Add characters to the queue with their profile settings
-- Hit "Start" and watch the magic unfold
-- The system uses advanced screen recognition to navigate PlayOnline
-- Automatically handles POL Proxy launching, login screens, and character selection
-- Integrates with Windower to launch your characters directly into the game
+1. Add characters to the queue with their profile and workflow settings
+2. Hit "Start" and watch the magic unfold
+3. The system uses OpenCV template matching to detect each screen state
+4. Executes workflow-defined navigation sequences (keyboard shortcuts + click actions)
+5. Automatically handles POL Proxy launching, PlayOnline authentication, and character selection
+6. Integrates with Windower or vanilla FFXI to launch your characters directly into the game
+7. Real-time progress tracking shows exactly what's happening at each step
 
 **Queue Management:**
 - **Pause/Resume**: Need to take a break? Pause the queue anytime
 - **Skip Items**: That one mule can wait - skip and keep going
-- **Batch Operations**: Add multiple characters at once, modify queue order, queue state preserved between sessions
+- **Batch Operations**: Add multiple characters at once, modify queue order
+- **State Persistence**: Queue state preserved between sessions - resume right where you left off
+- **Statistics Tracking**: View completion rates, timing data, and success metrics
+
+### 🔧 Workflow Editor
+Your personal login automation designer - customize every aspect of the auto-login process without touching code.
+
+**Visual Workflow Customization:**
+The Workflow Editor is a powerful GUI tool that lets you create, modify, and fine-tune login workflows with precision:
+
+- **Clone & Customize**: Start with the default workflow and adapt it to your needs
+- **Step-by-Step Control**: Add, remove, or reorder login steps with drag-and-drop simplicity
+- **Template Management**: Capture and assign screen templates for reliable detection
+- **Action Sequences**: Define keyboard shortcuts, click positions, and timing delays
+- **Multi-Resolution Support**: Set click positions as percentages for resolution independence
+- **Confidence Tuning**: Adjust template matching sensitivity for different screen setups
+
+**Common Use Cases:**
+- **Skip OTP Entry**: Disable two-factor authentication steps for accounts that don't use it
+- **Adjust Click Positions**: Fix workflows for different screen resolutions or UI scaling
+- **Add Custom Delays**: Fine-tune timing for slower systems or network conditions
+- **Launch Custom Apps**: Configure external application launches (POL Proxy, Windower, Ashita)
+- **Create Variants**: Maintain multiple workflows for different login scenarios
+
+**Workflow Sharing:**
+- **Export/Import**: Share your custom workflows with the community
+- **Version Control**: Track workflow changes with semantic versioning
+- **Validation & Testing**: Built-in validation and dry-run testing before deployment
+- **Restore Defaults**: One-click restore if you need to start fresh
+
+📖 **[Complete Workflow Editor Guide](workflows/README.md)** - Detailed documentation with examples and best practices
+
+---
 
 ### 📊 Profile System (login_w.bin Management)
 The backbone of multi-account management - handles the tedious file swapping so you don't have to.
@@ -111,20 +151,31 @@ Your mission control for keeping track of all active characters.
 5. **Controller Mapping**: Assign controller buttons to any character slot
 
 ### Auto-Login Configuration
-1. **Template Management**: Customize screen recognition templates for different resolutions
-2. **Timing Settings**: Adjust delays between actions for optimal reliability
-3. **Error Handling**: Configure retry attempts and failure recovery behavior
-4. **POL Proxy**: Launch POL Proxy automatically if needed
+
+**Workflow Editor** (Recommended):
+- **Visual Customization**: Use the built-in Workflow Editor for a complete visual workflow design experience
+- **Step Management**: Add, remove, reorder, and fine-tune every aspect of the login process
+- **Template Tuning**: Adjust screen detection templates and confidence thresholds
+- **Timing Control**: Configure delays, retries, and timeouts per step
+- **See**: [Workflow Editor Guide](workflows/README.md) for detailed instructions
+
+**Advanced Settings**:
+1. **Error Handling**: Configure maximum retry attempts and failure recovery behavior
+2. **External Applications**: Configure POL Proxy, Windower, or other tools to launch automatically
+3. **Global Timeouts**: Set workflow-wide timeouts for safety (prevents infinite loops)
+4. **Logging**: Enable detailed logging for troubleshooting workflow issues
 
 ## 🐛 Troubleshooting
 
 ### Common Issues & Solutions
 
 **"Auto-Login isn't working"**
-- Check that templates match your screen resolution
-- Verify PlayOnline directory is correctly configured
-- Try adjusting timing settings for slower systems
-- Make sure POL Proxy is properly configured if using
+- **Use the Workflow Editor**: Open Settings → Workflow Editor to visually inspect and test your workflow
+- **Check Templates**: Verify screen templates match your actual PlayOnline UI (resolution/scaling)
+- **Adjust Timing**: Increase step delays if your system or network is slower
+- **Review Logs**: Check `%APPDATA%\FFXIManager\logs\` for detailed error information
+- **Test Individual Steps**: Use the Workflow Editor's dry-run feature to isolate problematic steps
+- **Verify Configuration**: Ensure PlayOnline directory and external apps are correctly configured
 
 **"Controller not detected"**
 - Check Windows Gaming Services are running (Win11)
