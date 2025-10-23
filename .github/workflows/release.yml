@@ -122,27 +122,33 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
-          $zipName = "${{ env.PROJECT_NAME }}-v$version-windows.zip"
-          
-          # Create the ZIP
-          Compress-Archive -Path "publish/*" -DestinationPath $zipName -CompressionLevel Optimal
-          
-          # Calculate checksum
-          $hash = Get-FileHash $zipName -Algorithm SHA256
-          "$($hash.Hash)  $zipName" | Out-File -FilePath "$zipName.sha256"
-          
-          Write-Host "✅ Created package: $zipName"
+          $innerZipName = "${{ env.PROJECT_NAME }}-v$version-windows.zip"
+          $releasePackageName = "${{ env.PROJECT_NAME }}-v$version-release-package.zip"
+
+          # Create the inner ZIP (application files)
+          Compress-Archive -Path "publish/*" -DestinationPath $innerZipName -CompressionLevel Optimal
+
+          # Calculate checksum for inner zip
+          $hash = Get-FileHash $innerZipName -Algorithm SHA256
+          "$($hash.Hash)  $innerZipName" | Out-File -FilePath "$innerZipName.sha256"
+
+          Write-Host "✅ Created inner package: $innerZipName"
           Write-Host "📝 SHA256: $($hash.Hash)"
-          
-          echo "zip-name=$zipName" >> $env:GITHUB_OUTPUT
+
+          # Create outer release package (contains inner zip + sha256)
+          # This double-zip helps bypass Windows Defender false positives
+          Compress-Archive -Path $innerZipName, "$innerZipName.sha256" -DestinationPath $releasePackageName -CompressionLevel Optimal
+
+          Write-Host "✅ Created release package: $releasePackageName"
+          Write-Host "📦 Contents: $innerZipName + $innerZipName.sha256"
+
+          echo "release-package-name=$releasePackageName" >> $env:GITHUB_OUTPUT
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: release-package
-          path: |
-            ${{ steps.package.outputs.zip-name }}
-            ${{ steps.package.outputs.zip-name }}.sha256
+          path: ${{ steps.package.outputs.release-package-name }}
 
       - name: Clean up sensitive files
         if: always()
@@ -157,7 +163,10 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: build-release
-    
+
+    outputs:
+      release-url: ${{ steps.create-release.outputs.url }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -168,6 +177,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: release-package
+          path: release-artifacts
 
       - name: Determine release type
         id: release-type
@@ -213,6 +223,7 @@ jobs:
           fi
 
       - name: Create GitHub Release
+        id: create-release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.build-release.outputs.version }}
@@ -221,9 +232,7 @@ jobs:
           body_path: ${{ steps.release-notes.outputs.found == 'true' && steps.release-notes.outputs.file || 'changelog.txt' }}
           draft: false
           prerelease: ${{ steps.release-type.outputs.prerelease }}
-          files: |
-            ${{ needs.build-release.outputs.zip-name }}
-            ${{ needs.build-release.outputs.zip-name }}.sha256
+          files: release-artifacts/*
           generate_release_notes: ${{ steps.release-notes.outputs.found == 'false' }}  # Auto-generate if no custom notes
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}

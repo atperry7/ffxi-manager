@@ -200,23 +200,37 @@ Special thanks to:
    - Save copies of profile configurations
    - Note your character/account setup
 
-2. **Install 2.0-beta**:
-   - Download `FFXIManager-v2.0.0-beta-windows.zip`
-   - Extract to a new folder (don't overwrite 1.x installation)
-   - Run `FFXIManager.exe`
+2. **Download and Extract**:
+   - Download `FFXIManager-v2.0.0-beta-release-package.zip` from the release
+   - **Extract twice** (double-zip format):
+     - First extraction: Gets you `FFXIManager-v2.0.0-beta-windows.zip` + SHA256 checksum
+     - Second extraction: Gets you the application files
+   - **Why double-zip?** This format helps bypass Windows Defender false positives
 
-3. **Configure Workflows**:
+3. **Verify Integrity (Optional but Recommended)**:
+   ```powershell
+   # After first extraction, verify the checksum:
+   Get-FileHash FFXIManager-v2.0.0-beta-windows.zip -Algorithm SHA256
+   # Compare with the .sha256 file contents
+   ```
+
+4. **Run FFXI Manager**:
+   - Navigate to the extracted folder
+   - Run `FFXIManager.exe`
+   - If Windows SmartScreen warns, click "More info" → "Run anyway"
+
+5. **Configure Workflows**:
    - Open Settings → Workflow Editor
    - Review the default "PlayOnline Standard" workflow
    - Clone and customize for your setup if needed
    - Assign workflows to your accounts
 
-4. **Test Login**:
+6. **Test Login**:
    - Add a character to the auto-login queue
    - Run a test login to verify workflow compatibility
    - Adjust workflow settings in Workflow Editor if needed
 
-5. **Report Issues**:
+7. **Report Issues**:
    - If you encounter problems, report them on GitHub
    - Include logs from `%APPDATA%\FFXIManager\logs\`
    - Describe your setup (resolution, FFXI version, etc.)
