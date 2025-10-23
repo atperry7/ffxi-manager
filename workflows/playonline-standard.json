@@ -386,7 +386,7 @@
     },
     {
       "StepId": "pol_connect_button",
-      "DisplayName": "Connect to Servers",
+      "DisplayName": "Connect",
       "Description": "Click the Connect button to proceed to PlayOnline servers",
       "Order": 8,
       "TemplatePath": "connect_to_playonline_screen",
@@ -414,7 +414,7 @@
           }
         ],
         "Description": "Activate Connect button",
-        "PostNavigationDelayMs": 12000
+        "PostNavigationDelayMs": 15000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -558,11 +558,11 @@
           {
             "Action": "Enter",
             "Count": 2,
-            "DelayMs": 100,
+            "DelayMs": 1000,
             "Description": "Accept FFXI Terms of Service",
             "Parameters": {
               "TemplatePath": "ffxi_accept_terms",
-              "ConfidenceThreshold": 0.7,
+              "ConfidenceThreshold": 0.6,
               "ClickPoints": [
                 {
                   "X": 0.46202531645569583,
@@ -574,12 +574,12 @@
           }
         ],
         "Description": "Accept terms with Enter key",
-        "PostNavigationDelayMs": 500
+        "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
-      "RetryDelayMs": 500,
-      "ConfidenceThreshold": 0.7,
+      "RetryDelayMs": 1000,
+      "ConfidenceThreshold": 0.6,
       "Tolerance": 5,
       "Metadata": {}
     },
