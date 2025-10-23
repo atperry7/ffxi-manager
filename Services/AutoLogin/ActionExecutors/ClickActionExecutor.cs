@@ -22,7 +22,6 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
     public class ClickActionExecutor : BaseWorkflowActionExecutor
     {
         private readonly IUIAutomationService _automationService;
-        private readonly IScreenDetectionCoordinator _screenDetection;
 
         public override string ActionType => "Click";
 
@@ -30,12 +29,10 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
         public ClickActionExecutor(
             ILoggingService loggingService,
-            IUIAutomationService automationService,
-            IScreenDetectionCoordinator screenDetection)
+            IUIAutomationService automationService)
             : base(loggingService)
         {
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
-            _screenDetection = screenDetection ?? throw new ArgumentNullException(nameof(screenDetection));
         }
 
         protected override async Task<bool> ExecuteActionAsync(
@@ -64,28 +61,6 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 return false;
             }
 
-            // Ensure fresh handle in case of splash → main transitions
-            if (!await context.EnsureFreshWindowHandleAsync())
-            {
-                await _loggingService.LogErrorAsync("[CLICK] Unable to refresh window handle before capture");
-                return false;
-            }
-
-            // Capture screenshot to convert to screen coordinates (with logging + retries)
-            var screenshot = await _screenDetection.CaptureScreenshotWithLogging(context.WindowHandle, "click coordinate conversion", cancellationToken, retryCount: 0);
-            if (screenshot == null || !screenshot.IsValid)
-            {
-                await _loggingService.LogErrorAsync("[CLICK] Failed to capture window screenshot for coordinate conversion");
-                return false;
-            }
-
-            // Diagnostic logging for coordinate debugging
-            await _loggingService.LogInfoAsync($"[CLICK_DEBUG] Screenshot dimensions: {screenshot.Width}x{screenshot.Height}");
-            await _loggingService.LogInfoAsync($"[CLICK_DEBUG] Window bounds: {screenshot.WindowBounds} (size: {screenshot.WindowBounds.Width}x{screenshot.WindowBounds.Height})");
-            await _loggingService.LogInfoAsync($"[CLICK_DEBUG] DPI scale: {screenshot.DpiScale}");
-            await _loggingService.LogInfoAsync($"[CLICK_DEBUG] Template match position: {context.TemplateMatch.WindowRelativePosition}");
-            await _loggingService.LogInfoAsync($"[CLICK_DEBUG] Template match size: {context.TemplateMatch.MatchSize}");
-
             // Activate window first
             await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
             await Task.Delay(100, cancellationToken);
@@ -94,23 +69,12 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             for (int i = 0; i < multiPoints.Count; i++)
             {
                 var p = multiPoints[i];
-                var absolute = CalculateRelativeClickPoint(context.TemplateMatch, p.X, p.Y);
-                await _loggingService.LogInfoAsync($"[CLICK_DEBUG] Point {i + 1}: relative offset=({p.X}, {p.Y})");
-                await _loggingService.LogInfoAsync($"[CLICK_DEBUG] Point {i + 1}: absolute window-relative=({absolute.X}, {absolute.Y})");
+                var windowRelativePoint = CalculateRelativeClickPoint(context.TemplateMatch, p.X, p.Y);
 
-                var screenPoint = screenshot.ToScreenCoordinates(absolute);
-                await _loggingService.LogInfoAsync($"[CLICK_DEBUG] Point {i + 1}: final screen coordinates=({screenPoint.X}, {screenPoint.Y})");
+                await _loggingService.LogDebugAsync($"[CLICK] Point {i + 1}: relative=({p.X:F2},{p.Y:F2}) -> window-relative=({windowRelativePoint.X},{windowRelativePoint.Y})");
 
-                if (!IsReasonable(screenPoint))
-                {
-                    await _loggingService.LogWarningAsync($"[CLICK] Skipping out-of-bounds point {i + 1}: ({screenPoint.X}, {screenPoint.Y})");
-                    continue;
-                }
+                await _automationService.ClickWindowRelativeAsync(context.WindowHandle, windowRelativePoint, cancellationToken);
 
-                await _loggingService.LogDebugAsync($"[CLICK] Point {i + 1}: screen=({screenPoint.X}, {screenPoint.Y})");
-                await _automationService.MoveMouseAsync(screenPoint, cancellationToken);
-                await Task.Delay(150, cancellationToken);
-                await _automationService.ClickAsync(screenPoint, cancellationToken);
                 if (i < multiPoints.Count - 1 && action.DelayMs > 0)
                 {
                     await Task.Delay(action.DelayMs, cancellationToken);
@@ -137,9 +101,6 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             return new Point(absoluteX, absoluteY);
         }
-
-        private static bool IsReasonable(Point screenPoint)
-            => screenPoint.X >= 0 && screenPoint.Y >= 0 && screenPoint.X <= 8000 && screenPoint.Y <= 8000;
 
         // Multi-point list is directly stored in action.Parameters["ClickPoints"]
     }
