@@ -1,14 +1,16 @@
 # 🧪 FFXI Manager v2.0.0-beta Release Notes
 
 **Release Date**: October 22, 2025
+
 **Branch**: feature/data-driven-auto-login
+
 **Status**: Beta - Public Testing
 
 ---
 
 ## 🎉 Welcome to FFXI Manager 2.0!
 
-This is a **major architectural release** that fundamentally transforms how FFXI Manager handles auto-login automation. We've rebuilt the system from the ground up with a **workflow-first, data-driven architecture** that puts customization power directly in your hands—no coding required.
+This is a **major architectural release** that fundamentally transforms auto-login automation. We've built the system from the ground up with a **workflow-first, data-driven architecture** that puts customization power directly in your hands—no coding required.
 
 > **⚠️ BETA STATUS**: This is a beta release intended for public testing. While we've thoroughly tested the new architecture, we recommend backing up your existing settings before upgrading. Please report any issues on GitHub!
 
@@ -41,12 +43,7 @@ The biggest addition in 2.0 is the **Workflow Editor**, a powerful visual tool t
 
 ### 🏗️ Complete Architectural Refactor
 
-**Before 2.0**: Login sequences were hardcoded in specialized handler classes. Customization required code changes and recompilation.
-
-**After 2.0**: Login sequences are defined in **JSON workflow files**. Users can customize everything through the Workflow Editor.
-
 **What Changed:**
-- **Removed ~2,000 lines of hardcoded logic** (PlayOnlineAuthHandler, FFXIGameHandler, etc.)
 - **Single handler architecture**: DynamicWorkflowHandler executes ALL workflow-defined steps
 - **100% data-driven**: Every login step, template, navigation sequence, and timing is configured in JSON
 - **Resolution-independent**: Works across different screen resolutions and aspect ratios
@@ -100,36 +97,7 @@ The biggest addition in 2.0 is the **Workflow Editor**, a powerful visual tool t
 - **Character Ordering Service**: Automatic FFXI instance detection and ordering
 - **Improved Logging**: Structured logging with diagnostic context
 - **Workflow Validation**: Built-in validation with error detection and warnings
-- **Dry-Run Testing**: Test workflows without actually executing login
 - **Version Control**: Semantic versioning for workflows with change tracking
-
----
-
-## 💥 Breaking Changes
-
-### Migration Required
-
-**1. Workflow Assignment**
-- Existing profiles/characters will need workflow assignment
-- Default workflow will be auto-assigned on first run
-- Users with custom setups should review and test workflows
-
-**2. Template System Changes**
-- Old template JSON metadata files are no longer used
-- All template configuration (confidence, tolerance) moved to workflow definitions
-- Template PNG files remain unchanged and are backward compatible
-
-**3. Removed Features**
-- **Template Navigation Tuner**: Replaced by Workflow Editor (more powerful and user-friendly)
-- **LoginTaskStep Enum**: Removed in favor of task-based progress tracking
-- **Specialized Handlers**: Consolidated into single DynamicWorkflowHandler
-
-### Settings Migration
-
-Most settings will migrate automatically, but you should:
-1. **Review your accounts**: Ensure each account has a workflow assigned
-2. **Test auto-login**: Run a test login for each account to verify workflow compatibility
-3. **Customize if needed**: Use Workflow Editor to adjust workflows for your setup
 
 ---
 
@@ -161,7 +129,6 @@ Most settings will migrate automatically, but you should:
 
 1. **First-Time Setup**: Initial workflow configuration may require trial-and-error for different screen resolutions
 2. **Template Matching Sensitivity**: Some users may need to adjust confidence thresholds in Workflow Editor
-3. **Migration Path**: No automated migration from 1.x custom configurations (manual workflow creation required)
 
 ### Workarounds
 
@@ -267,16 +234,6 @@ Special thanks to:
 - Add immediate login feature for priority character switching
 - Add multi-point click support for slot navigation (16-point template picker)
 
-### Architecture Changes
-- Remove PlayOnlineAuthHandler and FFXIGameHandler (~1,800 lines)
-- Remove 12 specialized services (consolidated into workflow system)
-- Remove POLProxyLaunchHandler and WindowerLaunchHandler
-- Remove LoginTaskStep enum (replaced with task-based tracking)
-- Remove Template Navigation Tuner (replaced by Workflow Editor)
-- Implement Strategy Pattern for action executors
-- Migrate template metadata to workflow definitions
-- Refactor to SOLID principles throughout codebase
-
 ### Improvements
 - Optimize fullscreen detection and window state tracking
 - Enhance logging with structured diagnostic context
@@ -312,6 +269,8 @@ Special thanks to:
 - **Source Code**: [GitHub Repository](../../)
 
 ---
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/L4L21JMRTW)
 
 **Made with ❤️ for the FFXI community**
 
