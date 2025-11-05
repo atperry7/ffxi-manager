@@ -283,9 +283,9 @@ namespace FFXIManager.Services
             }
 
             // Validate POL Member Slot
-            if (account.POLMemberSlot < 1 || account.POLMemberSlot > 4)
+            if (account.POLMemberSlot < 1 || account.POLMemberSlot > 20)
             {
-                errors.Add("POL Member Slot must be between 1 and 4");
+                errors.Add("POL Member Slot must be between 1 and 20");
             }
 
             // Validate FFXI Character Slot

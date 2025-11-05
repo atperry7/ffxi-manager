@@ -17,7 +17,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
     ///
     /// **Requirements:**
     /// - Account context must be available via QueueItem
-    /// - Account.POLMemberSlot must be set (1-4)
+    /// - Account.POLMemberSlot must be set (1-20)
     /// - Window must have focus before navigation
     ///
     /// **Parameters:**
@@ -59,9 +59,9 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             var account = context.QueueItem.Account;
             var targetSlot = account.POLMemberSlot;
 
-            if (targetSlot < 1 || targetSlot > 4)
+            if (targetSlot < 1 || targetSlot > 20)
             {
-                await _loggingService.LogErrorAsync($"[MEMBER-SLOT] Invalid member slot: {targetSlot} (must be 1-4)");
+                await _loggingService.LogErrorAsync($"[MEMBER-SLOT] Invalid member slot: {targetSlot} (must be 1-20)");
                 return false;
             }
 
@@ -148,9 +148,9 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             // Get configured click points from action parameters (JSON array)
             var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
-            if (points == null || points.Count < 4)
+            if (points == null || points.Count < 20)
             {
-                await _loggingService.LogWarningAsync("[MEMBER-SLOT] ClickPoints missing or fewer than 4; cannot click");
+                await _loggingService.LogWarningAsync("[MEMBER-SLOT] ClickPoints missing or fewer than 20; cannot click");
                 return false;
             }
             var rel = points[Math.Clamp(targetSlot - 1, 0, points.Count - 1)];

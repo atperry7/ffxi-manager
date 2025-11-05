@@ -133,9 +133,9 @@ namespace FFXIManager.ViewModels
         public bool HasProfileSelected => CurrentProfile != null && !CurrentProfile.IsSystemFile;
 
         /// <summary>
-        /// Indicates if accounts can be added (max 4 per POL limitation)
+        /// Indicates if accounts can be added (max 20, though standard POL only supports 4)
         /// </summary>
-        public bool CanAddAccount => HasProfileSelected && Accounts.Count < 4;
+        public bool CanAddAccount => HasProfileSelected && Accounts.Count < 20;
 
         #endregion
 
@@ -185,9 +185,9 @@ namespace FFXIManager.ViewModels
                 return;
             }
 
-            if (Accounts.Count >= 4)
+            if (Accounts.Count >= 20)
             {
-                _statusService.SetTemporaryMessage("Maximum of 4 PlayOnline Member Accounts allowed", TimeSpan.FromSeconds(3));
+                _statusService.SetTemporaryMessage("Maximum of 20 PlayOnline Member Accounts allowed", TimeSpan.FromSeconds(3));
                 return;
             }
 
@@ -751,7 +751,7 @@ namespace FFXIManager.ViewModels
 
         private int GetNextAvailableSlot()
         {
-            for (int slot = 1; slot <= 4; slot++)
+            for (int slot = 1; slot <= 20; slot++)
             {
                 if (!Accounts.Any(a => a.POLMemberSlot == slot))
                 {
@@ -839,9 +839,9 @@ namespace FFXIManager.ViewModels
         }
 
         /// <summary>
-        /// Available POL Member Slots (1-4)
+        /// Available POL Member Slots (1-20)
         /// </summary>
-        public int[] AvailablePOLSlots => new[] { 1, 2, 3, 4 };
+        public int[] AvailablePOLSlots => Enumerable.Range(1, 20).ToArray();
 
         /// <summary>
         /// Available FFXI Character Slots (1-16)
@@ -870,6 +870,11 @@ namespace FFXIManager.ViewModels
         }
 
         /// <summary>
+        /// Gets whether to show the POL slot warning (true if slot > 4)
+        /// </summary>
+        public bool ShowPOLSlotWarning => Account.POLMemberSlot > 4;
+
+        /// <summary>
         /// Checks if a POL slot is already in use
         /// </summary>
         public bool IsPOLSlotAvailable(int slot)
@@ -881,6 +886,12 @@ namespace FFXIManager.ViewModels
         {
             // Re-validate when properties change
             OnPropertyChanged(nameof(Account));
+
+            // Update warning visibility when POL slot changes
+            if (e.PropertyName == nameof(PlayOnlineMemberAccount.POLMemberSlot))
+            {
+                OnPropertyChanged(nameof(ShowPOLSlotWarning));
+            }
         }
 
         /// <summary>

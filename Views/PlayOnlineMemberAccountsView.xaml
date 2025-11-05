@@ -226,7 +226,7 @@
                                         <Setter Property="Text" Value="Add a new PlayOnline Member Account"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding CanAddAccount}" Value="False">
-                                                <Setter Property="Text" Value="Maximum of 4 accounts allowed per profile"/>
+                                                <Setter Property="Text" Value="Maximum of 20 accounts allowed per profile"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>

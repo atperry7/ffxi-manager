@@ -77,10 +77,10 @@ namespace FFXIManager.Views
             }
 
             // Validate required fields
-            if (ViewModel.Account.POLMemberSlot < 1 || ViewModel.Account.POLMemberSlot > 4)
+            if (ViewModel.Account.POLMemberSlot < 1 || ViewModel.Account.POLMemberSlot > 20)
             {
                 MessageBox.Show(
-                    "POL Member Slot must be between 1 and 4.",
+                    "POL Member Slot must be between 1 and 20.",
                     "Validation Error",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);

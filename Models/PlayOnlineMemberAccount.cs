@@ -29,15 +29,15 @@ namespace FFXIManager.Models
         }
 
         /// <summary>
-        /// PlayOnline Member Slot Number (1 to 4)
+        /// PlayOnline Member Slot Number (1 to 20)
         /// </summary>
         public int POLMemberSlot
         {
             get => _polMemberSlot;
             set
             {
-                if (value < 1 || value > 4)
-                    throw new ArgumentOutOfRangeException(nameof(value), "POL Member Slot must be between 1 and 4");
+                if (value < 1 || value > 20)
+                    throw new ArgumentOutOfRangeException(nameof(value), "POL Member Slot must be between 1 and 20");
                 SetProperty(ref _polMemberSlot, value);
             }
         }
