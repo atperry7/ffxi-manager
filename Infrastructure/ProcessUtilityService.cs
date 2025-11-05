@@ -119,8 +119,71 @@ namespace FFXIManager.Infrastructure
         [DllImport("user32.dll")]
         private static extern int GetLastError();
 
+        // **KEYBOARD STATE MANAGEMENT**: Modern keyboard input APIs
+        [DllImport("user32.dll")]
+        private static extern bool GetKeyboardState(byte[] lpKeyState);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetKeyboardState(byte[] lpKeyState);
+
+        [DllImport("user32.dll")]
+        private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+        // **INPUT STRUCTURES**: For SendInput API
+        [StructLayout(LayoutKind.Sequential)]
+        private struct INPUT
+        {
+            public uint type;
+            public INPUTUNION u;
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        private struct INPUTUNION
+        {
+            [FieldOffset(0)]
+            public MOUSEINPUT mi;
+            [FieldOffset(0)]
+            public KEYBDINPUT ki;
+            [FieldOffset(0)]
+            public HARDWAREINPUT hi;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MOUSEINPUT
+        {
+            public int dx;
+            public int dy;
+            public uint mouseData;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct KEYBDINPUT
+        {
+            public ushort wVk;
+            public ushort wScan;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct HARDWAREINPUT
+        {
+            public uint uMsg;
+            public ushort wParamL;
+            public ushort wParamH;
+        }
+
+        // **INPUT CONSTANTS**
+        private const uint INPUT_KEYBOARD = 1;
+        private const uint KEYEVENTF_KEYUP = 0x0002;
+        private const byte VK_MENU = 0x12; // Alt key
+
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-        
+
         private const uint GW_HWNDNEXT = 2;
         private const uint GW_HWNDPREV = 3;
 
@@ -203,31 +266,39 @@ namespace FFXIManager.Infrastructure
                 await _logging.LogDebugAsync($"Initial window state: {initialState}", "ProcessUtilityService");
                 
                 using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
-                
-                // **PERFORMANCE**: Reduce attempts and delays for faster response
+
+                // **SIMPLIFIED**: Only 2 attempts now (SwitchToWindow -> Standard)
                 int attempts = 0;
                 bool success = false;
-                
-                while (!success && attempts < 3 && !cts.Token.IsCancellationRequested)
+                string? strategyUsed = null;
+
+                while (!success && attempts < 2 && !cts.Token.IsCancellationRequested)
                 {
                     attempts++;
+                    strategyUsed = attempts == 1 ? "SwitchToWindow" : "Standard";
+
+                    await _logging.LogDebugAsync($"Attempting window activation strategy {attempts}/2: {strategyUsed}", "ProcessUtilityService");
+
                     success = await AttemptWindowActivation(windowHandle, attempts, cts.Token);
-                    
-                    if (!success && attempts < 3)
+
+                    if (!success && attempts < 2)
                     {
-                        // **PERFORMANCE**: Reduced delay between attempts
-                        await Task.Delay(Math.Min(20 * attempts, 50), cts.Token); // Max 50ms delay
+                        // Brief delay between strategies
+                        await Task.Delay(20, cts.Token);
                     }
                 }
                 
                 stopwatch.Stop();
-                
+
                 // **VERIFICATION**: Get final window state
                 var finalState = GetWindowState(windowHandle);
-                
+
                 if (success || finalState.IsForeground)
                 {
-                    await _logging.LogDebugAsync($"Window activation succeeded after {attempts} attempts in {stopwatch.ElapsedMilliseconds}ms", "ProcessUtilityService");
+                    await _logging.LogDebugAsync(
+                        $"Window activation SUCCESS using {strategyUsed ?? "unknown"} strategy after {attempts} attempts in {stopwatch.ElapsedMilliseconds}ms",
+                        "ProcessUtilityService");
+
                     var successResult = WindowActivationResult.Successful(windowHandle, stopwatch.Elapsed, attempts);
                     successResult.WindowState = finalState;
                     return successResult;
@@ -509,6 +580,42 @@ namespace FFXIManager.Infrastructure
 
         #region Helper Methods
 
+        /// <summary>
+        /// Resets keyboard state to ensure no modifier keys are stuck.
+        /// **CRITICAL**: Prevents DirectX input corruption after window activation.
+        /// </summary>
+        private static void ResetKeyboardState()
+        {
+            try
+            {
+                // Create clean keyboard state (all keys UP)
+                byte[] cleanState = new byte[256];
+
+                // Get current state for diagnostic purposes
+                byte[] currentState = new byte[256];
+                if (GetKeyboardState(currentState))
+                {
+                    // Check if any modifier keys are pressed
+                    bool altPressed = (currentState[VK_MENU] & 0x80) != 0;
+                    bool ctrlPressed = (currentState[0x11] & 0x80) != 0; // VK_CONTROL
+                    bool shiftPressed = (currentState[0x10] & 0x80) != 0; // VK_SHIFT
+
+                    if (altPressed || ctrlPressed || shiftPressed)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[KEYBOARD RESET] Modifiers detected before reset - Alt:{altPressed} Ctrl:{ctrlPressed} Shift:{shiftPressed}");
+                    }
+                }
+
+                // Reset to clean state
+                SetKeyboardState(cleanState);
+                System.Diagnostics.Debug.WriteLine("[KEYBOARD RESET] Keyboard state reset to clean (all keys UP)");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[KEYBOARD RESET] Error resetting keyboard state: {ex.Message}");
+            }
+        }
+
         private string GetWindowTitle(IntPtr hWnd)
         {
             try
@@ -620,7 +727,8 @@ namespace FFXIManager.Infrastructure
         }
         
         /// <summary>
-        /// Attempts window activation using progressive strategies.
+        /// Attempts window activation using simplified strategies optimized for DirectX games.
+        /// **REFACTORED**: Reduced from 3 to 2 strategies, removed thread attachment and synthetic input.
         /// </summary>
         private static async Task<bool> AttemptWindowActivation(IntPtr hWnd, int attemptNumber, CancellationToken cancellationToken)
         {
@@ -628,177 +736,137 @@ namespace FFXIManager.Infrastructure
             switch (attemptNumber)
             {
                 case 1:
-                    // **ATTEMPT 1**: Simple activation
-                    return await SimpleActivation(hWnd, cancellationToken);
-                    
+                    // **ATTEMPT 1**: SwitchToThisWindow (best for DirectX games)
+                    return await SwitchToWindowActivation(hWnd, cancellationToken);
+
                 case 2:
-                    // **ATTEMPT 2**: Thread attachment
-                    return await ThreadAttachmentActivation(hWnd, cancellationToken);
-                    
-                case 3:
-                    // **ATTEMPT 3**: Aggressive activation with window restoration
-                    return await AggressiveActivation(hWnd, cancellationToken);
-                    
+                    // **ATTEMPT 2**: Standard activation (ShowWindow + SetForegroundWindow)
+                    return await StandardActivation(hWnd, cancellationToken);
+
                 default:
                     return false;
             }
         }
         
-        private static async Task<bool> SimpleActivation(IntPtr hWnd, CancellationToken cancellationToken)
+        /// <summary>
+        /// **STRATEGY 1**: SwitchToThisWindow activation - optimal for DirectX games.
+        /// Uses native Windows API designed for game window switching.
+        /// </summary>
+        private static async Task<bool> SwitchToWindowActivation(IntPtr hWnd, CancellationToken cancellationToken)
         {
-            // **PERFORMANCE**: Check if already foreground first
-            if (GetForegroundWindow() == hWnd)
-                return true;
-            
-            if (IsIconic(hWnd))
-            {
-                ShowWindow(hWnd, SW_RESTORE);
-                // **PERFORMANCE**: Reduced delay
-                await Task.Delay(20, cancellationToken);
-            }
-            
-            SetForegroundWindow(hWnd);
-            BringWindowToTop(hWnd);
-            
-            // **PERFORMANCE**: Reduced delay
-            await Task.Delay(5, cancellationToken);
-            return GetForegroundWindow() == hWnd;
-        }
-        
-        private static async Task<bool> ThreadAttachmentActivation(IntPtr hWnd, CancellationToken cancellationToken)
-        {
-            var currentThread = GetCurrentThreadId();
-            var targetThread = GetWindowThreadProcessId(hWnd, out _);
-            
-            if (currentThread == targetThread)
-            {
-                return await SimpleActivation(hWnd, cancellationToken);
-            }
-            
-            bool attached = false;
             try
             {
-                attached = AttachThreadInput(currentThread, targetThread, true);
-                if (attached)
+                // **PERFORMANCE**: Check if already foreground first
+                if (GetForegroundWindow() == hWnd)
                 {
-                    if (IsIconic(hWnd))
-                    {
-                        ShowWindow(hWnd, SW_RESTORE);
-                        // **PERFORMANCE**: Reduced delay
-                        await Task.Delay(20, cancellationToken);
-                    }
-                    
-                    SetForegroundWindow(hWnd);
-                    BringWindowToTop(hWnd);
-                    ShowWindow(hWnd, SW_SHOW);
-                    
+                    System.Diagnostics.Debug.WriteLine("[ACTIVATION] Window already foreground, skipping");
+                    return true;
+                }
+
+                // Restore window if minimized
+                if (IsIconic(hWnd))
+                {
+                    ShowWindow(hWnd, SW_RESTORE);
                     await Task.Delay(20, cancellationToken);
                 }
-            }
-            finally
-            {
-                if (attached)
+
+                // **PRIMARY METHOD**: SwitchToThisWindow is most reliable for DirectX games
+                SwitchToThisWindow(hWnd, true);
+
+                // **DIRECTX FIX**: 50ms delay for DirectX input reinitialization
+                await Task.Delay(50, cancellationToken);
+
+                bool success = GetForegroundWindow() == hWnd;
+
+                // **KEYBOARD STATE CLEANUP**: Always reset keyboard state after activation
+                ResetKeyboardState();
+
+                if (success)
                 {
-                    AttachThreadInput(currentThread, targetThread, false);
+                    System.Diagnostics.Debug.WriteLine("[ACTIVATION] SwitchToThisWindow succeeded");
                 }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("[ACTIVATION] SwitchToThisWindow failed, will try standard activation");
+                }
+
+                return success;
             }
-            
-            return GetForegroundWindow() == hWnd;
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ACTIVATION ERROR] SwitchToWindowActivation failed: {ex.Message}");
+                ResetKeyboardState(); // Cleanup even on error
+                return false;
+            }
         }
-        
-        private static async Task<bool> AggressiveActivation(IntPtr hWnd, CancellationToken cancellationToken)
+
+        /// <summary>
+        /// **STRATEGY 2**: Standard Windows activation fallback.
+        /// Uses traditional SetForegroundWindow + BringWindowToTop.
+        /// </summary>
+        private static async Task<bool> StandardActivation(IntPtr hWnd, CancellationToken cancellationToken)
         {
-            // Get the process ID of the target window
-            var threadId = GetWindowThreadProcessId(hWnd, out uint targetPid);
-            if (threadId == 0)
-            {
-                System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Failed to get thread ID for window 0x{hWnd.ToInt64():X}");
-            }
-            
-            // Allow the target process to set foreground window
-            AllowSetForegroundWindow((int)targetPid);
-            
-            // **ENHANCED**: Log current foreground window for debugging
-            var currentForeground = GetForegroundWindow();
-            if (currentForeground != IntPtr.Zero)
-            {
-                var fgState = GetWindowState(currentForeground);
-                System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Current foreground before activation: {fgState.WindowTitle} (0x{currentForeground.ToInt64():X})");
-            }
-            
-            // Temporarily disable focus stealing prevention
-            IntPtr timeout = Marshal.AllocHGlobal(sizeof(uint));
             try
             {
-                // Get current timeout
-                SystemParametersInfo(SPI_GETFOREGROUNDLOCKTIMEOUT, 0, timeout, 0);
-                uint originalTimeout = (uint)Marshal.ReadInt32(timeout);
-                
-                // Set timeout to 0 (disable focus stealing prevention)
-                Marshal.WriteInt32(timeout, 0);
-                SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, timeout, SPIF_SENDCHANGE);
-                
-                // **FIX**: Use SwitchToThisWindow for better reliability with games
-                // This API is more reliable for switching to game windows
-                SwitchToThisWindow(hWnd, true);
-                
-                // Force window to restore and show
+                // Get the process ID for AllowSetForegroundWindow
+                var threadId = GetWindowThreadProcessId(hWnd, out uint targetPid);
+                if (threadId == 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Failed to get thread ID for window 0x{hWnd.ToInt64():X}");
+                }
+
+                // Allow the target process to set foreground window
+                AllowSetForegroundWindow((int)targetPid);
+
+                // Log current foreground for diagnostics
+                var currentForeground = GetForegroundWindow();
+                if (currentForeground != IntPtr.Zero && currentForeground != hWnd)
+                {
+                    var fgState = GetWindowState(currentForeground);
+                    System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Current foreground: {fgState.WindowTitle} (0x{currentForeground.ToInt64():X})");
+                }
+
+                // Restore window if minimized
                 if (IsIconic(hWnd))
                 {
                     ShowWindow(hWnd, SW_RESTORE);
                     await Task.Delay(30, cancellationToken);
                 }
-                
+
+                // Show and bring to top
                 ShowWindow(hWnd, SW_SHOW);
                 BringWindowToTop(hWnd);
-                
-                // Multiple activation attempts in quick succession
-                for (int i = 0; i < 5; i++)
+
+                // Primary activation attempt
+                SetForegroundWindow(hWnd);
+
+                // **DIRECTX FIX**: 50ms delay for DirectX input reinitialization
+                await Task.Delay(50, cancellationToken);
+
+                bool success = GetForegroundWindow() == hWnd;
+
+                // **KEYBOARD STATE CLEANUP**: Always reset keyboard state after activation
+                // **CRITICAL**: This prevents DirectX input corruption (movement/camera lockup)
+                ResetKeyboardState();
+
+                if (success)
                 {
-                    // **ENHANCED**: Try multiple activation methods
-                    SetForegroundWindow(hWnd);
-                    
-                    if (i == 1)
-                    {
-                        // Try SwitchToThisWindow again
-                        SwitchToThisWindow(hWnd, true);
-                    }
-                    
-                    // Use SendKeys to simulate user input (bypasses focus stealing prevention)
-                    if (i == 2)
-                    {
-                        // Simulate an Alt key press to trick Windows into allowing focus change
-                        keybd_event(0x12, 0, 0, 0); // Alt key down
-                        keybd_event(0x12, 0, 2, 0); // Alt key up
-                        System.Diagnostics.Debug.WriteLine("[ACTIVATION] Sent Alt key to bypass focus stealing prevention");
-                    }
-                    
-                    await Task.Delay(10, cancellationToken);
-                    
-                    if (GetForegroundWindow() == hWnd)
-                    {
-                        // Restore original timeout
-                        Marshal.WriteInt32(timeout, (int)originalTimeout);
-                        SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, timeout, SPIF_SENDCHANGE);
-                        System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Successfully activated window after {i+1} attempts");
-                        return true;
-                    }
+                    System.Diagnostics.Debug.WriteLine("[ACTIVATION] Standard activation succeeded");
                 }
-                
-                // Restore original timeout
-                Marshal.WriteInt32(timeout, (int)originalTimeout);
-                SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, timeout, SPIF_SENDCHANGE);
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("[ACTIVATION] Standard activation failed");
+                }
+
+                return success;
             }
-            finally
+            catch (Exception ex)
             {
-                Marshal.FreeHGlobal(timeout);
+                System.Diagnostics.Debug.WriteLine($"[ACTIVATION ERROR] StandardActivation failed: {ex.Message}");
+                ResetKeyboardState(); // Cleanup even on error
+                return false;
             }
-            
-            return false;
         }
-        
-        [DllImport("user32.dll")]
-        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
         
         /// <summary>
         /// Checks if a window handle is still valid and exists.
