@@ -145,15 +145,18 @@ namespace FFXIManager.Services.AutoLogin
             // Pre-detect when:
             //  - detection-only step (no navigation), OR
             //  - step has TemplatePath and navigation does NOT include a Launch action (gated navigation)
+            //  - UNLESS SkipTemplateDetection is true (skip detection for center-relative clicks / blind navigation)
             // Otherwise (Launch-first flows), defer detection to per-action execution.
             bool hasNavigation = stepDef.Navigation != null && stepDef.Navigation.Sequence != null && stepDef.Navigation.Sequence.Count > 0;
             bool hasTemplate = !string.IsNullOrWhiteSpace(stepDef.TemplatePath);
             bool navHasLaunch = hasNavigation && (stepDef.Navigation?.Sequence != null) && stepDef.Navigation.Sequence.Any(a => string.Equals(a.Action, "Launch", StringComparison.OrdinalIgnoreCase));
+            bool skipDetection = stepDef.SkipTemplateDetection;
 
             IntPtr windowHandle = IntPtr.Zero;
             TemplateMatchResult? templateMatch = null;
 
-            if ((hasTemplate && !hasNavigation) || (hasTemplate && hasNavigation && !navHasLaunch))
+            // Skip template detection if explicitly requested OR if no template is configured
+            if (!skipDetection && ((hasTemplate && !hasNavigation) || (hasTemplate && hasNavigation && !navHasLaunch)))
             {
                 await _loggingService.LogDebugAsync("[DYNAMIC-WORKFLOW] Detection-only step - using on-demand discovery via refresh callback");
                 var targetApp = TargetApplicationResolver.ResolveForStep(stepDef);
@@ -202,7 +205,14 @@ namespace FFXIManager.Services.AutoLogin
             }
             else
             {
-                await _loggingService.LogDebugAsync("[DYNAMIC-WORKFLOW] Action-driven step - deferring window discovery/detection to per-action execution");
+                if (skipDetection)
+                {
+                    await _loggingService.LogDebugAsync("[DYNAMIC-WORKFLOW] Template detection skipped (SkipTemplateDetection=true) - proceeding directly to navigation");
+                }
+                else
+                {
+                    await _loggingService.LogDebugAsync("[DYNAMIC-WORKFLOW] Action-driven step - deferring window discovery/detection to per-action execution");
+                }
             }
 
             // Phase 3: Execute navigation with on-demand discovery/detection
@@ -698,6 +708,14 @@ namespace FFXIManager.Services.AutoLogin
             WorkflowActionContext actionContext,
             CancellationToken cancellationToken)
         {
+            // Skip all action-level detection if step has SkipTemplateDetection enabled
+            // This allows center-relative clicks and blind navigation without template matching overhead
+            if (stepDef.SkipTemplateDetection)
+            {
+                await _loggingService.LogDebugAsync("[NAVIGATION] Skipping action-level detection (SkipTemplateDetection=true)");
+                return;
+            }
+
             // Click actions: require template match if no existing match
             if (string.Equals(action.Action, "Click", StringComparison.OrdinalIgnoreCase))
             {

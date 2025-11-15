@@ -100,14 +100,6 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             int targetSlot,
             CancellationToken cancellationToken)
         {
-            // Need a detected template region to compute relative click
-            var match = context.TemplateMatch;
-            if (match == null)
-            {
-                await _loggingService.LogWarningAsync("[CHARACTER-SLOT] No template match in context; cannot perform click-based navigation");
-                return false;
-            }
-
             // Ensure window focus
             if (context.WindowHandle != IntPtr.Zero)
             {
@@ -122,19 +114,56 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 await _loggingService.LogWarningAsync($"[CHARACTER-SLOT] ClickPoints missing or fewer than 16 (found {points?.Count ?? 0}); cannot click");
                 return false;
             }
-            var rel = points[Math.Clamp(targetSlot - 1, 0, points.Count - 1)];
+            var clickPoint = points[Math.Clamp(targetSlot - 1, 0, points.Count - 1)];
 
-            // Convert relative (0-1) to window-relative coordinates within matched region
-            var rect = match.GetBoundingRectangle();
-            var wx = rect.Left + (int)Math.Round(rel.X * rect.Width);
-            var wy = rect.Top + (int)Math.Round(rel.Y * rect.Height);
+            // Check if template match is required (only for template-relative clicks)
+            if (!clickPoint.FromCenter && context.TemplateMatch == null)
+            {
+                await _loggingService.LogErrorAsync("[CHARACTER-SLOT] Template-relative click requested but no template match available");
+                return false;
+            }
 
-            await _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Clicking slot {targetSlot} at rel=({rel.X:F2},{rel.Y:F2}) -> window=({wx},{wy})");
+            // Calculate click point (supports both template-relative and center-relative)
+            System.Drawing.Point screenPoint = CalculateClickPoint(clickPoint, context, targetSlot);
 
-            await _automationService.ClickWindowRelativeAsync(context.WindowHandle, new System.Drawing.Point(wx, wy), cancellationToken);
+            await _automationService.ClickWindowRelativeAsync(context.WindowHandle, screenPoint, cancellationToken);
             await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
 
             return true;
+        }
+
+        /// <summary>
+        /// Calculates window-relative click point using either center-relative or template-relative coordinates
+        /// </summary>
+        private System.Drawing.Point CalculateClickPoint(RelativeClickOffset clickPoint, WorkflowActionContext context, int targetSlot)
+        {
+            if (clickPoint.FromCenter)
+            {
+                // Center-relative (template-independent, resolution-independent)
+                var centerPoint = _automationService.GetWindowCenter(context.WindowHandle);
+                var windowRect = _automationService.GetWindowClientRect(context.WindowHandle);
+
+                var offsetX = (int)(clickPoint.X * windowRect.Width);
+                var offsetY = (int)(clickPoint.Y * windowRect.Height);
+
+                var windowRelativeX = centerPoint.X - windowRect.Left + offsetX;
+                var windowRelativeY = centerPoint.Y - windowRect.Top + offsetY;
+
+                _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Slot {targetSlot} click point (center-relative): ({clickPoint.X:F2},{clickPoint.Y:F2}) -> window=({windowRelativeX},{windowRelativeY})");
+
+                return new System.Drawing.Point(windowRelativeX, windowRelativeY);
+            }
+            else
+            {
+                // Template-relative (existing behavior)
+                var rect = context.TemplateMatch!.GetBoundingRectangle();
+                var wx = rect.Left + (int)Math.Round(clickPoint.X * rect.Width);
+                var wy = rect.Top + (int)Math.Round(clickPoint.Y * rect.Height);
+
+                _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Slot {targetSlot} click point (template-relative): ({clickPoint.X:F2},{clickPoint.Y:F2}) -> window=({wx},{wy})");
+
+                return new System.Drawing.Point(wx, wy);
+            }
         }
     }
 }

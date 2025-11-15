@@ -5,19 +5,24 @@ using System.Drawing;
 namespace FFXIManager.Services.AutoLogin.ActionExecutors
 {
     /// <summary>
-    /// Executes mouse click actions using relative coordinates.
-    /// Clicks are resolution-independent, calculated relative to detected template regions.
+    /// Executes mouse click actions using either template-relative or window-center-relative coordinates.
+    /// Supports both traditional template-based navigation and resolution-independent center-based navigation.
     /// </summary>
     /// <remarks>
-    /// **Click Coordinate System:**
-    /// - ClickX/ClickY are relative percentages (0.0 to 1.0)
-    /// - 0.5, 0.5 = center of template region
-    /// - 0.0, 0.0 = top-left corner
-    /// - 1.0, 1.0 = bottom-right corner
+    /// **Template-Relative Mode (FromCenter=false, default):**
+    /// - Requires context.TemplateMatch from prior detection
+    /// - Coordinates are percentages within template region (0.0 to 1.0)
+    /// - Example: X=0.5, Y=0.5 clicks center of matched template
+    ///
+    /// **Window-Center-Relative Mode (FromCenter=true):**
+    /// - No template matching required (template-independent!)
+    /// - Coordinates are percentages relative to window center (-0.5 to 0.5)
+    /// - Resolution-independent due to DirectX9 POL proportional scaling
+    /// - Example: X=0.0, Y=-0.2 clicks 20% of window height above center
     ///
     /// **Prerequisites:**
-    /// - context.TemplateMatch must be non-null (from prior detection)
-    /// - Window must be visible and valid
+    /// - Window handle must be valid
+    /// - Template match required ONLY if FromCenter=false
     /// </remarks>
     public class ClickActionExecutor : BaseWorkflowActionExecutor
     {
@@ -47,13 +52,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 return false;
             }
 
-            if (context.TemplateMatch == null)
-            {
-                await _loggingService.LogWarningAsync("[CLICK] No template match available - click actions require prior screen detection");
-                return false;
-            }
-
-            // Determine if multiple click points are defined via Parameters["ClickPoints"] (JSON)
+            // Get click points
             var multiPoints = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
             if (multiPoints == null || multiPoints.Count == 0)
             {
@@ -61,17 +60,32 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 return false;
             }
 
+            // Check if any point requires template matching
+            bool requiresTemplate = multiPoints.Any(p => !p.FromCenter);
+            if (requiresTemplate && context.TemplateMatch == null)
+            {
+                await _loggingService.LogWarningAsync("[CLICK] Template-relative click requested but no template match available");
+                return false;
+            }
+
             // Activate window first
             await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
             await Task.Delay(100, cancellationToken);
 
-            await _loggingService.LogInfoAsync($"[CLICK] Executing multi-click sequence with {multiPoints!.Count} point(s)");
+            // Determine navigation mode for logging
+            bool hasCenter = multiPoints.Any(p => p.FromCenter);
+            bool hasTemplate = multiPoints.Any(p => !p.FromCenter);
+            string mode = hasCenter && hasTemplate ? "Hybrid" : hasCenter ? "Center-Relative" : "Template-Relative";
+
+            await _loggingService.LogInfoAsync($"[CLICK] Executing {mode} click sequence with {multiPoints!.Count} point(s)");
+
             for (int i = 0; i < multiPoints.Count; i++)
             {
                 var p = multiPoints[i];
-                var windowRelativePoint = CalculateRelativeClickPoint(context.TemplateMatch, p.X, p.Y);
+                var windowRelativePoint = CalculateClickPoint(p, context);
 
-                await _loggingService.LogDebugAsync($"[CLICK] Point {i + 1}: relative=({p.X:F2},{p.Y:F2}) -> window-relative=({windowRelativePoint.X},{windowRelativePoint.Y})");
+                string modeLabel = p.FromCenter ? "center-relative" : "template-relative";
+                await _loggingService.LogDebugAsync($"[CLICK] Point {i + 1} ({modeLabel}): ({p.X:F2},{p.Y:F2}) -> window=({windowRelativePoint.X},{windowRelativePoint.Y})");
 
                 await _automationService.ClickWindowRelativeAsync(context.WindowHandle, windowRelativePoint, cancellationToken);
 
@@ -92,16 +106,42 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
         }
 
         /// <summary>
-        /// Calculates absolute window-relative click point from template match and relative offset
+        /// Calculates window-relative click point using either template-relative or center-relative coordinates.
         /// </summary>
-        private Point CalculateRelativeClickPoint(TemplateMatchResult templateMatch, double relativeX, double relativeY)
+        /// <remarks>
+        /// DirectX9 POL Behavior: POL uses proportional scaling where UI elements maintain their
+        /// relative positions from the window center regardless of window size, making center-relative
+        /// coordinates perfectly stable across all resolutions.
+        /// </remarks>
+        private Point CalculateClickPoint(RelativeClickOffset offset, WorkflowActionContext context)
         {
-            var absoluteX = templateMatch.WindowRelativePosition.X + (int)(templateMatch.MatchSize.Width * relativeX);
-            var absoluteY = templateMatch.WindowRelativePosition.Y + (int)(templateMatch.MatchSize.Height * relativeY);
+            if (offset.FromCenter)
+            {
+                // Center-relative calculation (template-independent, resolution-independent)
+                var centerPoint = _automationService.GetWindowCenter(context.WindowHandle);
+                var windowRect = _automationService.GetWindowClientRect(context.WindowHandle);
 
-            return new Point(absoluteX, absoluteY);
+                // Convert percentage offsets to pixel offsets from center
+                // Range: -0.5 to 0.5 (percentage of window width/height from center)
+                var offsetX = (int)(offset.X * windowRect.Width);
+                var offsetY = (int)(offset.Y * windowRect.Height);
+
+                // Calculate final window-relative position
+                // Note: centerPoint is already in screen coordinates, convert to window-relative
+                var windowRelativeX = centerPoint.X - windowRect.Left + offsetX;
+                var windowRelativeY = centerPoint.Y - windowRect.Top + offsetY;
+
+                return new Point(windowRelativeX, windowRelativeY);
+            }
+            else
+            {
+                // Template-relative calculation (existing behavior)
+                var templateMatch = context.TemplateMatch!; // Already validated in ExecuteActionAsync
+                var absoluteX = templateMatch.WindowRelativePosition.X + (int)(templateMatch.MatchSize.Width * offset.X);
+                var absoluteY = templateMatch.WindowRelativePosition.Y + (int)(templateMatch.MatchSize.Height * offset.Y);
+
+                return new Point(absoluteX, absoluteY);
+            }
         }
-
-        // Multi-point list is directly stored in action.Parameters["ClickPoints"]
     }
 }

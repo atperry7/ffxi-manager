@@ -459,9 +459,10 @@ namespace FFXIManager.ViewModels.WorkflowEditor
         }
 
         /// <summary>
-        /// Opens the template viewer in pick mode to select a click position.
+        /// Opens the template viewer in pick mode to select click points.
         /// Prefers the action-level template; falls back to step-level template if needed.
-        /// Applies chosen coordinates to the action's ClickX/ClickY.
+        /// Applies chosen coordinates to the action's ClickPoints parameter.
+        /// All click configuration (FromCenter mode, coordinates, etc.) is managed within the dialog.
         /// </summary>
         public async Task<bool> PickClickPositionForActionAsync(WorkflowStepDefinition? step, KeyboardAction action)
         {
@@ -508,15 +509,36 @@ namespace FFXIManager.ViewModels.WorkflowEditor
                 await vm.LoadTemplateAsync(templateFilePath, null);
                 vm.ClickMarkers.Clear();
 
-                // Preload existing ClickPoints if any
+                // Load existing click points from action parameters
                 var existing = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new System.Collections.Generic.List<RelativeClickOffset>())
                                ?? new System.Collections.Generic.List<RelativeClickOffset>();
+
+                // Set FromCenterMode based on first click point (or default to false)
+                vm.FromCenterMode = existing.Count > 0 && existing[0].FromCenter;
+
                 for (int i = 0; i < existing.Count; i++)
                 {
+                    // Convert coordinates to pixel positions based on mode
+                    double pixelX, pixelY;
+                    if (existing[i].FromCenter)
+                    {
+                        // Center-relative (-0.5 to 0.5) to pixel coordinates
+                        pixelX = (existing[i].X + 0.5) * vm.TemplateImageWidth;
+                        pixelY = (existing[i].Y + 0.5) * vm.TemplateImageHeight;
+                    }
+                    else
+                    {
+                        // Template-relative (0.0 to 1.0) to pixel coordinates
+                        pixelX = existing[i].X * vm.TemplateImageWidth;
+                        pixelY = existing[i].Y * vm.TemplateImageHeight;
+                    }
+
                     vm.ClickMarkers.Add(new ClickMarker
                     {
-                        X = existing[i].X * vm.TemplateImageWidth,
-                        Y = existing[i].Y * vm.TemplateImageHeight,
+                        X = pixelX,
+                        Y = pixelY,
+                        RelativeX = existing[i].X,
+                        RelativeY = existing[i].Y,
                         Label = (i + 1).ToString(),
                         Description = existing[i].Description ?? $"Click {i + 1}",
                         MarkerColor = System.Windows.Media.Brushes.DodgerBlue,
@@ -535,9 +557,26 @@ namespace FFXIManager.ViewModels.WorkflowEditor
                     var list = new System.Collections.Generic.List<RelativeClickOffset>();
                     foreach (var m in vm.ClickMarkers)
                     {
-                        var nx = vm.TemplateImageWidth > 0 ? m.X / vm.TemplateImageWidth : 0.5;
-                        var ny = vm.TemplateImageHeight > 0 ? m.Y / vm.TemplateImageHeight : 0.5;
-                        list.Add(new RelativeClickOffset { X = nx, Y = ny, Description = m.Description });
+                        double nx, ny;
+                        if (vm.FromCenterMode)
+                        {
+                            // Pixel to center-relative (-0.5 to 0.5)
+                            nx = vm.TemplateImageWidth > 0 ? (m.X / vm.TemplateImageWidth) - 0.5 : 0.0;
+                            ny = vm.TemplateImageHeight > 0 ? (m.Y / vm.TemplateImageHeight) - 0.5 : 0.0;
+                        }
+                        else
+                        {
+                            // Pixel to template-relative (0.0 to 1.0)
+                            nx = vm.TemplateImageWidth > 0 ? m.X / vm.TemplateImageWidth : 0.5;
+                            ny = vm.TemplateImageHeight > 0 ? m.Y / vm.TemplateImageHeight : 0.5;
+                        }
+                        list.Add(new RelativeClickOffset
+                        {
+                            X = nx,
+                            Y = ny,
+                            Description = m.Description,
+                            FromCenter = vm.FromCenterMode
+                        });
                     }
                     action.SetParameter("ClickPoints", list);
                     return true;
@@ -605,7 +644,11 @@ namespace FFXIManager.ViewModels.WorkflowEditor
                 var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new System.Collections.Generic.List<RelativeClickOffset>())
                              ?? new System.Collections.Generic.List<RelativeClickOffset>();
                 // Ensure at least 4 placeholders
-                while (points.Count < 4) points.Add(new RelativeClickOffset { X = 0.5, Y = 0.5, Description = $"Slot {points.Count + 1}" });
+                while (points.Count < 4) points.Add(new RelativeClickOffset { X = 0.5, Y = 0.5, Description = $"Slot {points.Count + 1}", FromCenter = true });
+
+                // Default to center-relative mode (recommended for POL member slots)
+                // Check if existing points use center-relative mode; preserve if set
+                vm.FromCenterMode = points.Count > 0 ? points[0].FromCenter : true;
 
                 for (int i = 0; i < 4; i++)
                 {
@@ -635,7 +678,7 @@ namespace FFXIManager.ViewModels.WorkflowEditor
                 {
                     if (index >= 0 && index < 4)
                     {
-                        points[index] = new RelativeClickOffset { X = x, Y = y, Description = $"Slot {index + 1}" };
+                        points[index] = new RelativeClickOffset { X = x, Y = y, Description = $"Slot {index + 1}", FromCenter = vm.FromCenterMode };
                     }
                 }
 
@@ -793,7 +836,11 @@ namespace FFXIManager.ViewModels.WorkflowEditor
                 var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new System.Collections.Generic.List<RelativeClickOffset>())
                              ?? new System.Collections.Generic.List<RelativeClickOffset>();
                 // Ensure at least 16 placeholders
-                while (points.Count < 16) points.Add(new RelativeClickOffset { X = 0.5, Y = 0.5, Description = $"Slot {points.Count + 1}" });
+                while (points.Count < 16) points.Add(new RelativeClickOffset { X = 0.5, Y = 0.5, Description = $"Slot {points.Count + 1}", FromCenter = true });
+
+                // Default to center-relative mode (recommended for FFXI character slots)
+                // Check if existing points use center-relative mode; preserve if set
+                vm.FromCenterMode = points.Count > 0 ? points[0].FromCenter : true;
 
                 for (int i = 0; i < 16; i++)
                 {
@@ -837,7 +884,7 @@ namespace FFXIManager.ViewModels.WorkflowEditor
                 {
                     if (index >= 0 && index < 16)
                     {
-                        points[index] = new RelativeClickOffset { X = x, Y = y, Description = $"Slot {index + 1}" };
+                        points[index] = new RelativeClickOffset { X = x, Y = y, Description = $"Slot {index + 1}", FromCenter = vm.FromCenterMode };
                     }
                 }
 

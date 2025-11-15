@@ -4,24 +4,34 @@ using FFXIManager.Services.AutoLogin.ScreenDetection;
 namespace FFXIManager.Services.AutoLogin.ActionExecutors
 {
     /// <summary>
-    /// Executes member slot selection actions by navigating to the correct PlayOnline member slot.
-    /// Supports both keyboard navigation and click-based selection.
+    /// Executes member slot selection using POL's 4-slot visible window pattern.
+    /// Handles both direct clicking (slots 1-4) and scroll-then-click (slots 5-20).
     /// </summary>
     /// <remarks>
-    /// **Navigation Method (MVP):**
-    /// - Keyboard only: Use arrow keys to navigate to the target slot
+    /// **POL Slot Display Pattern:**
+    /// POL shows 4 member slots at a time in fixed positions. Scrolling down moves the list
+    /// up, positioning higher-numbered slots into the 4 visible positions.
     ///
-    /// **Hybrid Detection Support:**
-    /// - Optional template detection before navigation (if action has TemplatePath parameter)
-    /// - Can execute blindly without template detection
+    /// - Slots 1-4: Visible by default, click directly at their physical positions
+    /// - Slots 5-20: Scroll down to position target slot at slot 4's position, then click
+    ///
+    /// **Scroll Formula:**
+    /// For slot N where N > 4: Scroll down (N - 4) ticks to position slot N at slot 4's location
+    ///
+    /// **Click Modes:**
+    /// - FromCenter=true: Resolution-independent, template-free (recommended for POL)
+    /// - FromCenter=false: Template-relative positioning (legacy support)
     ///
     /// **Requirements:**
     /// - Account context must be available via QueueItem
     /// - Account.POLMemberSlot must be set (1-20)
-    /// - Window must have focus before navigation
+    /// - ClickPoints array with exactly 4 positions (for the 4 visible slots)
+    /// - Workflow must include ScrollWheel reset action BEFORE this action
     ///
     /// **Parameters:**
-    /// - (Optional) TemplatePath: If provided, can be used for future enhancements; ignored in MVP
+    /// - ClickPoints (RelativeClickOffset[], required): Array with 4 positions for visible slots
+    /// - ScrollTicksPerSlot (int, optional): Ticks per slot when scrolling (default: 1)
+    /// - ScrollDelayMs (int, optional): Delay between scroll ticks (default: 100ms)
     /// </remarks>
     public class MemberSlotActionExecutor : BaseWorkflowActionExecutor
     {
@@ -65,107 +75,131 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 return false;
             }
 
-            await _loggingService.LogInfoAsync($"[MEMBER-SLOT] Navigating to member slot {targetSlot} for account {account.DisplayName}");
+            await _loggingService.LogInfoAsync($"[MEMBER-SLOT] Selecting member slot {targetSlot} for account {account.DisplayName}");
 
             try
             {
-                // MVP: Click-only navigation (requires prior template detection)
-                var clicked = await NavigateWithClickAsync(action, context, targetSlot, cancellationToken);
-                if (clicked)
+                // Get configured click points from action parameters (should have exactly 4 positions)
+                var clickPoints = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
+                if (clickPoints == null || clickPoints.Count != 4)
                 {
-                    await _loggingService.LogInfoAsync($"[MEMBER-SLOT] Successfully clicked member slot {targetSlot}");
-                    return true;
+                    await _loggingService.LogErrorAsync($"[MEMBER-SLOT] ClickPoints must have exactly 4 positions (for visible slots 1-4), but has {clickPoints?.Count ?? 0}");
+                    return false;
                 }
 
-                await _loggingService.LogErrorAsync("[MEMBER-SLOT] Click navigation failed or not available (missing template match or click points)");
-                return false;
+                // Get scroll configuration
+                var scrollTicksPerSlot = action.GetParameter<int>("ScrollTicksPerSlot", 1);
+                var scrollDelayMs = action.GetParameter<int>("ScrollDelayMs", 100);
+
+                // Ensure window focus
+                if (context.WindowHandle != IntPtr.Zero)
+                {
+                    await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
+                    await Task.Delay(100, cancellationToken);
+                }
+
+                // Determine navigation strategy based on target slot
+                RelativeClickOffset clickPoint;
+
+                if (targetSlot <= 4)
+                {
+                    // Slots 1-4: Click directly at their physical positions
+                    clickPoint = clickPoints[targetSlot - 1];
+                    await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Slot {targetSlot} is visible, clicking at position {targetSlot}");
+                }
+                else
+                {
+                    // Slots 5-20: Scroll down to position target slot, then click at slot 4's position
+                    var scrollTicks = (targetSlot - 4) * scrollTicksPerSlot;
+
+                    await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Slot {targetSlot} requires scrolling: {scrollTicks} ticks down");
+
+                    // Get window center for scrolling
+                    var centerPoint = _automationService.GetWindowCenter(context.WindowHandle);
+                    if (centerPoint.IsEmpty)
+                    {
+                        await _loggingService.LogErrorAsync("[MEMBER-SLOT] Failed to get window center for scrolling");
+                        return false;
+                    }
+
+                    // Move mouse to center (over member slots)
+                    await _automationService.MoveMouseAsync(centerPoint, cancellationToken);
+                    await Task.Delay(100, cancellationToken);
+
+                    // Scroll down to position target slot at slot 4's position
+                    for (int i = 0; i < scrollTicks; i++)
+                    {
+                        await _automationService.ScrollMouseWheelAsync(-1, cancellationToken); // Negative = DOWN
+                        await Task.Delay(scrollDelayMs, cancellationToken);
+                    }
+
+                    // Small delay for UI to settle
+                    await Task.Delay(200, cancellationToken);
+
+                    // Click at slot 4's position (target slot is now positioned there)
+                    clickPoint = clickPoints[3]; // Index 3 = slot 4's position
+                    await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Scrolled {scrollTicks} ticks, now clicking at slot 4's position");
+                }
+
+                // Check if template match is required (only for template-relative clicks)
+                if (!clickPoint.FromCenter && context.TemplateMatch == null)
+                {
+                    await _loggingService.LogErrorAsync("[MEMBER-SLOT] Template-relative click requested but no template match available");
+                    return false;
+                }
+
+                // Calculate click point (supports both template-relative and center-relative)
+                System.Drawing.Point screenPoint = CalculateClickPoint(clickPoint, context);
+
+                await _automationService.ClickWindowRelativeAsync(context.WindowHandle, screenPoint, cancellationToken);
+                await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
+
+                await _loggingService.LogInfoAsync($"[MEMBER-SLOT] Successfully selected member slot {targetSlot}");
+
+                // Track state for future optimizations
+                account.LastSelectedPOLSlot = targetSlot;
+
+                return true;
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync($"[MEMBER-SLOT] Failed to navigate to member slot {targetSlot}", ex);
+                await _loggingService.LogErrorAsync($"[MEMBER-SLOT] Failed to select member slot {targetSlot}", ex);
                 return false;
             }
         }
 
         /// <summary>
-        /// Navigates to the target slot using keyboard arrow keys.
-        /// Assumes the UI starts at slot 1 (or that the current position is unknown).
+        /// Calculates window-relative click point using either center-relative or template-relative coordinates
         /// </summary>
-        private async Task NavigateWithKeyboardAsync(
-            KeyboardAction action,
-            WorkflowActionContext context,
-            int targetSlot,
-            CancellationToken cancellationToken)
+        private System.Drawing.Point CalculateClickPoint(RelativeClickOffset clickPoint, WorkflowActionContext context)
         {
-            await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Using keyboard navigation to slot {targetSlot}");
-
-            // Ensure window has focus to receive keyboard input
-            if (context.WindowHandle != IntPtr.Zero)
+            if (clickPoint.FromCenter)
             {
-                await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
-                await Task.Delay(100, cancellationToken);
+                // Center-relative (template-independent, resolution-independent)
+                var centerPoint = _automationService.GetWindowCenter(context.WindowHandle);
+                var windowRect = _automationService.GetWindowClientRect(context.WindowHandle);
+
+                var offsetX = (int)(clickPoint.X * windowRect.Width);
+                var offsetY = (int)(clickPoint.Y * windowRect.Height);
+
+                var windowRelativeX = centerPoint.X - windowRect.Left + offsetX;
+                var windowRelativeY = centerPoint.Y - windowRect.Top + offsetY;
+
+                _loggingService.LogDebugAsync($"[MEMBER-SLOT] Click point (center-relative): ({clickPoint.X:F2},{clickPoint.Y:F2}) -> window=({windowRelativeX},{windowRelativeY})");
+
+                return new System.Drawing.Point(windowRelativeX, windowRelativeY);
             }
-
-            // DX9-friendly behavior fallback: First Down typically selects slot 1 (when none is selected)
-            await _automationService.SendKeyAsync(ConsoleKey.DownArrow, cancellationToken);
-            await Task.Delay(action.DelayMs, cancellationToken);
-
-            // Move down to target slot (targetSlot more times)
-            var downPresses = Math.Max(0, targetSlot);
-            for (int i = 0; i < downPresses; i++)
+            else
             {
-                await _automationService.SendKeyAsync(ConsoleKey.DownArrow, cancellationToken);
-                await Task.Delay(action.DelayMs, cancellationToken);
+                // Template-relative (existing behavior)
+                var rect = context.TemplateMatch!.GetBoundingRectangle();
+                var wx = rect.Left + (int)Math.Round(clickPoint.X * rect.Width);
+                var wy = rect.Top + (int)Math.Round(clickPoint.Y * rect.Height);
+
+                _loggingService.LogDebugAsync($"[MEMBER-SLOT] Click point (template-relative): ({clickPoint.X:F2},{clickPoint.Y:F2}) -> window=({wx},{wy})");
+
+                return new System.Drawing.Point(wx, wy);
             }
-
-            // Press Enter to select slot that was navigated to
-            await _automationService.SendKeyAsync(ConsoleKey.Enter, cancellationToken);
-            await Task.Delay(action.DelayMs, cancellationToken);
-
-            await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Keyboard navigation completed: 1 initial down + {downPresses} down");
-        }
-
-        private async Task<bool> NavigateWithClickAsync(
-            KeyboardAction action,
-            WorkflowActionContext context,
-            int targetSlot,
-            CancellationToken cancellationToken)
-        {
-            // Need a detected template region to compute relative click
-            var match = context.TemplateMatch;
-            if (match == null)
-            {
-                await _loggingService.LogWarningAsync("[MEMBER-SLOT] No template match in context; cannot perform click-based navigation");
-                return false;
-            }
-
-            // Ensure window focus
-            if (context.WindowHandle != IntPtr.Zero)
-            {
-                await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
-                await Task.Delay(100, cancellationToken);
-            }
-
-            // Get configured click points from action parameters (JSON array)
-            var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
-            if (points == null || points.Count < 20)
-            {
-                await _loggingService.LogWarningAsync("[MEMBER-SLOT] ClickPoints missing or fewer than 20; cannot click");
-                return false;
-            }
-            var rel = points[Math.Clamp(targetSlot - 1, 0, points.Count - 1)];
-
-            // Convert relative (0-1) to window-relative coordinates within matched region
-            var rect = match.GetBoundingRectangle();
-            var wx = rect.Left + (int)Math.Round(rel.X * rect.Width);
-            var wy = rect.Top + (int)Math.Round(rel.Y * rect.Height);
-
-            await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Clicking slot {targetSlot} at rel=({rel.X:F2},{rel.Y:F2}) -> window=({wx},{wy})");
-
-            await _automationService.ClickWindowRelativeAsync(context.WindowHandle, new System.Drawing.Point(wx, wy), cancellationToken);
-            await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
-
-            return true;
         }
 
     }

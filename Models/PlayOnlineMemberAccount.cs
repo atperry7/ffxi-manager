@@ -11,6 +11,7 @@ namespace FFXIManager.Models
         private Guid _id = Guid.NewGuid();
         private int _polMemberSlot = 1;
         private int _ffxiCharacterSlot = 1;
+        private int? _lastSelectedPOLSlot;
         private OTPConfiguration? _otpConfiguration;
         private string _accountName = string.Empty;
         private Guid? _workflowId;
@@ -54,6 +55,17 @@ namespace FFXIManager.Models
                     throw new ArgumentOutOfRangeException(nameof(value), "FFXI Character Slot must be between 1 and 16");
                 SetProperty(ref _ffxiCharacterSlot, value);
             }
+        }
+
+        /// <summary>
+        /// Last POL member slot selected for this account (1-20).
+        /// Used for optimized navigation with keyboard cycling.
+        /// Null if never tracked or state is unreliable.
+        /// </summary>
+        public int? LastSelectedPOLSlot
+        {
+            get => _lastSelectedPOLSlot;
+            set => SetProperty(ref _lastSelectedPOLSlot, value);
         }
 
         /// <summary>

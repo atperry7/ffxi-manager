@@ -73,6 +73,36 @@ namespace FFXIManager.Models.AutoLogin
             set => SetProperty(ref _templatePath, value);
         }
 
+        private bool _skipTemplateDetection;
+
+        /// <summary>
+        /// Whether to skip template detection for this step and proceed directly to navigation.
+        /// When true, the step will not wait for template matching and will execute navigation immediately.
+        /// </summary>
+        /// <remarks>
+        /// **Use Cases:**
+        /// - Center-relative clicks that don't need template matching (FromCenter=true)
+        /// - Blind keyboard navigation where template is for visual reference only
+        /// - Steps where template detection is slow/unreliable but navigation coordinates are stable
+        ///
+        /// **Template Image Behavior:**
+        /// Even when SkipTemplateDetection=true, TemplatePath can still be set for:
+        /// - Visual reference/documentation in the workflow editor
+        /// - Click point positioning in the editor UI
+        /// - Future debugging/validation needs
+        ///
+        /// **Performance Impact:**
+        /// Skipping template detection eliminates polling overhead (typically 30 attempts × 500ms = 15s budget),
+        /// resulting in near-instant navigation execution.
+        ///
+        /// Default: false (template detection is performed if TemplatePath is set)
+        /// </remarks>
+        public bool SkipTemplateDetection
+        {
+            get => _skipTemplateDetection;
+            set => SetProperty(ref _skipTemplateDetection, value);
+        }
+
         /// <summary>
         /// Whether this step is enabled for execution.
         /// Disabled steps are skipped entirely during workflow execution.

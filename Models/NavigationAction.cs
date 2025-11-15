@@ -187,18 +187,49 @@ namespace FFXIManager.Models
     }
 
     /// <summary>
-    /// Defines relative click coordinates as percentages of the detected template region.
-    /// Values range from 0.0 to 1.0, where 0.5 represents the center.
+    /// Defines click coordinates using either template-relative or window-center-relative positioning.
+    /// Supports both traditional template-based navigation and resolution-independent center-based navigation.
     /// </summary>
+    /// <remarks>
+    /// **DirectX9 POL Behavior:**
+    /// POL uses a virtual coordinate system where UI elements and the mouse cursor scale proportionally
+    /// with window size. Elements maintain their relative positions from the window center, making
+    /// center-relative coordinates perfectly stable across all resolutions.
+    ///
+    /// **Mode: FromCenter = false (Template-Relative, default):**
+    /// - Coordinates are percentages within the matched template region (0.0 to 1.0)
+    /// - Requires template matching to locate the reference region
+    /// - Example: X=0.5, Y=0.5 clicks the center of the matched template
+    ///
+    /// **Mode: FromCenter = true (Window-Center-Relative):**
+    /// - Coordinates are percentages relative to window center (-0.5 to 0.5)
+    /// - No template matching required (template-independent!)
+    /// - Resolution-independent due to DX9 proportional scaling
+    /// - Example: X=0.0, Y=-0.2 clicks 20% of window height above center
+    /// </remarks>
     public class RelativeClickOffset
     {
         /// <summary>
-        /// Horizontal offset as percentage (0.0 = left edge, 0.5 = center, 1.0 = right edge)
+        /// If true, coordinates are relative to window center (resolution-independent).
+        /// If false, coordinates are relative to matched template region (default behavior).
+        /// </summary>
+        /// <remarks>
+        /// Center-relative mode is ideal for DirectX9 POL applications due to their
+        /// proportional scaling behavior, eliminating the need for template matching.
+        /// </remarks>
+        public bool FromCenter { get; set; } = false;
+
+        /// <summary>
+        /// Horizontal offset as percentage:
+        /// - FromCenter=false: 0.0 to 1.0 (left edge to right edge of template)
+        /// - FromCenter=true: -0.5 to 0.5 (left half to right half of window from center)
         /// </summary>
         public double X { get; set; } = 0.5;
 
         /// <summary>
-        /// Vertical offset as percentage (0.0 = top edge, 0.5 = center, 1.0 = bottom edge)
+        /// Vertical offset as percentage:
+        /// - FromCenter=false: 0.0 to 1.0 (top edge to bottom edge of template)
+        /// - FromCenter=true: -0.5 to 0.5 (top half to bottom half of window from center)
         /// </summary>
         public double Y { get; set; } = 0.5;
 

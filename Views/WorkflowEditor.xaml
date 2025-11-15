@@ -795,6 +795,32 @@
                                                         </Border>
                                                     </Grid>
 
+                                                    <!-- Skip Template Detection Checkbox -->
+                                                    <CheckBox Grid.Row="1" Grid.ColumnSpan="2"
+                                                              Content="Skip Template Detection (use for center-relative clicks)"
+                                                              IsChecked="{Binding SelectedStep.SkipTemplateDetection, UpdateSourceTrigger=PropertyChanged}"
+                                                              Margin="0,0,0,12"
+                                                              FontSize="11">
+                                                        <CheckBox.ToolTip>
+                                                            <TextBlock TextWrapping="Wrap" MaxWidth="400">
+When enabled, template detection will be skipped and navigation will execute immediately.
+
+Use cases:
+• Center-relative clicks (FromCenter=true) that don't need template matching
+• Blind keyboard navigation where template is for visual reference only
+• Steps where template detection is slow/unreliable but coordinates are stable
+
+Performance impact:
+• Eliminates polling overhead (typically 30 attempts × 500ms = 15s budget)
+• Results in near-instant navigation execution
+
+Template image behavior:
+• Template can still be set for visual reference in the editor
+• Template is NOT used for screen detection when this is enabled
+                                                            </TextBlock>
+                                                        </CheckBox.ToolTip>
+                                                    </CheckBox>
+
                                                     <!-- 2x2 Grid for Retry Properties -->
                                                     <Grid Grid.Row="2" Grid.ColumnSpan="2" Margin="0,0,0,12">
                                                         <Grid.ColumnDefinitions>
@@ -1006,6 +1032,7 @@
                                                                         <sys:String>Right</sys:String>
                                                                         <sys:String>Escape</sys:String>
                                                                         <sys:String>Click</sys:String>
+                                                                        <sys:String>ScrollWheel</sys:String>
                                                                         <sys:String>Launch</sys:String>
                                                                         <sys:String>Wait</sys:String>
                                                                         <sys:String>InputPassword</sys:String>
@@ -1031,6 +1058,7 @@
                                                                         <sys:String>Right</sys:String>
                                                                         <sys:String>Escape</sys:String>
                                                                         <sys:String>Click</sys:String>
+                                                                        <sys:String>ScrollWheel</sys:String>
                                                                         <sys:String>Launch</sys:String>
                                                                         <sys:String>Wait</sys:String>
                                                                         <sys:String>InputPassword</sys:String>
@@ -1112,6 +1140,7 @@
                                                             <ComboBoxItem Content="Right"/>
                                                             <ComboBoxItem Content="Escape"/>
                                                             <ComboBoxItem Content="Click"/>
+                                                            <ComboBoxItem Content="ScrollWheel"/>
                                                             <ComboBoxItem Content="Launch"/>
                                                             <ComboBoxItem Content="Wait"/>
                                                             <ComboBoxItem Content="InputPassword"/>
@@ -1228,47 +1257,6 @@
                                                                                           Command="{Binding RelativeSource={RelativeSource AncestorType=Window}, Path=DataContext.ShowLargeActionTemplateImageCommand}"/>
                                                                         </Image.InputBindings>
                                                                     </Image>
-
-                                                                    <!-- Multi ClickPoints Overlay -->
-                                                                    <ItemsControl x:Name="ActionTemplateOverlay"
-                                                                                  ItemsSource="{Binding SelectedActionClickPoints}"
-                                                                                  Visibility="{Binding IsClickActionSelected, Converter={StaticResource BoolToVisConverter}}"
-                                                                                  IsHitTestVisible="False"
-                                                                                  Margin="4">
-                                                                        <ItemsControl.ItemsPanel>
-                                                                            <ItemsPanelTemplate>
-                                                                                <Canvas/>
-                                                                            </ItemsPanelTemplate>
-                                                                        </ItemsControl.ItemsPanel>
-                                                                        <ItemsControl.ItemTemplate>
-                                                                            <DataTemplate>
-                                                                                <Ellipse Width="8" Height="8" Fill="{DynamicResource AccentBrush}">
-                                                                                    <Ellipse.RenderTransform>
-                                                                                        <TranslateTransform>
-                                                                                            <TranslateTransform.X>
-                                                                                                <MultiBinding Converter="{StaticResource RelativeToUniformImageCoordinateConverter}" ConverterParameter="X">
-                                                                                                    <Binding Path="X"/>
-                                                                                                    <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
-                                                                                                    <Binding Path="ActualHeight" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
-                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelWidth" RelativeSource="{RelativeSource AncestorType=GroupBox}"/>
-                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelHeight" RelativeSource="{RelativeSource AncestorType=GroupBox}"/>
-                                                                                                </MultiBinding>
-                                                                                            </TranslateTransform.X>
-                                                                                            <TranslateTransform.Y>
-                                                                                                <MultiBinding Converter="{StaticResource RelativeToUniformImageCoordinateConverter}" ConverterParameter="Y">
-                                                                                                    <Binding Path="Y"/>
-                                                                                                    <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
-                                                                                                    <Binding Path="ActualHeight" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
-                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelWidth" RelativeSource="{RelativeSource AncestorType=GroupBox}"/>
-                                                                                                    <Binding Path="DataContext.ActionTemplateImageSource.PixelHeight" RelativeSource="{RelativeSource AncestorType=GroupBox}"/>
-                                                                                                </MultiBinding>
-                                                                                            </TranslateTransform.Y>
-                                                                                        </TranslateTransform>
-                                                                                    </Ellipse.RenderTransform>
-                                                                                </Ellipse>
-                                                                            </DataTemplate>
-                                                                        </ItemsControl.ItemTemplate>
-                                                                    </ItemsControl>
                                                                 </Grid>
                                                             </Border>
                                                         </Grid>
@@ -1343,6 +1331,92 @@
                                                         </StackPanel>
                                                     </Border>
 
+                                                    <!-- Click Configuration (visible only for Click actions) -->
+                                                    <Border Visibility="{Binding IsClickActionSelected, Converter={StaticResource BoolToVisConverter}}"
+                                                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12"
+                                                            Background="{DynamicResource SurfaceBrush}">
+                                                        <StackPanel>
+                                                            <TextBlock Text="Click Action Settings" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
+
+                                                            <!-- Click Points Summary -->
+                                                            <TextBlock Margin="0,0,0,8" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}">
+                                                                <Run Text="Click Points: "/>
+                                                                <Run Text="{Binding SelectedActionClickPoints.Count, Mode=OneWay}" FontWeight="SemiBold"/>
+                                                                <Run Text=" configured"/>
+                                                            </TextBlock>
+
+                                                            <!-- Configure Button -->
+                                                            <Button Content="⚙️ Configure Click Points"
+                                                                    Style="{StaticResource SecondaryButton}"
+                                                                    Command="{Binding ShowLargeActionTemplateImageCommand}"
+                                                                    Margin="0,0,0,4"
+                                                                    Padding="12,8"
+                                                                    ToolTip="Open the click point editor to configure positions, coordinates, and mode"/>
+
+                                                            <!-- Help Text -->
+                                                            <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,8,0,0" TextWrapping="Wrap">
+                                                                💡 Click the button above to configure click points, coordinates, and center-relative mode in the visual editor.
+                                                            </TextBlock>
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <!-- ScrollWheel Properties (visible only for ScrollWheel actions) -->
+                                                    <Border Visibility="{Binding IsScrollWheelActionSelected, Converter={StaticResource BoolToVisConverter}}"
+                                                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12"
+                                                            Background="{DynamicResource SurfaceBrush}">
+                                                        <StackPanel>
+                                                            <TextBlock Text="Scroll Wheel Settings" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
+
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="140"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <Grid.RowDefinitions>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                </Grid.RowDefinitions>
+
+                                                                <!-- Direction -->
+                                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Direction:" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                                                                <ComboBox Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"
+                                                                          SelectedItem="{Binding ScrollDirection, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                          ToolTip="Scroll direction: Up or Down">
+                                                                    <ComboBoxItem Content="Up"/>
+                                                                    <ComboBoxItem Content="Down"/>
+                                                                </ComboBox>
+
+                                                                <!-- Ticks -->
+                                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Ticks:" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                                                                <TextBox Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"
+                                                                         Text="{Binding ScrollTicks, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                         ToolTip="Number of scroll wheel ticks&#x0a;Example: 30 ticks = aggressive scroll to reset list position"/>
+
+                                                                <!-- Scroll Delay -->
+                                                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Scroll Delay (ms):" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                                                                <TextBox Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
+                                                                         Text="{Binding ScrollDelayMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                         ToolTip="Delay between scroll ticks in milliseconds&#x0a;Recommended: 50ms"/>
+
+                                                                <!-- Use Window Center -->
+                                                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Mouse Position:" VerticalAlignment="Center"/>
+                                                                <CheckBox Grid.Row="3" Grid.Column="1"
+                                                                          Content="Use window center (recommended)"
+                                                                          IsChecked="{Binding ScrollUseWindowCenter, Mode=TwoWay}"
+                                                                          ToolTip="Position mouse at window center before scrolling&#x0a;Recommended: checked for consistent scrolling"/>
+                                                            </Grid>
+
+                                                            <Border Background="{DynamicResource InfoBackgroundBrush}" BorderBrush="{DynamicResource InfoBorderBrush}"
+                                                                    BorderThickness="1" CornerRadius="3" Padding="8" Margin="0,8,0,0">
+                                                                <TextBlock FontSize="10" TextWrapping="Wrap" Foreground="{DynamicResource InfoTextBrush}">
+                                                                    💡 Scroll wheel actions are commonly used to reset lists to the top before navigating to a specific slot
+                                                                </TextBlock>
+                                                            </Border>
+                                                        </StackPanel>
+                                                    </Border>
+
                                                     <!-- InputPassword Properties (visible only for InputPassword actions) -->
                                                     <Border Visibility="{Binding IsInputPasswordActionSelected, Converter={StaticResource BoolToVisConverter}}"
                                                             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12"
@@ -1401,13 +1475,54 @@
                                                             </TextBlock>
 
                                                             <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8">
-                                                                Navigates to the slot number defined in the account settings (POLMemberSlot) by clicking the configured points.
+                                                                Navigates to the member slot number defined in the account settings (POLMemberSlot 1-20) using POL's 4-slot visible window pattern.
                                                             </TextBlock>
 
-                                                            <!-- MemberSlot Click configuration -->
+                                                            <!-- POL 4-Slot Window Pattern Explanation -->
+                                                            <Border Background="{DynamicResource InfoBackgroundBrush}" BorderBrush="{DynamicResource InfoBorderBrush}"
+                                                                    BorderThickness="1" CornerRadius="3" Padding="8" Margin="0,0,0,12">
+                                                                <StackPanel>
+                                                                    <TextBlock FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource InfoTextBrush}" Margin="0,0,0,4">
+                                                                        POL 4-Slot Visible Window Pattern:
+                                                                    </TextBlock>
+                                                                    <TextBlock FontSize="10" TextWrapping="Wrap" Foreground="{DynamicResource InfoTextBrush}">
+                                                                        • Slots 1-4: Click directly at their physical positions
+                                                                    </TextBlock>
+                                                                    <TextBlock FontSize="10" TextWrapping="Wrap" Foreground="{DynamicResource InfoTextBrush}">
+                                                                        • Slots 5-20: Scroll down (N-4) ticks, then click at slot 4's position
+                                                                    </TextBlock>
+                                                                    <TextBlock FontSize="10" TextWrapping="Wrap" Foreground="{DynamicResource InfoTextBrush}" Margin="0,4,0,0">
+                                                                        💡 Only 4 click points are needed - for the 4 visible slot positions
+                                                                    </TextBlock>
+                                                                </StackPanel>
+                                                            </Border>
+
+                                                            <!-- Scroll Configuration -->
+                                                            <Grid Margin="0,0,0,8">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="140"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <Grid.RowDefinitions>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                </Grid.RowDefinitions>
+
+                                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Scroll Ticks/Slot:" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                                                                <TextBox Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"
+                                                                         Text="{Binding MemberSlotScrollTicksPerSlot, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                         ToolTip="Number of scroll wheel ticks per slot&#x0a;Used when navigating to slots 5-20&#x0a;Default: 1"/>
+
+                                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Scroll Delay (ms):" VerticalAlignment="Center"/>
+                                                                <TextBox Grid.Row="1" Grid.Column="1"
+                                                                         Text="{Binding MemberSlotScrollDelayMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                         ToolTip="Delay between scroll ticks in milliseconds&#x0a;Default: 100ms"/>
+                                                            </Grid>
+
+                                                            <!-- Click Points Configuration -->
                                                             <StackPanel Margin="0,8,0,0">
                                                                 <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,6">
-                                                                    Configure four click points for Member Slots 1-4 by clicking the template preview image above.
+                                                                    Configure FOUR click points for the visible Member Slots 1-4 by clicking the template preview image above.
                                                                 </TextBlock>
                                                                 <TextBlock FontSize="10" Foreground="{DynamicResource WarningBrush}" Margin="0,6,0,0"
                                                                            Visibility="{Binding HasTemplateImage, Converter={StaticResource BoolToVisConverter}}">

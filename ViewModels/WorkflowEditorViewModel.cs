@@ -283,6 +283,7 @@ namespace FFXIManager.ViewModels
                     OnPropertyChanged(nameof(IsClickActionSelected));
                     OnPropertyChanged(nameof(IsKeyboardActionSelected));
                     OnPropertyChanged(nameof(IsWaitActionSelected));
+                    OnPropertyChanged(nameof(IsScrollWheelActionSelected));
                     OnPropertyChanged(nameof(IsInputPasswordActionSelected));
                     OnPropertyChanged(nameof(IsInputOTPActionSelected));
                     OnPropertyChanged(nameof(IsMemberSlotActionSelected));
@@ -368,6 +369,11 @@ namespace FFXIManager.ViewModels
         /// Whether the selected navigation action is a Click action
         /// </summary>
         public bool IsClickActionSelected => SelectedNavigationAction?.Action == "Click";
+
+        /// <summary>
+        /// Whether the selected navigation action is a ScrollWheel action
+        /// </summary>
+        public bool IsScrollWheelActionSelected => SelectedNavigationAction?.Action == "ScrollWheel";
 
         /// <summary>
         /// Whether the selected navigation action is a Keyboard action (or a direct key like Tab/Enter)
@@ -824,6 +830,108 @@ namespace FFXIManager.ViewModels
                 if (SelectedNavigationAction != null)
                 {
                     SelectedNavigationAction.SetParameter("AllowSkipIfNotConfigured", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Scroll direction for ScrollWheel actions (from Parameters dictionary)
+        /// </summary>
+        public string ScrollDirection
+        {
+            get => SelectedNavigationAction?.GetParameter<string>("Direction", "Up") ?? "Up";
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("Direction", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Number of scroll ticks for ScrollWheel actions (from Parameters dictionary)
+        /// </summary>
+        public int ScrollTicks
+        {
+            get => SelectedNavigationAction?.GetParameter<int>("Ticks", 30) ?? 30;
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("Ticks", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Delay between scroll ticks for ScrollWheel actions (from Parameters dictionary)
+        /// </summary>
+        public int ScrollDelayMs
+        {
+            get => SelectedNavigationAction?.GetParameter<int>("ScrollDelayMs", 50) ?? 50;
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("ScrollDelayMs", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Use window center for mouse positioning for ScrollWheel actions (from Parameters dictionary)
+        /// </summary>
+        public bool ScrollUseWindowCenter
+        {
+            get => SelectedNavigationAction?.GetParameter<bool>("UseWindowCenter", true) ?? true;
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("UseWindowCenter", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Scroll ticks per slot for MemberSlot actions (from Parameters dictionary)
+        /// </summary>
+        public int MemberSlotScrollTicksPerSlot
+        {
+            get => SelectedNavigationAction?.GetParameter<int>("ScrollTicksPerSlot", 1) ?? 1;
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("ScrollTicksPerSlot", value);
+                    OnPropertyChanged();
+                    HasUnsavedChanges = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Scroll delay in milliseconds for MemberSlot actions (from Parameters dictionary)
+        /// </summary>
+        public int MemberSlotScrollDelayMs
+        {
+            get => SelectedNavigationAction?.GetParameter<int>("ScrollDelayMs", 100) ?? 100;
+            set
+            {
+                if (SelectedNavigationAction != null)
+                {
+                    SelectedNavigationAction.SetParameter("ScrollDelayMs", value);
                     OnPropertyChanged();
                     HasUnsavedChanges = true;
                 }
@@ -1797,6 +1905,7 @@ namespace FFXIManager.ViewModels
                 OnPropertyChanged(nameof(IsClickActionSelected));
                 OnPropertyChanged(nameof(IsKeyboardActionSelected));
                 OnPropertyChanged(nameof(IsWaitActionSelected));
+                OnPropertyChanged(nameof(IsScrollWheelActionSelected));
                 OnPropertyChanged(nameof(IsInputPasswordActionSelected));
                 OnPropertyChanged(nameof(IsInputOTPActionSelected));
                 OnPropertyChanged(nameof(IsMemberSlotActionSelected));
@@ -1915,11 +2024,13 @@ namespace FFXIManager.ViewModels
 
             if (string.Equals(SelectedNavigationAction.Action, "Click", StringComparison.OrdinalIgnoreCase))
             {
+                // Dialog manages all click configuration state (FromCenter, coordinates, etc.)
                 var changed = await _templateManager.PickClickPositionForActionAsync(SelectedStep, SelectedNavigationAction);
                 if (changed)
                 {
                     HasUnsavedChanges = true;
                     OnPropertyChanged(nameof(SelectedNavigationAction));
+                    OnPropertyChanged(nameof(SelectedActionClickPoints)); // Rebind UI to show updated click points
                 }
             }
             else if (IsMemberSlotActionSelected)

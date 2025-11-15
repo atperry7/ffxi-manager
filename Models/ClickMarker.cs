@@ -12,6 +12,8 @@ namespace FFXIManager.Models
     {
         private double _x;
         private double _y;
+        private double _relativeX;
+        private double _relativeY;
         private string _label = string.Empty;
         private string _description = string.Empty;
         private Brush _markerColor = Brushes.Blue;
@@ -73,6 +75,24 @@ namespace FFXIManager.Models
         {
             get => _stepIndex;
             set { if (_stepIndex != value) { _stepIndex = value; OnPropertyChanged(); } }
+        }
+
+        /// <summary>
+        /// Relative X coordinate (template-relative 0.0-1.0 or center-relative -0.5 to 0.5)
+        /// </summary>
+        public double RelativeX
+        {
+            get => _relativeX;
+            set { if (Math.Abs(_relativeX - value) > 0.0001) { _relativeX = value; OnPropertyChanged(); } }
+        }
+
+        /// <summary>
+        /// Relative Y coordinate (template-relative 0.0-1.0 or center-relative -0.5 to 0.5)
+        /// </summary>
+        public double RelativeY
+        {
+            get => _relativeY;
+            set { if (Math.Abs(_relativeY - value) > 0.0001) { _relativeY = value; OnPropertyChanged(); } }
         }
     }
 }

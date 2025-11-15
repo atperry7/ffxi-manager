@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Template Viewer"
-        Height="700" Width="900"
+        Height="900" Width="1200"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource BackgroundBrush}">
 
@@ -18,9 +18,6 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Title -->
@@ -39,36 +36,63 @@
                 CornerRadius="6"
                 Padding="10"
                 Margin="0,0,0,10">
-            <StackPanel>
-                <TextBlock Foreground="{DynamicResource SecondaryTextBrush}">
-                    <Run Text="Size: "/>
-                    <Run Text="{Binding TemplateImageWidth, StringFormat='{}{0:F0}', Mode=OneWay}"/>
-                    <Run Text=" × "/>
-                    <Run Text="{Binding TemplateImageHeight, StringFormat='{}{0:F0}', Mode=OneWay}"/>
-                    <Run Text=" pixels"/>
-                </TextBlock>
-                <TextBlock Foreground="{DynamicResource SecondaryTextBrush}">
-                    <Run Text="Click Points: "/>
-                    <Run Text="{Binding ClickMarkers.Count, Mode=OneWay}"/>
-                </TextBlock>
-                <TextBlock Text="Click the image to select a position"
-                           Foreground="{DynamicResource PrimaryTextBrush}"
-                           FontWeight="SemiBold"
-                           Visibility="{Binding IsPickMode, Converter={StaticResource BoolToVisConverter}}"/>
-            </StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Left side: Template info and coordinates -->
+                <StackPanel Grid.Column="0">
+                    <TextBlock Foreground="{DynamicResource SecondaryTextBrush}">
+                        <Run Text="Size: "/>
+                        <Run Text="{Binding TemplateImageWidth, StringFormat='{}{0:F0}', Mode=OneWay}"/>
+                        <Run Text=" × "/>
+                        <Run Text="{Binding TemplateImageHeight, StringFormat='{}{0:F0}', Mode=OneWay}"/>
+                        <Run Text=" pixels"/>
+                    </TextBlock>
+                    <TextBlock Foreground="{DynamicResource SecondaryTextBrush}">
+                        <Run Text="Click Points: "/>
+                        <Run Text="{Binding ClickMarkers.Count, Mode=OneWay}"/>
+                    </TextBlock>
+                    <TextBlock Text="Click the image to select a position"
+                               Foreground="{DynamicResource PrimaryTextBrush}"
+                               FontWeight="SemiBold"
+                               Visibility="{Binding IsPickMode, Converter={StaticResource BoolToVisConverter}}"/>
+                </StackPanel>
+
+                <!-- Right side: Grid toggle -->
+                <CheckBox Grid.Column="1"
+                          Content="Show Grid"
+                          IsChecked="{Binding ShowCoordinateGrid}"
+                          VerticalAlignment="Top"
+                          Foreground="{DynamicResource PrimaryTextBrush}"
+                          ToolTip="Show center-relative coordinate grid overlay">
+                    <CheckBox.LayoutTransform>
+                        <ScaleTransform ScaleX="1.1" ScaleY="1.1"/>
+                    </CheckBox.LayoutTransform>
+                </CheckBox>
+            </Grid>
         </Border>
 
-        <!-- Template Image with Click Markers -->
-        <ScrollViewer Grid.Row="2"
-                      HorizontalScrollBarVisibility="Auto"
-                      VerticalScrollBarVisibility="Auto"
-                      Margin="0,0,0,10">
-            <Border Background="{DynamicResource HeaderBackgroundBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="10">
-                <Viewbox Stretch="Uniform" StretchDirection="DownOnly" MaxWidth="850" MaxHeight="500">
+        <!-- Main Content: Template Image (75%) + Configuration Sidebar (25%) -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3*"/>
+                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: Template Image with Click Markers (75%) -->
+            <ScrollViewer Grid.Column="0"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto">
+                <Border Background="{DynamicResource HeaderBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="10">
+                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly" MaxHeight="1200">
                     <Grid>
                         <!-- Template Image -->
                         <Image Source="{Binding TemplateImage}"
@@ -77,13 +101,25 @@
                                Stretch="None"
                                RenderOptions.BitmapScalingMode="NearestNeighbor"/>
 
+                        <!-- Coordinate Grid Overlay (center-relative coordinate system) -->
+                        <!-- Grid populated dynamically in code-behind -->
+                        <Canvas Width="{Binding TemplateImageWidth}"
+                                Height="{Binding TemplateImageHeight}"
+                                ClipToBounds="True"
+                                Background="Transparent"
+                                Visibility="{Binding ShowCoordinateGrid, Converter={StaticResource BoolToVisConverter}}"
+                                x:Name="CoordinateGridCanvas"/>
+
                         <!-- Canvas overlay with same dimensions for pixel-perfect marker positioning -->
                         <Canvas x:Name="TemplateCanvas"
                                 Width="{Binding TemplateImageWidth}"
                                 Height="{Binding TemplateImageHeight}"
                                 ClipToBounds="True"
                                 Background="Transparent"
-                                MouseLeftButtonDown="TemplateCanvas_MouseLeftButtonDown">
+                                MouseLeftButtonDown="TemplateCanvas_MouseLeftButtonDown"
+                                MouseMove="TemplateCanvas_MouseMove"
+                                MouseEnter="TemplateCanvas_MouseEnter"
+                                MouseLeave="TemplateCanvas_MouseLeave">
                             <!-- Click Markers -->
                             <ItemsControl ItemsSource="{Binding ClickMarkers}">
                                 <ItemsControl.ItemsPanel>
@@ -150,118 +186,210 @@
             </Border>
         </ScrollViewer>
 
-        <!-- Legend (vertical DataGrid, scrollable, shows 5 rows) -->
-        <Border Grid.Row="3"
-                Background="{DynamicResource HeaderBackgroundBrush}"
-                BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="8"
-                Margin="0,0,0,10"
-                Visibility="{Binding ClickMarkers.Count, Converter={StaticResource ZeroToInverseVisibilityConverter}}">
-            <StackPanel>
-                <DataGrid ItemsSource="{Binding ClickMarkers}"
-                          AutoGenerateColumns="False"
-                          HeadersVisibility="Column"
-                          IsReadOnly="True"
-                          CanUserAddRows="False"
-                          CanUserDeleteRows="False"
-                          GridLinesVisibility="None"
-                          RowHeaderWidth="0"
-                          RowHeight="24"
-                          Background="{DynamicResource HeaderBackgroundBrush}"
-                          Foreground="{DynamicResource PrimaryTextBrush}"
-                          BorderThickness="0"
-                          ScrollViewer.CanContentScroll="True"
-                          ScrollViewer.VerticalScrollBarVisibility="Auto"
-                          MaxHeight="130">
-                    <DataGrid.Resources>
-                        <Style TargetType="DataGridCell">
-                            <Setter Property="BorderThickness" Value="0"/>
-                            <Setter Property="Padding" Value="4,0,4,0"/>
-                            <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
-                            <Setter Property="Background" Value="{DynamicResource HeaderBackgroundBrush}"/>
-                        </Style>
-                        <Style TargetType="DataGridColumnHeader">
-                            <Setter Property="Background" Value="{DynamicResource HeaderBackgroundBrush}"/>
-                            <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
-                            <Setter Property="FontSize" Value="11"/>
-                            <Setter Property="FontWeight" Value="SemiBold"/>
-                            <Setter Property="Padding" Value="4,2"/>
-                        </Style>
-                    </DataGrid.Resources>
-                    <DataGrid.Columns>
-                        <!-- Color -->
-                        <DataGridTemplateColumn Header="" Width="26">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <Ellipse Width="12" Height="12" Fill="{Binding MarkerColor}"/>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <!-- Label -->
-                        <DataGridTextColumn Header="#" Binding="{Binding Label}" Width="32"/>
-                        <!-- Description -->
-                        <DataGridTextColumn Header="Click Points" Binding="{Binding Description}" Width="*"/>
-                        <!-- Position (rounded) -->
-                        <DataGridTextColumn Header="X" Binding="{Binding X, StringFormat=F0}" Width="50"/>
-                        <DataGridTextColumn Header="Y" Binding="{Binding Y, StringFormat=F0}" Width="50"/>
-                    </DataGrid.Columns>
-                </DataGrid>
-            </StackPanel>
-        </Border>
+            <!-- Right: Configuration Sidebar (25%) -->
+            <ScrollViewer Grid.Column="2"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+                    <!-- Click Configuration Panel (visible in pick mode) -->
+                    <Border Background="{DynamicResource HeaderBackgroundBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="10"
+                            Margin="0,0,0,10"
+                            Visibility="{Binding IsPickMode, Converter={StaticResource BoolToVisConverter}}">
+                        <StackPanel>
+                            <TextBlock Text="Click Configuration" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,8"
+                                       Foreground="{DynamicResource PrimaryTextBrush}"/>
 
-        <!-- Status Bar -->
-        <Border Grid.Row="4"
-                Background="{DynamicResource HeaderBackgroundBrush}"
-                BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="8"
-                Margin="0,0,0,10">
-            <TextBlock Text="{Binding Status}"
-                       Foreground="{DynamicResource SecondaryTextBrush}"
-                       FontSize="11"/>
-        </Border>
+                            <!-- FromCenter Mode Toggle -->
+                            <CheckBox Content="Center-Relative Mode"
+                                      IsChecked="{Binding FromCenterMode, UpdateSourceTrigger=PropertyChanged}"
+                                      Margin="0,0,0,10"
+                                      FontSize="12"
+                                      Foreground="{DynamicResource PrimaryTextBrush}">
+                                <CheckBox.ToolTip>
+                                    <TextBlock TextWrapping="Wrap" MaxWidth="400">
+When checked: coordinates relative to window center (-0.5 to 0.5)
+When unchecked: coordinates relative to template (0.0 to 1.0)
 
-        <!-- Actions -->
-        <Grid Grid.Row="5">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
+Center-relative clicks work without template detection for faster, more reliable navigation.
+                                    </TextBlock>
+                                </CheckBox.ToolTip>
+                            </CheckBox>
 
-            <Button Grid.Column="1"
-                    Content="🗑️"
-                    Width="36"
-                    Height="36"
-                    Margin="0,0,8,0"
-                    Visibility="{Binding IsPickMode, Converter={StaticResource BoolToVisConverter}}"
-                    Style="{StaticResource CircularDangerButton}"
-                    ToolTip="Remove all click points from the template"
-                    Click="ClearAllButton_Click"/>
+                            <TextBlock Text="Click the template image to add points, or edit coordinates below:"
+                                       FontSize="10"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       Margin="0,0,0,8"
+                                       TextWrapping="Wrap"/>
 
-            <Button Grid.Column="2"
-                    Content="✅"
-                    Width="36"
-                    Height="36"
-                    Margin="0,0,8,0"
-                    Visibility="{Binding IsPickMode, Converter={StaticResource BoolToVisConverter}}"
-                    Style="{StaticResource CircularSuccessButton}"
-                    ToolTip="Save and apply the selected click points"
-                    IsDefault="True"
-                    Click="ApplyButton_Click"/>
+                            <!-- Editable Click Points List -->
+                            <ItemsControl ItemsSource="{Binding ClickMarkers}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="3"
+                                                Padding="8"
+                                                Margin="0,0,0,6"
+                                                Background="{DynamicResource SurfaceBrush}">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
 
-            <Button Grid.Column="3"
-                    Content="❌"
-                    Width="36"
-                    Height="36"
-                    Style="{StaticResource CircularSecondaryButton}"
-                    ToolTip="Close the template viewer"
-                    IsCancel="True"
-                    Click="CloseButton_Click"/>
+                                                <!-- Top Row: Color + Description + Remove -->
+                                                <Grid Grid.Row="0" Margin="0,0,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <Ellipse Grid.Column="0"
+                                                             Width="14" Height="14"
+                                                             Fill="{Binding MarkerColor}"
+                                                             VerticalAlignment="Center"
+                                                             Margin="0,0,6,0"/>
+
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding Description}"
+                                                               FontWeight="SemiBold"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource PrimaryTextBrush}"
+                                                               VerticalAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis"/>
+
+                                                    <Button Grid.Column="2"
+                                                            Content="✕"
+                                                            Width="20"
+                                                            Height="20"
+                                                            ToolTip="Remove this click point"
+                                                            VerticalAlignment="Center"
+                                                            Tag="{Binding}"
+                                                            Click="RemoveClickPoint_Click"/>
+                                                </Grid>
+
+                                                <!-- Bottom Row: Coordinates -->
+                                                <StackPanel Grid.Row="1">
+                                                    <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap">
+                                                        <Run Text="Relative: ("/>
+                                                        <Run Text="{Binding RelativeX, StringFormat=F3}" Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                                        <Run Text=", "/>
+                                                        <Run Text="{Binding RelativeY, StringFormat=F3}" Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                                        <Run Text=")"/>
+                                                    </TextBlock>
+                                                    <TextBlock FontSize="9" Foreground="{DynamicResource SecondaryTextBrush}" Opacity="0.7" TextWrapping="Wrap">
+                                                        <Run Text="Pixel: ("/>
+                                                        <Run Text="{Binding X, StringFormat=F0}"/>
+                                                        <Run Text=", "/>
+                                                        <Run Text="{Binding Y, StringFormat=F0}"/>
+                                                        <Run Text=")"/>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- No Points Message -->
+                            <TextBlock Text="No click points configured. Click the template image to add points."
+                                       FontSize="10"
+                                       FontStyle="Italic"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       Margin="0,8,0,0"
+                                       TextWrapping="Wrap"
+                                       Visibility="{Binding ClickMarkers.Count, Converter={StaticResource ZeroToVisibilityConverter}}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Live Mouse Coordinates (shown when hovering over template) -->
+                    <Border Background="{DynamicResource HeaderBackgroundBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="10"
+                            Margin="0,0,0,10"
+                            Visibility="{Binding IsMouseOverTemplate, Converter={StaticResource BoolToVisConverter}}">
+                        <StackPanel>
+                            <TextBlock Text="Live Coordinates"
+                                       FontWeight="SemiBold"
+                                       FontSize="13"
+                                       Margin="0,0,0,8"
+                                       Foreground="{DynamicResource PrimaryTextBrush}"/>
+
+                            <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap">
+                                <Run Text="Template-Relative:"/>
+                            </TextBlock>
+                            <TextBlock FontSize="11" Foreground="{DynamicResource PrimaryTextBrush}" Margin="0,0,0,6">
+                                <Run Text="("/>
+                                <Run Text="{Binding MouseTemplateRelativeX, StringFormat='{}{0:F3}', Mode=OneWay}"/>
+                                <Run Text=", "/>
+                                <Run Text="{Binding MouseTemplateRelativeY, StringFormat='{}{0:F3}', Mode=OneWay}"/>
+                                <Run Text=")"/>
+                            </TextBlock>
+
+                            <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap">
+                                <Run Text="Center-Relative:"/>
+                            </TextBlock>
+                            <TextBlock FontSize="11" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold">
+                                <Run Text="("/>
+                                <Run Text="{Binding MouseCenterRelativeX, StringFormat='{}{0:F3}', Mode=OneWay}"/>
+                                <Run Text=", "/>
+                                <Run Text="{Binding MouseCenterRelativeY, StringFormat='{}{0:F3}', Mode=OneWay}"/>
+                                <Run Text=")"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Status Bar -->
+                    <Border Background="{DynamicResource HeaderBackgroundBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="8"
+                            Margin="0,0,0,10">
+                        <TextBlock Text="{Binding Status}"
+                                   Foreground="{DynamicResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"/>
+                    </Border>
+
+                    <!-- Actions -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="🗑️"
+                                Width="36"
+                                Height="36"
+                                Margin="0,0,8,0"
+                                Visibility="{Binding IsPickMode, Converter={StaticResource BoolToVisConverter}}"
+                                Style="{StaticResource CircularDangerButton}"
+                                ToolTip="Remove all click points"
+                                Click="ClearAllButton_Click"/>
+
+                        <Button Content="✅"
+                                Width="36"
+                                Height="36"
+                                Margin="0,0,8,0"
+                                Visibility="{Binding IsPickMode, Converter={StaticResource BoolToVisConverter}}"
+                                Style="{StaticResource CircularSuccessButton}"
+                                ToolTip="Save and apply the selected click points"
+                                IsDefault="True"
+                                Click="ApplyButton_Click"/>
+
+                        <Button Content="❌"
+                                Width="36"
+                                Height="36"
+                                Style="{StaticResource CircularSecondaryButton}"
+                                ToolTip="Close the template viewer"
+                                IsCancel="True"
+                                Click="CloseButton_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
         </Grid>
     </Grid>
 </Window>

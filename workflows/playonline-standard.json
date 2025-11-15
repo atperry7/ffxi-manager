@@ -105,7 +105,7 @@
     {
       "StepId": "pol_member_selection",
       "DisplayName": "PlayOnline Member Selection",
-      "Description": "Select the PlayOnline member account from the member list",
+      "Description": "Select the PlayOnline member account from the member list using 4-slot visible window pattern",
       "Order": 2,
       "TemplatePath": "member_selection_screen",
       "IsEnabled": true,
@@ -115,127 +115,50 @@
       "Navigation": {
         "Sequence": [
           {
+            "Action": "ScrollWheel",
+            "Count": 1,
+            "DelayMs": 50,
+            "Description": "Reset member list to top by scrolling up aggressively",
+            "Parameters": {
+              "Direction": "Up",
+              "Ticks": 30,
+              "ScrollDelayMs": 50,
+              "PositionMouse": {
+                "FromCenter": true,
+                "X": 0.0,
+                "Y": 0.0,
+                "Description": "Window center (over member slots)"
+              }
+            }
+          },
+          {
             "Action": "MemberSlot",
             "Count": 1,
-            "DelayMs": 100,
-            "Description": "Navigate to next field",
+            "DelayMs": 150,
+            "Description": "Navigate to and select target member slot (handles slots 1-20 using 4-slot visible window)",
             "Parameters": {
-              "NavigationMethod": "Keyboard",
-              "TemplatePath": "action_pol_member_selection_0",
+              "ScrollTicksPerSlot": 1,
+              "ScrollDelayMs": 100,
               "ClickPoints": [
-                {
-                  "X": 0.46030188679245204,
-                  "Y": 0.11761000000000008,
-                  "Description": "Slot 1"
-                },
-                {
-                  "X": 0.46030188679245204,
-                  "Y": 0.3762766666666668,
-                  "Description": "Slot 2"
-                },
-                {
-                  "X": 0.44706918238993626,
-                  "Y": 0.6282766666666668,
-                  "Description": "Slot 3"
-                },
-                {
-                  "X": 0.44706918238993626,
-                  "Y": 0.8829433333333333,
-                  "Description": "Slot 4"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 5 - TODO: Capture coordinates from PlayOnline member screen"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 6 - TODO: Capture coordinates from PlayOnline member screen"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 7 - TODO: Capture coordinates from PlayOnline member screen"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 8 - TODO: Capture coordinates from PlayOnline member screen"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 9 - TODO: Capture coordinates from PlayOnline member screen"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 10 - TODO: Capture coordinates from PlayOnline member screen"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 11 - TODO: Capture coordinates from PlayOnline member screen"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 12 - TODO: Capture coordinates from PlayOnline member screen"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 13 - TODO: Capture coordinates from PlayOnline member screen"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 14 - TODO: Capture coordinates from PlayOnline member screen"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 15 - TODO: Capture coordinates from PlayOnline member screen"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 16 - TODO: Capture coordinates from PlayOnline member screen"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 17 - TODO: Capture coordinates from PlayOnline member screen"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 18 - TODO: Capture coordinates from PlayOnline member screen"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 19 - TODO: Capture coordinates from PlayOnline member screen"
-                },
-                {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 20 - TODO: Capture coordinates from PlayOnline member screen"
-                }
+                {"FromCenter": true, "X": 0.0, "Y": -0.15, "Description": "Slot 1 position"},
+                {"FromCenter": true, "X": 0.0, "Y": -0.05, "Description": "Slot 2 position"},
+                {"FromCenter": true, "X": 0.0, "Y": 0.05, "Description": "Slot 3 position"},
+                {"FromCenter": true, "X": 0.0, "Y": 0.15, "Description": "Slot 4 position"}
               ]
             }
           }
         ],
-        "Description": "Navigate to and select member slot using Tab\u002BEnter",
-        "PostNavigationDelayMs": 100
+        "Description": "Reset list to top, then navigate to target slot using POL's 4-slot visible window (slots 1-4 direct click, slots 5-20 scroll-then-click)",
+        "PostNavigationDelayMs": 200
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
       "RetryDelayMs": 500,
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
-      "Metadata": {}
+      "Metadata": {
+        "Notes": "Uses POL's 4-slot visible window pattern: slots 1-4 click directly, slots 5-20 scroll down (N-4) ticks and click at slot 4's position"
+      }
     },
     {
       "StepId": "pol_login_information_screen",

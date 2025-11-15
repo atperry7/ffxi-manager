@@ -84,6 +84,7 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<IWorkflowActionExecutor, FFXIManager.Services.AutoLogin.ActionExecutors.LaunchActionExecutor>();
             services.AddSingleton<IWorkflowActionExecutor, FFXIManager.Services.AutoLogin.ActionExecutors.KeyboardActionExecutor>();
             services.AddSingleton<IWorkflowActionExecutor, FFXIManager.Services.AutoLogin.ActionExecutors.ClickActionExecutor>();
+            services.AddSingleton<IWorkflowActionExecutor, FFXIManager.Services.AutoLogin.ActionExecutors.ScrollWheelActionExecutor>();
             services.AddSingleton<IWorkflowActionExecutor, FFXIManager.Services.AutoLogin.ActionExecutors.WaitActionExecutor>();
             services.AddSingleton<IWorkflowActionExecutor, FFXIManager.Services.AutoLogin.ActionExecutors.InputPasswordActionExecutor>();
             services.AddSingleton<IWorkflowActionExecutor, FFXIManager.Services.AutoLogin.ActionExecutors.InputOTPActionExecutor>();

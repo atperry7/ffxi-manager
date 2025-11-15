@@ -26,8 +26,15 @@ namespace FFXIManager.ViewModels
         private bool _isMultiPickMode;
         private int _multiPickCount = 1;
         private int _currentPickIndex = 0;
+        private bool _fromCenterMode;
         private double _pickedX;
         private double _pickedY;
+        private bool _showCoordinateGrid;
+        private bool _isMouseOverTemplate;
+        private double _mouseTemplateRelativeX;
+        private double _mouseTemplateRelativeY;
+        private double _mouseCenterRelativeX;
+        private double _mouseCenterRelativeY;
 
         public TemplateViewerDialogViewModel(
             ILoggingService loggingService,
@@ -121,7 +128,18 @@ namespace FFXIManager.ViewModels
         }
 
         /// <summary>
-        /// Picked X coordinate in relative units (0.0 - 1.0)
+        /// When true, picked coordinates are center-relative (-0.5 to 0.5).
+        /// When false, picked coordinates are template-relative (0.0 to 1.0).
+        /// </summary>
+        public bool FromCenterMode
+        {
+            get => _fromCenterMode;
+            set => SetProperty(ref _fromCenterMode, value);
+        }
+
+        /// <summary>
+        /// Picked X coordinate in relative units.
+        /// Range: -0.5 to 0.5 (center-relative) or 0.0 to 1.0 (template-relative)
         /// </summary>
         public double PickedX
         {
@@ -130,12 +148,67 @@ namespace FFXIManager.ViewModels
         }
 
         /// <summary>
-        /// Picked Y coordinate in relative units (0.0 - 1.0)
+        /// Picked Y coordinate in relative units.
+        /// Range: -0.5 to 0.5 (center-relative) or 0.0 to 1.0 (template-relative)
         /// </summary>
         public double PickedY
         {
             get => _pickedY;
             set => SetProperty(ref _pickedY, value);
+        }
+
+        /// <summary>
+        /// Whether to show the coordinate grid overlay
+        /// </summary>
+        public bool ShowCoordinateGrid
+        {
+            get => _showCoordinateGrid;
+            set => SetProperty(ref _showCoordinateGrid, value);
+        }
+
+        /// <summary>
+        /// Whether the mouse is currently over the template
+        /// </summary>
+        public bool IsMouseOverTemplate
+        {
+            get => _isMouseOverTemplate;
+            set => SetProperty(ref _isMouseOverTemplate, value);
+        }
+
+        /// <summary>
+        /// Current mouse X coordinate in template-relative units (0.0 - 1.0)
+        /// </summary>
+        public double MouseTemplateRelativeX
+        {
+            get => _mouseTemplateRelativeX;
+            set => SetProperty(ref _mouseTemplateRelativeX, value);
+        }
+
+        /// <summary>
+        /// Current mouse Y coordinate in template-relative units (0.0 - 1.0)
+        /// </summary>
+        public double MouseTemplateRelativeY
+        {
+            get => _mouseTemplateRelativeY;
+            set => SetProperty(ref _mouseTemplateRelativeY, value);
+        }
+
+        /// <summary>
+        /// Current mouse X coordinate in center-relative units (-0.5 to 0.5)
+        /// </summary>
+        public double MouseCenterRelativeX
+        {
+            get => _mouseCenterRelativeX;
+            set => SetProperty(ref _mouseCenterRelativeX, value);
+        }
+
+        /// <summary>
+        /// Current mouse Y coordinate in center-relative units (-0.5 to 0.5)
+        /// </summary>
+        public double MouseCenterRelativeY
+        {
+            get => _mouseCenterRelativeY;
+            set => SetProperty(ref _mouseCenterRelativeY, value);
         }
 
         /// <summary>

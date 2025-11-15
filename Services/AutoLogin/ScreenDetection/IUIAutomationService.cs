@@ -116,5 +116,26 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         /// <param name="windowHandle">Window handle</param>
         /// <param name="cancellationToken">Cancellation token</param>
         Task EnsureWindowFocusAsync(IntPtr windowHandle, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Scrolls the mouse wheel at the current cursor position
+        /// </summary>
+        /// <param name="delta">Positive = scroll up, Negative = scroll down. Magnitude controls speed (120 = 1 notch)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        Task ScrollMouseWheelAsync(int delta, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets the window client area rectangle
+        /// </summary>
+        /// <param name="windowHandle">Window handle</param>
+        /// <returns>Rectangle containing window position and size, or empty rect if failed</returns>
+        Rectangle GetWindowClientRect(IntPtr windowHandle);
+
+        /// <summary>
+        /// Gets the center point of a window's client area
+        /// </summary>
+        /// <param name="windowHandle">Window handle</param>
+        /// <returns>Center point in screen coordinates</returns>
+        Point GetWindowCenter(IntPtr windowHandle);
     }
 }

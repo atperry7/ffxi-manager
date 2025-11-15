@@ -30,6 +30,12 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
 
         [DllImport("user32.dll")]
+        private static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
+
+        [DllImport("user32.dll")]
+        private static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
+
+        [DllImport("user32.dll")]
         private static extern bool GetCursorPos(out POINT lpPoint);
 
         // DirectX-compatible input APIs
@@ -90,6 +96,8 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
         private const int MOUSEEVENTF_LEFTUP = 0x0004;
         private const int MOUSEEVENTF_RIGHTDOWN = 0x0008;
         private const int MOUSEEVENTF_RIGHTUP = 0x0010;
+        private const int MOUSEEVENTF_WHEEL = 0x0800;
+        private const int WHEEL_DELTA = 120; // Standard wheel delta for 1 notch
 
         // Keyboard event constants
         private const int KEYEVENTF_KEYDOWN = 0x0000;
@@ -613,6 +621,85 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
                     throw;
                 }
             }, cancellationToken);
+        }
+
+        public async Task ScrollMouseWheelAsync(int delta, CancellationToken cancellationToken = default)
+        {
+            await Task.Run(() =>
+            {
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    // Normalize delta to wheel notches (120 = 1 notch)
+                    int wheelDelta = delta * WHEEL_DELTA;
+
+                    // Use mouse_event to send wheel scroll
+                    mouse_event(MOUSEEVENTF_WHEEL, 0, 0, wheelDelta, 0);
+
+                    _loggingService.LogDebugAsync($"Mouse wheel scrolled: delta={delta} (raw={wheelDelta})");
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _loggingService.LogErrorAsync($"Scroll mouse wheel failed: {ex.Message}", ex);
+                    throw;
+                }
+            }, cancellationToken);
+        }
+
+        public Rectangle GetWindowClientRect(IntPtr windowHandle)
+        {
+            try
+            {
+                // Use GetClientRect to get accurate client area dimensions (excludes borders/title bar)
+                if (!GetClientRect(windowHandle, out RECT clientRect))
+                {
+                    _loggingService.LogWarningAsync($"Failed to get client rect for handle {windowHandle}");
+                    return Rectangle.Empty;
+                }
+
+                // GetClientRect returns dimensions relative to window (always starts at 0,0)
+                // We need to convert (0,0) to screen coordinates to get the actual position
+                POINT topLeft = new POINT { x = 0, y = 0 };
+                if (!ClientToScreen(windowHandle, ref topLeft))
+                {
+                    _loggingService.LogWarningAsync($"Failed to convert client coordinates to screen for handle {windowHandle}");
+                    return Rectangle.Empty;
+                }
+
+                // Return rectangle with screen coordinates and client dimensions
+                // This correctly handles both windowed (with borders) and fullscreen (borderless)
+                return new Rectangle(
+                    topLeft.x,
+                    topLeft.y,
+                    clientRect.Right - clientRect.Left,  // Width
+                    clientRect.Bottom - clientRect.Top   // Height
+                );
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogErrorAsync($"GetWindowClientRect failed: {ex.Message}", ex);
+                return Rectangle.Empty;
+            }
+        }
+
+        public Point GetWindowCenter(IntPtr windowHandle)
+        {
+            var rect = GetWindowClientRect(windowHandle);
+            if (rect.IsEmpty)
+            {
+                _loggingService.LogWarningAsync($"Cannot calculate center for empty window rect");
+                return Point.Empty;
+            }
+
+            return new Point(
+                rect.Left + rect.Width / 2,
+                rect.Top + rect.Height / 2
+            );
         }
 
         // Helper methods
