@@ -219,13 +219,6 @@ namespace FFXIManager.Services.AutoLogin
             await _progressService.UpdateProgressWithPhaseAsync(subtask, "authentication", 60, $"Navigating {stepDef.DisplayName}");
             await ExecuteNavigationAsync(subtask, stepDef, queueItem ?? throw new ArgumentNullException(nameof(queueItem)), context ?? throw new ArgumentNullException(nameof(context)), windowHandle, templateMatch, cancellationToken);
 
-            // Phase 5: Post-navigation delay (if configured)
-            if (stepDef.EstimatedDurationSeconds > 0)
-            {
-                await _progressService.UpdateProgressWithPhaseAsync(subtask, "authentication", 90, "Waiting for screen transition");
-                await Task.Delay(TimeSpan.FromSeconds(Math.Min(stepDef.EstimatedDurationSeconds, 3)), cancellationToken);
-            }
-
             await _progressService.UpdateProgressWithPhaseAsync(subtask, "authentication", 100, $"{stepDef.DisplayName} completed");
         }
 

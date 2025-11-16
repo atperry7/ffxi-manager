@@ -117,7 +117,6 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
                     // Move mouse to center (over member slots)
                     await _automationService.MoveMouseAsync(centerPoint, cancellationToken);
-                    await Task.Delay(100, cancellationToken);
 
                     // Scroll down to position target slot at slot 4's position
                     for (int i = 0; i < scrollTicks; i++)
@@ -125,9 +124,6 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                         await _automationService.ScrollMouseWheelAsync(-1, cancellationToken); // Negative = DOWN
                         await Task.Delay(scrollDelayMs, cancellationToken);
                     }
-
-                    // Small delay for UI to settle
-                    await Task.Delay(200, cancellationToken);
 
                     // Click at slot 4's position (target slot is now positioned there)
                     clickPoint = clickPoints[3]; // Index 3 = slot 4's position

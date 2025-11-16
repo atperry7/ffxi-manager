@@ -118,7 +118,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                                         await _automationService.ClickWindowRelativeAsync(context.WindowHandle, windowRelativePoint, cancellationToken);
                                         if (i < points.Count - 1 && action.DelayMs > 0)
                                         {
-                                            await Task.Delay(action.DelayMs, cancellationToken);
+                                            await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
                                         }
                                     }
                                 }

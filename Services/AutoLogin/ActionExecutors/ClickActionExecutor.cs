@@ -87,7 +87,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
                 if (i < multiPoints.Count - 1 && action.DelayMs > 0)
                 {
-                    await Task.Delay(action.DelayMs, cancellationToken);
+                    await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
                 }
             }
 
