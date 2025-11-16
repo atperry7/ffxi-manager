@@ -48,7 +48,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             // Validate prerequisites
             if (context.WindowHandle == IntPtr.Zero)
             {
-                await _loggingService.LogErrorAsync("[CLICK] Window handle is required for click actions");
+                _ = _loggingService.LogErrorAsync("[CLICK] Window handle is required for click actions");
                 return false;
             }
 
@@ -56,7 +56,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             var multiPoints = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
             if (multiPoints == null || multiPoints.Count == 0)
             {
-                await _loggingService.LogErrorAsync("[CLICK] No click points configured. Add at least 1 point to Parameters['ClickPoints'].");
+                _ = _loggingService.LogErrorAsync("[CLICK] No click points configured. Add at least 1 point to Parameters['ClickPoints'].");
                 return false;
             }
 
@@ -64,20 +64,16 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             bool requiresTemplate = multiPoints.Any(p => !p.FromCenter);
             if (requiresTemplate && context.TemplateMatch == null)
             {
-                await _loggingService.LogWarningAsync("[CLICK] Template-relative click requested but no template match available");
+                _ = _loggingService.LogWarningAsync("[CLICK] Template-relative click requested but no template match available");
                 return false;
             }
-
-            // Activate window first
-            await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
-            await Task.Delay(100, cancellationToken);
 
             // Determine navigation mode for logging
             bool hasCenter = multiPoints.Any(p => p.FromCenter);
             bool hasTemplate = multiPoints.Any(p => !p.FromCenter);
             string mode = hasCenter && hasTemplate ? "Hybrid" : hasCenter ? "Center-Relative" : "Template-Relative";
 
-            await _loggingService.LogInfoAsync($"[CLICK] Executing {mode} click sequence with {multiPoints!.Count} point(s)");
+            _ = _loggingService.LogInfoAsync($"[CLICK] Executing {mode} click sequence with {multiPoints!.Count} point(s)");
 
             for (int i = 0; i < multiPoints.Count; i++)
             {
@@ -85,7 +81,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 var windowRelativePoint = CalculateClickPoint(p, context);
 
                 string modeLabel = p.FromCenter ? "center-relative" : "template-relative";
-                await _loggingService.LogDebugAsync($"[CLICK] Point {i + 1} ({modeLabel}): ({p.X:F2},{p.Y:F2}) -> window=({windowRelativePoint.X},{windowRelativePoint.Y})");
+                _ = _loggingService.LogDebugAsync($"[CLICK] Point {i + 1} ({modeLabel}): ({p.X:F2},{p.Y:F2}) -> window=({windowRelativePoint.X},{windowRelativePoint.Y})");
 
                 await _automationService.ClickWindowRelativeAsync(context.WindowHandle, windowRelativePoint, cancellationToken);
 
@@ -95,12 +91,9 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 }
             }
 
-            if (action.DelayMs > 0)
-            {
-                await Task.Delay(action.DelayMs, cancellationToken);
-            }
+            await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
 
-            await _loggingService.LogDebugAsync("[CLICK] Click completed successfully");
+            _ = _loggingService.LogDebugAsync("[CLICK] Click completed successfully");
 
             return true;
         }

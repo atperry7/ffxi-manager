@@ -59,7 +59,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             // Validate context
             if (context.QueueItem?.Account == null)
             {
-                await _loggingService.LogErrorAsync("[CHARACTER-SLOT] No account context available");
+                _ = _loggingService.LogErrorAsync("[CHARACTER-SLOT] No account context available");
                 return false;
             }
 
@@ -68,11 +68,11 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             if (targetSlot < 1 || targetSlot > 16)
             {
-                await _loggingService.LogErrorAsync($"[CHARACTER-SLOT] Invalid character slot: {targetSlot} (must be 1-16)");
+                _ = _loggingService.LogErrorAsync($"[CHARACTER-SLOT] Invalid character slot: {targetSlot} (must be 1-16)");
                 return false;
             }
 
-            await _loggingService.LogInfoAsync($"[CHARACTER-SLOT] Navigating to character slot {targetSlot} for account {account.DisplayName}");
+            _ = _loggingService.LogInfoAsync($"[CHARACTER-SLOT] Navigating to character slot {targetSlot} for account {account.DisplayName}");
 
             try
             {
@@ -80,16 +80,16 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 var clicked = await NavigateWithClickAsync(action, context, targetSlot, cancellationToken);
                 if (clicked)
                 {
-                    await _loggingService.LogInfoAsync($"[CHARACTER-SLOT] Successfully clicked character slot {targetSlot}");
+                    _ = _loggingService.LogInfoAsync($"[CHARACTER-SLOT] Successfully clicked character slot {targetSlot}");
                     return true;
                 }
 
-                await _loggingService.LogErrorAsync("[CHARACTER-SLOT] Click navigation failed or not available (missing template match or click points)");
+                _ = _loggingService.LogErrorAsync("[CHARACTER-SLOT] Click navigation failed or not available (missing template match or click points)");
                 return false;
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync($"[CHARACTER-SLOT] Failed to navigate to character slot {targetSlot}", ex);
+                _ = _loggingService.LogErrorAsync($"[CHARACTER-SLOT] Failed to navigate to character slot {targetSlot}", ex);
                 return false;
             }
         }
@@ -100,18 +100,12 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             int targetSlot,
             CancellationToken cancellationToken)
         {
-            // Ensure window focus
-            if (context.WindowHandle != IntPtr.Zero)
-            {
-                await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
-                await Task.Delay(100, cancellationToken);
-            }
 
             // Get configured click points from action parameters (JSON array)
             var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
             if (points == null || points.Count < 16)
             {
-                await _loggingService.LogWarningAsync($"[CHARACTER-SLOT] ClickPoints missing or fewer than 16 (found {points?.Count ?? 0}); cannot click");
+                _ = _loggingService.LogWarningAsync($"[CHARACTER-SLOT] ClickPoints missing or fewer than 16 (found {points?.Count ?? 0}); cannot click");
                 return false;
             }
             var clickPoint = points[Math.Clamp(targetSlot - 1, 0, points.Count - 1)];
@@ -119,7 +113,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             // Check if template match is required (only for template-relative clicks)
             if (!clickPoint.FromCenter && context.TemplateMatch == null)
             {
-                await _loggingService.LogErrorAsync("[CHARACTER-SLOT] Template-relative click requested but no template match available");
+                _ = _loggingService.LogErrorAsync("[CHARACTER-SLOT] Template-relative click requested but no template match available");
                 return false;
             }
 
@@ -127,7 +121,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             System.Drawing.Point screenPoint = CalculateClickPoint(clickPoint, context, targetSlot);
 
             await _automationService.ClickWindowRelativeAsync(context.WindowHandle, screenPoint, cancellationToken);
-            await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
+            await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
 
             return true;
         }

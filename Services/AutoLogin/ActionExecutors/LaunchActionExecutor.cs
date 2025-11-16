@@ -55,11 +55,11 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             if (string.IsNullOrWhiteSpace(applicationName))
             {
-                await _loggingService.LogErrorAsync("[LAUNCH] ApplicationName parameter is required for Launch actions");
+                _ = _loggingService.LogErrorAsync("[LAUNCH] ApplicationName parameter is required for Launch actions");
                 return false;
             }
 
-            await _loggingService.LogInfoAsync($"[LAUNCH] Starting {applicationName} launch sequence");
+            _ = _loggingService.LogInfoAsync($"[LAUNCH] Starting {applicationName} launch sequence");
 
             // Phase 1: Find application from settings
             await UpdateProgressAsync(context, 10, $"Finding {applicationName}");
@@ -81,7 +81,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
                 if (allowSkipIfNotConfigured)
                 {
-                    await _loggingService.LogInfoAsync($"[LAUNCH] {message} - skipping action");
+                    _ = _loggingService.LogInfoAsync($"[LAUNCH] {message} - skipping action");
                     if (context.Subtask != null)
                     {
                         context.Subtask.Skip(message);
@@ -89,11 +89,11 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                     return true; // Skipping is considered success
                 }
 
-                await _loggingService.LogErrorAsync($"[LAUNCH] {message} - action marked as required");
+                _ = _loggingService.LogErrorAsync($"[LAUNCH] {message} - action marked as required");
                 throw new InvalidOperationException($"Required application not found: {applicationName}. Please configure it in External Applications settings.");
             }
 
-            await _loggingService.LogInfoAsync($"[LAUNCH] Found application: {app.Name} at {app.ExecutablePath}");
+            _ = _loggingService.LogInfoAsync($"[LAUNCH] Found application: {app.Name} at {app.ExecutablePath}");
             // Persist name->id mapping for later steps that only pass a name
             if (!string.IsNullOrWhiteSpace(app.Name))
             {
@@ -105,11 +105,11 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             if (app.IsRunning)
             {
-                await _loggingService.LogInfoAsync($"[LAUNCH] {app.Name} is already running (PIDs: {string.Join(", ", app.ProcessIds)})");
+                _ = _loggingService.LogInfoAsync($"[LAUNCH] {app.Name} is already running (PIDs: {string.Join(", ", app.ProcessIds)})");
 
                 if (allowSkipIfRunning)
                 {
-                    await _loggingService.LogInfoAsync($"[LAUNCH] Skipping launch - app already running");
+                    _ = _loggingService.LogInfoAsync($"[LAUNCH] Skipping launch - app already running");
                     if (context.Subtask != null)
                     {
                         context.Subtask.Skip($"{app.Name} already running");
@@ -131,13 +131,13 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                         app.Name.Contains("pol", StringComparison.OrdinalIgnoreCase))
                     {
                         context.AutoLoginContext?.SetData(AutoLoginContextKeys.WellKnown.PlayOnlineProcessId, skippedPid);
-                        await _loggingService.LogDebugAsync($"[LAUNCH] Stored existing PlayOnline PID {skippedPid} in well-known context key (skip case)");
+                        _ = _loggingService.LogDebugAsync($"[LAUNCH] Stored existing PlayOnline PID {skippedPid} in well-known context key (skip case)");
                     }
 
                     return true; // Skipping is considered success
                 }
 
-                await _loggingService.LogInfoAsync($"[LAUNCH] AllowSkipIfRunning=false - will relaunch");
+                _ = _loggingService.LogInfoAsync($"[LAUNCH] AllowSkipIfRunning=false - will relaunch");
             }
 
             // Phase 3: Launch application
@@ -148,11 +148,11 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             if (!launched)
             {
                 var message = $"Failed to launch {app.Name}. Check executable path and permissions.";
-                await _loggingService.LogErrorAsync($"[LAUNCH] {message}");
+                _ = _loggingService.LogErrorAsync($"[LAUNCH] {message}");
                 throw new InvalidOperationException(message);
             }
 
-            await _loggingService.LogInfoAsync($"[LAUNCH] {app.Name} launch initiated successfully");
+            _ = _loggingService.LogInfoAsync($"[LAUNCH] {app.Name} launch initiated successfully");
 
             // Phase 4: Wait for process detection (configurable)
             await UpdateProgressAsync(context, 50, $"Waiting for {app.Name} process");
@@ -177,12 +177,12 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             if (!processDetected)
             {
                 var message = $"{app.Name} process not detected after {retryAttempts} attempts";
-                await _loggingService.LogErrorAsync($"[LAUNCH] {message}");
+                _ = _loggingService.LogErrorAsync($"[LAUNCH] {message}");
                 throw new TimeoutException(message);
             }
 
             var processId = app.ProcessIds[0];
-            await _loggingService.LogInfoAsync($"[LAUNCH] {app.Name} process detected (PID: {processId})");
+            _ = _loggingService.LogInfoAsync($"[LAUNCH] {app.Name} process detected (PID: {processId})");
 
             // Store process ID in context for later use (type-safe)
             var stepIdForContext = context.WorkflowStep?.StepId ?? "launch";
@@ -200,7 +200,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 app.Name.Contains("pol", StringComparison.OrdinalIgnoreCase))
             {
                 context.AutoLoginContext?.SetData(AutoLoginContextKeys.WellKnown.PlayOnlineProcessId, processId);
-                await _loggingService.LogDebugAsync($"[LAUNCH] Stored PlayOnline PID {processId} in well-known context key");
+                _ = _loggingService.LogDebugAsync($"[LAUNCH] Stored PlayOnline PID {processId} in well-known context key");
             }
 
             // Update action context with PID for subsequent actions
@@ -208,9 +208,11 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             context.ApplicationName = app.Name;
             context.ApplicationId = app.Id;
 
+            await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
+
             // Phase 5: Complete
             await UpdateProgressAsync(context, 100, $"{app.Name} launched");
-            await _loggingService.LogInfoAsync($"[LAUNCH] {app.Name} launch sequence completed successfully");
+            _ = _loggingService.LogInfoAsync($"[LAUNCH] {app.Name} launch sequence completed successfully");
 
             return true;
         }

@@ -6,7 +6,7 @@
   "IsDefault": true,
   "IsReadOnly": false,
   "CreatedDate": "2025-01-15T00:00:00Z",
-  "LastModifiedDate": "2025-10-22T23:04:50.7732467Z",
+  "LastModifiedDate": "2025-11-16T13:51:49.6980821Z",
   "Steps": [
     {
       "StepId": "launch_pol_proxy",
@@ -14,9 +14,10 @@
       "Description": "Launch POL Proxy application if configured (optional step)",
       "Order": 0,
       "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": false,
-      "EstimatedDurationSeconds": 15,
+      "EstimatedDurationSeconds": 60,
       "FallbackTemplatePaths": [],
       "Navigation": {
         "Sequence": [
@@ -50,23 +51,24 @@
       "Description": "Launch Windower application and click the Launch Arrow to start PlayOnline",
       "Order": 1,
       "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": false,
-      "EstimatedDurationSeconds": 15,
+      "EstimatedDurationSeconds": 60,
       "FallbackTemplatePaths": [],
       "Navigation": {
         "Sequence": [
           {
             "Action": "Launch",
             "Count": 1,
-            "DelayMs": 100,
+            "DelayMs": 5000,
             "Parameters": {
               "ApplicationName": "Windower",
               "AllowSkipIfNotConfigured": false,
               "AllowSkipIfRunning": false,
               "RetryAttempts": 60,
               "RetryDelayMs": 500,
-              "TemplatePath": "launch_arrow",
+              "TemplatePath": "",
               "ConfidenceThreshold": 0.8,
               "ApplicationId": "16cb8aee-4c47-43dc-adfa-5975fbc9ac9c"
             }
@@ -74,26 +76,27 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 100,
+            "DelayMs": 50,
             "Description": "Click Launch Arrow",
             "Parameters": {
-              "TemplatePath": "launch_arrow",
+              "TemplatePath": "action_launch_windower_1",
               "ConfidenceThreshold": 0.8,
               "RetryAttempts": 30,
               "RetryDelayMs": 500,
               "TargetApplication": "Windower",
               "ClickPoints": [
                 {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 1"
+                  "FromCenter": true,
+                  "X": 0.41486111111111124,
+                  "Y": 0.4387914230019494,
+                  "Description": "Click 1"
                 }
               ]
             }
           }
         ],
         "Description": "Launch Windower and click the Launch Arrow button to start PlayOnline",
-        "PostNavigationDelayMs": 4000
+        "PostNavigationDelayMs": 6000
       },
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
@@ -104,10 +107,11 @@
     },
     {
       "StepId": "pol_member_selection",
-      "DisplayName": "PlayOnline Member Selection",
+      "DisplayName": "Member Selection",
       "Description": "Select the PlayOnline member account from the member list using 4-slot visible window pattern",
       "Order": 2,
-      "TemplatePath": "member_selection_screen",
+      "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 30,
@@ -134,22 +138,43 @@
           {
             "Action": "MemberSlot",
             "Count": 1,
-            "DelayMs": 150,
+            "DelayMs": 0,
             "Description": "Navigate to and select target member slot (handles slots 1-20 using 4-slot visible window)",
             "Parameters": {
               "ScrollTicksPerSlot": 1,
               "ScrollDelayMs": 100,
               "ClickPoints": [
-                {"FromCenter": true, "X": 0.0, "Y": -0.15, "Description": "Slot 1 position"},
-                {"FromCenter": true, "X": 0.0, "Y": -0.05, "Description": "Slot 2 position"},
-                {"FromCenter": true, "X": 0.0, "Y": 0.05, "Description": "Slot 3 position"},
-                {"FromCenter": true, "X": 0.0, "Y": 0.15, "Description": "Slot 4 position"}
-              ]
+                {
+                  "FromCenter": true,
+                  "X": -0.01292813969106782,
+                  "Y": -0.22839737861185583,
+                  "Description": "Slot 1"
+                },
+                {
+                  "FromCenter": true,
+                  "X": -0.005764495186926399,
+                  "Y": -0.10626452189454871,
+                  "Description": "Slot 2"
+                },
+                {
+                  "FromCenter": true,
+                  "X": -0.0026304007163645005,
+                  "Y": 0.012889484658921702,
+                  "Description": "Slot 3"
+                },
+                {
+                  "FromCenter": true,
+                  "X": 0.002294604880232809,
+                  "Y": 0.1362138814417635,
+                  "Description": "Slot 4"
+                }
+              ],
+              "TemplatePath": "action_pol_member_selection_1"
             }
           }
         ],
-        "Description": "Reset list to top, then navigate to target slot using POL's 4-slot visible window (slots 1-4 direct click, slots 5-20 scroll-then-click)",
-        "PostNavigationDelayMs": 200
+        "Description": "Reset list to top, then navigate to target slot using POL\u0027s 4-slot visible window (slots 1-4 direct click, slots 5-20 scroll-then-click)",
+        "PostNavigationDelayMs": 100
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -157,15 +182,16 @@
       "ConfidenceThreshold": 0.8,
       "Tolerance": 5,
       "Metadata": {
-        "Notes": "Uses POL's 4-slot visible window pattern: slots 1-4 click directly, slots 5-20 scroll down (N-4) ticks and click at slot 4's position"
+        "Notes": "Uses POL\u0027s 4-slot visible window pattern: slots 1-4 click directly, slots 5-20 scroll down (N-4) ticks and click at slot 4\u0027s position"
       }
     },
     {
       "StepId": "pol_login_information_screen",
-      "DisplayName": "Navigate to Login Screen",
-      "Description": "Navigate to the PlayOnline login information screen",
+      "DisplayName": "Click Log In",
+      "Description": "Login Information Screen after selecting Member Slot",
       "Order": 3,
       "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 15,
@@ -181,16 +207,17 @@
               "TemplatePath": "action_pol_login_information_screen_0",
               "ClickPoints": [
                 {
-                  "X": 0.6,
-                  "Y": 0.4,
-                  "Description": "Slot 1"
+                  "FromCenter": true,
+                  "X": -0.31084567070435176,
+                  "Y": -0.16673579801623084,
+                  "Description": "Click 1"
                 }
               ]
             }
           }
         ],
-        "Description": "Navigate to and click Log In button",
-        "PostNavigationDelayMs": 100
+        "Description": "Click Log In",
+        "PostNavigationDelayMs": 50
       },
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
@@ -200,9 +227,10 @@
     {
       "StepId": "pol_connect_screen",
       "DisplayName": "Open Virtual Keyboard",
-      "Description": "Detect the Connect to PlayOnline screen and prepare for password entry",
+      "Description": "Click password field for keyboard",
       "Order": 4,
-      "TemplatePath": "connect_to_playonline_screen",
+      "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 30,
@@ -215,19 +243,20 @@
             "DelayMs": 0,
             "Description": "Navigate to next field",
             "Parameters": {
-              "TemplatePath": "password_otp_fields",
+              "TemplatePath": "action_pol_otp_entry_0",
               "ClickPoints": [
                 {
-                  "X": 0.46724470134874746,
-                  "Y": 0.1724348958333337,
+                  "FromCenter": true,
+                  "X": 0.21046433378196505,
+                  "Y": -0.07548685782556758,
                   "Description": "Click 1"
                 }
               ]
             }
           }
         ],
-        "Description": "Focus password field on connection screen",
-        "PostNavigationDelayMs": 100
+        "Description": "Click Password Field",
+        "PostNavigationDelayMs": 50
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -238,10 +267,11 @@
     },
     {
       "StepId": "pol_virtual_keyboard",
-      "DisplayName": "Activate Virtual Keyboard",
-      "Description": "Detect and activate the PlayOnline virtual keyboard for password entry",
+      "DisplayName": "Input Password",
+      "Description": "Enter password on virtual keyboard",
       "Order": 5,
-      "TemplatePath": "virtual_keyboard_password_input_screen",
+      "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 30,
@@ -251,15 +281,16 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 50,
+            "DelayMs": 20,
             "Description": "Click center of virtual keyboard password field",
             "Parameters": {
-              "TemplatePath": "virtual_keyboard_password_input_screen",
+              "TemplatePath": "action_pol_virtual_keyboard_0",
               "ClickPoints": [
                 {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 1"
+                  "FromCenter": true,
+                  "X": 0.0018493611297915047,
+                  "Y": -0.19009583707696914,
+                  "Description": "Click 1"
                 }
               ],
               "ConfidenceThreshold": 0.75
@@ -268,7 +299,7 @@
           {
             "Action": "InputPassword",
             "Count": 1,
-            "DelayMs": 100,
+            "DelayMs": 50,
             "Description": "Password Input",
             "Parameters": {
               "ClickPoints": [
@@ -282,7 +313,7 @@
           }
         ],
         "Description": "Activate virtual keyboard password field",
-        "PostNavigationDelayMs": 100
+        "PostNavigationDelayMs": 50
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -295,10 +326,11 @@
     },
     {
       "StepId": "pol_password_confirmation",
-      "DisplayName": "Confirm Password Entry",
+      "DisplayName": "Confirm Password",
       "Description": "Confirm password entry with circle button",
       "Order": 6,
-      "TemplatePath": "circle_confirmation_password",
+      "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 30,
@@ -311,12 +343,13 @@
             "DelayMs": 50,
             "Description": "Click the confirmation",
             "Parameters": {
-              "TemplatePath": "circle_confirmation_password",
+              "TemplatePath": "action_pol_password_confirmation_0",
               "ClickPoints": [
                 {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 1"
+                  "FromCenter": true,
+                  "X": -0.3092916386460435,
+                  "Y": -0.1871009284216832,
+                  "Description": "Click 1"
                 }
               ],
               "ConfidenceThreshold": 0.75
@@ -324,7 +357,7 @@
           }
         ],
         "Description": "Confirm password using circle button",
-        "PostNavigationDelayMs": 100
+        "PostNavigationDelayMs": 50
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -339,6 +372,7 @@
       "Description": "Enter one-time password if OTP is enabled for the account",
       "Order": 7,
       "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": true,
       "EstimatedDurationSeconds": 15,
@@ -348,14 +382,15 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 50,
+            "DelayMs": 20,
             "Description": "Tab to OTP field",
             "Parameters": {
-              "TemplatePath": "password_otp_fields",
+              "TemplatePath": "action_pol_otp_entry_0",
               "ClickPoints": [
                 {
-                  "X": 0.4826589595375721,
-                  "Y": 0.6724348958333337,
+                  "FromCenter": true,
+                  "X": 0.20373485868102292,
+                  "Y": -0.01634707287933096,
                   "Description": "Click 1"
                 }
               ]
@@ -364,7 +399,7 @@
           {
             "Action": "InputOTP",
             "Count": 1,
-            "DelayMs": 100,
+            "DelayMs": 20,
             "Description": "Navigate to next field",
             "Parameters": {
               "ClickPoints": [
@@ -378,7 +413,7 @@
           }
         ],
         "Description": "Tab to OTP field and enter code",
-        "PostNavigationDelayMs": 500
+        "PostNavigationDelayMs": 50
       },
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
@@ -392,7 +427,8 @@
       "DisplayName": "Connect",
       "Description": "Click the Connect button to proceed to PlayOnline servers",
       "Order": 8,
-      "TemplatePath": "connect_to_playonline_screen",
+      "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 30,
@@ -402,22 +438,23 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 500,
+            "DelayMs": 20,
             "Description": "Click connect button to finish login",
             "Parameters": {
-              "TemplatePath": "connect_to_playonline_screen",
+              "TemplatePath": "action_pol_otp_entry_0",
               "ClickPoints": [
                 {
-                  "X": 0.5,
-                  "Y": 0.5,
-                  "Description": "Slot 1"
+                  "FromCenter": true,
+                  "X": -0.21573575594436972,
+                  "Y": 0.09177718040621274,
+                  "Description": "Click 1"
                 }
               ]
             }
           }
         ],
         "Description": "Activate Connect button",
-        "PostNavigationDelayMs": 15000
+        "PostNavigationDelayMs": 50
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -431,7 +468,8 @@
       "DisplayName": "PlayOnline Main Screen",
       "Description": "Configure this step",
       "Order": 9,
-      "TemplatePath": "main_screen",
+      "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": false,
       "SkipIfApplicationRunning": "POL Proxy",
@@ -442,14 +480,15 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 100,
+            "DelayMs": 20,
             "Description": "Navigate to next field",
             "Parameters": {
-              "TemplatePath": "main_screen",
+              "TemplatePath": "pol_main_screen_0",
               "ClickPoints": [
                 {
-                  "X": 0.4462102689486551,
-                  "Y": 0.4588095238095243,
+                  "FromCenter": false,
+                  "X": 0.19828744123572867,
+                  "Y": 0.32833632019115894,
                   "Description": "Click 1"
                 }
               ]
@@ -457,7 +496,7 @@
           }
         ],
         "Description": "Navigation for PlayOnline Main Screen",
-        "PostNavigationDelayMs": 500
+        "PostNavigationDelayMs": 50
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -471,7 +510,8 @@
       "DisplayName": "Navigate to Play Screen",
       "Description": "Detect and navigate the PlayOnline play screen to access games",
       "Order": 10,
-      "TemplatePath": "play_screen",
+      "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": false,
       "SkipIfApplicationRunning": "POL Proxy",
@@ -482,14 +522,15 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 500,
+            "DelayMs": 20,
             "Description": "Click First Play",
             "Parameters": {
-              "TemplatePath": "play_screen",
+              "TemplatePath": "action_pol_play_screen_0",
               "ClickPoints": [
                 {
-                  "X": 0.4974795211090106,
-                  "Y": 0.4438809523809531,
+                  "FromCenter": true,
+                  "X": -0.2609693306469667,
+                  "Y": -0.33175925925925925,
                   "Description": "Click 1"
                 }
               ]
@@ -497,7 +538,7 @@
           }
         ],
         "Description": "Navigate to Final Fantasy XI in game list",
-        "PostNavigationDelayMs": 500
+        "PostNavigationDelayMs": 50
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -511,7 +552,8 @@
       "DisplayName": "Confirm Play Selection",
       "Description": "Confirm the selection to start Final Fantasy XI",
       "Order": 11,
-      "TemplatePath": "play_confirmation",
+      "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": false,
       "SkipIfApplicationRunning": "POL Proxy",
@@ -522,14 +564,15 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 500,
+            "DelayMs": 20,
             "Description": "Secondary Play Confirm",
             "Parameters": {
-              "TemplatePath": "play_confirmation",
+              "TemplatePath": "action_pol_play_confirmation_0",
               "ClickPoints": [
                 {
-                  "X": 0.4922660479505026,
-                  "Y": 0.4155620155038761,
+                  "FromCenter": true,
+                  "X": -0.16828967987463622,
+                  "Y": 0.2964100268576544,
                   "Description": "Click 1"
                 }
               ]
@@ -537,7 +580,7 @@
           }
         ],
         "Description": "Confirm play selection",
-        "PostNavigationDelayMs": 5000
+        "PostNavigationDelayMs": 50
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -551,25 +594,34 @@
       "DisplayName": "Accept FFXI Terms",
       "Description": "Detect and accept the Final Fantasy XI Terms of Service screen",
       "Order": 12,
-      "TemplatePath": "ffxi_accept_terms",
+      "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": false,
-      "EstimatedDurationSeconds": 30,
+      "EstimatedDurationSeconds": 90,
       "FallbackTemplatePaths": [],
       "Navigation": {
         "Sequence": [
           {
-            "Action": "Enter",
+            "Action": "Wait",
+            "Count": 1,
+            "DelayMs": 25000,
+            "Description": "Let FFXI Full Game Load - you may want to adjust this if you don\u0027t use POL Proxy",
+            "Parameters": {}
+          },
+          {
+            "Action": "Click",
             "Count": 2,
-            "DelayMs": 1000,
+            "DelayMs": 50,
             "Description": "Accept FFXI Terms of Service",
             "Parameters": {
-              "TemplatePath": "ffxi_accept_terms",
+              "TemplatePath": "action_ffxi_terms_acceptance_0",
               "ConfidenceThreshold": 0.6,
               "ClickPoints": [
                 {
-                  "X": 0.46202531645569583,
-                  "Y": 0.5830487804878056,
+                  "FromCenter": true,
+                  "X": 0.016093750000000018,
+                  "Y": 0.02709444444444442,
                   "Description": "Click 1"
                 }
               ]
@@ -577,10 +629,10 @@
           }
         ],
         "Description": "Accept terms with Enter key",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 4000
       },
       "MaxRetryAttempts": 3,
-      "RetryAttempts": 60,
+      "RetryAttempts": 90,
       "RetryDelayMs": 1000,
       "ConfidenceThreshold": 0.6,
       "Tolerance": 5,
@@ -591,7 +643,8 @@
       "DisplayName": "FFXI Main Menu",
       "Description": "Navigate the FFXI main menu to character selection",
       "Order": 13,
-      "TemplatePath": "ffxi_main_screen",
+      "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 30,
@@ -599,17 +652,18 @@
       "Navigation": {
         "Sequence": [
           {
-            "Action": "Enter",
+            "Action": "Click",
             "Count": 2,
-            "DelayMs": 100,
+            "DelayMs": 50,
             "Description": "Select Character option",
             "Parameters": {
-              "TemplatePath": "ffxi_main_screen",
+              "TemplatePath": "action_ffxi_main_menu_0",
               "ConfidenceThreshold": 0.6,
               "ClickPoints": [
                 {
-                  "X": 0.4452313503305004,
-                  "Y": 0.4099019607843143,
+                  "FromCenter": true,
+                  "X": -0.09171875000000002,
+                  "Y": 0.0859833333333333,
                   "Description": "Click 1"
                 }
               ]
@@ -617,7 +671,7 @@
           }
         ],
         "Description": "Select Character menu option",
-        "PostNavigationDelayMs": 500
+        "PostNavigationDelayMs": 50
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -631,7 +685,8 @@
       "DisplayName": "Select Character Slot",
       "Description": "Navigate to and select the configured character slot",
       "Order": 14,
-      "TemplatePath": "step_ffxi_character_slot_selection",
+      "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 30,
@@ -641,89 +696,105 @@
           {
             "Action": "CharacterSlot",
             "Count": 0,
-            "DelayMs": 200,
+            "DelayMs": 20,
             "Description": "Click desired character slot (uses account FFXICharacterSlot property)",
             "Parameters": {
               "TemplatePath": "action_ffxi_character_slot_selection_0",
               "ClickPoints": [
                 {
-                  "X": 0.25049900199600794,
-                  "Y": 0.12085915492957755,
+                  "FromCenter": true,
+                  "X": 0.3561718749999998,
+                  "Y": 0.28583333333333316,
                   "Description": "Slot 1"
                 },
                 {
-                  "X": 0.25449101796407175,
-                  "Y": 0.2194507042253523,
+                  "FromCenter": true,
+                  "X": 0.35585937499999987,
+                  "Y": 0.3013888888888887,
                   "Description": "Slot 2"
                 },
                 {
-                  "X": 0.24750499001996004,
-                  "Y": 0.3114694835680752,
+                  "FromCenter": true,
+                  "X": 0.35648437499999985,
+                  "Y": 0.3158333333333333,
                   "Description": "Slot 3"
                 },
                 {
-                  "X": 0.24550898203592805,
-                  "Y": 0.42602347417840386,
+                  "FromCenter": true,
+                  "X": 0.35554687499999993,
+                  "Y": 0.3358333333333332,
                   "Description": "Slot 4"
                 },
                 {
-                  "X": 0.2524950099800399,
-                  "Y": 0.5405774647887326,
+                  "FromCenter": true,
+                  "X": 0.35492187499999994,
+                  "Y": 0.35361111111111077,
                   "Description": "Slot 5"
                 },
                 {
-                  "X": 0.23153692614770455,
-                  "Y": 0.6250845070422537,
+                  "FromCenter": true,
+                  "X": 0.35554687499999993,
+                  "Y": 0.3708333333333331,
                   "Description": "Slot 6"
                 },
                 {
-                  "X": 0.21556886227544905,
-                  "Y": 0.7527840375586855,
+                  "FromCenter": true,
+                  "X": 0.35585937499999987,
+                  "Y": 0.38749999999999984,
                   "Description": "Slot 7"
                 },
                 {
-                  "X": 0.23752495009980035,
-                  "Y": 0.8241455399061034,
+                  "FromCenter": true,
+                  "X": 0.35648437499999985,
+                  "Y": 0.4019444444444441,
                   "Description": "Slot 8"
                 },
                 {
-                  "X": 0.7964071856287425,
-                  "Y": 0.12930985915492973,
+                  "FromCenter": true,
+                  "X": 0.4499218749999998,
+                  "Y": 0.2830555555555554,
                   "Description": "Slot 9"
                 },
                 {
-                  "X": 0.777445109780439,
-                  "Y": 0.2363521126760565,
+                  "FromCenter": true,
+                  "X": 0.4499218749999998,
+                  "Y": 0.3024999999999999,
                   "Description": "Slot 10"
                 },
                 {
-                  "X": 0.7674650698602792,
-                  "Y": 0.3340046948356808,
+                  "FromCenter": true,
+                  "X": 0.4505468749999999,
+                  "Y": 0.3191666666666665,
                   "Description": "Slot 11"
                 },
                 {
-                  "X": 0.7534930139720558,
-                  "Y": 0.4279014084507044,
+                  "FromCenter": true,
+                  "X": 0.4514843749999998,
+                  "Y": 0.3352777777777777,
                   "Description": "Slot 12"
                 },
                 {
-                  "X": 0.7564870259481038,
-                  "Y": 0.5086525821596245,
+                  "FromCenter": true,
+                  "X": 0.44960937499999987,
+                  "Y": 0.35638888888888853,
                   "Description": "Slot 13"
                 },
                 {
-                  "X": 0.7385229540918163,
-                  "Y": 0.6382300469483568,
+                  "FromCenter": true,
+                  "X": 0.44867187499999994,
+                  "Y": 0.3702777777777775,
                   "Description": "Slot 14"
                 },
                 {
-                  "X": 0.7644710578842314,
-                  "Y": 0.7340046948356809,
+                  "FromCenter": true,
+                  "X": 0.44742187499999997,
+                  "Y": 0.3869444444444441,
                   "Description": "Slot 15"
                 },
                 {
-                  "X": 0.7514970059880238,
-                  "Y": 0.8541924882629108,
+                  "FromCenter": true,
+                  "X": 0.45023437499999985,
+                  "Y": 0.4002777777777775,
                   "Description": "Slot 16"
                 }
               ],
@@ -732,7 +803,7 @@
           }
         ],
         "Description": "Click character slot to select (slot number read from account configuration)",
-        "PostNavigationDelayMs": 200
+        "PostNavigationDelayMs": 50
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -748,7 +819,8 @@
       "DisplayName": "Confirm Character Login",
       "Description": "Final confirmation to log the character into the game world",
       "Order": 15,
-      "TemplatePath": "ffxi_character_confirmation",
+      "TemplatePath": "",
+      "SkipTemplateDetection": true,
       "IsEnabled": true,
       "IsOptional": false,
       "EstimatedDurationSeconds": 30,
@@ -756,31 +828,32 @@
       "Navigation": {
         "Sequence": [
           {
-            "Action": "Enter",
-            "Count": 2,
-            "DelayMs": 100,
-            "Description": "Enter on Yes",
+            "Action": "Click",
+            "Count": 1,
+            "DelayMs": 0,
+            "Description": "Click Yes to confirm character",
             "Parameters": {
-              "TemplatePath": "ffxi_character_confirmation"
+              "TemplatePath": "action_ffxi_character_confirmation_0",
+              "ClickPoints": [
+                {
+                  "FromCenter": true,
+                  "X": 0.016093750000000018,
+                  "Y": 0.02709444444444442,
+                  "Description": "Click 1"
+                }
+              ]
             }
           },
           {
             "Action": "Wait",
             "Count": 1,
-            "DelayMs": 1000,
+            "DelayMs": 5000,
             "Description": "Artifical wait for the confirm character",
-            "Parameters": {}
-          },
-          {
-            "Action": "Enter",
-            "Count": 1,
-            "DelayMs": 500,
-            "Description": "Confirm login to game world",
             "Parameters": {}
           }
         ],
         "Description": "Final confirmation to enter game world",
-        "PostNavigationDelayMs": 5000
+        "PostNavigationDelayMs": 50
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -803,9 +876,9 @@
     "SupportedResolutions": "All",
     "Notes": "Complete workflow covering full PlayOnline and FFXI login sequence. Supports OTP conditional execution and POL Proxy bypass for play screen navigation."
   },
-  "TotalEstimatedDurationSeconds": 420,
+  "TotalEstimatedDurationSeconds": 570,
   "EnabledStepCount": 16,
   "OptionalStepCount": 1,
-  "DurationDisplay": "~7m 0s",
+  "DurationDisplay": "~9m 30s",
   "TagsDisplay": "playonline, standard, default, complete"
 }

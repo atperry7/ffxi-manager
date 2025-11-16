@@ -60,13 +60,13 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             // Validate context
             if (context.QueueItem?.Account == null)
             {
-                await _loggingService.LogErrorAsync("[INPUT-OTP] No account context available");
+                _ = _loggingService.LogErrorAsync("[INPUT-OTP] No account context available");
                 return false;
             }
 
             if (context.QueueItem?.Profile == null)
             {
-                await _loggingService.LogErrorAsync("[INPUT-OTP] No profile context available");
+                _ = _loggingService.LogErrorAsync("[INPUT-OTP] No profile context available");
                 return false;
             }
 
@@ -76,12 +76,12 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             // Check if OTP is enabled for this account. If not, treat as no-op success so the step can proceed.
             if (!account.IsOTPEnabled || account.OTPConfiguration == null)
             {
-                await _loggingService.LogInfoAsync($"[INPUT-OTP] OTP not enabled for {account.DisplayName} - skipping action (treated as success)");
+                _ = _loggingService.LogInfoAsync($"[INPUT-OTP] OTP not enabled for {account.DisplayName} - skipping action (treated as success)");
                 // Do not fail or retry this action; consider it successfully skipped.
                 return true;
             }
 
-            await _loggingService.LogInfoAsync($"[INPUT-OTP] Retrieving OTP secret for account {account.DisplayName}");
+            _ = _loggingService.LogInfoAsync($"[INPUT-OTP] Retrieving OTP secret for account {account.DisplayName}");
 
             // Generate OTP credential target (with OTP prefix)
             var baseTarget = _credentialsService.GenerateCredentialTarget(profile.FilePath, account.Id);
@@ -92,8 +92,8 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             if (string.IsNullOrEmpty(otpSecret))
             {
-                await _loggingService.LogWarningAsync($"[INPUT-OTP] No OTP secret found in Credential Manager for account {account.DisplayName}");
-                await _loggingService.LogInfoAsync("[INPUT-OTP] User needs to set up OTP via Settings → PlayOnline Accounts");
+                _ = _loggingService.LogWarningAsync($"[INPUT-OTP] No OTP secret found in Credential Manager for account {account.DisplayName}");
+                _ = _loggingService.LogInfoAsync("[INPUT-OTP] User needs to set up OTP via Settings → PlayOnline Accounts");
                 return false;
             }
 
@@ -108,7 +108,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
                 if (string.IsNullOrEmpty(otpCode))
                 {
-                    await _loggingService.LogWarningAsync("[INPUT-OTP] No OTP code available - OTP service may not be running");
+                    _ = _loggingService.LogWarningAsync("[INPUT-OTP] No OTP code available - OTP service may not be running");
                     return false;
                 }
 
@@ -116,14 +116,14 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 var templatePath = action.GetParameter<string?>("TemplatePath", null);
                 if (!string.IsNullOrWhiteSpace(templatePath) && context.WindowHandle != IntPtr.Zero)
                 {
-                    await _loggingService.LogDebugAsync($"[INPUT-OTP] Attempting template detection: {templatePath}");
+                    _ = _loggingService.LogDebugAsync($"[INPUT-OTP] Attempting template detection: {templatePath}");
 
                     try
                     {
                         // Ensure fresh handle and capture screenshot
                         if (!await context.EnsureFreshWindowHandleAsync())
                         {
-                            await _loggingService.LogWarningAsync("[INPUT-OTP] Unable to refresh window handle before detection");
+                            _ = _loggingService.LogWarningAsync("[INPUT-OTP] Unable to refresh window handle before detection");
                         }
                         var screenshot = await _screenDetection.CaptureScreenshotWithLogging(context.WindowHandle, "OTP field detection", cancellationToken, retryCount: 0);
 
@@ -134,20 +134,20 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
                             if (matchResult?.IsValid == true)
                             {
-                                await _loggingService.LogInfoAsync($"[INPUT-OTP] Template matched: {templatePath} (confidence: {matchResult.Confidence:F2})");
+                                _ = _loggingService.LogInfoAsync($"[INPUT-OTP] Template matched: {templatePath} (confidence: {matchResult.Confidence:F2})");
 
                                 // Optional: Click one or more points if provided in action parameters
                                 var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
                                 if (points != null && points.Count > 0)
                                 {
+                                    // Store match result in context for CalculateClickPoint
+                                    context.TemplateMatch = matchResult;
+
                                     for (int i = 0; i < points.Count; i++)
                                     {
                                         var p = points[i];
-                                        var absoluteX = matchResult.WindowRelativePosition.X + (int)(matchResult.MatchSize.Width * p.X);
-                                        var absoluteY = matchResult.WindowRelativePosition.Y + (int)(matchResult.MatchSize.Height * p.Y);
-                                        var windowRelativePoint = new System.Drawing.Point(absoluteX, absoluteY);
-                                        var screenPoint = screenshot.ToScreenCoordinates(windowRelativePoint);
-                                        await _automationService.ClickAsync(screenPoint, cancellationToken);
+                                        var windowRelativePoint = CalculateClickPoint(p, context);
+                                        await _automationService.ClickWindowRelativeAsync(context.WindowHandle, windowRelativePoint, cancellationToken);
                                         if (i < points.Count - 1 && action.DelayMs > 0)
                                         {
                                             await Task.Delay(action.DelayMs, cancellationToken);
@@ -157,38 +157,33 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                             }
                             else
                             {
-                                await _loggingService.LogWarningAsync($"[INPUT-OTP] Template not found: {templatePath}, proceeding with blind input");
+                                _ = _loggingService.LogWarningAsync($"[INPUT-OTP] Template not found: {templatePath}, proceeding with blind input");
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        await _loggingService.LogWarningAsync($"[INPUT-OTP] Template detection failed: {ex.Message}, proceeding with blind input");
+                        _ = _loggingService.LogWarningAsync($"[INPUT-OTP] Template detection failed: {ex.Message}, proceeding with blind input");
                     }
                 }
 
-                // Ensure window has focus
-                if (context.WindowHandle != IntPtr.Zero)
-                {
-                    await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
-                    await Task.Delay(100, cancellationToken);
-                }
-
                 // Type OTP code securely
-                await _loggingService.LogInfoAsync("[INPUT-OTP] Typing OTP code: ******");
+                _ = _loggingService.LogInfoAsync("[INPUT-OTP] Typing OTP code: ******");
                 await _automationService.TypeSecureTextAsync(otpCode, action.DelayMs, cancellationToken);
 
                 // Clear OTP data from memory immediately
                 otpSecret = null!;
                 otpCode = null!;
                 GC.Collect(); // Force garbage collection to clear sensitive strings
-
-                await _loggingService.LogInfoAsync("[INPUT-OTP] OTP input completed successfully");
+                
+                await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
+                
+                _ = _loggingService.LogInfoAsync("[INPUT-OTP] OTP input completed successfully");
                 return true;
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync("[INPUT-OTP] Failed to type OTP code", ex);
+                _ = _loggingService.LogErrorAsync("[INPUT-OTP] Failed to type OTP code", ex);
 
                 // Clear OTP data from memory on error
                 otpSecret = null!;
@@ -196,6 +191,40 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 GC.Collect();
 
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Calculates window-relative click point using either center-relative or template-relative coordinates
+        /// </summary>
+        private System.Drawing.Point CalculateClickPoint(RelativeClickOffset clickPoint, WorkflowActionContext context)
+        {
+            if (clickPoint.FromCenter)
+            {
+                // Center-relative (template-independent, resolution-independent)
+                var centerPoint = _automationService.GetWindowCenter(context.WindowHandle);
+                var windowRect = _automationService.GetWindowClientRect(context.WindowHandle);
+
+                var offsetX = (int)(clickPoint.X * windowRect.Width);
+                var offsetY = (int)(clickPoint.Y * windowRect.Height);
+
+                var windowRelativeX = centerPoint.X - windowRect.Left + offsetX;
+                var windowRelativeY = centerPoint.Y - windowRect.Top + offsetY;
+
+                _ = _loggingService.LogDebugAsync($"[INPUT-OTP] Click point (center-relative): ({clickPoint.X:F2},{clickPoint.Y:F2}) -> window=({windowRelativeX},{windowRelativeY})");
+
+                return new System.Drawing.Point(windowRelativeX, windowRelativeY);
+            }
+            else
+            {
+                // Template-relative (existing behavior)
+                var rect = context.TemplateMatch!.GetBoundingRectangle();
+                var wx = rect.Left + (int)Math.Round(clickPoint.X * rect.Width);
+                var wy = rect.Top + (int)Math.Round(clickPoint.Y * rect.Height);
+
+                _ = _loggingService.LogDebugAsync($"[INPUT-OTP] Click point (template-relative): ({clickPoint.X:F2},{clickPoint.Y:F2}) -> window=({wx},{wy})");
+
+                return new System.Drawing.Point(wx, wy);
             }
         }
     }

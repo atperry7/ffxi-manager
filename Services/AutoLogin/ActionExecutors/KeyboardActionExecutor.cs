@@ -38,14 +38,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             var count = Math.Max(1, action.Count); // Repeat count
             var delayMs = Math.Max(50, action.DelayMs); // Delay after each key
 
-            await _loggingService.LogDebugAsync($"[KEYBOARD] Executing {key} x{count} (delay: {delayMs}ms)");
-
-            // Activate window first to ensure focus
-            if (context.WindowHandle != IntPtr.Zero)
-            {
-                await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
-                await Task.Delay(100, cancellationToken); // Brief delay for activation
-            }
+            _ = _loggingService.LogDebugAsync($"[KEYBOARD] Executing {key} x{count} (delay: {delayMs}ms)");
 
             // Execute keyboard input(s)
             for (int i = 0; i < count; i++)
@@ -61,7 +54,9 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 }
             }
 
-            await _loggingService.LogDebugAsync($"[KEYBOARD] Completed {key} x{count}");
+            await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
+
+            _ = _loggingService.LogDebugAsync($"[KEYBOARD] Completed {key} x{count}");
 
             return true;
         }
@@ -129,7 +124,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                     break;
 
                 default:
-                    await _loggingService.LogWarningAsync($"[KEYBOARD] Unknown key action: {key}");
+                    _ = _loggingService.LogWarningAsync($"[KEYBOARD] Unknown key action: {key}");
                     return;
             }
         }

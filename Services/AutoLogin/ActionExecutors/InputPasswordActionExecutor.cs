@@ -55,20 +55,20 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             // Validate context
             if (context.QueueItem?.Account == null)
             {
-                await _loggingService.LogErrorAsync("[INPUT-PASSWORD] No account context available");
+                _ = _loggingService.LogErrorAsync("[INPUT-PASSWORD] No account context available");
                 return false;
             }
 
             if (context.QueueItem?.Profile == null)
             {
-                await _loggingService.LogErrorAsync("[INPUT-PASSWORD] No profile context available");
+                _ = _loggingService.LogErrorAsync("[INPUT-PASSWORD] No profile context available");
                 return false;
             }
 
             var account = context.QueueItem.Account;
             var profile = context.QueueItem.Profile;
 
-            await _loggingService.LogInfoAsync($"[INPUT-PASSWORD] Retrieving password for account {account.DisplayName}");
+            _ = _loggingService.LogInfoAsync($"[INPUT-PASSWORD] Retrieving password for account {account.DisplayName}");
 
             // Generate credential target
             var credentialTarget = _credentialsService.GenerateCredentialTarget(profile.FilePath, account.Id);
@@ -78,8 +78,8 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             if (string.IsNullOrEmpty(password))
             {
-                await _loggingService.LogWarningAsync($"[INPUT-PASSWORD] No password found in Credential Manager for account {account.DisplayName}");
-                await _loggingService.LogInfoAsync("[INPUT-PASSWORD] User needs to set up password via Settings → PlayOnline Accounts");
+                _ = _loggingService.LogWarningAsync($"[INPUT-PASSWORD] No password found in Credential Manager for account {account.DisplayName}");
+                _ = _loggingService.LogInfoAsync("[INPUT-PASSWORD] User needs to set up password via Settings → PlayOnline Accounts");
                 return false;
             }
 
@@ -89,16 +89,10 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 var templatePath = action.GetParameter<string?>("TemplatePath", null);
                 if (!string.IsNullOrWhiteSpace(templatePath) && context.WindowHandle != IntPtr.Zero)
                 {
-                    await _loggingService.LogDebugAsync($"[INPUT-PASSWORD] Attempting template detection: {templatePath}");
+                    _ = _loggingService.LogDebugAsync($"[INPUT-PASSWORD] Attempting template detection: {templatePath}");
 
                     try
                     {
-                        // Ensure fresh handle and capture screenshot
-                        if (!await context.EnsureFreshWindowHandleAsync())
-                        {
-                            await _loggingService.LogWarningAsync("[INPUT-PASSWORD] Unable to refresh window handle before detection");
-                        }
-
                         var screenshot = await _screenDetection.CaptureScreenshotWithLogging(context.WindowHandle, "password field detection", cancellationToken, retryCount: 0);
 
                         if (screenshot != null && screenshot.IsValid)
@@ -108,20 +102,20 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
                             if (matchResult?.IsValid == true)
                             {
-                                await _loggingService.LogInfoAsync($"[INPUT-PASSWORD] Template matched: {templatePath} (confidence: {matchResult.Confidence:F2})");
+                                _ = _loggingService.LogInfoAsync($"[INPUT-PASSWORD] Template matched: {templatePath} (confidence: {matchResult.Confidence:F2})");
 
                                 // Optional: Click one or more points if provided in action parameters
                                 var points = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
                                 if (points != null && points.Count > 0)
                                 {
+                                    // Store match result in context for CalculateClickPoint
+                                    context.TemplateMatch = matchResult;
+
                                     for (int i = 0; i < points.Count; i++)
                                     {
                                         var p = points[i];
-                                        var absoluteX = matchResult.WindowRelativePosition.X + (int)(matchResult.MatchSize.Width * p.X);
-                                        var absoluteY = matchResult.WindowRelativePosition.Y + (int)(matchResult.MatchSize.Height * p.Y);
-                                        var windowRelativePoint = new System.Drawing.Point(absoluteX, absoluteY);
-                                        var screenPoint = screenshot.ToScreenCoordinates(windowRelativePoint);
-                                        await _automationService.ClickAsync(screenPoint, cancellationToken);
+                                        var windowRelativePoint = CalculateClickPoint(p, context);
+                                        await _automationService.ClickWindowRelativeAsync(context.WindowHandle, windowRelativePoint, cancellationToken);
                                         if (i < points.Count - 1 && action.DelayMs > 0)
                                         {
                                             await Task.Delay(action.DelayMs, cancellationToken);
@@ -131,43 +125,72 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                             }
                             else
                             {
-                                await _loggingService.LogWarningAsync($"[INPUT-PASSWORD] Template not found: {templatePath}, proceeding with blind input");
+                                _ = _loggingService.LogWarningAsync($"[INPUT-PASSWORD] Template not found: {templatePath}, proceeding with blind input");
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        await _loggingService.LogWarningAsync($"[INPUT-PASSWORD] Template detection failed: {ex.Message}, proceeding with blind input");
+                        _ = _loggingService.LogWarningAsync($"[INPUT-PASSWORD] Template detection failed: {ex.Message}, proceeding with blind input");
                     }
                 }
 
-                // Ensure window has focus
-                if (context.WindowHandle != IntPtr.Zero)
-                {
-                    await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
-                    await Task.Delay(100, cancellationToken);
-                }
-
                 // Type password securely
-                await _loggingService.LogInfoAsync("[INPUT-PASSWORD] Typing password: ****");
+                _ = _loggingService.LogInfoAsync("[INPUT-PASSWORD] Typing password: ****");
                 await _automationService.TypeSecureTextAsync(password, action.DelayMs, cancellationToken);
 
                 // Clear password from memory immediately
                 password = null!;
                 GC.Collect(); // Force garbage collection to clear password string
 
-                await _loggingService.LogInfoAsync("[INPUT-PASSWORD] Password input completed successfully");
+                await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
+
+                _ = _loggingService.LogInfoAsync("[INPUT-PASSWORD] Password input completed successfully");
                 return true;
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync("[INPUT-PASSWORD] Failed to type password", ex);
+                _ = _loggingService.LogErrorAsync("[INPUT-PASSWORD] Failed to type password", ex);
 
                 // Clear password from memory on error
                 password = null!;
                 GC.Collect();
 
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Calculates window-relative click point using either center-relative or template-relative coordinates
+        /// </summary>
+        private System.Drawing.Point CalculateClickPoint(RelativeClickOffset clickPoint, WorkflowActionContext context)
+        {
+            if (clickPoint.FromCenter)
+            {
+                // Center-relative (template-independent, resolution-independent)
+                var centerPoint = _automationService.GetWindowCenter(context.WindowHandle);
+                var windowRect = _automationService.GetWindowClientRect(context.WindowHandle);
+
+                var offsetX = (int)(clickPoint.X * windowRect.Width);
+                var offsetY = (int)(clickPoint.Y * windowRect.Height);
+
+                var windowRelativeX = centerPoint.X - windowRect.Left + offsetX;
+                var windowRelativeY = centerPoint.Y - windowRect.Top + offsetY;
+
+                _ = _loggingService.LogDebugAsync($"[INPUT-PASSWORD] Click point (center-relative): ({clickPoint.X:F2},{clickPoint.Y:F2}) -> window=({windowRelativeX},{windowRelativeY})");
+
+                return new System.Drawing.Point(windowRelativeX, windowRelativeY);
+            }
+            else
+            {
+                // Template-relative (existing behavior)
+                var rect = context.TemplateMatch!.GetBoundingRectangle();
+                var wx = rect.Left + (int)Math.Round(clickPoint.X * rect.Width);
+                var wy = rect.Top + (int)Math.Round(clickPoint.Y * rect.Height);
+
+                _ = _loggingService.LogDebugAsync($"[INPUT-PASSWORD] Click point (template-relative): ({clickPoint.X:F2},{clickPoint.Y:F2}) -> window=({wx},{wy})");
+
+                return new System.Drawing.Point(wx, wy);
             }
         }
     }

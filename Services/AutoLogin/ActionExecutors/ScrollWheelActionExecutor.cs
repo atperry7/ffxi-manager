@@ -1,4 +1,4 @@
-using FFXIManager.Models;
+﻿using FFXIManager.Models;
 using FFXIManager.Services.AutoLogin.ScreenDetection;
 using System.Drawing;
 
@@ -70,7 +70,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             // Validate window handle
             if (context.WindowHandle == IntPtr.Zero)
             {
-                await _loggingService.LogErrorAsync("[SCROLL-WHEEL] Window handle is required");
+                _ = _loggingService.LogErrorAsync("[SCROLL-WHEEL] Window handle is required");
                 return false;
             }
 
@@ -86,17 +86,17 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             if (!isUp && !isDown)
             {
-                await _loggingService.LogErrorAsync($"[SCROLL-WHEEL] Invalid Direction: '{direction}' (must be 'Up' or 'Down')");
+                _ = _loggingService.LogErrorAsync($"[SCROLL-WHEEL] Invalid Direction: '{direction}' (must be 'Up' or 'Down')");
                 return false;
             }
 
             if (ticks <= 0)
             {
-                await _loggingService.LogWarningAsync($"[SCROLL-WHEEL] Ticks must be positive (got {ticks}), skipping");
+                _ = _loggingService.LogWarningAsync($"[SCROLL-WHEEL] Ticks must be positive (got {ticks}), skipping");
                 return true;
             }
 
-            await _loggingService.LogDebugAsync($"[SCROLL-WHEEL] Scrolling {direction} ×{ticks} (delay: {scrollDelayMs}ms)");
+            _ = _loggingService.LogDebugAsync($"[SCROLL-WHEEL] Scrolling {direction} ×{ticks} (delay: {scrollDelayMs}ms)");
 
             // Ensure window focus
             await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
@@ -108,23 +108,22 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             if (positionMouse != null)
             {
                 mousePosition = CalculateMousePosition(positionMouse, context);
-                await _loggingService.LogDebugAsync($"[SCROLL-WHEEL] Positioning mouse at ({mousePosition.X}, {mousePosition.Y}) - {(positionMouse.FromCenter ? "center-relative" : "template-relative")}");
+                _ = _loggingService.LogDebugAsync($"[SCROLL-WHEEL] Positioning mouse at ({mousePosition.X}, {mousePosition.Y}) - {(positionMouse.FromCenter ? "center-relative" : "template-relative")}");
             }
             else
             {
                 // Default: window center
                 mousePosition = _automationService.GetWindowCenter(context.WindowHandle);
-                await _loggingService.LogDebugAsync($"[SCROLL-WHEEL] Positioning mouse at window center ({mousePosition.X}, {mousePosition.Y})");
+                _ = _loggingService.LogDebugAsync($"[SCROLL-WHEEL] Positioning mouse at window center ({mousePosition.X}, {mousePosition.Y})");
             }
 
             if (mousePosition.IsEmpty)
             {
-                await _loggingService.LogErrorAsync("[SCROLL-WHEEL] Failed to calculate mouse position");
+                _ = _loggingService.LogErrorAsync("[SCROLL-WHEEL] Failed to calculate mouse position");
                 return false;
             }
 
             await _automationService.MoveMouseAsync(mousePosition, cancellationToken);
-            await Task.Delay(100, cancellationToken);
 
             // Execute scroll ticks
             var delta = isUp ? 1 : -1;
@@ -139,7 +138,8 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 }
             }
 
-            await _loggingService.LogDebugAsync($"[SCROLL-WHEEL] Completed {ticks} scroll ticks {direction}");
+            await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
+            _ = _loggingService.LogDebugAsync($"[SCROLL-WHEEL] Completed {ticks} scroll ticks {direction}");
 
             return true;
         }

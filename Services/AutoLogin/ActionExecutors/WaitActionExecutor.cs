@@ -30,19 +30,19 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             WorkflowActionContext context,
             CancellationToken cancellationToken)
         {
-            var delayMs = Math.Max(0, action.DelayMs);
+            var delayMs = Math.Max(1, action.DelayMs);
 
             if (delayMs == 0)
             {
-                await _loggingService.LogDebugAsync("[WAIT] No delay specified (DelayMs = 0)");
+                _ = _loggingService.LogDebugAsync("[WAIT] No delay specified (DelayMs = 0)");
                 return true;
             }
 
-            await _loggingService.LogDebugAsync($"[WAIT] Waiting {delayMs}ms");
+            _ = _loggingService.LogDebugAsync($"[WAIT] Waiting {delayMs}ms");
 
             await Task.Delay(delayMs, cancellationToken);
 
-            await _loggingService.LogDebugAsync("[WAIT] Wait completed");
+            _ = _loggingService.LogDebugAsync("[WAIT] Wait completed");
 
             return true;
         }

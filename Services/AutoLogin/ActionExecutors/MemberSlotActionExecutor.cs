@@ -62,7 +62,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             // Validate context
             if (context.QueueItem?.Account == null)
             {
-                await _loggingService.LogErrorAsync("[MEMBER-SLOT] No account context available");
+                _ = _loggingService.LogErrorAsync("[MEMBER-SLOT] No account context available");
                 return false;
             }
 
@@ -71,11 +71,11 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             if (targetSlot < 1 || targetSlot > 20)
             {
-                await _loggingService.LogErrorAsync($"[MEMBER-SLOT] Invalid member slot: {targetSlot} (must be 1-20)");
+                _ = _loggingService.LogErrorAsync($"[MEMBER-SLOT] Invalid member slot: {targetSlot} (must be 1-20)");
                 return false;
             }
 
-            await _loggingService.LogInfoAsync($"[MEMBER-SLOT] Selecting member slot {targetSlot} for account {account.DisplayName}");
+            _ = _loggingService.LogInfoAsync($"[MEMBER-SLOT] Selecting member slot {targetSlot} for account {account.DisplayName}");
 
             try
             {
@@ -83,20 +83,13 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 var clickPoints = action.GetParameter<System.Collections.Generic.List<RelativeClickOffset>>("ClickPoints", new List<RelativeClickOffset>());
                 if (clickPoints == null || clickPoints.Count != 4)
                 {
-                    await _loggingService.LogErrorAsync($"[MEMBER-SLOT] ClickPoints must have exactly 4 positions (for visible slots 1-4), but has {clickPoints?.Count ?? 0}");
+                    _ = _loggingService.LogErrorAsync($"[MEMBER-SLOT] ClickPoints must have exactly 4 positions (for visible slots 1-4), but has {clickPoints?.Count ?? 0}");
                     return false;
                 }
 
                 // Get scroll configuration
                 var scrollTicksPerSlot = action.GetParameter<int>("ScrollTicksPerSlot", 1);
                 var scrollDelayMs = action.GetParameter<int>("ScrollDelayMs", 100);
-
-                // Ensure window focus
-                if (context.WindowHandle != IntPtr.Zero)
-                {
-                    await _automationService.EnsureWindowFocusAsync(context.WindowHandle, cancellationToken);
-                    await Task.Delay(100, cancellationToken);
-                }
 
                 // Determine navigation strategy based on target slot
                 RelativeClickOffset clickPoint;
@@ -105,20 +98,20 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 {
                     // Slots 1-4: Click directly at their physical positions
                     clickPoint = clickPoints[targetSlot - 1];
-                    await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Slot {targetSlot} is visible, clicking at position {targetSlot}");
+                    _ = _loggingService.LogDebugAsync($"[MEMBER-SLOT] Slot {targetSlot} is visible, clicking at position {targetSlot}");
                 }
                 else
                 {
                     // Slots 5-20: Scroll down to position target slot, then click at slot 4's position
                     var scrollTicks = (targetSlot - 4) * scrollTicksPerSlot;
 
-                    await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Slot {targetSlot} requires scrolling: {scrollTicks} ticks down");
+                    _ = _loggingService.LogDebugAsync($"[MEMBER-SLOT] Slot {targetSlot} requires scrolling: {scrollTicks} ticks down");
 
                     // Get window center for scrolling
                     var centerPoint = _automationService.GetWindowCenter(context.WindowHandle);
                     if (centerPoint.IsEmpty)
                     {
-                        await _loggingService.LogErrorAsync("[MEMBER-SLOT] Failed to get window center for scrolling");
+                        _ = _loggingService.LogErrorAsync("[MEMBER-SLOT] Failed to get window center for scrolling");
                         return false;
                     }
 
@@ -138,13 +131,13 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
                     // Click at slot 4's position (target slot is now positioned there)
                     clickPoint = clickPoints[3]; // Index 3 = slot 4's position
-                    await _loggingService.LogDebugAsync($"[MEMBER-SLOT] Scrolled {scrollTicks} ticks, now clicking at slot 4's position");
+                    _ = _loggingService.LogDebugAsync($"[MEMBER-SLOT] Scrolled {scrollTicks} ticks, now clicking at slot 4's position");
                 }
 
                 // Check if template match is required (only for template-relative clicks)
                 if (!clickPoint.FromCenter && context.TemplateMatch == null)
                 {
-                    await _loggingService.LogErrorAsync("[MEMBER-SLOT] Template-relative click requested but no template match available");
+                    _ = _loggingService.LogErrorAsync("[MEMBER-SLOT] Template-relative click requested but no template match available");
                     return false;
                 }
 
@@ -152,9 +145,9 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 System.Drawing.Point screenPoint = CalculateClickPoint(clickPoint, context);
 
                 await _automationService.ClickWindowRelativeAsync(context.WindowHandle, screenPoint, cancellationToken);
-                await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
+                await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
 
-                await _loggingService.LogInfoAsync($"[MEMBER-SLOT] Successfully selected member slot {targetSlot}");
+                _ = _loggingService.LogInfoAsync($"[MEMBER-SLOT] Successfully selected member slot {targetSlot}");
 
                 // Track state for future optimizations
                 account.LastSelectedPOLSlot = targetSlot;
@@ -163,7 +156,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             }
             catch (Exception ex)
             {
-                await _loggingService.LogErrorAsync($"[MEMBER-SLOT] Failed to select member slot {targetSlot}", ex);
+                _ = _loggingService.LogErrorAsync($"[MEMBER-SLOT] Failed to select member slot {targetSlot}", ex);
                 return false;
             }
         }
