@@ -1988,6 +1988,10 @@ namespace FFXIManager.ViewModels
         {
             try
             {
+                // Force UI update by clearing first, then loading
+                // This ensures PropertyChanged fires even if WPF caches the BitmapImage
+                TemplateImageSource = null;
+
                 // Delegate to helper
                 TemplateImageSource = _templateManager.LoadStepTemplateThumbnail(SelectedStep);
                 OnPropertyChanged(nameof(HasTemplateImage));
@@ -2007,6 +2011,10 @@ namespace FFXIManager.ViewModels
         {
             try
             {
+                // Force UI update by clearing first, then loading
+                // This ensures PropertyChanged fires even if WPF caches the BitmapImage
+                ActionTemplateImageSource = null;
+
                 // Delegate to helper
                 ActionTemplateImageSource = _templateManager.LoadActionTemplateThumbnail(SelectedNavigationAction);
                 OnPropertyChanged(nameof(ActionTemplatePath));

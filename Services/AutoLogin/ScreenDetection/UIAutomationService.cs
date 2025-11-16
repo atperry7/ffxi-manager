@@ -581,15 +581,18 @@ namespace FFXIManager.Services.AutoLogin.ScreenDetection
 
         public Point ConvertToScreenCoordinates(IntPtr windowHandle, Point windowRelativePoint)
         {
-            if (GetWindowRect(windowHandle, out RECT rect))
+            // Convert client-area (0,0) to screen coordinates to match how action executors calculate positions
+            // This ensures coordinates relative to the client area (excluding title bar/borders) are converted correctly
+            POINT topLeft = new POINT { x = 0, y = 0 };
+            if (ClientToScreen(windowHandle, ref topLeft))
             {
                 return new Point(
-                    rect.Left + windowRelativePoint.X,
-                    rect.Top + windowRelativePoint.Y
+                    topLeft.x + windowRelativePoint.X,
+                    topLeft.y + windowRelativePoint.Y
                 );
             }
 
-            return windowRelativePoint; // Fallback if window rect fails
+            return windowRelativePoint; // Fallback if conversion fails
         }
 
         public async Task WaitAsync(int milliseconds, CancellationToken cancellationToken = default)

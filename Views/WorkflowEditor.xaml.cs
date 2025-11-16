@@ -43,6 +43,10 @@ namespace FFXIManager.Views
             }
 
             base.OnClosing(e);
+
+            // Restore focus to the owner window when closing
+            // Without this, the main window goes behind other applications
+            Owner?.Activate();
         }
     }
 }
