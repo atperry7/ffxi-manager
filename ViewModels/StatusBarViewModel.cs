@@ -188,12 +188,13 @@ namespace FFXIManager.ViewModels
             // Marshal collection modifications to UI thread to avoid ItemsControl inconsistency errors
             _uiDispatcher.BeginInvoke(() =>
             {
-                RecentMessages.Add(entry);
+                // Insert at beginning so newest messages appear at top of popup
+                RecentMessages.Insert(0, entry);
                 CurrentMessageType = entry.Type;
-                // Trim to a reasonable number for the UI (e.g., last 50)
+                // Trim oldest messages from the end
                 while (RecentMessages.Count > _statusService.MaxHistory)
                 {
-                    RecentMessages.RemoveAt(0);
+                    RecentMessages.RemoveAt(RecentMessages.Count - 1);
                 }
             });
         }
