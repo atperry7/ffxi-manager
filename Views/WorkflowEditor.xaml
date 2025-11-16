@@ -1521,12 +1521,24 @@ Template image behavior:
 
                                                             <!-- Click Points Configuration -->
                                                             <StackPanel Margin="0,8,0,0">
-                                                                <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,6">
-                                                                    Configure FOUR click points for the visible Member Slots 1-4 by clicking the template preview image above.
+                                                                <!-- Click Points Summary -->
+                                                                <TextBlock Margin="0,0,0,8" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}">
+                                                                    <Run Text="Click Points: "/>
+                                                                    <Run Text="{Binding SelectedActionClickPoints.Count, Mode=OneWay}" FontWeight="SemiBold"/>
+                                                                    <Run Text=" configured (4 required)"/>
                                                                 </TextBlock>
-                                                                <TextBlock FontSize="10" Foreground="{DynamicResource WarningBrush}" Margin="0,6,0,0"
-                                                                           Visibility="{Binding HasTemplateImage, Converter={StaticResource BoolToVisConverter}}">
-                                                                    Uses the step's template image; add one above if missing.
+
+                                                                <!-- Configure Button -->
+                                                                <Button Content="⚙️ Configure Member Slot Positions"
+                                                                        Style="{StaticResource SecondaryButton}"
+                                                                        Command="{Binding PickMemberSlotClickPointsCommand}"
+                                                                        Margin="0,0,0,4"
+                                                                        Padding="12,8"
+                                                                        ToolTip="Open the 4-slot picker to configure click positions for Member Slots 1-4"/>
+
+                                                                <!-- Help Text -->
+                                                                <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,8,0,0" TextWrapping="Wrap">
+                                                                    💡 Click the button above to configure the 4 visible slot positions using center-relative or template-relative coordinates.
                                                                 </TextBlock>
                                                             </StackPanel>
                                                         </StackPanel>
@@ -1551,12 +1563,24 @@ Template image behavior:
 
                                                             <!-- CharacterSlot Click configuration -->
                                                             <StackPanel Margin="0,8,0,0">
-                                                                <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,6">
-                                                                    Configure sixteen click points for Character Slots 1-16 by clicking the template preview image above.
+                                                                <!-- Click Points Summary -->
+                                                                <TextBlock Margin="0,0,0,8" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}">
+                                                                    <Run Text="Click Points: "/>
+                                                                    <Run Text="{Binding SelectedActionClickPoints.Count, Mode=OneWay}" FontWeight="SemiBold"/>
+                                                                    <Run Text=" configured (16 required)"/>
                                                                 </TextBlock>
-                                                                <TextBlock FontSize="10" Foreground="{DynamicResource WarningBrush}" Margin="0,6,0,0"
-                                                                           Visibility="{Binding HasTemplateImage, Converter={StaticResource BoolToVisConverter}}">
-                                                                    Uses the step's template image; add one above if missing.
+
+                                                                <!-- Configure Button -->
+                                                                <Button Content="⚙️ Configure Character Slot Positions"
+                                                                        Style="{StaticResource SecondaryButton}"
+                                                                        Command="{Binding PickCharacterSlotClickPointsCommand}"
+                                                                        Margin="0,0,0,4"
+                                                                        Padding="12,8"
+                                                                        ToolTip="Open the 16-slot picker to configure click positions for Character Slots 1-16"/>
+
+                                                                <!-- Help Text -->
+                                                                <TextBlock FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,8,0,0" TextWrapping="Wrap">
+                                                                    💡 Click the button above to configure all 16 character slot positions using center-relative or template-relative coordinates.
                                                                 </TextBlock>
                                                             </StackPanel>
                                                         </StackPanel>

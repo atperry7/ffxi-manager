@@ -1692,6 +1692,10 @@ namespace FFXIManager.ViewModels
             (SelectActionTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (ReplaceActionTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (ShowLargeActionTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (PickMemberSlotClickPointsCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (PreviewMemberSlotClickPointsCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (PickCharacterSlotClickPointsCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (PreviewCharacterSlotClickPointsCommand as RelayCommand)?.RaiseCanExecuteChanged();
         }
 
         /// <summary>
