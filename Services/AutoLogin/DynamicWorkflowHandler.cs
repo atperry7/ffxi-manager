@@ -31,6 +31,7 @@ namespace FFXIManager.Services.AutoLogin
         private readonly IScreenDetectionCoordinator _screenDetectionCoordinator;
         private readonly IWorkflowProgressService _progressService;
         private readonly IQueueStatisticsService _statisticsService;
+        private readonly IExternalApplicationService _externalApplicationService;
 
         public DynamicWorkflowHandler(
             ILoggingService loggingService,
@@ -39,7 +40,8 @@ namespace FFXIManager.Services.AutoLogin
             IWindowDiscoveryService windowDiscoveryService,
             IScreenDetectionCoordinator screenDetectionCoordinator,
             IWorkflowProgressService progressService,
-            IQueueStatisticsService statisticsService)
+            IQueueStatisticsService statisticsService,
+            IExternalApplicationService externalApplicationService)
         {
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
@@ -48,6 +50,7 @@ namespace FFXIManager.Services.AutoLogin
             _screenDetectionCoordinator = screenDetectionCoordinator ?? throw new ArgumentNullException(nameof(screenDetectionCoordinator));
             _progressService = progressService ?? throw new ArgumentNullException(nameof(progressService));
             _statisticsService = statisticsService ?? throw new ArgumentNullException(nameof(statisticsService));
+            _externalApplicationService = externalApplicationService ?? throw new ArgumentNullException(nameof(externalApplicationService));
         }
 
         /// <summary>
@@ -140,6 +143,30 @@ namespace FFXIManager.Services.AutoLogin
                 }
             }
             catch { /* best-effort */ }
+
+            // Application-aware skip logic: Check if step should be skipped based on running applications
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(stepDef.SkipIfApplicationRunning))
+                {
+                    var applications = await _externalApplicationService.GetApplicationsAsync();
+                    var isAppRunning = applications.Any(app =>
+                        app.IsRunning &&
+                        string.Equals(app.Name, stepDef.SkipIfApplicationRunning, StringComparison.OrdinalIgnoreCase));
+
+                    if (isAppRunning)
+                    {
+                        _ = _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] Skipping step '{stepDef.DisplayName}' because '{stepDef.SkipIfApplicationRunning}' is running");
+                        subtask.Skip($"Skipped because {stepDef.SkipIfApplicationRunning} is running");
+                        return; // Treat as successful no-op
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _ = _loggingService.LogWarningAsync($"[DYNAMIC-WORKFLOW] Failed to check SkipIfApplicationRunning for '{stepDef.DisplayName}': {ex.Message}");
+                // Continue execution if skip check fails (fail-open behavior)
+            }
 
             // Phase 2: Decide detection strategy
             // Pre-detect when:
