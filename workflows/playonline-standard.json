@@ -6,7 +6,7 @@
   "IsDefault": true,
   "IsReadOnly": false,
   "CreatedDate": "2025-01-15T00:00:00Z",
-  "LastModifiedDate": "2025-11-16T13:51:49.6980821Z",
+  "LastModifiedDate": "2025-11-16T14:33:28.4137147Z",
   "Steps": [
     {
       "StepId": "launch_pol_proxy",
@@ -96,7 +96,7 @@
           }
         ],
         "Description": "Launch Windower and click the Launch Arrow button to start PlayOnline",
-        "PostNavigationDelayMs": 6000
+        "PostNavigationDelayMs": 7000
       },
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
@@ -174,7 +174,7 @@
           }
         ],
         "Description": "Reset list to top, then navigate to target slot using POL\u0027s 4-slot visible window (slots 1-4 direct click, slots 5-20 scroll-then-click)",
-        "PostNavigationDelayMs": 100
+        "PostNavigationDelayMs": 50
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -281,7 +281,7 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 20,
+            "DelayMs": 100,
             "Description": "Click center of virtual keyboard password field",
             "Parameters": {
               "TemplatePath": "action_pol_virtual_keyboard_0",
@@ -382,7 +382,7 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 20,
+            "DelayMs": 100,
             "Description": "Tab to OTP field",
             "Parameters": {
               "TemplatePath": "action_pol_otp_entry_0",
@@ -606,7 +606,7 @@
             "Action": "Wait",
             "Count": 1,
             "DelayMs": 25000,
-            "Description": "Let FFXI Full Game Load - you may want to adjust this if you don\u0027t use POL Proxy",
+            "Description": "Let FFXI Full Game Load - adjust this if you don\u0027t use POL Proxy",
             "Parameters": {}
           },
           {
@@ -629,7 +629,7 @@
           }
         ],
         "Description": "Accept terms with Enter key",
-        "PostNavigationDelayMs": 4000
+        "PostNavigationDelayMs": 6000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 90,
@@ -671,7 +671,7 @@
           }
         ],
         "Description": "Select Character menu option",
-        "PostNavigationDelayMs": 50
+        "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -803,7 +803,7 @@
           }
         ],
         "Description": "Click character slot to select (slot number read from account configuration)",
-        "PostNavigationDelayMs": 50
+        "PostNavigationDelayMs": 200
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -847,8 +847,8 @@
           {
             "Action": "Wait",
             "Count": 1,
-            "DelayMs": 5000,
-            "Description": "Artifical wait for the confirm character",
+            "DelayMs": 3000,
+            "Description": "Allow character time to finialize login before finishing workflow",
             "Parameters": {}
           }
         ],
