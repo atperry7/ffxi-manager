@@ -45,7 +45,8 @@ namespace FFXIManager.Services.AutoLogin
             Directory.CreateDirectory(_workflowsDirectory);
 
             // Initialize system workflows on first run
-            _ = EnsureSystemWorkflowsAsync();
+            // Note: Must be called synchronously to ensure workflows are deployed before use
+            EnsureSystemWorkflowsSync();
         }
 
         public async Task<WorkflowDefinition?> LoadWorkflowAsync(Guid workflowId, CancellationToken cancellationToken = default)
@@ -671,6 +672,83 @@ namespace FFXIManager.Services.AutoLogin
             catch (Exception ex)
             {
                 await _loggingService.LogErrorAsync("Failed to initialize system workflows", ex);
+            }
+        }
+
+        /// <summary>
+        /// Synchronous version of EnsureSystemWorkflowsAsync for constructor initialization.
+        /// Ensures system-provided default workflows exist by copying from application directory to APPDATA.
+        /// </summary>
+        private void EnsureSystemWorkflowsSync()
+        {
+            try
+            {
+                // Determine application directory containing default workflows
+                var appPath = AppDomain.CurrentDomain.BaseDirectory;
+                var defaultWorkflowsSource = Path.Combine(appPath, "workflows");
+
+                if (!Directory.Exists(defaultWorkflowsSource))
+                {
+                    // Can't log yet - logging service may not be initialized
+                    return;
+                }
+
+                // Copy all default workflow JSON files directly (no deserialization to avoid failures)
+                var sourceFiles = Directory.GetFiles(defaultWorkflowsSource, "*.json")
+                    .Where(f => !f.EndsWith("README.json", StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+
+                foreach (var sourceFile in sourceFiles)
+                {
+                    try
+                    {
+                        var fileName = Path.GetFileName(sourceFile);
+                        var destFile = Path.Combine(_workflowsDirectory, fileName);
+
+                        // Copy if doesn't exist, or if source is newer
+                        if (!File.Exists(destFile) || File.GetLastWriteTimeUtc(sourceFile) > File.GetLastWriteTimeUtc(destFile))
+                        {
+                            File.Copy(sourceFile, destFile, overwrite: true);
+                        }
+                    }
+                    catch
+                    {
+                        // Silently continue - will be logged by async version if needed
+                    }
+                }
+
+                // Copy template PNG files to workflows/templates/
+                var templatesSource = Path.Combine(defaultWorkflowsSource, "templates");
+                if (Directory.Exists(templatesSource))
+                {
+                    var templatesDestination = Path.Combine(_workflowsDirectory, "templates");
+                    Directory.CreateDirectory(templatesDestination);
+
+                    var templateFiles = Directory.GetFiles(templatesSource, "*.png");
+                    foreach (var templateFile in templateFiles)
+                    {
+                        try
+                        {
+                            var fileName = Path.GetFileName(templateFile);
+                            var destFile = Path.Combine(templatesDestination, fileName);
+
+                            // Copy if doesn't exist, or if source is newer
+                            if (!File.Exists(destFile) || File.GetLastWriteTimeUtc(templateFile) > File.GetLastWriteTimeUtc(destFile))
+                            {
+                                File.Copy(templateFile, destFile, overwrite: true);
+                            }
+                        }
+                        catch
+                        {
+                            // Silently continue
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Silently fail - logging service may not be initialized yet
+                // The async version will log any issues during normal operation
             }
         }
 
