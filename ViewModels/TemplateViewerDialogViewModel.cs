@@ -315,12 +315,28 @@ namespace FFXIManager.ViewModels
                         int idx = 1;
                         foreach (var p in points)
                         {
-                            var pixelX = p.X * TemplateImageWidth;
-                            var pixelY = p.Y * TemplateImageHeight;
+                            // Convert relative coordinates to pixel positions based on coordinate system
+                            double pixelX, pixelY;
+                            if (p.FromCenter)
+                            {
+                                // Center-relative: (-0.5 to 0.5) → pixel coordinates
+                                // Add 0.5 to shift range from [-0.5, 0.5] to [0.0, 1.0], then multiply by dimensions
+                                pixelX = (p.X + 0.5) * TemplateImageWidth;
+                                pixelY = (p.Y + 0.5) * TemplateImageHeight;
+                            }
+                            else
+                            {
+                                // Template-relative: (0.0 to 1.0) → pixel coordinates
+                                pixelX = p.X * TemplateImageWidth;
+                                pixelY = p.Y * TemplateImageHeight;
+                            }
+
                             ClickMarkers.Add(new ClickMarker
                             {
                                 X = pixelX,
                                 Y = pixelY,
+                                RelativeX = p.X,  // Store original relative coordinate for UI display
+                                RelativeY = p.Y,  // Store original relative coordinate for UI display
                                 Label = (idx++).ToString(),
                                 Description = p.Description ?? "Click action",
                                 MarkerColor = Brushes.DodgerBlue,

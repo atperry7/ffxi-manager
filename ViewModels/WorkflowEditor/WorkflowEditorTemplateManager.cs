@@ -660,12 +660,28 @@ namespace FFXIManager.ViewModels.WorkflowEditor
                         _ => System.Windows.Media.Brushes.LimeGreen
                     };
 
-                    double px = (points[i].X) * vm.TemplateImageWidth;
-                    double py = (points[i].Y) * vm.TemplateImageHeight;
+                    // Convert relative coordinates to pixel positions based on coordinate system
+                    double px, py;
+                    if (points[i].FromCenter)
+                    {
+                        // Center-relative: (-0.5 to 0.5) → pixel coordinates
+                        // Add 0.5 to shift range from [-0.5, 0.5] to [0.0, 1.0], then multiply by dimensions
+                        px = (points[i].X + 0.5) * vm.TemplateImageWidth;
+                        py = (points[i].Y + 0.5) * vm.TemplateImageHeight;
+                    }
+                    else
+                    {
+                        // Template-relative: (0.0 to 1.0) → pixel coordinates
+                        px = points[i].X * vm.TemplateImageWidth;
+                        py = points[i].Y * vm.TemplateImageHeight;
+                    }
+
                     vm.ClickMarkers.Add(new ClickMarker
                     {
                         X = px,
                         Y = py,
+                        RelativeX = points[i].X,  // Store original relative coordinate for UI display
+                        RelativeY = points[i].Y,  // Store original relative coordinate for UI display
                         Label = (i + 1).ToString(),
                         Description = $"Slot {i + 1}",
                         MarkerColor = color,
@@ -866,12 +882,28 @@ namespace FFXIManager.ViewModels.WorkflowEditor
                         _ => System.Windows.Media.Brushes.Gray
                     };
 
-                    double px = (points[i].X) * vm.TemplateImageWidth;
-                    double py = (points[i].Y) * vm.TemplateImageHeight;
+                    // Convert relative coordinates to pixel positions based on coordinate system
+                    double px, py;
+                    if (points[i].FromCenter)
+                    {
+                        // Center-relative: (-0.5 to 0.5) → pixel coordinates
+                        // Add 0.5 to shift range from [-0.5, 0.5] to [0.0, 1.0], then multiply by dimensions
+                        px = (points[i].X + 0.5) * vm.TemplateImageWidth;
+                        py = (points[i].Y + 0.5) * vm.TemplateImageHeight;
+                    }
+                    else
+                    {
+                        // Template-relative: (0.0 to 1.0) → pixel coordinates
+                        px = points[i].X * vm.TemplateImageWidth;
+                        py = points[i].Y * vm.TemplateImageHeight;
+                    }
+
                     vm.ClickMarkers.Add(new ClickMarker
                     {
                         X = px,
                         Y = py,
+                        RelativeX = points[i].X,  // Store original relative coordinate for UI display
+                        RelativeY = points[i].Y,  // Store original relative coordinate for UI display
                         Label = (i + 1).ToString(),
                         Description = $"Slot {i + 1}",
                         MarkerColor = color,
