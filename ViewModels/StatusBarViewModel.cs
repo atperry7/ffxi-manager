@@ -1,4 +1,5 @@
-﻿using FFXIManager.Models;
+﻿using FFXIManager.Infrastructure;
+using FFXIManager.Models;
 using FFXIManager.Services;
 using FFXIManager.ViewModels.Base;
 using System.Collections.ObjectModel;
@@ -16,6 +17,7 @@ namespace FFXIManager.ViewModels
         private readonly ISettingsService _settingsService;
         private readonly IProfileService _profileService;
         private readonly ILoggingService _loggingService;
+        private readonly IUiDispatcher _uiDispatcher;
         private readonly DispatcherTimer _refreshTimer;
 
         private string _statusMessage = "Ready";
@@ -34,12 +36,14 @@ namespace FFXIManager.ViewModels
             IStatusMessageService statusService,
             ISettingsService settingsService,
             IProfileService profileService,
-            ILoggingService loggingService)
+            ILoggingService loggingService,
+            IUiDispatcher uiDispatcher)
         {
             _statusService = statusService;
             _settingsService = settingsService;
             _profileService = profileService;
             _loggingService = loggingService;
+            _uiDispatcher = uiDispatcher;
 
             // Subscribe to status message changes
             _statusService.MessageChanged += OnStatusMessageChanged;
@@ -181,13 +185,17 @@ namespace FFXIManager.ViewModels
 
         private void OnMessageEnqueued(object? sender, StatusMessageEntry entry)
         {
-            RecentMessages.Add(entry);
-            CurrentMessageType = entry.Type;
-            // Trim to a reasonable number for the UI (e.g., last 50)
-            while (RecentMessages.Count > _statusService.MaxHistory)
+            // Marshal collection modifications to UI thread to avoid ItemsControl inconsistency errors
+            _uiDispatcher.BeginInvoke(() =>
             {
-                RecentMessages.RemoveAt(0);
-            }
+                RecentMessages.Add(entry);
+                CurrentMessageType = entry.Type;
+                // Trim to a reasonable number for the UI (e.g., last 50)
+                while (RecentMessages.Count > _statusService.MaxHistory)
+                {
+                    RecentMessages.RemoveAt(0);
+                }
+            });
         }
 
         private static string? NormalizeVersion(string? v)

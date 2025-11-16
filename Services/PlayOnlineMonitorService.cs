@@ -20,29 +20,15 @@ namespace FFXIManager.Services
         private bool _isMonitoring;
         private bool _disposed;
 
-        // **EMERGENCY PROTECTION**: Rapid switching protection with character-aware logic and system safeguards
-        private readonly SemaphoreSlim _activationSemaphore = new(1, 1);
-        private readonly Timer _activationDebounceTimer;
-        private CancellationTokenSource _currentActivationCts = new();
-        private PlayOnlineCharacter? _pendingActivation;
-
         // **POL-SPECIFIC**: Timer to check POL processes for title changes (since Win32 events don't work)
         private readonly Timer _polTitleCheckTimer;
         private readonly Dictionary<IntPtr, string> _lastPolTitles = new();
         private DateTime _lastActivationAttempt = DateTime.MinValue;
-        private int _lastActivatedCharacterSlotIndex = -1; // Track last activated character slot for smart debouncing
 
-        // **EMERGENCY CIRCUIT BREAKER**: Prevents system lockup during excessive switching
-        private static int _globalActivationCount;
-        private static DateTime _lastGlobalReset = DateTime.UtcNow;
-        private static volatile bool _emergencyThrottleActive;
-        private const int MAX_ACTIVATIONS_PER_SECOND = 20;
-        private const int EMERGENCY_THROTTLE_DURATION_MS = 3000;
-
-        // Gaming-optimized timing values (loaded from settings) with emergency limits
+        // Gaming-optimized timing values (loaded from settings)
         private int _activationDebounceMs = 50;    // Fast debounce for gaming
         private int _minActivationIntervalMs = 100; // Only applies to same character
-        private int _activationTimeoutMs = 1500;   // **REDUCED** timeout to prevent deadlocks (was 3000)
+        private int _activationTimeoutMs = 150;    // **OPTIMIZED**: Reduced to 150ms for fast gaming response
 
         // **GAMING OPTIMIZATION**: Predictive character window caching
         private readonly ConcurrentDictionary<int, CachedCharacterInfo> _characterCache = new();
@@ -103,9 +89,6 @@ namespace FFXIManager.Services
             // Load gaming-optimized settings
             LoadPerformanceSettings();
 
-            // Initialize activation debounce timer (initially disabled)
-            _activationDebounceTimer = new Timer(DebouncedActivationCallback, null, Timeout.Infinite, Timeout.Infinite);
-
             // **POL-SPECIFIC**: Initialize POL title checking timer (every 10 seconds - reduced to avoid Windows protection)
             _polTitleCheckTimer = new Timer(CheckPolTitlesCallback, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10));
 
@@ -165,53 +148,9 @@ namespace FFXIManager.Services
             return characters;
         }
 
-        /// <summary>
-        /// **EMERGENCY PROTECTION**: Checks and manages global activation rate limiting
-        /// </summary>
-        private bool IsEmergencyThrottleActive()
-        {
-            var now = DateTime.UtcNow;
-
-            // Reset counter every second
-            if ((now - _lastGlobalReset).TotalMilliseconds >= 1000)
-            {
-                Interlocked.Exchange(ref _globalActivationCount, 0);
-                _lastGlobalReset = now;
-                _emergencyThrottleActive = false;
-            }
-
-            // Check if we're over the limit
-            var currentCount = Interlocked.Increment(ref _globalActivationCount);
-
-            if (currentCount > MAX_ACTIVATIONS_PER_SECOND && !_emergencyThrottleActive)
-            {
-                _emergencyThrottleActive = true;
-
-                // Schedule throttle reset
-                Task.Delay(EMERGENCY_THROTTLE_DURATION_MS).ContinueWith(_ =>
-                {
-                    _emergencyThrottleActive = false;
-                    Interlocked.Exchange(ref _globalActivationCount, 0);
-                    _ = _logging.LogInfoAsync("Emergency throttle deactivated - normal switching resumed", "PlayOnlineMonitorService");
-                });
-
-                _ = _logging.LogWarningAsync("**EMERGENCY THROTTLE ACTIVATED**: {ActivationCount} activations/sec exceeded limit ({MaxActivationsPerSecond})", "PlayOnlineMonitorService", currentCount, MAX_ACTIVATIONS_PER_SECOND);
-                return true;
-            }
-
-            return _emergencyThrottleActive;
-        }
-
         public async Task<bool> ActivateCharacterWindowAsync(PlayOnlineCharacter character, CancellationToken cancellationToken = default)
         {
             var activationStopwatch = System.Diagnostics.Stopwatch.StartNew();
-
-            // Emergency throttle check
-            if (IsEmergencyThrottleActive())
-            {
-                await _logging.LogWarningAsync("Character activation blocked: emergency throttle active", "PlayOnlineMonitorService");
-                return false;
-            }
 
             // Validation
             if (!IsCharacterValidForActivation(character))
@@ -220,18 +159,7 @@ namespace FFXIManager.Services
                 return false;
             }
 
-            // Rate limiting check
-            var currentSlotIndex = GetCharacterSlotIndexFast(character);
-            var timeSinceLastAttempt = DateTime.UtcNow - _lastActivationAttempt;
-            bool isSameCharacter = (currentSlotIndex == _lastActivatedCharacterSlotIndex && currentSlotIndex != -1);
-
-            if (isSameCharacter && timeSinceLastAttempt.TotalMilliseconds < 50)
-            {
-                RequestDebouncedActivation(character);
-                return true;
-            }
-
-            _lastActivatedCharacterSlotIndex = currentSlotIndex;
+            // **FIRE AND FORGET**: No debouncing - activation cancellation handled at HotkeyActivationService level
             var result = await PerformImmediateActivationAsync(character, cancellationToken);
 
             // Performance logging
@@ -263,73 +191,16 @@ namespace FFXIManager.Services
         }
 
         /// <summary>
-        /// Requests a debounced character activation to prevent rapid-fire switching
-        /// </summary>
-        private void RequestDebouncedActivation(PlayOnlineCharacter character)
-        {
-            // Store the character for debounced activation
-            _pendingActivation = character;
-
-            // Cancel previous activation if still pending
-            _currentActivationCts.Cancel();
-            _currentActivationCts.Dispose();
-            _currentActivationCts = new CancellationTokenSource();
-
-            // Reset debounce timer
-            _activationDebounceTimer.Change(_activationDebounceMs, Timeout.Infinite);
-
-            _ = _logging.LogDebugAsync("Queued debounced activation for {CharacterName} (debounce: {DebounceMs}ms)", "PlayOnlineMonitorService", character.DisplayName, _activationDebounceMs);
-        }
-
-        /// <summary>
-        /// Timer callback for debounced activation
-        /// </summary>
-        private void DebouncedActivationCallback(object? state)
-        {
-            // **FIXED**: Convert async void to fire-and-forget Task to prevent crashes
-            _ = DebouncedActivationCallbackAsync();
-        }
-
-        /// <summary>
-        /// Async implementation of debounced activation with proper exception handling
-        /// </summary>
-        private async Task DebouncedActivationCallbackAsync()
-        {
-            var characterToActivate = _pendingActivation;
-            if (characterToActivate == null || _disposed) return;
-
-            try
-            {
-                await PerformImmediateActivationAsync(characterToActivate, _currentActivationCts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                // Expected cancellation - ignore
-            }
-            catch (Exception ex)
-            {
-                await _logging.LogErrorAsync("Error in debounced activation for {CharacterName}", "PlayOnlineMonitorService", ex, characterToActivate.DisplayName);
-            }
-        }
-
-        /// <summary>
         /// Performs the actual window activation with proper synchronization
         /// </summary>
         private async Task<bool> PerformImmediateActivationAsync(PlayOnlineCharacter character, CancellationToken cancellationToken = default)
         {
-            // **PERFORMANCE**: Reduce semaphore wait to 100ms
-            if (!await _activationSemaphore.WaitAsync(100, cancellationToken))
-            {
-                // Don't log for performance
-                return false;
-            }
-
             try
             {
                 _lastActivationAttempt = DateTime.UtcNow;
 
                 // **PERFORMANCE**: Use shorter timeout for faster response
-                var fastTimeoutMs = Math.Min(_activationTimeoutMs, 500); // Cap at 500ms
+                var fastTimeoutMs = Math.Min(_activationTimeoutMs, 150); // Cap at 150ms for gaming
 
                 // **PERFORMANCE**: Skip info logging to reduce overhead
                 System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Starting for {character.DisplayName}");
@@ -375,10 +246,6 @@ namespace FFXIManager.Services
             {
                 await _logging.LogErrorAsync("Error activating window for {CharacterName}", "PlayOnlineMonitorService", ex, character.DisplayName);
                 return false;
-            }
-            finally
-            {
-                _activationSemaphore.Release();
             }
         }
 
@@ -610,21 +477,8 @@ namespace FFXIManager.Services
             {
                 StopMonitoring();
 
-                // **IMPROVED**: Wait briefly for any pending activation to complete
-                if (_activationSemaphore.CurrentCount == 0)
-                {
-                    // Activation in progress - wait up to 500ms for completion
-                    _activationSemaphore.Wait(500);
-                }
-
-                // Cancel any pending activations
-                _currentActivationCts?.Cancel();
-                _currentActivationCts?.Dispose();
-
-                // Dispose timers and synchronization objects
-                _activationDebounceTimer?.Dispose();
+                // Dispose timer
                 _polTitleCheckTimer?.Dispose();
-                _activationSemaphore?.Dispose();
 
                 // Unregister from unified monitoring
                 _unifiedMonitoring.UnregisterMonitor(_monitorId);

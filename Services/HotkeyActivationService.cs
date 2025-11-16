@@ -120,12 +120,17 @@ namespace FFXIManager.Services
 
         private bool _disposed;
 
-        // **SPAM PREVENTION**: Track last activation times to prevent rapid-fire hotkeys
-        private readonly ConcurrentDictionary<int, DateTime> _lastActivationTimes = new();
+        // **FIRE AND FORGET - LAST WINS**: Track and cancel in-flight activations
+        private CancellationTokenSource? _currentActivationCts;
+        private readonly object _activationLock = new();
+        private DateTime _lastActivationStart = DateTime.MinValue;
+        private const int MIN_ACTIVATION_INTERVAL_MS = 150; // Minimum time between activation starts (Windows API stability)
 
-        // **CYCLE TRACKING**: Track current position for character cycling
+        // **CYCLE TRACKING**: Track current position for character cycling with cancellation support
+        private CancellationTokenSource? _currentCycleCts;
         private int _currentCycleIndex = -1;
         private DateTime _lastCycleTime = DateTime.MinValue;
+        private DateTime _lastCycleActivationStart = DateTime.MinValue;
         private readonly object _cycleLock = new();
 
         // **CYCLE CONSTANTS**: Configuration for cycle behavior
@@ -163,27 +168,34 @@ namespace FFXIManager.Services
 
             try
             {
-                // **SPAM PREVENTION**: Check cooldown to prevent rapid-fire hotkey spam
-                var now = DateTime.UtcNow;
-                if (_lastActivationTimes.TryGetValue(hotkeyId, out var lastActivation))
+                // **FIRE AND FORGET - LAST WINS**: Cancel any in-flight activation and start new one
+                CancellationTokenSource linkedCts;
+                int waitMs = 0;
+
+                lock (_activationLock)
                 {
-                    var settings = _settingsService.LoadSettings();
-                    var timeSinceLastMs = (now - lastActivation).TotalMilliseconds;
+                    // Cancel previous activation if any
+                    _currentActivationCts?.Cancel();
+                    _currentActivationCts?.Dispose();
 
-                    if (timeSinceLastMs < settings.HotkeySpamCooldownMs)
+                    // Calculate minimum interval wait time (outside lock for await)
+                    var now = DateTime.UtcNow;
+                    var timeSinceLastStart = (now - _lastActivationStart).TotalMilliseconds;
+                    if (timeSinceLastStart < MIN_ACTIVATION_INTERVAL_MS)
                     {
-                        var cooldownResult = new HotkeyActivationResult
-                        {
-                            HotkeyId = hotkeyId,
-                            Success = false,
-                            Duration = stopwatch.Elapsed,
-                            ErrorMessage = $"Hotkey on cooldown ({settings.HotkeySpamCooldownMs - timeSinceLastMs:F0}ms remaining)",
-                            Source = ActivationSource.Hotkey
-                        };
-
-                        // Don't log this as it would be spam, just return
-                        return cooldownResult;
+                        waitMs = (int)(MIN_ACTIVATION_INTERVAL_MS - timeSinceLastStart);
                     }
+                    _lastActivationStart = DateTime.UtcNow;
+
+                    // Create new cancellation token for this activation
+                    _currentActivationCts = new CancellationTokenSource();
+                    linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_currentActivationCts.Token, cancellationToken);
+                }
+
+                // Enforce minimum interval outside lock
+                if (waitMs > 0)
+                {
+                    await Task.Delay(waitMs, cancellationToken);
                 }
 
                 // **FAST PATH**: O(1) character lookup from pre-validated mappings
@@ -201,11 +213,8 @@ namespace FFXIManager.Services
                     return notMappedResult;
                 }
 
-                // **SPAM PREVENTION**: Update last activation time for successful lookup
-                _lastActivationTimes.AddOrUpdate(hotkeyId, now, (key, oldValue) => now);
-
-                // Perform activation with smart retry logic
-                var result = await PerformActivationWithMetrics(character, hotkeyId, ActivationSource.Hotkey, stopwatch, cancellationToken);
+                // Perform activation with smart retry logic using linked cancellation token
+                var result = await PerformActivationWithMetrics(character, hotkeyId, ActivationSource.Hotkey, stopwatch, linkedCts.Token);
 
                 // Show toast notification for activation result
                 await ShowActivationToastAsync(result);
@@ -213,6 +222,24 @@ namespace FFXIManager.Services
                 await _loggingService.LogInfoAsync("Hotkey {HotkeyId} → {CharacterName}: {Result} ({DurationMs:F0}ms)", "HotkeyActivationService", hotkeyId, character.DisplayName, result.Success ? "✓" : "✗", result.Duration.TotalMilliseconds);
 
                 return result;
+            }
+            catch (OperationCanceledException)
+            {
+                // Activation was cancelled (replaced by newer activation) - this is normal for "last wins"
+                stopwatch.Stop();
+                var cancelledResult = new HotkeyActivationResult
+                {
+                    HotkeyId = hotkeyId,
+                    Success = false,
+                    Duration = stopwatch.Elapsed,
+                    ErrorMessage = "Cancelled by newer activation",
+                    Source = ActivationSource.Hotkey
+                };
+
+                await _loggingService.LogDebugAsync("Hotkey {HotkeyId} activation cancelled (replaced by newer activation)", "HotkeyActivationService", hotkeyId);
+
+                // Don't record cancelled activations as failures
+                return cancelledResult;
             }
             catch (Exception ex)
             {
@@ -294,6 +321,7 @@ namespace FFXIManager.Services
 
         /// <summary>
         /// Cycles to the next active character.
+        /// **FIRE AND FORGET - LAST WINS**: Cancels any in-flight cycle activation
         /// </summary>
         public async Task<HotkeyActivationResult> CycleToNextCharacterAsync(CancellationToken cancellationToken = default)
         {
@@ -301,6 +329,36 @@ namespace FFXIManager.Services
 
             try
             {
+                // **FIRE AND FORGET - LAST WINS**: Cancel any in-flight cycle activation
+                CancellationTokenSource linkedCts;
+                int waitMs = 0;
+
+                lock (_cycleLock)
+                {
+                    // Cancel previous cycle activation if any
+                    _currentCycleCts?.Cancel();
+                    _currentCycleCts?.Dispose();
+
+                    // Calculate minimum interval wait time
+                    var now = DateTime.UtcNow;
+                    var timeSinceLastStart = (now - _lastCycleActivationStart).TotalMilliseconds;
+                    if (timeSinceLastStart < MIN_ACTIVATION_INTERVAL_MS)
+                    {
+                        waitMs = (int)(MIN_ACTIVATION_INTERVAL_MS - timeSinceLastStart);
+                    }
+                    _lastCycleActivationStart = DateTime.UtcNow;
+
+                    // Create new cancellation token for this cycle activation
+                    _currentCycleCts = new CancellationTokenSource();
+                    linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_currentCycleCts.Token, cancellationToken);
+                }
+
+                // Enforce minimum interval outside lock
+                if (waitMs > 0)
+                {
+                    await Task.Delay(waitMs, linkedCts.Token);
+                }
+
                 // Get characters in user-defined order
                 var characterOrdering = _characterOrderingService;
                 var orderedCharacters = await characterOrdering.GetOrderedCharactersAsync();
@@ -323,15 +381,21 @@ namespace FFXIManager.Services
                 if (orderedCharacters.Count == 1)
                 {
                     // Only one character, just activate it
-                    return await ActivateCharacterDirectAsync(orderedCharacters[0], cancellationToken);
+                    return await ActivateCharacterDirectAsync(orderedCharacters[0], linkedCts.Token);
                 }
+
+                // Determine next character to cycle to
+                PlayOnlineCharacter targetCharacter;
+                bool cycleReset = false;
+                bool isFirstUse = (_lastCycleTime == DateTime.MinValue);
+                double timeSinceLastCycle;
+                int cycleIndex;
+                int totalCount = orderedCharacters.Count;
 
                 lock (_cycleLock)
                 {
                     // Check if we need to reset the cycle (timeout or first use)
-                    bool cycleReset = false;
-                    bool isFirstUse = (_lastCycleTime == DateTime.MinValue);
-                    var timeSinceLastCycle = isFirstUse ? 0 : (DateTime.UtcNow - _lastCycleTime).TotalSeconds;
+                    timeSinceLastCycle = isFirstUse ? 0 : (DateTime.UtcNow - _lastCycleTime).TotalSeconds;
 
                     if (_currentCycleIndex == -1 || (!isFirstUse && timeSinceLastCycle > CYCLE_TIMEOUT_SECONDS))
                     {
@@ -363,12 +427,6 @@ namespace FFXIManager.Services
                         }
 
                         cycleReset = true;
-
-                        // Notify user of cycle reset only if it was due to timeout (not first use)
-                        if (!isFirstUse && timeSinceLastCycle > CYCLE_TIMEOUT_SECONDS)
-                        {
-                            _ = _notificationService.ShowToastAsync("Cycle reset - timeout exceeded", NotificationType.Info);
-                        }
                     }
                     else
                     {
@@ -377,41 +435,52 @@ namespace FFXIManager.Services
                     }
 
                     _lastCycleTime = DateTime.UtcNow;
-
-                    // Activate the next character
-                    var targetCharacter = orderedCharacters[_currentCycleIndex];
-
-                    // Capture variables for the async task
-                    var showReset = cycleReset && !isFirstUse && timeSinceLastCycle > CYCLE_TIMEOUT_SECONDS;
-                    var cycleIndex = _currentCycleIndex;
-                    var totalCount = orderedCharacters.Count;
-
-                    _ = Task.Run(async () =>
-                    {
-                        var result = await ActivateCharacterDirectAsync(targetCharacter, cancellationToken);
-
-                        // Show which character we cycled to
-                        var positionText = $"Character {cycleIndex + 1}/{totalCount}: {targetCharacter.DisplayName}";
-
-                        // Only show [Reset] if it was an actual timeout reset, not first use
-                        if (showReset)
-                        {
-                            positionText = $"[Reset] {positionText}";
-                        }
-
-                        await _notificationService.ShowToastAsync(positionText, NotificationType.Success);
-                        await _loggingService.LogInfoAsync("Cycled to {PositionText}", "HotkeyActivationService", positionText);
-                    });
-
-                    stopwatch.Stop();
-                    return new HotkeyActivationResult
-                    {
-                        Character = targetCharacter,
-                        Success = true,
-                        Duration = stopwatch.Elapsed,
-                        Source = ActivationSource.Hotkey
-                    };
+                    cycleIndex = _currentCycleIndex;
+                    targetCharacter = orderedCharacters[_currentCycleIndex];
                 }
+
+                // **FIRE AND FORGET**: Perform activation with cancellation support
+                var result = await ActivateCharacterDirectAsync(targetCharacter, linkedCts.Token);
+
+                // Show which character we cycled to
+                var positionText = $"Character {cycleIndex + 1}/{totalCount}: {targetCharacter.DisplayName}";
+
+                // Only show [Reset] if it was an actual timeout reset, not first use
+                if (cycleReset && !isFirstUse && timeSinceLastCycle > CYCLE_TIMEOUT_SECONDS)
+                {
+                    positionText = $"[Reset] {positionText}";
+                    _ = _notificationService.ShowToastAsync("Cycle reset - timeout exceeded", NotificationType.Info);
+                }
+
+                await _notificationService.ShowToastAsync(positionText, NotificationType.Success);
+                await _loggingService.LogInfoAsync("Cycled to {PositionText}", "HotkeyActivationService", positionText);
+
+                stopwatch.Stop();
+                return new HotkeyActivationResult
+                {
+                    Character = targetCharacter,
+                    Success = result.Success,
+                    Duration = stopwatch.Elapsed,
+                    ErrorMessage = result.ErrorMessage,
+                    Source = ActivationSource.Hotkey
+                };
+            }
+            catch (OperationCanceledException)
+            {
+                // Cycle activation was cancelled (replaced by newer cycle) - this is normal for "last wins"
+                stopwatch.Stop();
+                var cancelledResult = new HotkeyActivationResult
+                {
+                    Success = false,
+                    Duration = stopwatch.Elapsed,
+                    ErrorMessage = "Cancelled by newer cycle activation",
+                    Source = ActivationSource.Hotkey
+                };
+
+                await _loggingService.LogDebugAsync("Cycle activation cancelled (replaced by newer cycle)", "HotkeyActivationService");
+
+                // Don't record cancelled activations as failures
+                return cancelledResult;
             }
             catch (Exception ex)
             {
@@ -499,6 +568,7 @@ namespace FFXIManager.Services
 
         /// <summary>
         /// Performs character activation with comprehensive metrics collection.
+        /// **OPTIMIZED**: Reduced retries (2 max) and faster retry delays (10ms base) for gaming performance
         /// </summary>
         private async Task<HotkeyActivationResult> PerformActivationWithMetrics(
             PlayOnlineCharacter character,
@@ -507,8 +577,8 @@ namespace FFXIManager.Services
             Stopwatch totalStopwatch,
             CancellationToken cancellationToken)
         {
-            const int maxRetries = 3;
-            const int baseDelayMs = 25;
+            const int maxRetries = 2;     // Reduced from 3 for faster response
+            const int baseDelayMs = 10;   // Reduced from 25ms for faster retries
 
             int retryCount = 0;
             Exception? lastException = null;
@@ -641,6 +711,22 @@ namespace FFXIManager.Services
         {
             if (_disposed) return;
             _disposed = true;
+
+            // Cancel and dispose any in-flight activation
+            lock (_activationLock)
+            {
+                _currentActivationCts?.Cancel();
+                _currentActivationCts?.Dispose();
+                _currentActivationCts = null;
+            }
+
+            // Cancel and dispose any in-flight cycle activation
+            lock (_cycleLock)
+            {
+                _currentCycleCts?.Cancel();
+                _currentCycleCts?.Dispose();
+                _currentCycleCts = null;
+            }
 
             CharacterActivated = null;
             _ = _loggingService?.LogInfoAsync("HotkeyActivationService disposed", "HotkeyActivationService");

@@ -17,12 +17,6 @@ namespace FFXIManager.Services
         private TimeSpan _hotkeyDebounceInterval = TimeSpan.FromMilliseconds(50);
         private bool _disposed;
 
-        private static int _hotkeyPressCount;
-        private static DateTime _lastHotkeyReset = DateTime.UtcNow;
-        private static volatile bool _hotkeyFloodProtection;
-        private const int MAX_HOTKEYS_PER_SECOND = 15;
-        private const int FLOOD_PROTECTION_DURATION_MS = 2000;
-
         public event EventHandler<HotkeyPressedEventArgs>? HotkeyPressed;
 
         public GlobalHotkeyManager(
@@ -196,12 +190,6 @@ namespace FFXIManager.Services
         {
             try
             {
-                if (IsHotkeyFloodProtectionActive())
-                {
-                    _ = _loggingService.LogWarningAsync($"Hotkey press ignored: flood protection active ({e.Modifiers}+{e.Key})", "GlobalHotkeyManager");
-                    return;
-                }
-
                 var now = DateTime.UtcNow;
                 if (_lastHotkeyPress.TryGetValue(e.HotkeyId, out var lastPress))
                 {
@@ -226,12 +214,6 @@ namespace FFXIManager.Services
         {
             try
             {
-                if (IsHotkeyFloodProtectionActive())
-                {
-                    _ = _loggingService.LogWarningAsync($"Controller button press ignored: flood protection active ({e.Button})", "GlobalHotkeyManager");
-                    return;
-                }
-
                 var now = DateTime.UtcNow;
                 if (_lastHotkeyPress.TryGetValue(e.HotkeyId, out var lastPress))
                 {
@@ -251,33 +233,6 @@ namespace FFXIManager.Services
             {
                 _ = _loggingService.LogErrorAsync("Error handling controller button press", ex, "GlobalHotkeyManager");
             }
-        }
-
-        private bool IsHotkeyFloodProtectionActive()
-        {
-            var now = DateTime.UtcNow;
-            if ((now - _lastHotkeyReset).TotalMilliseconds >= 1000)
-            {
-                Interlocked.Exchange(ref _hotkeyPressCount, 0);
-                _lastHotkeyReset = now;
-                _hotkeyFloodProtection = false;
-            }
-
-            var currentCount = Interlocked.Increment(ref _hotkeyPressCount);
-            if (currentCount > MAX_HOTKEYS_PER_SECOND && !_hotkeyFloodProtection)
-            {
-                _hotkeyFloodProtection = true;
-                Task.Run(async () =>
-                {
-                    await Task.Delay(FLOOD_PROTECTION_DURATION_MS);
-                    _hotkeyFloodProtection = false;
-                    Interlocked.Exchange(ref _hotkeyPressCount, 0);
-                    await _loggingService.LogInfoAsync("Hotkey flood protection deactivated", "GlobalHotkeyManager");
-                });
-                _ = _loggingService.LogWarningAsync($"Hotkey flood protection activated: {currentCount} presses/sec", "GlobalHotkeyManager");
-                return true;
-            }
-            return _hotkeyFloodProtection;
         }
 
         public void Dispose()

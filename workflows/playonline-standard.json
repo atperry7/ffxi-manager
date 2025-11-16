@@ -847,7 +847,7 @@
           {
             "Action": "Wait",
             "Count": 1,
-            "DelayMs": 3000,
+            "DelayMs": 5000,
             "Description": "Allow character time to finialize login before finishing workflow",
             "Parameters": {}
           }

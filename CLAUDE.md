@@ -6,16 +6,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **FFXI Manager** is a WPF desktop application (.NET 9) for managing multiple Final Fantasy XI accounts. It automates character login sequences, manages PlayOnline profile switching, provides global hotkey support for character window switching, and includes controller integration for seamless multi-boxing.
 
+## Quick Reference
+
+**Essential Paths:**
+- Service registration: `Infrastructure/DependencyInjection.cs`
+- Workflow definition: `workflows/playonline-standard.json`
+- Template images: `workflows/templates/`
+- User settings: `%APPDATA%/FFXIManager/settings.json`
+- Application logs: `%APPDATA%/FFXIManager/logs/`
+
+**Common Commands:**
+```bash
+dotnet build FFXIManager.sln                    # Build solution
+dotnet test Testing/FFXIManager.Tests.csproj    # Run tests
+```
+
 # RULES TO FOLLOW
-- ALWAYS follow MVVM + DI + SOLID architecture principles.
-- DO NOT CREATE backwards compatibility unless request by the user. 
-- PROACTIVELY refactor when changes are needed and utilize powershell commands for mass updates when needed.
-- PREFER data-driven approaches (e.g., JSON workflows) over hardcoded logic.
-- ALWAYS use async/await for I/O operations and logging.
-- ALWAYS use IUiDispatcher for UI updates from background threads.
-- ALWAYS use ILoggingService for logging instead of direct Serilog calls.
-- ALWAYS register services in Infrastructure/DependencyInjection.cs.
-- Provide short and concise summaries when completing tasks.
+- ALWAYS follow MVVM + DI + SOLID architecture principles
+- DO NOT CREATE backwards compatibility unless requested by the user
+- PROACTIVELY refactor when changes are needed and utilize powershell commands for mass updates when needed
+- PREFER data-driven approaches (e.g., JSON workflows) over hardcoded logic
+- ALWAYS use IUiDispatcher for UI updates from background threads
+- ALWAYS use ILoggingService for logging instead of direct Serilog calls
+- ALWAYS register services in Infrastructure/DependencyInjection.cs
+- Provide short and concise summaries when completing tasks
 
 ## Build Commands
 
@@ -30,6 +44,9 @@ dotnet build FFXIManager.csproj
 # Build for release
 dotnet build FFXIManager.sln -c Release
 ```
+
+### Testing
+User performs live testing with actual FFXI accounts. No automated tests exist for auto-login due to complexity.
 
 ### MSBuild (Windows)
 If using MSBuild on WSL/Linux, use the Windows MSBuild path:
@@ -216,16 +233,42 @@ The application uses **OpenCV (OpenCvSharp4)** for template matching to detect U
 - Only needed for process launch logic (e.g., launching applications)
 - All UI navigation should use workflow system, not specialized handlers
 
-Logs are written to:
-- `%APPDATA%/FFXIManager/logs/log-YYYYMMDD.json` (JSON format)
-- Console output during development
-
 ### Service Registration Pattern
 
 All services registered in `Infrastructure/DependencyInjection.cs`:
 - Use `AddSingleton<IInterface, Implementation>()` for stateful services
 - Use `AddTransient<T>()` for ViewModels and dialogs
 - ViewModels should inject services via constructor
+
+### Logging & Debugging
+
+**Logging Infrastructure:**
+- Uses Serilog with JSON structured logging
+- Configured via `appsettings.json`
+- ALWAYS use `ILoggingService` interface, never direct Serilog calls
+- Logs written to: `%APPDATA%/FFXIManager/logs/log-YYYYMMDD.json`
+
+**Logging Patterns:**
+```csharp
+// Inject the service
+private readonly ILoggingService _logger;
+
+public MyService(ILoggingService logger)
+{
+    _logger = logger;
+}
+
+// Log with structured data
+_ = _logger.LogInformationAsync("Processing queue item", new { CharacterId = item.Id, ProfileName = profile.Name });
+_ = _logger.LogWarningAsync("Template match confidence low", new { Confidence = 0.65, Threshold = 0.75 });
+_ = _logger.LogErrorAsync("Failed to launch application", ex, new { AppName = appData.Name });
+```
+
+**Debugging Auto-Login:**
+1. Enable verbose logging in `appsettings.json` (set MinimumLevel to "Debug")
+2. Check workflow execution in real-time via `AutoLoginQueueViewModel` progress updates
+3. Review template matching results in log files (includes confidence scores)
+4. Use Workflow Editor's dry-run feature to test individual steps
 
 ## Common Development Tasks
 
@@ -249,8 +292,9 @@ All services registered in `Infrastructure/DependencyInjection.cs`:
 
 - **appsettings.json** - Serilog configuration, app settings
 - **settings.json** - User settings (`%APPDATA%/FFXIManager/settings.json`)
-- **queue_state.json** - Auto-login queue persistence
-- **workflows/*.json** - Workflow definitions
+- **queue_state.json** - Auto-login queue persistence (`%APPDATA%/FFXIManager/queue_state.json`)
+- **workflows/playonline-standard.json** - Default workflow definition
+- **workflows/templates/** - Template PNG files for screen detection
 
 ## Security & Safety
 
@@ -259,60 +303,17 @@ All services registered in `Infrastructure/DependencyInjection.cs`:
 - **Input Handling**: Uses Windows API (SendInput) for keyboard/mouse automation
 - **Credentials**: Can optionally use Windows Credential Manager for secure storage
 
-## Project History
+## Project History & Architecture Evolution
 
-**Branch**: data-driven-auto-login-test
+The application underwent a major architectural transformation to achieve a **100% workflow-driven, data-first architecture**:
 
-**Recent Major Refactorings:**
+**Key Achievements:**
+- **Workflow-Driven**: All login flows defined in JSON (`workflows/playonline-standard.json`) - no hardcoded logic
+- **Single Handler**: `DynamicWorkflowHandler` executes ALL steps (UI navigation + application launches)
+- **Task-Based Progress**: Progress tracking flows through `AutoLoginTask` → `AutoLoginSubtask` → UI (no legacy enum-based steps)
+- **Template Separation**: Templates are pure PNG files for detection - all metadata/navigation lives in workflow JSON
+- **Resolution Independence**: Hybrid navigation (keyboard-first, click fallback) with relative coordinates
+- **SOLID Refactoring**: Monolithic services extracted into focused, single-responsibility components
 
-1. **Complete LoginTaskStep Enum Removal - Phase 5** (Latest)
-   - Deleted `LoginTaskStep` enum entirely (was obsolete with only `None` value)
-   - Removed all step-based progress tracking from `AutoLoginQueueItem` (CurrentStep, CompletedSteps, CompleteStep)
-   - Removed TaskStep property from `AutoLoginSubtask` and legacy factory methods
-   - Removed AssociatedStep from `UIElementTemplate`
-   - Deleted `ScreenState.cs` (unused legacy file ~174 lines)
-   - Removed LoadTemplatesForStepAsync from `ITemplateManagementService`
-   - Removed LegacyTaskStep from `WorkflowStepDefinition`
-   - Removed TaskStep from `ILoginTaskHandler` interface and `BaseLoginTaskHandler`
-   - Updated handler resolution to use workflow step presence, not enum matching
-   - Cleaned up 60+ obsolete warnings across 17 files
-   - **Result**: 100% task-based progress tracking - no enum-based step identification. Progress flows through AutoLoginTask → AutoLoginSubtask → UI in real-time.
-
-2. **Template Metadata Migration to Workflows - Phase 4**
-   - Moved template PNG files from `Templates/` to `workflows/templates/` (flat structure)
-   - Removed all template JSON metadata files (14 files)
-   - Added `ConfidenceThreshold` and `Tolerance` properties to `WorkflowStepDefinition`
-   - Updated workflow JSON to include all template metadata in step definitions
-   - Templates are now pure PNG files - all configuration lives in workflows
-   - **Result**: Workflows are now the absolute single source of truth for all login configuration
-
-3. **100% Workflow-Driven Architecture - Phase 3**
-   - Removed `TemplateNavigationTuner` UI tool (~800 lines) - obsolete after workflow-first migration
-   - Removed template navigation fallback from `DynamicWorkflowHandler`
-   - Templates now **detection-only** (PNG + confidence threshold) - no navigation metadata
-   - Workflows are now the **single source of truth** for all navigation
-   - **Result**: Clean architectural separation - Templates = Detection, Workflows = Navigation + Execution
-
-4. **100% Workflow-Driven Architecture - Phase 2**
-   - Removed `POLProxyLaunchHandler` and `WindowerLaunchHandler`
-   - Removed 4 configuration classes (POLProxyLaunchConfiguration, WindowerLaunchConfiguration, etc.)
-   - Simplified `LoginTaskStep` enum from 8 values to 1 (only `None` remains, marked obsolete)
-   - Extended `DynamicWorkflowHandler` to handle generic application launches
-   - Added `StepType` property to `WorkflowStepDefinition` ("NavigateUI" vs "LaunchApplication")
-   - Generic launch pattern: ExternalApplicationService + UnifiedMonitoringService + template confirmation
-   - **Result**: DynamicWorkflowHandler is now the ONLY handler - handles ALL UI navigation AND application launches
-
-5. **Complete Migration to Workflow-First Architecture - Phase 1**
-   - Removed `PlayOnlineAuthHandler` and `FFXIGameHandler` (~1,800 lines of code)
-   - Removed 12 specialized services (authentication, navigation, screen detection)
-   - Stripped navigation from all template JSON files (14 templates updated)
-   - Consolidated all login logic into workflow JSON definitions
-   - Simplified `LoginTaskHandlerResolver` to first-match resolution
-   - Created `SharedAutoLoginConfiguration` for minimal shared constants
-   - **Result**: Single workflow JSON file (`playonline-standard.json`) defines entire login flow
-
-6. Extracted SOLID-compliant services from monolithic queue service
-
-7. Implemented data-driven workflow system (JSON-based login flows)
-
-8. Migrated from absolute coordinates to hybrid navigation (resolution-independent)
+**Historical Context:**
+The project evolved from hardcoded specialized handlers (`PlayOnlineAuthHandler`, `FFXIGameHandler`, `POLProxyLaunchHandler`) with absolute coordinates and enum-based step tracking to the current data-driven architecture where a single workflow JSON file defines the entire login flow

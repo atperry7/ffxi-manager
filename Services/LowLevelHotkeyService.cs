@@ -28,14 +28,6 @@ namespace FFXIManager.Services
         /// </summary>
         private const int SUPPRESS_KEY_EVENT = 1;
 
-        // **EMERGENCY SAFEGUARDS**: Critical system protection
-        private static readonly object _emergencyLock = new object();
-        private static volatile bool _emergencyMode;
-        private static int _consecutiveFailures;
-        private static DateTime _lastFailureTime = DateTime.MinValue;
-        private const int MAX_CONSECUTIVE_FAILURES = 10;
-        private const int EMERGENCY_COOLDOWN_MS = 2000;
-
         private readonly ConcurrentDictionary<int, HotkeyInfo> _registeredHotkeys = new();
         private readonly ConcurrentDictionary<HotkeyKey, int> _hotkeyLookup = new(); // O(1) lookup for performance
         private volatile int _registeredCount;
@@ -185,12 +177,6 @@ namespace FFXIManager.Services
 
         private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
-            // **EMERGENCY PROTECTION**: If in emergency mode, pass through all keys immediately
-            if (_emergencyMode)
-            {
-                return CallNextHookEx(_hookId, nCode, wParam, lParam);
-            }
-
             if (nCode >= HC_ACTION && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN))
             {
                 try
@@ -222,17 +208,15 @@ namespace FFXIManager.Services
                         // Verify the hotkey is still registered and enabled
                         if (_registeredHotkeys.TryGetValue(hotkeyId, out var hotkeyInfo) && hotkeyInfo.IsRegistered)
                         {
-                            // **EMERGENCY PROTECTION**: Non-blocking event fire with timeout protection
+                            // Non-blocking event fire for performance
                             Task.Run(() =>
                             {
                                 try
                                 {
                                     HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(hotkeyId, modifiers, key));
-                                    ResetFailureCount();
                                 }
                                 catch (Exception ex)
                                 {
-                                    IncrementFailureCount();
                                     System.Diagnostics.Debug.WriteLine($"Hotkey event failed: {ex.Message}");
                                 }
                             });
@@ -250,7 +234,6 @@ namespace FFXIManager.Services
                 }
                 catch (Exception ex)
                 {
-                    IncrementFailureCount();
                     System.Diagnostics.Debug.WriteLine($"Hook callback critical error: {ex.Message}");
                     // Continue execution to prevent system lockup
                 }
@@ -259,47 +242,6 @@ namespace FFXIManager.Services
             // Pass the key to other applications
             return CallNextHookEx(_hookId, nCode, wParam, lParam);
         }
-
-        /// <summary>
-        /// **EMERGENCY SAFEGUARD**: Increments failure count and enters emergency mode if threshold exceeded
-        /// </summary>
-        private static void IncrementFailureCount()
-        {
-            lock (_emergencyLock)
-            {
-                _consecutiveFailures++;
-                _lastFailureTime = DateTime.UtcNow;
-
-                if (_consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && !_emergencyMode)
-                {
-                    _emergencyMode = true;
-                    System.Diagnostics.Debug.WriteLine($"**EMERGENCY MODE ACTIVATED**: {_consecutiveFailures} consecutive failures detected. Keyboard hooks disabled for {EMERGENCY_COOLDOWN_MS}ms.");
-
-                    // Schedule emergency mode reset
-                    Task.Delay(EMERGENCY_COOLDOWN_MS).ContinueWith(_ =>
-                    {
-                        lock (_emergencyLock)
-                        {
-                            _emergencyMode = false;
-                            _consecutiveFailures = 0;
-                            System.Diagnostics.Debug.WriteLine("Emergency mode deactivated. Normal operation resumed.");
-                        }
-                    });
-                }
-            }
-        }
-
-        /// <summary>
-        /// **EMERGENCY SAFEGUARD**: Resets failure count on successful operations
-        /// </summary>
-        private static void ResetFailureCount()
-        {
-            lock (_emergencyLock)
-            {
-                _consecutiveFailures = 0;
-            }
-        }
-
 
         /// <summary>
         /// Registers a hotkey to be monitored by the low-level hook.
