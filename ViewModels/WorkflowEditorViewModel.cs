@@ -1097,7 +1097,7 @@ namespace FFXIManager.ViewModels
                         }
                     }
                 },
-                () => IsMemberSlotActionSelected && SelectedStep != null && !string.IsNullOrWhiteSpace(SelectedStep.TemplatePath));
+                () => IsMemberSlotActionSelected && HasAnyTemplateForAction);
 
             PreviewMemberSlotClickPointsCommand = new RelayCommand(
                 async () =>
@@ -1107,7 +1107,7 @@ namespace FFXIManager.ViewModels
                         await _templateManager.ShowMemberSlotClickPositionsAsync(SelectedStep, SelectedNavigationAction);
                     }
                 },
-                () => IsMemberSlotActionSelected && SelectedStep != null && !string.IsNullOrWhiteSpace(SelectedStep.TemplatePath));
+                () => IsMemberSlotActionSelected && HasAnyTemplateForAction);
 
             PickCharacterSlotClickPointsCommand = new RelayCommand(
                 async () =>
@@ -1122,7 +1122,7 @@ namespace FFXIManager.ViewModels
                         }
                     }
                 },
-                () => IsCharacterSlotActionSelected && SelectedStep != null && !string.IsNullOrWhiteSpace(SelectedStep.TemplatePath));
+                () => IsCharacterSlotActionSelected && HasAnyTemplateForAction);
 
             PreviewCharacterSlotClickPointsCommand = new RelayCommand(
                 async () =>
@@ -1132,7 +1132,7 @@ namespace FFXIManager.ViewModels
                         await _templateManager.ShowCharacterSlotClickPositionsAsync(SelectedStep, SelectedNavigationAction);
                     }
                 },
-                () => IsCharacterSlotActionSelected && SelectedStep != null && !string.IsNullOrWhiteSpace(SelectedStep.TemplatePath));
+                () => IsCharacterSlotActionSelected && HasAnyTemplateForAction);
 
         }
 
