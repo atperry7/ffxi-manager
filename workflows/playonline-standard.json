@@ -695,7 +695,7 @@
         "Sequence": [
           {
             "Action": "CharacterSlot",
-            "Count": 0,
+            "Count": 1,
             "DelayMs": 20,
             "Description": "Click desired character slot (uses account FFXICharacterSlot property)",
             "Parameters": {
