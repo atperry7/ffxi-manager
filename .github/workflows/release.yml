@@ -212,7 +212,7 @@ jobs:
       - name: Check for release notes file
         id: release-notes
         run: |
-          RELEASE_NOTES_FILE="RELEASE_NOTES_v${{ needs.build-release.outputs.version }}.md"
+          RELEASE_NOTES_FILE=".github/release-notes/RELEASE_NOTES_v${{ needs.build-release.outputs.version }}.md"
           if [ -f "$RELEASE_NOTES_FILE" ]; then
             echo "found=true" >> $GITHUB_OUTPUT
             echo "file=$RELEASE_NOTES_FILE" >> $GITHUB_OUTPUT
