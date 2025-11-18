@@ -44,7 +44,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             IUIAutomationService automationService,
             IScreenDetectionCoordinator screenDetection,
             ITemplateMatchingService templateService)
-            : base(loggingService)
+            : base(loggingService, automationService)
         {
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
             _screenDetection = screenDetection ?? throw new ArgumentNullException(nameof(screenDetection));
@@ -118,46 +118,15 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             }
 
             // Calculate click point (supports both template-relative and center-relative)
-            System.Drawing.Point screenPoint = CalculateClickPoint(clickPoint, context, targetSlot);
+            System.Drawing.Point screenPoint = CalculateClickPoint(clickPoint, context, "CHARACTER-SLOT");
+
+            // Move mouse to position for click
+            await _automationService.MoveMouseAsync(screenPoint, cancellationToken);
+            await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
 
             await _automationService.ClickWindowRelativeAsync(context.WindowHandle, screenPoint, cancellationToken);
-            await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
 
             return true;
-        }
-
-        /// <summary>
-        /// Calculates window-relative click point using either center-relative or template-relative coordinates
-        /// </summary>
-        private System.Drawing.Point CalculateClickPoint(RelativeClickOffset clickPoint, WorkflowActionContext context, int targetSlot)
-        {
-            if (clickPoint.FromCenter)
-            {
-                // Center-relative (template-independent, resolution-independent)
-                var centerPoint = _automationService.GetWindowCenter(context.WindowHandle);
-                var windowRect = _automationService.GetWindowClientRect(context.WindowHandle);
-
-                var offsetX = (int)(clickPoint.X * windowRect.Width);
-                var offsetY = (int)(clickPoint.Y * windowRect.Height);
-
-                var windowRelativeX = centerPoint.X - windowRect.Left + offsetX;
-                var windowRelativeY = centerPoint.Y - windowRect.Top + offsetY;
-
-                _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Slot {targetSlot} click point (center-relative): ({clickPoint.X:F2},{clickPoint.Y:F2}) -> window=({windowRelativeX},{windowRelativeY})");
-
-                return new System.Drawing.Point(windowRelativeX, windowRelativeY);
-            }
-            else
-            {
-                // Template-relative (existing behavior)
-                var rect = context.TemplateMatch!.GetBoundingRectangle();
-                var wx = rect.Left + (int)Math.Round(clickPoint.X * rect.Width);
-                var wy = rect.Top + (int)Math.Round(clickPoint.Y * rect.Height);
-
-                _loggingService.LogDebugAsync($"[CHARACTER-SLOT] Slot {targetSlot} click point (template-relative): ({clickPoint.X:F2},{clickPoint.Y:F2}) -> window=({wx},{wy})");
-
-                return new System.Drawing.Point(wx, wy);
-            }
         }
     }
 }

@@ -28,7 +28,6 @@ namespace FFXIManager.ViewModels
         private PlayOnlineMemberAccount? _selectedAccount;
         private bool _isLoading;
         private bool _disposed;
-        private bool _isShowingSessionStats = true;
         private CancellationTokenSource _cancellationTokenSource = new();
 
         // Duration update timer
@@ -446,76 +445,76 @@ namespace FFXIManager.ViewModels
 
         #region Statistics Display
 
+        private bool _isStepPerformanceExpanded;
+
         /// <summary>
-        /// Whether session statistics (vs all-time) are being displayed
+        /// Whether the step performance section is expanded
         /// </summary>
-        public bool IsShowingSessionStats
+        public bool IsStepPerformanceExpanded
         {
-            get => _isShowingSessionStats;
-            set
+            get => _isStepPerformanceExpanded;
+            set => SetProperty(ref _isStepPerformanceExpanded, value);
+        }
+
+        /// <summary>
+        /// Session statistics summary display
+        /// </summary>
+        public string SessionStatsSummary
+        {
+            get
             {
-                if (SetProperty(ref _isShowingSessionStats, value))
-                {
-                    // Notify all statistics properties to refresh
-                    OnPropertyChanged(nameof(TotalLoginsDisplay));
-                    OnPropertyChanged(nameof(SuccessRateDisplay));
-                    OnPropertyChanged(nameof(AverageTimeDisplay));
-                    OnPropertyChanged(nameof(StatsScopeLabel));
-                }
+                var stats = _queueService.GetExecutionStatistics();
+                var successRate = stats.TotalExecutions > 0 ? $"{stats.SuccessRate:P0}" : "N/A";
+                var avgTime = stats.AverageItemTime.TotalSeconds >= 1
+                    ? (stats.AverageItemTime.TotalMinutes >= 1
+                        ? $"{stats.AverageItemTime.TotalMinutes:F0}m {stats.AverageItemTime.Seconds}s"
+                        : $"{stats.AverageItemTime.TotalSeconds:F0}s")
+                    : "N/A";
+
+                return $"Session: {stats.TotalExecutions} logins | {stats.TotalCompletedItems} success ({successRate}) | Avg: {avgTime}";
             }
         }
 
         /// <summary>
-        /// Label for the statistics scope toggle
+        /// All-time statistics summary display
         /// </summary>
-        public string StatsScopeLabel => IsShowingSessionStats ? "Session" : "All-Time";
-
-        /// <summary>
-        /// Display text for total logins
-        /// </summary>
-        public string TotalLoginsDisplay
+        public string AllTimeStatsSummary
         {
             get
             {
-                var stats = IsShowingSessionStats
-                    ? _queueService.GetExecutionStatistics()
-                    : _queueService.GetAllTimeStatistics();
-                return $"Total Logins: {stats.TotalExecutions}";
+                var stats = _queueService.GetAllTimeStatistics();
+                var successRate = stats.TotalExecutions > 0 ? $"{stats.SuccessRate:P1}" : "N/A";
+
+                return $"All-Time: {stats.TotalExecutions} logins | {stats.TotalCompletedItems} success ({successRate}) | {stats.TotalFailedItems} failed";
             }
         }
 
         /// <summary>
-        /// Display text for success rate
+        /// Step performance data for DataGrid display
         /// </summary>
-        public string SuccessRateDisplay
+        public ObservableCollection<StepPerformanceEntry> StepPerformanceData
         {
             get
             {
-                var stats = IsShowingSessionStats
-                    ? _queueService.GetExecutionStatistics()
-                    : _queueService.GetAllTimeStatistics();
-                return $"Success Rate: {stats.SuccessRate:P1}";
+                var stats = _queueService.GetAllTimeStatistics();
+                var entries = stats.StepPerformance.Values
+                    .OrderByDescending(s => s.Runs)
+                    .ThenByDescending(s => s.Successes)
+                    .ToList();
+
+                return new ObservableCollection<StepPerformanceEntry>(entries);
             }
         }
 
         /// <summary>
-        /// Display text for average time per login
+        /// Whether step performance data is available
         /// </summary>
-        public string AverageTimeDisplay
+        public bool HasStepPerformanceData
         {
             get
             {
-                var stats = IsShowingSessionStats
-                    ? _queueService.GetExecutionStatistics()
-                    : _queueService.GetAllTimeStatistics();
-
-                if (stats.AverageItemTime.TotalSeconds < 1)
-                    return "Avg Time: --";
-
-                if (stats.AverageItemTime.TotalMinutes < 1)
-                    return $"Avg Time: {stats.AverageItemTime.TotalSeconds:F0}s";
-
-                return $"Avg Time: {stats.AverageItemTime.TotalMinutes:F0}m {stats.AverageItemTime.Seconds}s";
+                var stats = _queueService.GetAllTimeStatistics();
+                return stats.StepPerformance.Count > 0;
             }
         }
 
@@ -539,7 +538,6 @@ namespace FFXIManager.ViewModels
         public ICommand ResetQueueCommand { get; private set; } = null!;
         public ICommand RefreshAccountsCommand { get; private set; } = null!;
         public ICommand OpenWorkflowEditorCommand { get; private set; } = null!;
-        public ICommand ToggleStatsScopeCommand { get; private set; } = null!;
 
         // Parameter-based commands
         public ICommand RemoveItemParameterCommand { get; private set; } = null!;
@@ -603,9 +601,6 @@ namespace FFXIManager.ViewModels
 
             OpenWorkflowEditorCommand = new RelayCommand(
                 () => OpenWorkflowEditor());
-
-            ToggleStatsScopeCommand = new RelayCommand(
-                () => IsShowingSessionStats = !IsShowingSessionStats);
 
             // Parameter-based commands
             RemoveItemParameterCommand = new RelayCommandWithParameter<AutoLoginQueueItem>(
@@ -1162,9 +1157,10 @@ namespace FFXIManager.ViewModels
             OnPropertyChanged(nameof(QueueStatusDisplay));
             OnPropertyChanged(nameof(QueueProgressDisplay));
             OnPropertyChanged(nameof(IdleStateMessage));
-            OnPropertyChanged(nameof(TotalLoginsDisplay));
-            OnPropertyChanged(nameof(SuccessRateDisplay));
-            OnPropertyChanged(nameof(AverageTimeDisplay));
+            OnPropertyChanged(nameof(SessionStatsSummary));
+            OnPropertyChanged(nameof(AllTimeStatsSummary));
+            OnPropertyChanged(nameof(StepPerformanceData));
+            OnPropertyChanged(nameof(HasStepPerformanceData));
 
             // Manage duration update timer based on execution state
             var isExecuting = ExecutionState is QueueExecutionState.Starting or QueueExecutionState.Processing

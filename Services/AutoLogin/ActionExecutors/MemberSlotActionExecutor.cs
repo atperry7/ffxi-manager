@@ -47,7 +47,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             IUIAutomationService automationService,
             IScreenDetectionCoordinator screenDetection,
             ITemplateMatchingService templateService)
-            : base(loggingService)
+            : base(loggingService, automationService)
         {
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
             _screenDetection = screenDetection ?? throw new ArgumentNullException(nameof(screenDetection));
@@ -138,15 +138,12 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 }
 
                 // Calculate click point (supports both template-relative and center-relative)
-                System.Drawing.Point screenPoint = CalculateClickPoint(clickPoint, context);
+                System.Drawing.Point screenPoint = CalculateClickPoint(clickPoint, context, "MEMBER-SLOT");
 
                 await _automationService.ClickWindowRelativeAsync(context.WindowHandle, screenPoint, cancellationToken);
-                await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
+                await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
 
                 _ = _loggingService.LogInfoAsync($"[MEMBER-SLOT] Successfully selected member slot {targetSlot}");
-
-                // Track state for future optimizations
-                account.LastSelectedPOLSlot = targetSlot;
 
                 return true;
             }
@@ -156,40 +153,5 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 return false;
             }
         }
-
-        /// <summary>
-        /// Calculates window-relative click point using either center-relative or template-relative coordinates
-        /// </summary>
-        private System.Drawing.Point CalculateClickPoint(RelativeClickOffset clickPoint, WorkflowActionContext context)
-        {
-            if (clickPoint.FromCenter)
-            {
-                // Center-relative (template-independent, resolution-independent)
-                var centerPoint = _automationService.GetWindowCenter(context.WindowHandle);
-                var windowRect = _automationService.GetWindowClientRect(context.WindowHandle);
-
-                var offsetX = (int)(clickPoint.X * windowRect.Width);
-                var offsetY = (int)(clickPoint.Y * windowRect.Height);
-
-                var windowRelativeX = centerPoint.X - windowRect.Left + offsetX;
-                var windowRelativeY = centerPoint.Y - windowRect.Top + offsetY;
-
-                _loggingService.LogDebugAsync($"[MEMBER-SLOT] Click point (center-relative): ({clickPoint.X:F2},{clickPoint.Y:F2}) -> window=({windowRelativeX},{windowRelativeY})");
-
-                return new System.Drawing.Point(windowRelativeX, windowRelativeY);
-            }
-            else
-            {
-                // Template-relative (existing behavior)
-                var rect = context.TemplateMatch!.GetBoundingRectangle();
-                var wx = rect.Left + (int)Math.Round(clickPoint.X * rect.Width);
-                var wy = rect.Top + (int)Math.Round(clickPoint.Y * rect.Height);
-
-                _loggingService.LogDebugAsync($"[MEMBER-SLOT] Click point (template-relative): ({clickPoint.X:F2},{clickPoint.Y:F2}) -> window=({wx},{wy})");
-
-                return new System.Drawing.Point(wx, wy);
-            }
-        }
-
     }
 }

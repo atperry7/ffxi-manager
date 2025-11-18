@@ -47,14 +47,12 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
                 await ExecuteSingleKeyAsync(key, cancellationToken);
 
-                // Delay between repeats (not after last one)
-                if (i < count - 1 || delayMs > 0)
+                // Delay between repeats
+                if (i < count - 1)
                 {
                     await Task.Delay(delayMs, cancellationToken);
                 }
             }
-
-            await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
 
             _ = _loggingService.LogDebugAsync($"[KEYBOARD] Completed {key} x{count}");
 

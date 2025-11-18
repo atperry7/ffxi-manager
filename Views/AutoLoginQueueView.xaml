@@ -323,7 +323,7 @@
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}"/>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
-                        <DataGridTextColumn Header="Account" Width="150" MinWidth="120">
+                        <DataGridTextColumn Header="Account" Width="*" MinWidth="120">
                             <DataGridTextColumn.Binding>
                                 <Binding Path="DisplayName" Mode="OneWay" UpdateSourceTrigger="PropertyChanged"/>
                             </DataGridTextColumn.Binding>
@@ -403,56 +403,89 @@
             </Grid>
         </GroupBox>
 
-        <!-- Statistics Panel -->
+        <!-- Enhanced Statistics Panel -->
         <GroupBox Grid.Row="3" Header="Statistics" Margin="0,0,0,10">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- Statistics Display -->
-                <Grid Grid.Row="0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+                <!-- Session Statistics -->
+                <TextBlock Grid.Row="0"
+                           Text="{Binding SessionStatsSummary}"
+                           FontWeight="SemiBold"
+                           FontSize="13"
+                           Margin="0,0,0,5"
+                           Foreground="{DynamicResource PrimaryTextBrush}"/>
 
-                    <!-- Total Logins -->
-                    <TextBlock Grid.Column="0"
-                               Text="{Binding TotalLoginsDisplay}"
-                               FontWeight="SemiBold"
-                               FontSize="13"
-                               Margin="0,0,10,0"
-                               VerticalAlignment="Center"/>
+                <!-- All-Time Statistics -->
+                <TextBlock Grid.Row="1"
+                           Text="{Binding AllTimeStatsSummary}"
+                           FontWeight="SemiBold"
+                           FontSize="13"
+                           Margin="0,0,0,10"
+                           Foreground="{DynamicResource InfoBrush}"/>
 
-                    <!-- Success Rate -->
-                    <TextBlock Grid.Column="1"
-                               Text="{Binding SuccessRateDisplay}"
-                               FontWeight="SemiBold"
-                               FontSize="13"
-                               Foreground="{DynamicResource SuccessBrush}"
-                               Margin="0,0,10,0"
-                               VerticalAlignment="Center"/>
-
-                    <!-- Average Time -->
-                    <TextBlock Grid.Column="2"
-                               Text="{Binding AverageTimeDisplay}"
-                               FontWeight="SemiBold"
-                               FontSize="13"
-                               Margin="0,0,10,0"
-                               VerticalAlignment="Center"/>
-
-                    <!-- Toggle Button -->
-                    <Button Grid.Column="3"
-                            Content="{Binding StatsScopeLabel}"
-                            Style="{StaticResource CircularInfoButton}"
-                            Command="{Binding ToggleStatsScopeCommand}"
-                            ToolTip="Toggle between Session and All-Time statistics"
-                            Padding="8,4"/>
-                </Grid>
+                <!-- Step Performance Breakdown (Expandable) -->
+                <Expander Grid.Row="2"
+                          Header="Step Performance"
+                          IsExpanded="{Binding IsStepPerformanceExpanded}"
+                          Visibility="{Binding HasStepPerformanceData, Converter={StaticResource BoolToVisConverter}}">
+                    <DataGrid ItemsSource="{Binding StepPerformanceData}"
+                              Style="{StaticResource DataGridBase}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              SelectionMode="Single"
+                              MaxHeight="300"
+                              Margin="0,5,0,0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Step" Binding="{Binding DisplayName}" Width="*" MinWidth="120">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextCellStyle}">
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Runs" Binding="{Binding Runs}" Width="60">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}"/>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Success" Binding="{Binding Successes}" Width="70">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}">
+                                        <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Failed" Binding="{Binding Failures}" Width="60">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}">
+                                        <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Avg Duration" Width="100">
+                                <DataGridTextColumn.Binding>
+                                    <Binding Path="AverageDuration" StringFormat="{}{0:mm}m {0:ss}s"/>
+                                </DataGridTextColumn.Binding>
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}"/>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Avg Confidence" Width="110">
+                                <DataGridTextColumn.Binding>
+                                    <Binding Path="AverageConfidence" StringFormat="{}{0:P0}"/>
+                                </DataGridTextColumn.Binding>
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}"/>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Expander>
             </Grid>
         </GroupBox>
 

@@ -35,7 +35,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
         public ClickActionExecutor(
             ILoggingService loggingService,
             IUIAutomationService automationService)
-            : base(loggingService)
+            : base(loggingService, automationService)
         {
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
         }
@@ -78,63 +78,26 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             for (int i = 0; i < multiPoints.Count; i++)
             {
                 var p = multiPoints[i];
-                var windowRelativePoint = CalculateClickPoint(p, context);
+                var windowRelativePoint = CalculateClickPoint(p, context, "CLICK");
 
                 string modeLabel = p.FromCenter ? "center-relative" : "template-relative";
                 _ = _loggingService.LogDebugAsync($"[CLICK] Point {i + 1} ({modeLabel}): ({p.X:F2},{p.Y:F2}) -> window=({windowRelativePoint.X},{windowRelativePoint.Y})");
 
+                // Move mouse to position for click
+                await _automationService.MoveMouseAsync(windowRelativePoint, cancellationToken);
+                await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
+
                 await _automationService.ClickWindowRelativeAsync(context.WindowHandle, windowRelativePoint, cancellationToken);
 
-                if (i < multiPoints.Count - 1 && action.DelayMs > 0)
+                if (i < multiPoints.Count - 1)
                 {
-                    await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
+                    await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
                 }
             }
-
-            await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
 
             _ = _loggingService.LogDebugAsync("[CLICK] Click completed successfully");
 
             return true;
-        }
-
-        /// <summary>
-        /// Calculates window-relative click point using either template-relative or center-relative coordinates.
-        /// </summary>
-        /// <remarks>
-        /// DirectX9 POL Behavior: POL uses proportional scaling where UI elements maintain their
-        /// relative positions from the window center regardless of window size, making center-relative
-        /// coordinates perfectly stable across all resolutions.
-        /// </remarks>
-        private Point CalculateClickPoint(RelativeClickOffset offset, WorkflowActionContext context)
-        {
-            if (offset.FromCenter)
-            {
-                // Center-relative calculation (template-independent, resolution-independent)
-                var centerPoint = _automationService.GetWindowCenter(context.WindowHandle);
-                var windowRect = _automationService.GetWindowClientRect(context.WindowHandle);
-
-                // Convert percentage offsets to pixel offsets from center
-                // Range: -0.5 to 0.5 (percentage of window width/height from center)
-                var offsetX = (int)(offset.X * windowRect.Width);
-                var offsetY = (int)(offset.Y * windowRect.Height);
-
-                // Calculate final window-relative position
-                // Note: centerPoint is already in screen coordinates, convert to window-relative
-                var windowRelativeX = centerPoint.X - windowRect.Left + offsetX;
-                var windowRelativeY = centerPoint.Y - windowRect.Top + offsetY;
-
-                return new Point(windowRelativeX, windowRelativeY);
-            }
-            else
-            {
-                // Template-relative calculation (existing behavior)
-                var templateMatch = context.TemplateMatch!; // Already validated in ExecuteActionAsync
-                var absoluteX = templateMatch.WindowRelativePosition.X + (int)(templateMatch.MatchSize.Width * offset.X);
-                var absoluteY = templateMatch.WindowRelativePosition.Y + (int)(templateMatch.MatchSize.Height * offset.Y);
-
-                return new Point(absoluteX, absoluteY);
-            }
         }
     }
 }

@@ -39,7 +39,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             IUIAutomationService automationService,
             IScreenDetectionCoordinator screenDetection,
             ITemplateMatchingService templateService)
-            : base(loggingService)
+            : base(loggingService, automationService)
         {
             _credentialsService = credentialsService ?? throw new ArgumentNullException(nameof(credentialsService));
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
@@ -114,11 +114,11 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                                     for (int i = 0; i < points.Count; i++)
                                     {
                                         var p = points[i];
-                                        var windowRelativePoint = CalculateClickPoint(p, context);
+                                        var windowRelativePoint = CalculateClickPoint(p, context, "INPUT-PASSWORD");
                                         await _automationService.ClickWindowRelativeAsync(context.WindowHandle, windowRelativePoint, cancellationToken);
-                                        if (i < points.Count - 1 && action.DelayMs > 0)
+                                        if (i < points.Count - 1)
                                         {
-                                            await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
+                                            await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
                                         }
                                     }
                                 }
@@ -139,58 +139,13 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 _ = _loggingService.LogInfoAsync("[INPUT-PASSWORD] Typing password: ****");
                 await _automationService.TypeSecureTextAsync(password, action.DelayMs, cancellationToken);
 
-                // Clear password from memory immediately
-                password = null!;
-                GC.Collect(); // Force garbage collection to clear password string
-
-                await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
-
                 _ = _loggingService.LogInfoAsync("[INPUT-PASSWORD] Password input completed successfully");
                 return true;
             }
             catch (Exception ex)
             {
                 _ = _loggingService.LogErrorAsync("[INPUT-PASSWORD] Failed to type password", ex);
-
-                // Clear password from memory on error
-                password = null!;
-                GC.Collect();
-
                 return false;
-            }
-        }
-
-        /// <summary>
-        /// Calculates window-relative click point using either center-relative or template-relative coordinates
-        /// </summary>
-        private System.Drawing.Point CalculateClickPoint(RelativeClickOffset clickPoint, WorkflowActionContext context)
-        {
-            if (clickPoint.FromCenter)
-            {
-                // Center-relative (template-independent, resolution-independent)
-                var centerPoint = _automationService.GetWindowCenter(context.WindowHandle);
-                var windowRect = _automationService.GetWindowClientRect(context.WindowHandle);
-
-                var offsetX = (int)(clickPoint.X * windowRect.Width);
-                var offsetY = (int)(clickPoint.Y * windowRect.Height);
-
-                var windowRelativeX = centerPoint.X - windowRect.Left + offsetX;
-                var windowRelativeY = centerPoint.Y - windowRect.Top + offsetY;
-
-                _ = _loggingService.LogDebugAsync($"[INPUT-PASSWORD] Click point (center-relative): ({clickPoint.X:F2},{clickPoint.Y:F2}) -> window=({windowRelativeX},{windowRelativeY})");
-
-                return new System.Drawing.Point(windowRelativeX, windowRelativeY);
-            }
-            else
-            {
-                // Template-relative (existing behavior)
-                var rect = context.TemplateMatch!.GetBoundingRectangle();
-                var wx = rect.Left + (int)Math.Round(clickPoint.X * rect.Width);
-                var wy = rect.Top + (int)Math.Round(clickPoint.Y * rect.Height);
-
-                _ = _loggingService.LogDebugAsync($"[INPUT-PASSWORD] Click point (template-relative): ({clickPoint.X:F2},{clickPoint.Y:F2}) -> window=({wx},{wy})");
-
-                return new System.Drawing.Point(wx, wy);
             }
         }
     }

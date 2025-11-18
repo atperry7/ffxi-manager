@@ -73,43 +73,6 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTextColumn Header="POL Slot"
-                                        Binding="{Binding POLMemberSlot}"
-                                        Width="70">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}"/>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
-                    <DataGridTextColumn Header="FFXI Slot"
-                                        Binding="{Binding FFXICharacterSlot}"
-                                        Width="75">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}"/>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
-                    <DataGridTemplateColumn Header="Password" Width="80">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <TextBlock HorizontalAlignment="Center"
-                                           VerticalAlignment="Center">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Text" Value="Not Set"/>
-                                            <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
-                                            <Setter Property="FontStyle" Value="Italic"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Path=HasStoredPassword}" Value="True">
-                                                    <Setter Property="Text" Value="Secured"/>
-                                                    <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}"/>
-                                                    <Setter Property="FontStyle" Value="Normal"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
                     <DataGridTemplateColumn Header="OTP" Width="125">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>

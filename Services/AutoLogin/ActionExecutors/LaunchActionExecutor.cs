@@ -208,8 +208,6 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             context.ApplicationName = app.Name;
             context.ApplicationId = app.Id;
 
-            await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
-
             // Phase 5: Complete
             await UpdateProgressAsync(context, 100, $"{app.Name} launched");
             _ = _loggingService.LogInfoAsync($"[LAUNCH] {app.Name} launch sequence completed successfully");

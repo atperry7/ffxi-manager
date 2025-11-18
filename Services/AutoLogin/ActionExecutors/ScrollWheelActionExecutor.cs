@@ -57,7 +57,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
         public ScrollWheelActionExecutor(
             ILoggingService loggingService,
             IUIAutomationService automationService)
-            : base(loggingService)
+            : base(loggingService, automationService)
         {
             _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
         }
@@ -107,7 +107,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             if (positionMouse != null)
             {
-                mousePosition = CalculateMousePosition(positionMouse, context);
+                mousePosition = CalculateMousePosition(positionMouse, context, "SCROLL-WHEEL");
                 _ = _loggingService.LogDebugAsync($"[SCROLL-WHEEL] Positioning mouse at ({mousePosition.X}, {mousePosition.Y}) - {(positionMouse.FromCenter ? "center-relative" : "template-relative")}");
             }
             else
@@ -134,52 +134,13 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
                 if (i < ticks - 1) // Don't delay after last tick
                 {
-                    await Task.Delay(scrollDelayMs, cancellationToken);
+                    await Task.Delay(Math.Max(50, scrollDelayMs), cancellationToken);
                 }
             }
 
-            await Task.Delay(Math.Max(1, action.DelayMs), cancellationToken);
             _ = _loggingService.LogDebugAsync($"[SCROLL-WHEEL] Completed {ticks} scroll ticks {direction}");
 
             return true;
-        }
-
-        /// <summary>
-        /// Calculates the mouse position using either center-relative or template-relative coordinates
-        /// </summary>
-        private Point CalculateMousePosition(RelativeClickOffset offset, WorkflowActionContext context)
-        {
-            if (offset.FromCenter)
-            {
-                // Center-relative calculation (template-independent, resolution-independent)
-                var centerPoint = _automationService.GetWindowCenter(context.WindowHandle);
-                var windowRect = _automationService.GetWindowClientRect(context.WindowHandle);
-
-                // Convert percentage offsets to pixel offsets from center
-                var offsetX = (int)(offset.X * windowRect.Width);
-                var offsetY = (int)(offset.Y * windowRect.Height);
-
-                // Calculate final screen position
-                var screenX = centerPoint.X + offsetX;
-                var screenY = centerPoint.Y + offsetY;
-
-                return new Point(screenX, screenY);
-            }
-            else
-            {
-                // Template-relative calculation
-                if (context.TemplateMatch == null)
-                {
-                    _loggingService.LogErrorAsync("[SCROLL-WHEEL] Template-relative position requested but no template match available");
-                    return Point.Empty;
-                }
-
-                var rect = context.TemplateMatch.GetBoundingRectangle();
-                var wx = rect.Left + (int)Math.Round(offset.X * rect.Width);
-                var wy = rect.Top + (int)Math.Round(offset.Y * rect.Height);
-
-                return new Point(wx, wy);
-            }
         }
     }
 }

@@ -36,7 +36,7 @@
           }
         ],
         "Description": "Launch POL Proxy application",
-        "PostNavigationDelayMs": 0
+        "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
@@ -138,7 +138,7 @@
           {
             "Action": "MemberSlot",
             "Count": 1,
-            "DelayMs": 0,
+            "DelayMs": 50,
             "Description": "Navigate to and select target member slot (handles slots 1-20 using 4-slot visible window)",
             "Parameters": {
               "ScrollTicksPerSlot": 1,
@@ -174,7 +174,7 @@
           }
         ],
         "Description": "Reset list to top, then navigate to target slot using POL\u0027s 4-slot visible window (slots 1-4 direct click, slots 5-20 scroll-then-click)",
-        "PostNavigationDelayMs": 50
+        "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -201,7 +201,7 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 0,
+            "DelayMs": 50,
             "Description": "Navigate to next field",
             "Parameters": {
               "TemplatePath": "action_pol_login_information_screen_0",
@@ -217,7 +217,7 @@
           }
         ],
         "Description": "Click Log In",
-        "PostNavigationDelayMs": 50
+        "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
@@ -240,7 +240,7 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 0,
+            "DelayMs": 50,
             "Description": "Navigate to next field",
             "Parameters": {
               "TemplatePath": "action_pol_otp_entry_0",
@@ -256,7 +256,7 @@
           }
         ],
         "Description": "Click Password Field",
-        "PostNavigationDelayMs": 50
+        "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -313,7 +313,7 @@
           }
         ],
         "Description": "Activate virtual keyboard password field",
-        "PostNavigationDelayMs": 50
+        "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -357,7 +357,7 @@
           }
         ],
         "Description": "Confirm password using circle button",
-        "PostNavigationDelayMs": 50
+        "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -399,7 +399,7 @@
           {
             "Action": "InputOTP",
             "Count": 1,
-            "DelayMs": 20,
+            "DelayMs": 50,
             "Description": "Navigate to next field",
             "Parameters": {
               "ClickPoints": [
@@ -413,7 +413,7 @@
           }
         ],
         "Description": "Tab to OTP field and enter code",
-        "PostNavigationDelayMs": 50
+        "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
@@ -438,7 +438,7 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 20,
+            "DelayMs": 50,
             "Description": "Click connect button to finish login",
             "Parameters": {
               "TemplatePath": "action_pol_otp_entry_0",
@@ -454,7 +454,7 @@
           }
         ],
         "Description": "Activate Connect button",
-        "PostNavigationDelayMs": 50
+        "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -480,7 +480,7 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 20,
+            "DelayMs": 50,
             "Description": "Navigate to next field",
             "Parameters": {
               "TemplatePath": "pol_main_screen_0",
@@ -496,7 +496,7 @@
           }
         ],
         "Description": "Navigation for PlayOnline Main Screen",
-        "PostNavigationDelayMs": 50
+        "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -522,7 +522,7 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 20,
+            "DelayMs": 50,
             "Description": "Click First Play",
             "Parameters": {
               "TemplatePath": "action_pol_play_screen_0",
@@ -538,7 +538,7 @@
           }
         ],
         "Description": "Navigate to Final Fantasy XI in game list",
-        "PostNavigationDelayMs": 50
+        "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -564,7 +564,7 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 20,
+            "DelayMs": 50,
             "Description": "Secondary Play Confirm",
             "Parameters": {
               "TemplatePath": "action_pol_play_confirmation_0",
@@ -580,7 +580,7 @@
           }
         ],
         "Description": "Confirm play selection",
-        "PostNavigationDelayMs": 50
+        "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -605,7 +605,7 @@
           {
             "Action": "Wait",
             "Count": 1,
-            "DelayMs": 25000,
+            "DelayMs": 30000,
             "Description": "Let FFXI Full Game Load - adjust this if you don\u0027t use POL Proxy",
             "Parameters": {}
           },
@@ -629,7 +629,7 @@
           }
         ],
         "Description": "Accept terms with Enter key",
-        "PostNavigationDelayMs": 6000
+        "PostNavigationDelayMs": 7000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 90,
@@ -671,7 +671,7 @@
           }
         ],
         "Description": "Select Character menu option",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 3000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -696,7 +696,7 @@
           {
             "Action": "CharacterSlot",
             "Count": 1,
-            "DelayMs": 20,
+            "DelayMs": 50,
             "Description": "Click desired character slot (uses account FFXICharacterSlot property)",
             "Parameters": {
               "TemplatePath": "action_ffxi_character_slot_selection_0",
@@ -803,7 +803,7 @@
           }
         ],
         "Description": "Click character slot to select (slot number read from account configuration)",
-        "PostNavigationDelayMs": 200
+        "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -830,7 +830,7 @@
           {
             "Action": "Click",
             "Count": 1,
-            "DelayMs": 0,
+            "DelayMs": 50,
             "Description": "Click Yes to confirm character",
             "Parameters": {
               "TemplatePath": "action_ffxi_character_confirmation_0",
@@ -847,13 +847,13 @@
           {
             "Action": "Wait",
             "Count": 1,
-            "DelayMs": 5000,
+            "DelayMs": 10000,
             "Description": "Allow character time to finialize login before finishing workflow",
             "Parameters": {}
           }
         ],
         "Description": "Final confirmation to enter game world",
-        "PostNavigationDelayMs": 50
+        "PostNavigationDelayMs": 1000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
