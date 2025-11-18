@@ -533,18 +533,64 @@ namespace FFXIManager.ViewModels
             {
                 if (SelectedStep == null) return string.Empty;
 
-                var attempts = SelectedStep.RetryAttempts ?? 30;
-                var delayMs = SelectedStep.RetryDelayMs ?? 500;
-                var totalSeconds = (attempts * delayMs) / 1000.0;
+                // Step-level detection retry budget
+                var stepRetryAttempts = SelectedStep.RetryAttempts ?? 30;
+                var stepRetryDelayMs = SelectedStep.RetryDelayMs ?? 500;
+                var detectionBudgetMs = stepRetryAttempts * stepRetryDelayMs;
+
+                // Navigation sequence budget (if navigation exists)
+                var navigationBudgetMs = 0.0;
+                if (SelectedStep.Navigation?.Sequence != null)
+                {
+                    foreach (var action in SelectedStep.Navigation.Sequence)
+                    {
+                        var count = action.Count;
+                        var delayMs = action.DelayMs;
+
+                        // Action-level retry budget (detection polling before executing action)
+                        var actionRetryAttempts = action.GetParameter("RetryAttempts", stepRetryAttempts);
+                        var actionRetryDelayMs = action.GetParameter("RetryDelayMs", stepRetryDelayMs);
+                        var actionDetectionMs = actionRetryAttempts * actionRetryDelayMs;
+
+                        // Special handling for ScrollWheel and MemberSlot actions with scroll delays
+                        var actionScrollDelayMs = 0;
+                        if (action.Action == "ScrollWheel")
+                        {
+                            var scrollTicks = action.GetParameter("Ticks", 30);
+                            var scrollDelayMs = action.GetParameter("ScrollDelayMs", 50);
+                            actionScrollDelayMs = scrollTicks * scrollDelayMs;
+                        }
+                        else if (action.Action == "MemberSlot")
+                        {
+                            // MemberSlot can scroll up to 16 slots (slot 20 - 4 visible slots)
+                            var scrollTicksPerSlot = action.GetParameter("ScrollTicksPerSlot", 1);
+                            var scrollDelayMs = action.GetParameter("ScrollDelayMs", 100);
+                            var maxScrollTicks = 16 * scrollTicksPerSlot; // Worst case: slot 20
+                            actionScrollDelayMs = maxScrollTicks * scrollDelayMs;
+                        }
+
+                        // Total time for this action = (detection + scroll + delay) × repeat count
+                        var actionTotalMs = (actionDetectionMs + actionScrollDelayMs + delayMs) * count;
+                        navigationBudgetMs += actionTotalMs;
+                    }
+
+                    // Add post-navigation delay
+                    var postNavDelayMs = SelectedStep.Navigation.PostNavigationDelayMs;
+                    navigationBudgetMs += postNavDelayMs;
+                }
+
+                var totalBudgetSeconds = (detectionBudgetMs + navigationBudgetMs) / 1000.0;
                 var estimated = SelectedStep.EstimatedDurationSeconds;
 
-                if (totalSeconds > estimated)
+                if (totalBudgetSeconds > estimated)
                 {
-                    return $"⚠ Retry budget ({totalSeconds:F1}s) exceeds timeout ({estimated}s)";
+                    return $"⚠ Total budget ({totalBudgetSeconds:F1}s) exceeds timeout ({estimated}s)\n" +
+                           $"   Detection: {detectionBudgetMs / 1000.0:F1}s, Actions: {navigationBudgetMs / 1000.0:F1}s";
                 }
                 else
                 {
-                    return $"✓ Retry budget: {totalSeconds:F1}s of {estimated}s";
+                    return $"✓ Total budget: {totalBudgetSeconds:F1}s of {estimated}s\n" +
+                           $"   Detection: {detectionBudgetMs / 1000.0:F1}s, Actions: {navigationBudgetMs / 1000.0:F1}s";
                 }
             }
         }
@@ -557,18 +603,55 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedStep == null) return;
 
-            var attempts = SelectedStep.RetryAttempts ?? 30;
-            var delayMs = SelectedStep.RetryDelayMs ?? 500;
-            var totalSeconds = (int)Math.Ceiling((attempts * delayMs) / 1000.0);
+            // Calculate total budget using same logic as StepRetryBudgetInfo
+            var stepRetryAttempts = SelectedStep.RetryAttempts ?? 30;
+            var stepRetryDelayMs = SelectedStep.RetryDelayMs ?? 500;
+            var detectionBudgetMs = stepRetryAttempts * stepRetryDelayMs;
+
+            var navigationBudgetMs = 0.0;
+            if (SelectedStep.Navigation?.Sequence != null)
+            {
+                foreach (var action in SelectedStep.Navigation.Sequence)
+                {
+                    var count = action.Count;
+                    var delayMs = action.DelayMs;
+                    var actionRetryAttempts = action.GetParameter("RetryAttempts", stepRetryAttempts);
+                    var actionRetryDelayMs = action.GetParameter("RetryDelayMs", stepRetryDelayMs);
+                    var actionDetectionMs = actionRetryAttempts * actionRetryDelayMs;
+
+                    var actionScrollDelayMs = 0;
+                    if (action.Action == "ScrollWheel")
+                    {
+                        var scrollTicks = action.GetParameter("Ticks", 30);
+                        var scrollDelayMs = action.GetParameter("ScrollDelayMs", 50);
+                        actionScrollDelayMs = scrollTicks * scrollDelayMs;
+                    }
+                    else if (action.Action == "MemberSlot")
+                    {
+                        var scrollTicksPerSlot = action.GetParameter("ScrollTicksPerSlot", 1);
+                        var scrollDelayMs = action.GetParameter("ScrollDelayMs", 100);
+                        var maxScrollTicks = 16 * scrollTicksPerSlot;
+                        actionScrollDelayMs = maxScrollTicks * scrollDelayMs;
+                    }
+
+                    var actionTotalMs = (actionDetectionMs + actionScrollDelayMs + delayMs) * count;
+                    navigationBudgetMs += actionTotalMs;
+                }
+
+                var postNavDelayMs = SelectedStep.Navigation.PostNavigationDelayMs;
+                navigationBudgetMs += postNavDelayMs;
+            }
+
+            var totalSeconds = (int)Math.Ceiling((detectionBudgetMs + navigationBudgetMs) / 1000.0);
 
             if (totalSeconds > SelectedStep.EstimatedDurationSeconds)
             {
-                // Auto-adjust EstimatedDurationSeconds to accommodate retry budget
+                // Auto-adjust EstimatedDurationSeconds to accommodate full budget
                 SelectedStep.EstimatedDurationSeconds = totalSeconds;
                 OnPropertyChanged(nameof(StepEstimatedDurationSeconds));
                 OnPropertyChanged(nameof(StepRetryBudgetInfo));
 
-                _ = _loggingService.LogInfoAsync($"Auto-adjusted EstimatedDurationSeconds to {totalSeconds}s to accommodate retry budget");
+                _ = _loggingService.LogInfoAsync($"Auto-adjusted EstimatedDurationSeconds to {totalSeconds}s to accommodate total retry budget (detection + navigation)");
             }
         }
 
@@ -1866,6 +1949,12 @@ namespace FFXIManager.ViewModels
         {
             // Any property change on navigation means unsaved changes
             HasUnsavedChanges = true;
+
+            // If PostNavigationDelayMs changed, recalculate retry budget
+            if (e.PropertyName == nameof(NavigationAction.PostNavigationDelayMs))
+            {
+                OnPropertyChanged(nameof(StepRetryBudgetInfo));
+            }
         }
 
         /// <summary>
@@ -1891,6 +1980,9 @@ namespace FFXIManager.ViewModels
                 }
             }
 
+            // Notify retry budget changed (actions added/removed affect total timing)
+            OnPropertyChanged(nameof(StepRetryBudgetInfo));
+
             // Collection changes already set HasUnsavedChanges in existing code
         }
 
@@ -1901,6 +1993,14 @@ namespace FFXIManager.ViewModels
         {
             // Any property change on a navigation action means unsaved changes
             HasUnsavedChanges = true;
+
+            // If timing-related properties changed, recalculate retry budget
+            if (e.PropertyName == nameof(KeyboardAction.Count) ||
+                e.PropertyName == nameof(KeyboardAction.DelayMs) ||
+                e.PropertyName == nameof(KeyboardAction.Parameters))
+            {
+                OnPropertyChanged(nameof(StepRetryBudgetInfo));
+            }
 
             // If the Action property changed, notify the UI to update visibility of detail panels
             if (e.PropertyName == nameof(KeyboardAction.Action) && sender == SelectedNavigationAction)
