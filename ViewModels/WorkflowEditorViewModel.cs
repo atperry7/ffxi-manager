@@ -1365,16 +1365,25 @@ namespace FFXIManager.ViewModels
 
         private async Task ImportWorkflowAsync()
         {
-            // Delegate to helper
-            await _workflowManager.ImportWorkflowAsync();
+            // Delegate to helper - returns imported workflow or null
+            var importedWorkflow = await _workflowManager.ImportWorkflowAsync();
+
+            if (importedWorkflow != null)
+            {
+                // Reload workflow list to include the newly imported workflow
+                await LoadWorkflowsAsync();
+
+                // Select the imported workflow
+                SelectedWorkflow = Workflows.FirstOrDefault(w => w.WorkflowId == importedWorkflow.WorkflowId);
+            }
         }
 
         private async Task ExportWorkflowAsync()
         {
             if (SelectedWorkflow == null) return;
 
-            // Delegate to helper
-            await _workflowManager.ExportWorkflowAsync();
+            // Delegate to helper - pass selected workflow
+            await _workflowManager.ExportWorkflowAsync(SelectedWorkflow);
         }
 
         private async Task RestoreDefaultWorkflowsAsync()
