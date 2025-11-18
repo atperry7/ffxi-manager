@@ -140,8 +140,8 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 // Calculate click point (supports both template-relative and center-relative)
                 System.Drawing.Point screenPoint = CalculateClickPoint(clickPoint, context, "MEMBER-SLOT");
 
+                // Click slot (base class handles post-action delay)
                 await _automationService.ClickWindowRelativeAsync(context.WindowHandle, screenPoint, cancellationToken);
-                await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
 
                 _ = _loggingService.LogInfoAsync($"[MEMBER-SLOT] Successfully selected member slot {targetSlot}");
 

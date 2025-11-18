@@ -618,47 +618,14 @@ namespace FFXIManager.Services.AutoLogin
                 // Determine target app for this action
                 var targetApp = TargetApplicationResolver.ResolveForAction(stepDef, navigation, i);
 
-                // Action-level retry budget (applies to entire action execution including detection)
-                var actionAttempts = Math.Max(1, action.GetParameter<int>("RetryAttempts", stepDef.RetryAttempts ?? 30));
-                var actionDelayMs = Math.Max(1, action.GetParameter<int>("RetryDelayMs", stepDef.RetryDelayMs ?? 100));
+                // Ensure window handle is available if needed
+                await EnsureWindowHandleForAction(action, targetApp, actionContext, autoLoginContext, cancellationToken);
 
-                Exception? lastError = null;
-                for (int attempt = 1; attempt <= actionAttempts; attempt++)
-                {
-                    try
-                    {
-                        // Reset per-attempt transient detection to avoid stale matches
-                        actionContext.TemplateMatch = null;
+                // Ensure template match is available if needed
+                await EnsureTemplateMatchForAction(action, subtask, stepDef, actionContext, cancellationToken);
 
-                        // Ensure window handle is available if needed
-                        await EnsureWindowHandleForAction(action, targetApp, actionContext, autoLoginContext, cancellationToken);
-
-                        // Ensure template match is available if needed (per-attempt)
-                        await EnsureTemplateMatchForAction(action, subtask, stepDef, actionContext, cancellationToken);
-
-                        // Execute the action
-                        await ExecuteSingleAction(action, subtask, stepDef, actionContext, autoLoginContext, i + 1, cancellationToken);
-
-                        // Success — break out of per-action retry loop
-                        lastError = null;
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        lastError = ex;
-                        _ = _loggingService.LogWarningAsync($"[NAVIGATION] Action '{action.Action}' attempt {attempt}/{actionAttempts} failed: {ex.Message}");
-                        if (attempt < actionAttempts)
-                        {
-                            await Task.Delay(actionDelayMs, cancellationToken);
-                        }
-                    }
-                }
-
-                if (lastError != null)
-                {
-                    // Exhausted action-level retries
-                    throw new InvalidOperationException($"Navigation action '{action.Action}' failed after {actionAttempts} attempt(s)", lastError);
-                }
+                // Execute the action (executor handles retry/repeat/delay)
+                await ExecuteSingleAction(action, subtask, stepDef, actionContext, autoLoginContext, i + 1, cancellationToken);
             }
         }
 

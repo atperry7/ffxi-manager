@@ -125,14 +125,15 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             await _automationService.MoveMouseAsync(mousePosition, cancellationToken);
 
-            // Execute scroll ticks
+            // Execute scroll ticks (base class handles post-action delay)
             var delta = isUp ? 1 : -1;
 
             for (int i = 0; i < ticks; i++)
             {
                 await _automationService.ScrollMouseWheelAsync(delta, cancellationToken);
 
-                if (i < ticks - 1) // Don't delay after last tick
+                // Delay between ticks (executor-specific, not after last tick)
+                if (i < ticks - 1)
                 {
                     await Task.Delay(Math.Max(50, scrollDelayMs), cancellationToken);
                 }

@@ -34,33 +34,82 @@ namespace FFXIManager.Services.AutoLogin
         public virtual bool RequiresWindowHandle => false;
 
         /// <summary>
-        /// Executes the workflow action with error handling and logging
+        /// Executes the workflow action with retry, repeat, and delay support.
+        /// Implements unified timing pattern: retry on failure, repeat on success, delay after completion.
         /// </summary>
         public async Task<bool> ExecuteAsync(
             KeyboardAction action,
             WorkflowActionContext context,
             CancellationToken cancellationToken)
         {
-            try
-            {
-                await _loggingService.LogDebugAsync($"[ACTION-EXECUTOR] Executing {ActionType} action");
+            // Hardcoded exceptions: InputPassword/InputOTP don't retry or repeat (prevents account lockouts)
+            var supportsRetry = !IsPasswordOrOtpAction(action);
+            var supportsRepeat = !IsPasswordOrOtpAction(action);
 
-                var result = await ExecuteActionAsync(action, context, cancellationToken);
+            var retryAttempts = supportsRetry ? action.GetParameter("RetryAttempts", 1) : 1;
+            var retryDelayMs = Math.Max(50, action.GetParameter("RetryDelayMs", 500));
+            var repeatCount = supportsRepeat ? Math.Max(1, action.Count) : 1;
 
-                await _loggingService.LogDebugAsync($"[ACTION-EXECUTOR] {ActionType} action completed: {result}");
+            for (int attempt = 1; attempt <= retryAttempts; attempt++)
+            {
+                try
+                {
+                    // Repeat loop (execute N times on success)
+                    for (int repeat = 1; repeat <= repeatCount; repeat++)
+                    {
+                        _ = _loggingService.LogDebugAsync($"[{ActionType}] Executing (attempt {attempt}/{retryAttempts}, repeat {repeat}/{repeatCount})");
 
-                return result;
+                        var result = await ExecuteActionAsync(action, context, cancellationToken);
+
+                        if (!result)
+                            throw new InvalidOperationException($"{ActionType} execution returned false");
+
+                        // Delay between repeats (not after last repeat)
+                        if (repeat < repeatCount)
+                        {
+                            await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
+                        }
+                    }
+
+                    // Post-action delay (after all repeats complete)
+                    if (action.DelayMs > 0)
+                    {
+                        await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
+                    }
+
+                    _ = _loggingService.LogDebugAsync($"[{ActionType}] Completed successfully");
+                    return true; // Success - exit retry loop
+                }
+                catch (OperationCanceledException)
+                {
+                    _ = _loggingService.LogInfoAsync($"[{ActionType}] Cancelled");
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    if (attempt < retryAttempts)
+                    {
+                        _ = _loggingService.LogWarningAsync($"[{ActionType}] Attempt {attempt}/{retryAttempts} failed: {ex.Message}. Retrying in {retryDelayMs}ms...");
+                        await Task.Delay(retryDelayMs, cancellationToken);
+                    }
+                    else
+                    {
+                        _ = _loggingService.LogErrorAsync($"[{ActionType}] Failed after {retryAttempts} attempt(s)", ex);
+                        return false;
+                    }
+                }
             }
-            catch (OperationCanceledException)
-            {
-                await _loggingService.LogInfoAsync($"[ACTION-EXECUTOR] {ActionType} action cancelled");
-                throw;
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync($"[ACTION-EXECUTOR] {ActionType} action failed", ex);
-                return false;
-            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Determines if an action is InputPassword or InputOTP (which should not retry or repeat).
+        /// </summary>
+        private bool IsPasswordOrOtpAction(KeyboardAction action)
+        {
+            return action.Action.Equals("InputPassword", StringComparison.OrdinalIgnoreCase) ||
+                   action.Action.Equals("InputOTP", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

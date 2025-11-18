@@ -75,6 +75,7 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
 
             _ = _loggingService.LogInfoAsync($"[CLICK] Executing {mode} click sequence with {multiPoints!.Count} point(s)");
 
+            // Execute all clicks in sequence (base class handles post-action delay)
             for (int i = 0; i < multiPoints.Count; i++)
             {
                 var p = multiPoints[i];
@@ -83,15 +84,13 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
                 string modeLabel = p.FromCenter ? "center-relative" : "template-relative";
                 _ = _loggingService.LogDebugAsync($"[CLICK] Point {i + 1} ({modeLabel}): ({p.X:F2},{p.Y:F2}) -> window=({windowRelativePoint.X},{windowRelativePoint.Y})");
 
-                // Move mouse to position for click
                 await _automationService.MoveMouseAsync(windowRelativePoint, cancellationToken);
-                await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
-
                 await _automationService.ClickWindowRelativeAsync(context.WindowHandle, windowRelativePoint, cancellationToken);
 
+                // Small delay between multi-point clicks (executor-specific)
                 if (i < multiPoints.Count - 1)
                 {
-                    await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
+                    await Task.Delay(100, cancellationToken);
                 }
             }
 

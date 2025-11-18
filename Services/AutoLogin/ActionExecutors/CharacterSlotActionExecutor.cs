@@ -120,10 +120,8 @@ namespace FFXIManager.Services.AutoLogin.ActionExecutors
             // Calculate click point (supports both template-relative and center-relative)
             System.Drawing.Point screenPoint = CalculateClickPoint(clickPoint, context, "CHARACTER-SLOT");
 
-            // Move mouse to position for click
+            // Move mouse and click (base class handles post-action delay)
             await _automationService.MoveMouseAsync(screenPoint, cancellationToken);
-            await Task.Delay(Math.Max(50, action.DelayMs), cancellationToken);
-
             await _automationService.ClickWindowRelativeAsync(context.WindowHandle, screenPoint, cancellationToken);
 
             return true;
