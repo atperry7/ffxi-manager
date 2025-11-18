@@ -504,6 +504,9 @@ namespace FFXIManager.Services.AutoLogin
                     return 0;
                 }
 
+                // Track if we're restoring a workflow with IsDefault=true
+                Guid? restoredDefaultWorkflowId = null;
+
                 int restoredCount = 0;
                 foreach (var sourceFile in sourceFiles)
                 {
@@ -517,6 +520,12 @@ namespace FFXIManager.Services.AutoLogin
                         continue;
                     }
 
+                    // Track if this workflow is marked as default in source
+                    if (workflow.IsDefault)
+                    {
+                        restoredDefaultWorkflowId = workflow.WorkflowId;
+                    }
+
                     // Destination: workflows/{guid}.json (flat structure)
                     var destFile = GetWorkflowFilePath(workflow.WorkflowId);
 
@@ -524,6 +533,32 @@ namespace FFXIManager.Services.AutoLogin
                     File.Copy(sourceFile, destFile, overwrite: true);
                     restoredCount++;
                     await _loggingService.LogDebugAsync($"Restored default workflow: {workflow.Name} to {workflow.WorkflowId}.json");
+                }
+
+                // If a restored workflow has IsDefault=true, clear the flag from all other workflows
+                if (restoredDefaultWorkflowId.HasValue)
+                {
+                    var allFiles = Directory.GetFiles(_workflowsDirectory, "*.json");
+                    foreach (var file in allFiles)
+                    {
+                        try
+                        {
+                            var json = await File.ReadAllTextAsync(file);
+                            var workflow = JsonSerializer.Deserialize<WorkflowDefinition>(json, JsonOptions);
+
+                            if (workflow != null && workflow.IsDefault && workflow.WorkflowId != restoredDefaultWorkflowId.Value)
+                            {
+                                workflow.IsDefault = false;
+                                var updatedJson = JsonSerializer.Serialize(workflow, JsonOptions);
+                                await File.WriteAllTextAsync(file, updatedJson);
+                                await _loggingService.LogInfoAsync($"Cleared IsDefault flag from '{workflow.Name}' after restoring default workflow");
+                            }
+                        }
+                        catch
+                        {
+                            // Continue with other files
+                        }
+                    }
                 }
 
                 // Also restore template PNG files to shared workflows/templates/ directory (flat structure)
@@ -590,6 +625,28 @@ namespace FFXIManager.Services.AutoLogin
                     return;
                 }
 
+                // Check if any existing workflow already has IsDefault=true
+                bool existingDefaultFound = false;
+                var existingFiles = Directory.GetFiles(_workflowsDirectory, "*.json");
+                foreach (var existingFile in existingFiles)
+                {
+                    try
+                    {
+                        var existingJson = await File.ReadAllTextAsync(existingFile);
+                        var existingWorkflow = JsonSerializer.Deserialize<WorkflowDefinition>(existingJson, JsonOptions);
+                        if (existingWorkflow?.IsDefault == true)
+                        {
+                            existingDefaultFound = true;
+                            await _loggingService.LogDebugAsync($"Existing default workflow found: {existingWorkflow.Name}, will prevent duplicate defaults");
+                            break;
+                        }
+                    }
+                    catch
+                    {
+                        // Continue checking other files
+                    }
+                }
+
                 // Copy all default workflow JSON files to root workflows/ directory using GUID filenames
                 // Skip README.md and other non-workflow files
                 var sourceFiles = Directory.GetFiles(defaultWorkflowsSource, "*.json")
@@ -620,7 +677,16 @@ namespace FFXIManager.Services.AutoLogin
                     // Copy if doesn't exist, or if source is newer
                     if (!File.Exists(destFile) || File.GetLastWriteTimeUtc(sourceFile) > File.GetLastWriteTimeUtc(destFile))
                     {
-                        File.Copy(sourceFile, destFile, overwrite: true);
+                        // Prevent multiple defaults: if an existing workflow is already default,
+                        // clear IsDefault flag from source workflow before copying
+                        if (existingDefaultFound && workflow.IsDefault)
+                        {
+                            workflow.IsDefault = false;
+                            json = JsonSerializer.Serialize(workflow, JsonOptions);
+                            await _loggingService.LogInfoAsync($"Cleared IsDefault flag from '{workflow.Name}' to prevent duplicate defaults");
+                        }
+
+                        await File.WriteAllTextAsync(destFile, json);
                         copiedCount++;
                         await _loggingService.LogDebugAsync($"Copied default workflow: {workflow.Name} to {workflow.WorkflowId}.json");
                     }
@@ -678,6 +744,7 @@ namespace FFXIManager.Services.AutoLogin
         /// <summary>
         /// Synchronous version of EnsureSystemWorkflowsAsync for constructor initialization.
         /// Ensures system-provided default workflows exist by copying from application directory to APPDATA.
+        /// Prevents multiple workflows from having IsDefault=true by checking existing workflows.
         /// </summary>
         private void EnsureSystemWorkflowsSync()
         {
@@ -693,7 +760,28 @@ namespace FFXIManager.Services.AutoLogin
                     return;
                 }
 
-                // Copy all default workflow JSON files directly (no deserialization to avoid failures)
+                // Check if any existing workflow already has IsDefault=true
+                bool existingDefaultFound = false;
+                var existingFiles = Directory.GetFiles(_workflowsDirectory, "*.json");
+                foreach (var existingFile in existingFiles)
+                {
+                    try
+                    {
+                        var existingJson = File.ReadAllText(existingFile);
+                        var existingWorkflow = JsonSerializer.Deserialize<WorkflowDefinition>(existingJson, JsonOptions);
+                        if (existingWorkflow?.IsDefault == true)
+                        {
+                            existingDefaultFound = true;
+                            break;
+                        }
+                    }
+                    catch
+                    {
+                        // Continue checking other files
+                    }
+                }
+
+                // Copy all default workflow JSON files using GUID-based filenames
                 var sourceFiles = Directory.GetFiles(defaultWorkflowsSource, "*.json")
                     .Where(f => !f.EndsWith("README.json", StringComparison.OrdinalIgnoreCase))
                     .ToArray();
@@ -702,13 +790,28 @@ namespace FFXIManager.Services.AutoLogin
                 {
                     try
                     {
-                        var fileName = Path.GetFileName(sourceFile);
-                        var destFile = Path.Combine(_workflowsDirectory, fileName);
+                        // Read the JSON to extract the WorkflowId for GUID-based filename
+                        var json = File.ReadAllText(sourceFile);
+                        var workflow = JsonSerializer.Deserialize<WorkflowDefinition>(json, JsonOptions);
+
+                        if (workflow == null)
+                            continue;
+
+                        // Destination: workflows/{guid}.json (flat structure)
+                        var destFile = GetWorkflowFilePath(workflow.WorkflowId);
 
                         // Copy if doesn't exist, or if source is newer
                         if (!File.Exists(destFile) || File.GetLastWriteTimeUtc(sourceFile) > File.GetLastWriteTimeUtc(destFile))
                         {
-                            File.Copy(sourceFile, destFile, overwrite: true);
+                            // Prevent multiple defaults: if an existing workflow is already default,
+                            // clear IsDefault flag from source workflow before copying
+                            if (existingDefaultFound && workflow.IsDefault)
+                            {
+                                workflow.IsDefault = false;
+                                json = JsonSerializer.Serialize(workflow, JsonOptions);
+                            }
+
+                            File.WriteAllText(destFile, json);
                         }
                     }
                     catch
