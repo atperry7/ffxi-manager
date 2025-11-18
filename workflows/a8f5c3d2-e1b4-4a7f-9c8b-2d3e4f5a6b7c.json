@@ -174,7 +174,7 @@
           }
         ],
         "Description": "Reset list to top, then navigate to target slot using POL\u0027s 4-slot visible window (slots 1-4 direct click, slots 5-20 scroll-then-click)",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 200
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -217,7 +217,7 @@
           }
         ],
         "Description": "Click Log In",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 200
       },
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
@@ -256,7 +256,7 @@
           }
         ],
         "Description": "Click Password Field",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 200
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -313,7 +313,7 @@
           }
         ],
         "Description": "Activate virtual keyboard password field",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 200
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -357,7 +357,7 @@
           }
         ],
         "Description": "Confirm password using circle button",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 200
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -413,7 +413,7 @@
           }
         ],
         "Description": "Tab to OTP field and enter code",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 200
       },
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
@@ -454,7 +454,7 @@
           }
         ],
         "Description": "Activate Connect button",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 200
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -496,7 +496,7 @@
           }
         ],
         "Description": "Navigation for PlayOnline Main Screen",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 200
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -538,7 +538,7 @@
           }
         ],
         "Description": "Navigate to Final Fantasy XI in game list",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 200
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -580,7 +580,7 @@
           }
         ],
         "Description": "Confirm play selection",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 200
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -605,7 +605,7 @@
           {
             "Action": "Wait",
             "Count": 1,
-            "DelayMs": 30000,
+            "DelayMs": 25000,
             "Description": "Let FFXI Full Game Load - adjust this if you don\u0027t use POL Proxy",
             "Parameters": {}
           },
@@ -671,7 +671,7 @@
           }
         ],
         "Description": "Select Character menu option",
-        "PostNavigationDelayMs": 3000
+        "PostNavigationDelayMs": 5000
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,
@@ -853,7 +853,7 @@
           }
         ],
         "Description": "Final confirmation to enter game world",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 100
       },
       "MaxRetryAttempts": 3,
       "RetryAttempts": 60,

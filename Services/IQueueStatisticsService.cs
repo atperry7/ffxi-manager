@@ -105,6 +105,59 @@ namespace FFXIManager.Services
         /// </summary>
         void RecordDetectionResult(string stepId, string displayName, double confidence, double detectionSeconds);
 
+        /// <summary>
+        /// Records a detection failure (timeout) for a step.
+        /// </summary>
+        void RecordDetectionFailure(string stepId, string displayName, int attemptsMade);
+
+        /// <summary>
+        /// Records that a fallback template was used for detection.
+        /// </summary>
+        void RecordFallbackTemplateUsed(string stepId, string displayName);
+
+        /// <summary>
+        /// Records a step skip with the reason.
+        /// </summary>
+        void RecordStepSkipped(string stepId, string displayName, string reason);
+
+        #endregion
+
+        #region Window Discovery Metrics
+
+        /// <summary>
+        /// Records window discovery performance metrics.
+        /// </summary>
+        void RecordWindowDiscovery(string stepId, string displayName, TimeSpan duration, int attempts, bool successOnFirstAttempt);
+
+        #endregion
+
+        #region Action-level Metrics
+
+        /// <summary>
+        /// Records the execution of a workflow action (Click, Keyboard, InputPassword, etc.)
+        /// </summary>
+        void RecordActionExecution(
+            string stepId,
+            string displayName,
+            string actionType,
+            bool success,
+            TimeSpan duration,
+            int retryCount = 0);
+
+        #endregion
+
+        #region Phase Timing Metrics
+
+        /// <summary>
+        /// Records time spent in the detection phase of a step.
+        /// </summary>
+        void RecordDetectionPhaseTime(string stepId, string displayName, TimeSpan duration, int attempts);
+
+        /// <summary>
+        /// Records time spent in the navigation phase of a step.
+        /// </summary>
+        void RecordNavigationPhaseTime(string stepId, string displayName, TimeSpan duration);
+
         #endregion
     }
 }

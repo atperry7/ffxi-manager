@@ -404,9 +404,10 @@
         </GroupBox>
 
         <!-- Enhanced Statistics Panel -->
-        <GroupBox Grid.Row="3" Header="Statistics" Margin="0,0,0,10">
+        <GroupBox Grid.Row="3" Header="📊 Workflow Performance Analytics" Margin="0,0,0,10">
             <Grid>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -430,61 +431,186 @@
 
                 <!-- Step Performance Breakdown (Expandable) -->
                 <Expander Grid.Row="2"
-                          Header="Step Performance"
+                          Header="📊 Step Performance Overview"
                           IsExpanded="{Binding IsStepPerformanceExpanded}"
-                          Visibility="{Binding HasStepPerformanceData, Converter={StaticResource BoolToVisConverter}}">
-                    <DataGrid ItemsSource="{Binding StepPerformanceData}"
-                              Style="{StaticResource DataGridBase}"
-                              AutoGenerateColumns="False"
-                              IsReadOnly="True"
-                              SelectionMode="Single"
-                              MaxHeight="300"
-                              Margin="0,5,0,0">
+                          Visibility="{Binding HasStepPerformanceData, Converter={StaticResource BoolToVisConverter}}"
+                          Margin="0,0,0,5">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" MaxHeight="250">
+                        <DataGrid ItemsSource="{Binding StepPerformanceData}"
+                                  Style="{StaticResource DataGridBase}"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  SelectionMode="Single"
+                                  Margin="0,5,0,0"
+                                  FontSize="11">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Step" Binding="{Binding DisplayName}" Width="*" MinWidth="120">
+                            <!-- Step Name -->
+                            <DataGridTextColumn Header="Step" Binding="{Binding DisplayName}" Width="150" MinWidth="120">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextCellStyle}">
                                         <Setter Property="FontWeight" Value="SemiBold"/>
+                                        <Setter Property="ToolTip" Value="{Binding StepId}"/>
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="Runs" Binding="{Binding Runs}" Width="60">
+
+                            <!-- Execution Summary -->
+                            <DataGridTextColumn Header="Runs" Binding="{Binding Runs}" Width="50">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}"/>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="Success" Binding="{Binding Successes}" Width="70">
+                            <DataGridTextColumn Header="✓" Binding="{Binding Successes}" Width="45">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}">
                                         <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}"/>
+                                        <Setter Property="FontWeight" Value="Bold"/>
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="Failed" Binding="{Binding Failures}" Width="60">
+                            <DataGridTextColumn Header="✗" Binding="{Binding Failures}" Width="45">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}">
                                         <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="Avg Duration" Width="100">
-                                <DataGridTextColumn.Binding>
-                                    <Binding Path="AverageDuration" StringFormat="{}{0:mm}m {0:ss}s"/>
-                                </DataGridTextColumn.Binding>
+                            <DataGridTextColumn Header="Skip" Binding="{Binding Skips}" Width="45">
                                 <DataGridTextColumn.ElementStyle>
-                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}"/>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}">
+                                        <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
+                                    </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="Avg Confidence" Width="110">
+
+                            <!-- Timing Breakdown -->
+                            <DataGridTextColumn Header="Avg Time" Width="70">
+                                <DataGridTextColumn.Binding>
+                                    <Binding Path="AverageDuration" StringFormat="{}{0:mm':'ss}"/>
+                                </DataGridTextColumn.Binding>
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}">
+                                        <Setter Property="FontFamily" Value="Consolas"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Detect" Width="55">
+                                <DataGridTextColumn.Binding>
+                                    <Binding Path="AverageDetectionTime" StringFormat="{}{0:s'.'ff}'s'"/>
+                                </DataGridTextColumn.Binding>
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}">
+                                        <Setter Property="Foreground" Value="{DynamicResource InfoBrush}"/>
+                                        <Setter Property="FontFamily" Value="Consolas"/>
+                                        <Setter Property="FontSize" Value="10"/>
+                                        <Setter Property="ToolTip" Value="Average detection time"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Window" Width="60">
+                                <DataGridTextColumn.Binding>
+                                    <Binding Path="AverageWindowDiscoveryTime" StringFormat="{}{0:s'.'ff}'s'"/>
+                                </DataGridTextColumn.Binding>
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}">
+                                        <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+                                        <Setter Property="FontFamily" Value="Consolas"/>
+                                        <Setter Property="FontSize" Value="10"/>
+                                        <Setter Property="ToolTip" Value="Average window discovery time"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Nav" Width="55">
+                                <DataGridTextColumn.Binding>
+                                    <Binding Path="AverageNavigationTime" StringFormat="{}{0:s'.'ff}'s'"/>
+                                </DataGridTextColumn.Binding>
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}">
+                                        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                        <Setter Property="FontFamily" Value="Consolas"/>
+                                        <Setter Property="FontSize" Value="10"/>
+                                        <Setter Property="ToolTip" Value="Average navigation time"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- Detection Metrics -->
+                            <DataGridTextColumn Header="Confidence" Width="80">
                                 <DataGridTextColumn.Binding>
                                     <Binding Path="AverageConfidence" StringFormat="{}{0:P0}"/>
                                 </DataGridTextColumn.Binding>
                                 <DataGridTextColumn.ElementStyle>
-                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}"/>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}">
+                                        <Setter Property="FontFamily" Value="Consolas"/>
+                                        <Setter Property="ToolTip" Value="Average template match confidence"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Detect✗" Binding="{Binding DetectionFailures}" Width="60">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}">
+                                        <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+                                        <Setter Property="ToolTip" Value="Detection failures (timeouts)"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Fallback" Binding="{Binding FallbackTemplateUsages}" Width="65">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}">
+                                        <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
+                                        <Setter Property="ToolTip" Value="Times fallback template was used"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- Window Discovery Metrics -->
+                            <DataGridTextColumn Header="Win Disc" Binding="{Binding WindowDiscoveryAttempts}" Width="65">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}">
+                                        <Setter Property="FontSize" Value="10"/>
+                                        <Setter Property="ToolTip" Value="Window discovery attempts"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="1st Try %" Binding="{Binding WindowDiscoverySuccessfulFirstAttempts}" Width="70">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCenteredTextCellStyle}">
+                                        <Setter Property="FontSize" Value="10"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}"/>
+                                        <Setter Property="ToolTip" Value="First-attempt window discovery successes"/>
+                                    </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
                         </DataGrid.Columns>
                     </DataGrid>
+                    </ScrollViewer>
+                </Expander>
+
+                <!-- Performance Optimization Insights (Expandable) -->
+                <Expander Grid.Row="3"
+                          Header="🔍 Performance Optimization Insights"
+                          IsExpanded="False"
+                          Visibility="{Binding HasStepPerformanceData, Converter={StaticResource BoolToVisConverter}}">
+                    <StackPanel Margin="10,5">
+                        <TextBlock FontWeight="SemiBold" Margin="0,0,0,8" Foreground="{DynamicResource InfoBrush}">
+                            💡 How to use these metrics to optimize your workflows:
+                        </TextBlock>
+                        <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,3">
+                            <Bold>High "Detect✗" values:</Bold> Templates are unreliable - adjust confidence thresholds, improve template quality, or increase timeout
+                        </TextBlock>
+                        <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,3">
+                            <Bold>Frequent "Fallback" usage:</Bold> Primary template needs tuning - capture better templates or adjust matching parameters
+                        </TextBlock>
+                        <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,3">
+                            <Bold>Low "1st Try %":</Bold> Applications are slow to launch or become visible - increase window discovery retry budgets
+                        </TextBlock>
+                        <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,3">
+                            <Bold>Phase timing (Detect/Window/Nav):</Bold> Identify where time is spent - optimize the slowest phase for each step
+                        </TextBlock>
+                        <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,3">
+                            <Bold>High "Skip" counts:</Bold> Review skip reasons to understand workflow paths - may indicate configuration issues
+                        </TextBlock>
+                    </StackPanel>
                 </Expander>
             </Grid>
         </GroupBox>

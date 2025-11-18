@@ -75,7 +75,7 @@ namespace FFXIManager.Services.AutoLogin
         {
             _ = _loggingService.LogDebugAsync($"Starting execution of '{subtask.Name}' for {queueItem.DisplayName}");
             // Record step start for performance tracking
-            try { _statisticsService.RecordStepStart(queueItem, subtask); } catch { }
+            try { _statisticsService.RecordStepStart(queueItem, subtask); } catch (Exception ex) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record step start: {ex.Message}"); }
 
             try
             {
@@ -88,7 +88,7 @@ namespace FFXIManager.Services.AutoLogin
                 _ = _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] Completed step: {stepDef.DisplayName}");
 
                 // Record success
-                try { _statisticsService.RecordStepCompleted(queueItem, subtask, success: true); } catch { }
+                try { _statisticsService.RecordStepCompleted(queueItem, subtask, success: true); } catch (Exception ex) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record step completion: {ex.Message}"); }
 
                 _ = _loggingService.LogDebugAsync($"Successfully completed '{subtask.Name}' for {queueItem.DisplayName}");
             }
@@ -104,11 +104,12 @@ namespace FFXIManager.Services.AutoLogin
                 {
                     _ = _loggingService.LogWarningAsync($"[DYNAMIC-WORKFLOW] Optional step failed and will be skipped: {stepDef.DisplayName} - {ex.Message}");
                     subtask.Skip($"Optional step failed: {ex.Message}");
+                    try { _statisticsService.RecordStepSkipped(stepDef.StepId, stepDef.DisplayName, $"Optional-step-failed: {ex.Message}"); } catch (Exception statsEx) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record step skip: {statsEx.Message}"); }
                     return;
                 }
 
                 _ = _loggingService.LogErrorAsync($"Failed to execute '{subtask.Name}' for {queueItem.DisplayName}", ex);
-                try { _statisticsService.RecordStepCompleted(queueItem, subtask, success: false); } catch { }
+                try { _statisticsService.RecordStepCompleted(queueItem, subtask, success: false); } catch (Exception statsEx) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record step failure: {statsEx.Message}"); }
                 throw;
             }
         }
@@ -139,6 +140,7 @@ namespace FFXIManager.Services.AutoLogin
                 if (account != null && account.IsOTPEnabled == false && hasOtpAction)
                 {
                     _ = _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] Skipping OTP step '{stepDef.DisplayName}' for account without OTP enabled");
+                    try { _statisticsService.RecordStepSkipped(stepDef.StepId, stepDef.DisplayName, "OTP-disabled-account"); } catch (Exception ex) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record step skip: {ex.Message}"); }
                     return; // Treat as successful no-op
                 }
             }
@@ -158,6 +160,7 @@ namespace FFXIManager.Services.AutoLogin
                     {
                         _ = _loggingService.LogInfoAsync($"[DYNAMIC-WORKFLOW] Skipping step '{stepDef.DisplayName}' because '{stepDef.SkipIfApplicationRunning}' is running");
                         subtask.Skip($"Skipped because {stepDef.SkipIfApplicationRunning} is running");
+                        try { _statisticsService.RecordStepSkipped(stepDef.StepId, stepDef.DisplayName, $"Application-running: {stepDef.SkipIfApplicationRunning}"); } catch (Exception ex) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record step skip: {ex.Message}"); }
                         return; // Treat as successful no-op
                     }
                 }
@@ -183,6 +186,8 @@ namespace FFXIManager.Services.AutoLogin
             TemplateMatchResult? templateMatch = null;
 
             // Skip template detection if explicitly requested OR if no template is configured
+            var detectionStart = DateTime.UtcNow;
+            int detectionAttempts = 0;
             if (!skipDetection && ((hasTemplate && !hasNavigation) || (hasTemplate && hasNavigation && !navHasLaunch)))
             {
                 _ = _loggingService.LogDebugAsync("[DYNAMIC-WORKFLOW] Detection-only step - using on-demand discovery via refresh callback");
@@ -211,7 +216,12 @@ namespace FFXIManager.Services.AutoLogin
 
                 // Start detection with no initial handle; coordinator will call refresh per attempt
                 // For pre-detection with subsequent navigation, avoid marking progress 100 on detection
+                detectionAttempts = Math.Max(1, stepDef.RetryAttempts ?? 30);
                 templateMatch = await DetectScreenAsync(subtask, stepDef, IntPtr.Zero, cancellationToken, refreshHandleAsync, completeOnDetection: false);
+
+                // Record detection phase timing
+                var detectionDuration = DateTime.UtcNow - detectionStart;
+                try { _statisticsService.RecordDetectionPhaseTime(stepDef.StepId, stepDef.DisplayName, detectionDuration, detectionAttempts); } catch (Exception ex) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record detection phase time: {ex.Message}"); }
 
                 // Capture last discovered handle (if any) for subsequent navigation phase
                 if (latestHandle != IntPtr.Zero)
@@ -244,7 +254,13 @@ namespace FFXIManager.Services.AutoLogin
 
             // Phase 3: Execute navigation with on-demand discovery/detection
             await _progressService.UpdateProgressWithPhaseAsync(subtask, "authentication", 60, $"Navigating {stepDef.DisplayName}");
+
+            var navigationStart = DateTime.UtcNow;
             await ExecuteNavigationAsync(subtask, stepDef, queueItem ?? throw new ArgumentNullException(nameof(queueItem)), context ?? throw new ArgumentNullException(nameof(context)), windowHandle, templateMatch, cancellationToken);
+            var navigationDuration = DateTime.UtcNow - navigationStart;
+
+            // Record navigation phase timing
+            try { _statisticsService.RecordNavigationPhaseTime(stepDef.StepId, stepDef.DisplayName, navigationDuration); } catch (Exception ex) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record navigation phase time: {ex.Message}"); }
 
             await _progressService.UpdateProgressWithPhaseAsync(subtask, "authentication", 100, $"{stepDef.DisplayName} completed");
         }
@@ -309,13 +325,14 @@ namespace FFXIManager.Services.AutoLogin
             var primaryTemplate = stepDef.TemplatePath;
             var description = stepDef.DisplayName;
 
+            // Calculate attempts outside try block so it's accessible in catch
+            var attempts = Math.Max(1, stepDef.RetryAttempts ?? 30);
+            var delayMs = Math.Max(1, stepDef.RetryDelayMs ?? 100);
+
             // Try primary template first
             try
             {
                 _ = _loggingService.LogDebugAsync($"Attempting detection with primary template: {primaryTemplate}");
-
-                var attempts = Math.Max(1, stepDef.RetryAttempts ?? 30);
-                var delayMs = Math.Max(1, stepDef.RetryDelayMs ?? 100); // guard against 0ms hammering
                 var options = new ScreenDetectionOptions
                 {
                     // EstimatedDurationSeconds is a hard cap for this step
@@ -346,7 +363,7 @@ namespace FFXIManager.Services.AutoLogin
                         cancellationToken,
                         options,
                         completeOnDetection: completeOnDetection);
-                    try { _statisticsService.RecordDetectionResult(stepDef.StepId, stepDef.DisplayName, matchPrimary.Confidence, (DateTime.UtcNow - detectStart).TotalSeconds); } catch { }
+                    try { _statisticsService.RecordDetectionResult(stepDef.StepId, stepDef.DisplayName, matchPrimary.Confidence, (DateTime.UtcNow - detectStart).TotalSeconds); } catch (Exception ex) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record detection result: {ex.Message}"); }
                     return matchPrimary;
                 }
                 else
@@ -361,7 +378,7 @@ namespace FFXIManager.Services.AutoLogin
                         cancellationToken,
                         options,
                         completeOnDetection: completeOnDetection);
-                    try { _statisticsService.RecordDetectionResult(stepDef.StepId, stepDef.DisplayName, matchPrimary.Confidence, (DateTime.UtcNow - detectStart).TotalSeconds); } catch { }
+                    try { _statisticsService.RecordDetectionResult(stepDef.StepId, stepDef.DisplayName, matchPrimary.Confidence, (DateTime.UtcNow - detectStart).TotalSeconds); } catch (Exception ex) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record detection result: {ex.Message}"); }
                     return matchPrimary;
                 }
             }
@@ -369,16 +386,19 @@ namespace FFXIManager.Services.AutoLogin
             {
                 _ = _loggingService.LogInfoAsync($"Primary template '{primaryTemplate}' failed, trying fallback templates");
 
+                // Record primary template failure
+                try { _statisticsService.RecordDetectionFailure(stepDef.StepId, stepDef.DisplayName, attempts); } catch (Exception ex) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record detection failure: {ex.Message}"); }
+
                 // Try fallback templates
                 foreach (var fallbackTemplate in stepDef.FallbackTemplatePaths)
                 {
+                    // Calculate attempts outside try block for catch block access
+                    var attemptsFb = Math.Max(1, stepDef.RetryAttempts ?? 30);
+                    var delayFb = Math.Max(1, stepDef.RetryDelayMs ?? 100);
+
                     try
                     {
                         _ = _loggingService.LogDebugAsync($"Attempting detection with fallback template: {fallbackTemplate}");
-
-                        // Use the configured retry attempts for fallback as well (avoid hard-coded minimums)
-                        var attemptsFb = Math.Max(1, stepDef.RetryAttempts ?? 30);
-                        var delayFb = Math.Max(1, stepDef.RetryDelayMs ?? 100);
                         var options = new ScreenDetectionOptions
                         {
                             Timeout = TimeSpan.FromSeconds(Math.Max(1, stepDef.EstimatedDurationSeconds)),
@@ -406,7 +426,12 @@ namespace FFXIManager.Services.AutoLogin
                                 cancellationToken,
                                 options,
                                 completeOnDetection: completeOnDetection);
-                            try { _statisticsService.RecordDetectionResult(stepDef.StepId, stepDef.DisplayName, matchFallback.Confidence, (DateTime.UtcNow - detectStart).TotalSeconds); } catch { }
+                            try
+                            {
+                                _statisticsService.RecordDetectionResult(stepDef.StepId, stepDef.DisplayName, matchFallback.Confidence, (DateTime.UtcNow - detectStart).TotalSeconds);
+                                _statisticsService.RecordFallbackTemplateUsed(stepDef.StepId, stepDef.DisplayName);
+                            }
+                            catch (Exception ex) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record fallback detection result: {ex.Message}"); }
                             return matchFallback;
                         }
                         else
@@ -421,19 +446,31 @@ namespace FFXIManager.Services.AutoLogin
                                 cancellationToken,
                                 options,
                                 completeOnDetection: completeOnDetection);
-                            try { _statisticsService.RecordDetectionResult(stepDef.StepId, stepDef.DisplayName, matchFallback.Confidence, (DateTime.UtcNow - detectStart).TotalSeconds); } catch { }
+                            try
+                            {
+                                _statisticsService.RecordDetectionResult(stepDef.StepId, stepDef.DisplayName, matchFallback.Confidence, (DateTime.UtcNow - detectStart).TotalSeconds);
+                                _statisticsService.RecordFallbackTemplateUsed(stepDef.StepId, stepDef.DisplayName);
+                            }
+                            catch (Exception ex) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record fallback detection result: {ex.Message}"); }
                             return matchFallback;
                         }
                     }
                     catch (TimeoutException)
                     {
                         _ = _loggingService.LogDebugAsync($"Fallback template '{fallbackTemplate}' also failed");
+                        try { _statisticsService.RecordDetectionFailure(stepDef.StepId, stepDef.DisplayName, attemptsFb); } catch (Exception ex) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record fallback detection failure: {ex.Message}"); }
                         continue;
                     }
                 }
 
-                // All templates failed
+                // All templates failed - record final failure
                 throw new TimeoutException($"Could not detect screen for step '{description}' using any configured templates");
+            }
+            catch (TimeoutException) when (stepDef.FallbackTemplatePaths.Count == 0)
+            {
+                // Primary template failed with no fallbacks - record failure
+                try { _statisticsService.RecordDetectionFailure(stepDef.StepId, stepDef.DisplayName, attempts); } catch (Exception ex) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record detection failure: {ex.Message}"); }
+                throw;
             }
         }
 
@@ -647,15 +684,20 @@ namespace FFXIManager.Services.AutoLogin
             {
                 _ = _loggingService.LogDebugAsync("[NAVIGATION] Acquiring window info on-demand for UI action");
 
-                // Use step-level retry configuration to wait for spawned apps (e.g., PlayOnline after launch)
+                var discoveryStart = DateTime.UtcNow;
                 var stepDef = actionContext.WorkflowStep;
                 var attempts = Math.Max(1, stepDef?.RetryAttempts ?? 30);
                 var delayMs = Math.Max(1, stepDef?.RetryDelayMs ?? 100);
 
                 Exception? lastError = null;
+                int actualAttempts = 0;
+                bool successOnFirstAttempt = false;
+
                 for (int attempt = 1; attempt <= attempts; attempt++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    actualAttempts = attempt;
+
                     try
                     {
                         var windowInfo = await _windowDiscoveryService.DiscoverWindowInfoAsync(targetApp, autoLoginContext, cancellationToken);
@@ -664,6 +706,20 @@ namespace FFXIManager.Services.AutoLogin
                             // Update context with PID + handle
                             actionContext.UpdateFromWindowInfo(windowInfo);
                             _ = _loggingService.LogInfoAsync($"[NAVIGATION] Acquired window - PID: {windowInfo.ProcessId}, Handle: 0x{windowInfo.WindowHandle.ToInt64():X}");
+
+                            // Record window discovery success
+                            var duration = DateTime.UtcNow - discoveryStart;
+                            successOnFirstAttempt = (attempt == 1);
+                            try
+                            {
+                                _statisticsService.RecordWindowDiscovery(
+                                    stepId: stepDef?.StepId ?? string.Empty,
+                                    displayName: stepDef?.DisplayName ?? "Unknown",
+                                    duration: duration,
+                                    attempts: actualAttempts,
+                                    successOnFirstAttempt: successOnFirstAttempt);
+                            }
+                            catch (Exception ex) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record window discovery: {ex.Message}"); }
                             return;
                         }
                     }
@@ -679,7 +735,7 @@ namespace FFXIManager.Services.AutoLogin
                     }
                 }
 
-                // If we reach here, we failed to get a window within retry budget
+                // If we reach here, we failed to get a window within retry budget - no statistics recorded (failure handled at step level)
                 throw new InvalidOperationException("Could not acquire a valid window for UI interaction.", lastError);
             }
         }
@@ -819,13 +875,21 @@ namespace FFXIManager.Services.AutoLogin
             int actionNumber,
             CancellationToken cancellationToken)
         {
+            var actionStart = DateTime.UtcNow;
+            bool success = false;
+            int retryCount = 0;
+
             try
             {
                 // Get appropriate executor for this action
                 var executor = _actionExecutorFactory.GetExecutor(action.Action);
 
                 // Execute the action
-                var success = await executor.ExecuteAsync(action, actionContext, cancellationToken);
+                success = await executor.ExecuteAsync(action, actionContext, cancellationToken);
+
+                // TODO: Extract retry count from executor if exposed
+                // For now, we'll estimate based on action parameters
+                retryCount = action.GetParameter<int>("RetryAttempts", 0);
 
                 if (!success)
                 {
@@ -845,6 +909,25 @@ namespace FFXIManager.Services.AutoLogin
             {
                 _ = _loggingService.LogErrorAsync($"[NAVIGATION] Failed to execute action {action.Action} at position {actionNumber}", ex);
                 throw;
+            }
+            finally
+            {
+                // Record action execution statistics (always, even on failure)
+                var duration = DateTime.UtcNow - actionStart;
+                try
+                {
+                    _statisticsService.RecordActionExecution(
+                        stepId: stepDef.StepId,
+                        displayName: stepDef.DisplayName,
+                        actionType: action.Action,
+                        success: success,
+                        duration: duration,
+                        retryCount: retryCount);
+                }
+                catch (Exception statsEx)
+                {
+                    _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record action execution statistics: {statsEx.Message}");
+                }
             }
         }
 
@@ -942,7 +1025,7 @@ namespace FFXIManager.Services.AutoLogin
             {
                 actionContext.TemplateMatch = match;
                 _ = _loggingService.LogInfoAsync("[LAUNCH-READY] Application readiness confirmed by template");
-                try { _statisticsService.RecordDetectionResult(stepDef.StepId, stepDef.DisplayName, match.Confidence, (DateTime.UtcNow - readyStart).TotalSeconds); } catch { }
+                try { _statisticsService.RecordDetectionResult(stepDef.StepId, stepDef.DisplayName, match.Confidence, (DateTime.UtcNow - readyStart).TotalSeconds); } catch (Exception ex) { _ = _loggingService.LogWarningAsync($"[STATISTICS] Failed to record launch readiness detection: {ex.Message}"); }
             }
         }
 
