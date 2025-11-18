@@ -1,5 +1,5 @@
 ﻿{
-  "WorkflowId": "a8f5c3d2-e1b4-4a7f-9c8b-2d3e4f5a6b7c",
+  "WorkflowId": "a8f5c3d2-e1b4-4a7f-9c8b-2d3e4f5a6b7d",
   "Name": "PlayOnline Standard",
   "Description": "Complete workflow for logging into PlayOnline and FFXI. Handles member selection, password entry, optional OTP, and FFXI character login.",
   "Version": "2.0.0",
