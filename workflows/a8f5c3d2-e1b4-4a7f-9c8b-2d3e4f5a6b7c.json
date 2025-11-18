@@ -36,7 +36,7 @@
           }
         ],
         "Description": "Launch POL Proxy application",
-        "PostNavigationDelayMs": 1000
+        "PostNavigationDelayMs": 50
       },
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
@@ -96,7 +96,7 @@
           }
         ],
         "Description": "Launch Windower and click the Launch Arrow button to start PlayOnline",
-        "PostNavigationDelayMs": 7000
+        "PostNavigationDelayMs": 10000
       },
       "MaxRetryAttempts": 3,
       "ConfidenceThreshold": 0.8,
