@@ -136,6 +136,8 @@ namespace FFXIManager.Infrastructure
             services.AddTransient<FFXIManager.Views.WorkflowEditorWindow>();
             services.AddTransient<TemplateViewerDialogViewModel>();
             services.AddTransient<FFXIManager.Views.TemplateViewerDialog>();
+            services.AddTransient<AutoLoginProgressViewModel>();
+            services.AddTransient<FFXIManager.Views.AutoLoginProgressWindow>();
 
             // Workflow Editor Helpers (SOLID refactoring)
             services.AddTransient<FFXIManager.ViewModels.WorkflowEditor.WorkflowEditorNavigationManager>();

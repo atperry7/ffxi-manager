@@ -1,0 +1,173 @@
+<Window x:Class="FFXIManager.Views.AutoLoginProgressWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Auto-Login Progress"
+        Width="350" Height="210"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        ResizeMode="NoResize"
+        Topmost="True"
+        ShowInTaskbar="False"
+        Background="Transparent">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
+    </Window.Resources>
+
+    <!-- Main Window Content with Custom Title Bar -->
+    <Border Background="{DynamicResource BackgroundBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="8">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Custom Title Bar -->
+            <Border Grid.Row="0"
+                    Background="{DynamicResource HeaderBackgroundBrush}"
+                    Height="20"
+                    CornerRadius="8,8,0,0"
+                    MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid>
+                    <TextBlock Text="Auto-Login Progress"
+                               FontSize="10"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource PrimaryTextBrush}"/>
+
+                    <!-- Always-on-top indicator -->
+                    <TextBlock Text="📌"
+                               FontSize="10"
+                               HorizontalAlignment="Left"
+                               VerticalAlignment="Center"
+                               Margin="5,0,0,0"
+                               Foreground="{DynamicResource AccentBrush}"
+                               ToolTip="Always on Top"/>
+
+                    <!-- Close Button -->
+                    <Button Content="×"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Width="16"
+                            Height="16"
+                            Margin="0,0,2,0"
+                            Padding="0"
+                            FontSize="14"
+                            FontWeight="Bold"
+                            Command="{Binding CloseWindowCommand}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Foreground="{DynamicResource SecondaryTextBrush}"
+                            ToolTip="Close"
+                            Cursor="Hand">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    CornerRadius="2">
+                                                <ContentPresenter HorizontalAlignment="Center"
+                                                                  VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- Content Area -->
+            <Border Grid.Row="1" Padding="12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Queue Status -->
+                    <TextBlock Grid.Row="0"
+                               Text="{Binding QueueStatus}"
+                               FontWeight="Bold"
+                               FontSize="12"
+                               Foreground="{DynamicResource InfoBrush}"
+                               Margin="0,0,0,8"/>
+
+                    <!-- Account Info -->
+                    <Border Grid.Row="1"
+                            Background="{DynamicResource SurfaceBrush}"
+                            CornerRadius="4"
+                            Padding="8,6"
+                            Margin="0,0,0,8"
+                            BorderBrush="{DynamicResource InfoBrush}"
+                            BorderThickness="1"
+                            Visibility="{Binding HasCurrentItem, Converter={StaticResource BoolToVisConverter}}">
+                        <StackPanel>
+                            <TextBlock FontWeight="SemiBold" FontSize="13">
+                                <Run Text="🎮" FontSize="14"/>
+                                <Run Text="{Binding CurrentAccountName, Mode=OneWay}"
+                                     Foreground="{DynamicResource InfoBrush}"/>
+                            </TextBlock>
+                            <TextBlock FontSize="11"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       Visibility="{Binding CurrentProfileName, Converter={StaticResource NullToInverseVisibilityConverter}}">
+                                <Run Text="Profile:"/>
+                                <Run Text="{Binding CurrentProfileName, Mode=OneWay}"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Current Step -->
+                    <TextBlock Grid.Row="2"
+                               Text="{Binding CurrentStep}"
+                               FontSize="11"
+                               FontStyle="Italic"
+                               TextAlignment="Center"
+                               Foreground="{DynamicResource SecondaryTextBrush}"
+                               TextTrimming="CharacterEllipsis"
+                               Margin="0,0,0,6"
+                               ToolTip="{Binding CurrentStep}"/>
+
+                    <!-- Progress Bar -->
+                    <ProgressBar Grid.Row="3"
+                                 Value="{Binding TaskProgress, Mode=OneWay}"
+                                 Maximum="100"
+                                 Height="14"
+                                 Style="{StaticResource ActiveProgressBarStyle}"
+                                 Margin="0,0,0,8"/>
+
+                    <!-- Stop Button -->
+                    <Button Grid.Row="4"
+                            Content="⏹ Stop Auto-Login"
+                            Command="{Binding StopQueueCommand}"
+                            Style="{StaticResource DangerButton}"
+                            FontWeight="SemiBold"
+                            Padding="8,4"
+                            HorizontalAlignment="Center"
+                            ToolTip="Stop the auto-login queue immediately"
+                            Cursor="Hand"/>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

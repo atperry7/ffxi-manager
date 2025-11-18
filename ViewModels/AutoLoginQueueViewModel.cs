@@ -35,6 +35,9 @@ namespace FFXIManager.ViewModels
 
         private readonly IServiceProvider _serviceProvider;
 
+        // Progress window reference
+        private System.Windows.Window? _progressWindow;
+
         public AutoLoginQueueViewModel(
             IAutoLoginQueueService queueService,
             IPlayOnlineMemberAccountService accountService,
@@ -978,6 +981,9 @@ namespace FFXIManager.ViewModels
                 UpdateQueueProperties();
                 UpdateCommandStates();
                 _statusService.SetMessage("Auto-login queue started");
+
+                // Open progress window
+                OpenProgressWindow();
             });
         }
 
@@ -988,6 +994,9 @@ namespace FFXIManager.ViewModels
                 UpdateQueueProperties();
                 UpdateCommandStates();
                 _statusService.SetMessage($"Auto-login queue stopped: {e.Message}");
+
+                // Close progress window
+                CloseProgressWindow();
 
                 // Allow user to review completion results - no auto-reset
                 if (e.Reason == QueueStopReason.Completed)
@@ -1194,6 +1203,67 @@ namespace FFXIManager.ViewModels
 
         #endregion
 
+        #region Progress Window Management
+
+        private void OpenProgressWindow()
+        {
+            try
+            {
+                // Don't open if already open
+                if (_progressWindow != null) return;
+
+                // Create and show the progress window
+                _progressWindow = _serviceProvider.GetService(typeof(FFXIManager.Views.AutoLoginProgressWindow)) as System.Windows.Window;
+                if (_progressWindow != null)
+                {
+                    _progressWindow.Owner = System.Windows.Application.Current?.MainWindow;
+                    _progressWindow.Closed += OnProgressWindowClosed;
+                    _progressWindow.Show();
+
+                    _ = _loggingService.LogDebugAsync("Auto-login progress window opened");
+                }
+                else
+                {
+                    _ = _loggingService.LogWarningAsync("AutoLoginProgressWindow could not be created");
+                }
+            }
+            catch (Exception ex)
+            {
+                _ = _loggingService.LogErrorAsync("Failed to open auto-login progress window", ex);
+            }
+        }
+
+        private void CloseProgressWindow()
+        {
+            try
+            {
+                if (_progressWindow != null)
+                {
+                    _progressWindow.Closed -= OnProgressWindowClosed;
+                    _progressWindow.Close();
+                    _progressWindow = null;
+
+                    _ = _loggingService.LogDebugAsync("Auto-login progress window closed");
+                }
+            }
+            catch (Exception ex)
+            {
+                _ = _loggingService.LogErrorAsync("Failed to close auto-login progress window", ex);
+            }
+        }
+
+        private void OnProgressWindowClosed(object? sender, EventArgs e)
+        {
+            // User manually closed the window - just null out the reference
+            if (_progressWindow != null)
+            {
+                _progressWindow.Closed -= OnProgressWindowClosed;
+                _progressWindow = null;
+            }
+        }
+
+        #endregion
+
         #region IDisposable
 
         public void Dispose()
@@ -1201,6 +1271,9 @@ namespace FFXIManager.ViewModels
             if (_disposed) return;
 
             _disposed = true;
+
+            // Close progress window if open
+            CloseProgressWindow();
 
             // Reset queue items to pending for clean application restart
             try
