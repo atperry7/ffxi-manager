@@ -10,6 +10,7 @@ namespace FFXIManager.Services
         private readonly ISettingsService _settingsService;
         private readonly ILoggingService _loggingService;
         private readonly IWindowsCredentialsService _credentialsService;
+        private readonly IOTPService _otpService;
         private readonly object _lockObject = new();
         // Canonical instances cache by ProfilePath -> AccountId -> Account instance
         private readonly Dictionary<string, Dictionary<Guid, PlayOnlineMemberAccount>> _accountCache = new();
@@ -17,11 +18,13 @@ namespace FFXIManager.Services
         public PlayOnlineMemberAccountService(
             ISettingsService settingsService,
             ILoggingService loggingService,
-            IWindowsCredentialsService credentialsService)
+            IWindowsCredentialsService credentialsService,
+            IOTPService otpService)
         {
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             _credentialsService = credentialsService ?? throw new ArgumentNullException(nameof(credentialsService));
+            _otpService = otpService ?? throw new ArgumentNullException(nameof(otpService));
         }
 
         public Task<List<PlayOnlineMemberAccount>> GetAccountsForProfileAsync(string profileFilePath)
@@ -50,6 +53,13 @@ namespace FFXIManager.Services
                                 var targetCred = _credentialsService.GenerateCredentialTarget(profileFilePath, src.Id);
                                 var hasPwd = _credentialsService.CredentialExistsAsync(targetCred, src.AccountName).Result;
                                 src.HasStoredPassword = hasPwd;
+
+                                // Ensure OTP HasStoredSecret reflects system state
+                                if (src.OTPConfiguration != null)
+                                {
+                                    var hasOtpSecret = _otpService.HasOTPSecretAsync(profileFilePath, src.Id).Result;
+                                    src.OTPConfiguration.HasStoredSecret = hasOtpSecret;
+                                }
 
                                 if (!profileCache.TryGetValue(src.Id, out var canonical))
                                 {

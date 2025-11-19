@@ -74,7 +74,22 @@ namespace FFXIManager.Models
         public OTPConfiguration? OTPConfiguration
         {
             get => _otpConfiguration;
-            set => SetProperty(ref _otpConfiguration, value);
+            set
+            {
+                // Unsubscribe from old OTPConfiguration's PropertyChanged
+                if (_otpConfiguration != null)
+                {
+                    _otpConfiguration.PropertyChanged -= OTPConfiguration_PropertyChanged;
+                }
+
+                SetProperty(ref _otpConfiguration, value);
+
+                // Subscribe to new OTPConfiguration's PropertyChanged
+                if (_otpConfiguration != null)
+                {
+                    _otpConfiguration.PropertyChanged += OTPConfiguration_PropertyChanged;
+                }
+            }
         }
 
         /// <summary>
@@ -151,7 +166,7 @@ namespace FFXIManager.Models
                 if (!IsOTPEnabled)
                     return "N/A";
 
-                if (!OTPConfiguration?.HasStoredSecret == true)
+                if (OTPConfiguration?.HasStoredSecret != true)
                     return "No Key";
 
                 if (string.IsNullOrEmpty(CurrentOTPCode))
@@ -219,6 +234,21 @@ namespace FFXIManager.Models
             field = value;
             OnPropertyChanged(propertyName);
             return true;
+        }
+
+        /// <summary>
+        /// Handles property changes on the OTPConfiguration object to update dependent properties
+        /// </summary>
+        private void OTPConfiguration_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            // When OTPConfiguration's properties change, update dependent computed properties
+            if (e.PropertyName == nameof(Models.OTPConfiguration.HasStoredSecret) ||
+                e.PropertyName == nameof(Models.OTPConfiguration.IsEnabled))
+            {
+                OnPropertyChanged(nameof(IsOTPEnabled));
+                OnPropertyChanged(nameof(OTPCodeDisplay));
+                OnPropertyChanged(nameof(DisplayName));
+            }
         }
     }
 }
