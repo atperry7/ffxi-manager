@@ -36,6 +36,7 @@ namespace FFXIManager.ViewModels
         private readonly WorkflowEditorStepManager _stepManager;
         private readonly WorkflowEditorTemplateManager _templateManager;
         private readonly WorkflowEditorWorkflowManager _workflowManager;
+        private readonly ITemplateDialogCoordinationService _templateDialogService;
 
         private ObservableCollection<WorkflowDefinition> _workflows;
         private ObservableCollection<ExternalApplication> _availableApplications;
@@ -70,7 +71,8 @@ namespace FFXIManager.ViewModels
             WorkflowEditorNavigationManager navigationManager,
             WorkflowEditorStepManager stepManager,
             WorkflowEditorTemplateManager templateManager,
-            WorkflowEditorWorkflowManager workflowManager)
+            WorkflowEditorWorkflowManager workflowManager,
+            ITemplateDialogCoordinationService templateDialogService)
         {
             _workflowService = workflowService ?? throw new ArgumentNullException(nameof(workflowService));
             _loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
@@ -87,6 +89,7 @@ namespace FFXIManager.ViewModels
             _stepManager = stepManager ?? throw new ArgumentNullException(nameof(stepManager));
             _templateManager = templateManager ?? throw new ArgumentNullException(nameof(templateManager));
             _workflowManager = workflowManager ?? throw new ArgumentNullException(nameof(workflowManager));
+            _templateDialogService = templateDialogService ?? throw new ArgumentNullException(nameof(templateDialogService));
 
             _workflows = new ObservableCollection<WorkflowDefinition>();
             _availableApplications = new ObservableCollection<ExternalApplication>();
@@ -1052,10 +1055,8 @@ namespace FFXIManager.ViewModels
 
         // Template image management commands
         public ICommand SelectTemplateImageCommand { get; private set; } = null!;
-        public ICommand ReplaceTemplateImageCommand { get; private set; } = null!;
         public ICommand ShowLargeTemplateImageCommand { get; private set; } = null!;
         public ICommand SelectActionTemplateImageCommand { get; private set; } = null!;
-        public ICommand ReplaceActionTemplateImageCommand { get; private set; } = null!;
         public ICommand ShowLargeActionTemplateImageCommand { get; private set; } = null!;
         public ICommand PickMemberSlotClickPointsCommand { get; private set; } = null!;
         public ICommand PreviewMemberSlotClickPointsCommand { get; private set; } = null!;
@@ -1147,10 +1148,6 @@ namespace FFXIManager.ViewModels
                 async () => await SelectTemplateImageAsync(),
                 () => CanEditStep);
 
-            ReplaceTemplateImageCommand = new RelayCommand(
-                async () => await ReplaceTemplateImageAsync(),
-                () => CanEditStep && !string.IsNullOrEmpty(SelectedStep?.TemplatePath));
-
             ShowLargeTemplateImageCommand = new RelayCommand(
                 async () => await ShowLargeTemplateImageAsync(),
                 () => HasTemplateImage);
@@ -1158,10 +1155,6 @@ namespace FFXIManager.ViewModels
             SelectActionTemplateImageCommand = new RelayCommand(
                 async () => await SelectActionTemplateImageAsync(),
                 () => CanEditNavigationAction);
-
-            ReplaceActionTemplateImageCommand = new RelayCommand(
-                async () => await ReplaceActionTemplateImageAsync(),
-                () => CanEditNavigationAction && !string.IsNullOrEmpty(ActionTemplatePath));
 
             ShowLargeActionTemplateImageCommand = new RelayCommand(
                 async () => await ShowLargeActionTemplateImageAsync(),
@@ -1589,139 +1582,29 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedStep == null) return;
 
-            // Store current template image to restore if operation is canceled
-            var previousTemplateImage = TemplateImageSource;
-
             try
             {
-                // Open file dialog to select image
-                var dialog = new Microsoft.Win32.OpenFileDialog
-                {
-                    Title = "Select Screenshot or Image for Template",
-                    Filter = "Image Files (*.png;*.jpg;*.bmp)|*.png;*.jpg;*.bmp|All Files (*.*)|*.*",
-                    Multiselect = false
-                };
+                var window = System.Windows.Application.Current.MainWindow;
+                var templateName = $"step_{SelectedStep.StepId.ToLowerInvariant().Replace("-", "_")}";
 
-                if (dialog.ShowDialog() != true)
-                {
-                    // Restore previous image on cancel
-                    TemplateImageSource = previousTemplateImage;
-                    return;
-                }
+                var result = await _templateDialogService.SelectAndCropTemplateAsync(templateName, window);
 
-                // Open image cropper dialog
-                var cropViewModel = new ImageCropperDialogViewModel(dialog.FileName, _loggingService);
-                var cropDialog = new Views.ImageCropperDialog(cropViewModel)
+                if (result.Success)
                 {
-                    Owner = System.Windows.Application.Current.MainWindow
-                };
-
-                if (cropDialog.ShowDialog() != true)
-                {
-                    // Restore previous image on cancel
-                    TemplateImageSource = previousTemplateImage;
-                    return;
-                }
-
-                // Validate crop rectangle
-                if (cropViewModel.CropRectangle == null)
-                {
-                    await _dialogService.ShowMessageDialogAsync("Invalid Selection", "No crop area was selected.");
-                    return;
-                }
-
-                // Delegate to helper
-                var success = await _templateManager.CreateStepTemplateAsync(
-                    SelectedStep,
-                    dialog.FileName,
-                    cropViewModel.CropRectangle.Value);
-
-                if (success)
-                {
-                    // Update UI state
+                    SelectedStep.TemplatePath = result.TemplatePath;
                     HasUnsavedChanges = true;
                     UpdateCommandStates();
                     LoadTemplateImage();
+                }
+                else if (!string.IsNullOrWhiteSpace(result.ErrorMessage))
+                {
+                    await _dialogService.ShowMessageDialogAsync("Template Selection Failed", result.ErrorMessage);
                 }
             }
             catch (Exception ex)
             {
                 await _loggingService.LogErrorAsync("Error selecting template image", ex);
-                await _dialogService.ShowMessageDialogAsync("Selection Failed",
-                    $"Failed to select template image: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Replaces the existing template image for the step
-        /// </summary>
-        private async Task ReplaceTemplateImageAsync()
-        {
-            if (SelectedStep == null || string.IsNullOrEmpty(SelectedStep.TemplatePath))
-                return;
-
-            // Store current template image to restore if operation is canceled
-            var previousTemplateImage = TemplateImageSource;
-
-            try
-            {
-                // Open file dialog to select new image
-                var dialog = new Microsoft.Win32.OpenFileDialog
-                {
-                    Title = "Select New Image for Template",
-                    Filter = "Image Files (*.png;*.jpg;*.bmp)|*.png;*.jpg;*.bmp|All Files (*.*)|*.*",
-                    Multiselect = false
-                };
-
-                if (dialog.ShowDialog() != true)
-                {
-                    // Restore previous image on cancel
-                    TemplateImageSource = previousTemplateImage;
-                    return;
-                }
-
-                // Open image cropper dialog
-                var cropViewModel = new ImageCropperDialogViewModel(dialog.FileName, _loggingService);
-                var cropDialog = new Views.ImageCropperDialog(cropViewModel)
-                {
-                    Owner = System.Windows.Application.Current.MainWindow
-                };
-
-                if (cropDialog.ShowDialog() != true)
-                {
-                    // Restore previous image on cancel
-                    TemplateImageSource = previousTemplateImage;
-                    return;
-                }
-
-                // Delegate to helper
-                var success = await _templateManager.ReplaceStepTemplateAsync(
-                    SelectedStep,
-                    dialog.FileName,
-                    cropViewModel.CropRectangle);
-
-                if (success)
-                {
-                    // Update UI state + targeted invalidation
-                    try
-                    {
-                        var p = SelectedStep.TemplatePath;
-                        if (!string.IsNullOrWhiteSpace(p))
-                        {
-                            _templateService.Invalidate(p);
-                            if (!p.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
-                                _templateService.Invalidate(p + ".png");
-                        }
-                    }
-                    catch { }
-                    LoadTemplateImage();
-                }
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync("Error replacing template image", ex);
-                await _dialogService.ShowMessageDialogAsync("Replacement Failed",
-                    $"Failed to replace template image: {ex.Message}");
+                await _dialogService.ShowMessageDialogAsync("Selection Failed", $"Failed to select template image: {ex.Message}");
             }
         }
 
@@ -1779,10 +1662,8 @@ namespace FFXIManager.ViewModels
             (TestWorkflowCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (ValidateWorkflowCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (SelectTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
-            (ReplaceTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (ShowLargeTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (SelectActionTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
-            (ReplaceActionTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (ShowLargeActionTemplateImageCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (PickMemberSlotClickPointsCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (PreviewMemberSlotClickPointsCommand as RelayCommand)?.RaiseCanExecuteChanged();
@@ -2097,18 +1978,27 @@ namespace FFXIManager.ViewModels
         {
             try
             {
+                // Ensure cache is invalidated before loading
+                if (SelectedStep?.TemplatePath != null)
+                {
+                    _templateService.Invalidate(SelectedStep.TemplatePath);
+                }
+
                 // Force UI update by clearing first, then loading
                 // This ensures PropertyChanged fires even if WPF caches the BitmapImage
                 TemplateImageSource = null;
+                OnPropertyChanged(nameof(TemplateImageSource));
 
                 // Delegate to helper
                 TemplateImageSource = _templateManager.LoadStepTemplateThumbnail(SelectedStep);
+                OnPropertyChanged(nameof(TemplateImageSource));
                 OnPropertyChanged(nameof(HasTemplateImage));
             }
             catch (Exception ex)
             {
                 _ = _loggingService.LogErrorAsync("Error loading template image", ex);
                 TemplateImageSource = null;
+                OnPropertyChanged(nameof(TemplateImageSource));
                 OnPropertyChanged(nameof(HasTemplateImage));
             }
         }
@@ -2120,12 +2010,21 @@ namespace FFXIManager.ViewModels
         {
             try
             {
+                // Ensure cache is invalidated before loading
+                var templatePath = SelectedNavigationAction?.GetParameter<string>("TemplatePath", string.Empty);
+                if (!string.IsNullOrWhiteSpace(templatePath))
+                {
+                    _templateService.Invalidate(templatePath);
+                }
+
                 // Force UI update by clearing first, then loading
                 // This ensures PropertyChanged fires even if WPF caches the BitmapImage
                 ActionTemplateImageSource = null;
+                OnPropertyChanged(nameof(ActionTemplateImageSource));
 
                 // Delegate to helper
                 ActionTemplateImageSource = _templateManager.LoadActionTemplateThumbnail(SelectedNavigationAction);
+                OnPropertyChanged(nameof(ActionTemplateImageSource));
                 OnPropertyChanged(nameof(ActionTemplatePath));
                 OnPropertyChanged(nameof(HasActionTemplateImage));
             }
@@ -2133,6 +2032,7 @@ namespace FFXIManager.ViewModels
             {
                 _ = _loggingService.LogErrorAsync("Error loading action template image", ex);
                 ActionTemplateImageSource = null;
+                OnPropertyChanged(nameof(ActionTemplateImageSource));
                 OnPropertyChanged(nameof(ActionTemplatePath));
                 OnPropertyChanged(nameof(HasActionTemplateImage));
             }
@@ -2190,127 +2090,29 @@ namespace FFXIManager.ViewModels
         {
             if (SelectedNavigationAction == null) return;
 
-            // Store current action template image to restore if operation is canceled
-            var previousActionTemplateImage = ActionTemplateImageSource;
-
             try
             {
-                var dialog = new Microsoft.Win32.OpenFileDialog
-                {
-                    Title = "Select Screenshot or Image for Action Template",
-                    Filter = "Image Files (*.png;*.jpg;*.bmp)|*.png;*.jpg;*.bmp|All Files (*.*)|*.*",
-                    Multiselect = false
-                };
+                var window = System.Windows.Application.Current.MainWindow;
+                var templateName = GenerateActionTemplateName();
 
-                if (dialog.ShowDialog() != true)
-                {
-                    // Restore previous image on cancel
-                    ActionTemplateImageSource = previousActionTemplateImage;
-                    return;
-                }
+                var result = await _templateDialogService.SelectAndCropTemplateAsync(templateName, window);
 
-                var cropViewModel = new ImageCropperDialogViewModel(dialog.FileName, _loggingService);
-                var cropDialog = new Views.ImageCropperDialog(cropViewModel)
+                if (result.Success)
                 {
-                    Owner = System.Windows.Application.Current.MainWindow
-                };
-
-                if (cropDialog.ShowDialog() != true)
-                {
-                    // Restore previous image on cancel
-                    ActionTemplateImageSource = previousActionTemplateImage;
-                    return;
-                }
-
-                if (cropViewModel.CropRectangle == null)
-                {
-                    await _dialogService.ShowMessageDialogAsync("Invalid Selection", "No crop area was selected.");
-                    return;
-                }
-
-                // Delegate to helper
-                var success = await _templateManager.CreateActionTemplateAsync(
-                    SelectedNavigationAction,
-                    SelectedStep,
-                    dialog.FileName,
-                    cropViewModel.CropRectangle.Value);
-
-                if (success)
-                {
-                    // Update UI state
-                    LoadActionTemplateImage();
+                    SelectedNavigationAction.SetParameter("TemplatePath", result.TemplatePath);
                     HasUnsavedChanges = true;
+                    UpdateCommandStates();
+                    LoadActionTemplateImage();
+                }
+                else if (!string.IsNullOrWhiteSpace(result.ErrorMessage))
+                {
+                    await _dialogService.ShowMessageDialogAsync("Template Selection Failed", result.ErrorMessage);
                 }
             }
             catch (Exception ex)
             {
                 await _loggingService.LogErrorAsync("Error selecting action template image", ex);
-            }
-        }
-
-        private async Task ReplaceActionTemplateImageAsync()
-        {
-            if (SelectedNavigationAction == null)
-                return;
-
-            // Store current action template image to restore if operation is canceled
-            var previousActionTemplateImage = ActionTemplateImageSource;
-
-            try
-            {
-                var dialog = new Microsoft.Win32.OpenFileDialog
-                {
-                    Title = "Select New Image for Action Template",
-                    Filter = "Image Files (*.png;*.jpg;*.bmp)|*.png;*.jpg;*.bmp|All Files (*.*)|*.*",
-                    Multiselect = false
-                };
-
-                if (dialog.ShowDialog() != true)
-                {
-                    // Restore previous image on cancel
-                    ActionTemplateImageSource = previousActionTemplateImage;
-                    return;
-                }
-
-                var cropViewModel = new ImageCropperDialogViewModel(dialog.FileName, _loggingService);
-                var cropDialog = new Views.ImageCropperDialog(cropViewModel)
-                {
-                    Owner = System.Windows.Application.Current.MainWindow
-                };
-
-                if (cropDialog.ShowDialog() != true)
-                {
-                    // Restore previous image on cancel
-                    ActionTemplateImageSource = previousActionTemplateImage;
-                    return;
-                }
-
-                // Delegate to helper
-                var success = await _templateManager.ReplaceActionTemplateAsync(
-                    SelectedNavigationAction,
-                    dialog.FileName,
-                    cropViewModel.CropRectangle);
-
-                if (success)
-                {
-                    // Update UI state + targeted invalidation
-                    try
-                    {
-                        var p = SelectedNavigationAction.GetParameter<string>("TemplatePath", string.Empty);
-                        if (!string.IsNullOrWhiteSpace(p))
-                        {
-                            _templateService.Invalidate(p);
-                            if (!p.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
-                                _templateService.Invalidate(p + ".png");
-                        }
-                    }
-                    catch { }
-                    LoadActionTemplateImage();
-                }
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync("Error replacing action template image", ex);
+                await _dialogService.ShowMessageDialogAsync("Selection Failed", $"Failed to select action template image: {ex.Message}");
             }
         }
 

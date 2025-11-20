@@ -145,6 +145,9 @@ namespace FFXIManager.Infrastructure
             services.AddTransient<FFXIManager.ViewModels.WorkflowEditor.WorkflowEditorTemplateManager>();
             services.AddTransient<FFXIManager.ViewModels.WorkflowEditor.WorkflowEditorWorkflowManager>();
 
+            // Template dialog coordination service (extracts dialog lifecycle management)
+            services.AddSingleton<ITemplateDialogCoordinationService, TemplateDialogCoordinationService>();
+
             // Hotkey plumbing
             services.AddSingleton<IGlobalHotkeyService, LowLevelHotkeyService>();
             services.AddSingleton<ControllerInputService>();
