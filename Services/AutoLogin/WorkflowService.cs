@@ -674,8 +674,8 @@ namespace FFXIManager.Services.AutoLogin
                     // Destination: workflows/{guid}.json (flat structure)
                     var destFile = GetWorkflowFilePath(workflow.WorkflowId);
 
-                    // Copy if doesn't exist, or if source is newer
-                    if (!File.Exists(destFile) || File.GetLastWriteTimeUtc(sourceFile) > File.GetLastWriteTimeUtc(destFile))
+                    // Only copy if doesn't exist (never overwrite user modifications)
+                    if (!File.Exists(destFile))
                     {
                         // Prevent multiple defaults: if an existing workflow is already default,
                         // clear IsDefault flag from source workflow before copying
@@ -707,10 +707,10 @@ namespace FFXIManager.Services.AutoLogin
                         var fileName = Path.GetFileName(templateFile);
                         var destFile = Path.Combine(templatesDestination, fileName);
 
-                        // Copy if doesn't exist, or if source is newer
-                        if (!File.Exists(destFile) || File.GetLastWriteTimeUtc(templateFile) > File.GetLastWriteTimeUtc(destFile))
+                        // Only copy if doesn't exist (never overwrite user modifications)
+                        if (!File.Exists(destFile))
                         {
-                            File.Copy(templateFile, destFile, overwrite: true);
+                            File.Copy(templateFile, destFile, overwrite: false);
                             templatesCopied++;
                             await _loggingService.LogDebugAsync($"Copied template: {fileName}");
                         }
@@ -800,8 +800,8 @@ namespace FFXIManager.Services.AutoLogin
                         // Destination: workflows/{guid}.json (flat structure)
                         var destFile = GetWorkflowFilePath(workflow.WorkflowId);
 
-                        // Copy if doesn't exist, or if source is newer
-                        if (!File.Exists(destFile) || File.GetLastWriteTimeUtc(sourceFile) > File.GetLastWriteTimeUtc(destFile))
+                        // Only copy if doesn't exist (never overwrite user modifications)
+                        if (!File.Exists(destFile))
                         {
                             // Prevent multiple defaults: if an existing workflow is already default,
                             // clear IsDefault flag from source workflow before copying
@@ -835,10 +835,10 @@ namespace FFXIManager.Services.AutoLogin
                             var fileName = Path.GetFileName(templateFile);
                             var destFile = Path.Combine(templatesDestination, fileName);
 
-                            // Copy if doesn't exist, or if source is newer
-                            if (!File.Exists(destFile) || File.GetLastWriteTimeUtc(templateFile) > File.GetLastWriteTimeUtc(destFile))
+                            // Only copy if doesn't exist (never overwrite user modifications)
+                            if (!File.Exists(destFile))
                             {
-                                File.Copy(templateFile, destFile, overwrite: true);
+                                File.Copy(templateFile, destFile, overwrite: false);
                             }
                         }
                         catch
