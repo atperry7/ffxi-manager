@@ -273,6 +273,10 @@ namespace FFXIManager.Infrastructure
                 if (success || finalState.IsForeground)
                 {
                     await _logging.LogDebugAsync($"Window activation succeeded after {attempts} attempts in {stopwatch.ElapsedMilliseconds}ms", "ProcessUtilityService");
+
+                    // **FIX FOR KEYBOARD LOCKUP**: Reset keyboard state after successful activation
+                    ResetKeyboardState();
+
                     var successResult = WindowActivationResult.Successful(windowHandle, stopwatch.Elapsed, attempts);
                     successResult.WindowState = finalState;
                     return successResult;
@@ -280,6 +284,9 @@ namespace FFXIManager.Infrastructure
 
                 // **FAILURE ANALYSIS**: Determine why activation failed
                 var failureReason = AnalyzeActivationFailure(windowHandle, initialState, finalState);
+
+                // **FIX FOR KEYBOARD LOCKUP**: Reset keyboard state after failed activation
+                ResetKeyboardState();
 
                 var failedResult = WindowActivationResult.Failed(windowHandle, failureReason,
                     $"Failed after {attempts} attempts. Final state: {finalState}");
@@ -290,12 +297,19 @@ namespace FFXIManager.Infrastructure
             }
             catch (OperationCanceledException)
             {
+                // **FIX FOR KEYBOARD LOCKUP**: Reset keyboard state after cancellation
+                ResetKeyboardState();
+
                 return WindowActivationResult.Failed(windowHandle, WindowActivationFailureReason.Timeout,
                     $"Activation timed out after {timeoutMs}ms");
             }
             catch (Exception ex)
             {
                 await _logging.LogErrorAsync($"Unexpected error during window activation", ex, "ProcessUtilityService");
+
+                // **FIX FOR KEYBOARD LOCKUP**: Reset keyboard state after exception
+                ResetKeyboardState();
+
                 return WindowActivationResult.Failed(windowHandle, WindowActivationFailureReason.Unknown, ex.Message);
             }
         }
@@ -363,23 +377,29 @@ namespace FFXIManager.Infrastructure
 
                     if (currentThread != targetThread)
                     {
+                        bool attached = false;
                         try
                         {
-                            // **IMPROVED**: More robust thread attachment
-                            if (AttachThreadInput(currentThread, targetThread, true))
+                            // **FIX FOR KEYBOARD LOCKUP**: Ensure thread detachment with try-finally
+                            // If cancellation or exception occurs, threads must be detached to prevent
+                            // corrupted keyboard input routing between windows.
+                            attached = AttachThreadInput(currentThread, targetThread, true);
+                            if (attached)
                             {
                                 SetForegroundWindow(windowHandle);
                                 BringWindowToTop(windowHandle);
 
                                 // Small delay to let the activation take effect
                                 await Task.Delay(10, cts.Token);
-
-                                AttachThreadInput(currentThread, targetThread, false);
                             }
                         }
-                        catch
+                        finally
                         {
-                            // Thread attachment can fail - continue without it
+                            // **CRITICAL**: Always detach, even if cancelled or exception thrown
+                            if (attached)
+                            {
+                                AttachThreadInput(currentThread, targetThread, false);
+                            }
                         }
                     }
 
@@ -398,18 +418,29 @@ namespace FFXIManager.Infrastructure
                         "ProcessUtilityService");
                 }
 
+                // **FIX FOR KEYBOARD LOCKUP**: Reset keyboard state after activation (success or failure)
+                ResetKeyboardState();
+
                 return success;
             }
             catch (OperationCanceledException)
             {
                 await _logging.LogWarningAsync($"Window activation timeout ({timeoutMs}ms) for 0x{windowHandle.ToInt64():X}",
                     "ProcessUtilityService");
+
+                // **FIX FOR KEYBOARD LOCKUP**: Reset keyboard state after timeout
+                ResetKeyboardState();
+
                 return false;
             }
             catch (Exception ex)
             {
                 await _logging.LogWarningAsync($"Error activating window 0x{windowHandle.ToInt64():X}: {ex.Message}",
                     "ProcessUtilityService");
+
+                // **FIX FOR KEYBOARD LOCKUP**: Reset keyboard state after exception
+                ResetKeyboardState();
+
                 return false;
             }
         }
@@ -771,17 +802,22 @@ namespace FFXIManager.Infrastructure
                 System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Current foreground before activation: {fgState.WindowTitle} (0x{currentForeground.ToInt64():X})");
             }
 
-            // Temporarily disable focus stealing prevention
+            // **FIX FOR KEYBOARD LOCKUP**: Temporarily disable focus stealing prevention
+            // Must always restore original timeout to prevent system-wide keyboard routing corruption
             IntPtr timeout = Marshal.AllocHGlobal(sizeof(uint));
+            uint originalTimeout = 0;
+            bool timeoutModified = false;
+
             try
             {
                 // Get current timeout
                 SystemParametersInfo(SPI_GETFOREGROUNDLOCKTIMEOUT, 0, timeout, 0);
-                uint originalTimeout = (uint)Marshal.ReadInt32(timeout);
+                originalTimeout = (uint)Marshal.ReadInt32(timeout);
 
                 // Set timeout to 0 (disable focus stealing prevention)
                 Marshal.WriteInt32(timeout, 0);
                 SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, timeout, SPIF_SENDCHANGE);
+                timeoutModified = true;
 
                 // **FIX**: Use SwitchToThisWindow for better reliability with games
                 // This API is more reliable for switching to game windows
@@ -822,28 +858,99 @@ namespace FFXIManager.Infrastructure
 
                     if (GetForegroundWindow() == hWnd)
                     {
-                        // Restore original timeout
-                        Marshal.WriteInt32(timeout, (int)originalTimeout);
-                        SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, timeout, SPIF_SENDCHANGE);
                         System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Successfully activated window after {i + 1} attempts");
                         return true;
                     }
                 }
 
-                // Restore original timeout
-                Marshal.WriteInt32(timeout, (int)originalTimeout);
-                SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, timeout, SPIF_SENDCHANGE);
+                return false;
             }
             finally
             {
+                // **CRITICAL**: Always restore original timeout, even if cancelled or exception thrown
+                // If timeout stays at 0, any application can steal focus, corrupting keyboard routing
+                if (timeoutModified)
+                {
+                    Marshal.WriteInt32(timeout, (int)originalTimeout);
+                    SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, timeout, SPIF_SENDCHANGE);
+                    System.Diagnostics.Debug.WriteLine("[ACTIVATION] Restored focus stealing prevention timeout");
+                }
                 Marshal.FreeHGlobal(timeout);
             }
-
-            return false;
         }
 
         [DllImport("user32.dll")]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetKeyboardState(byte[] lpKeyState);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetKeyboardState(byte[] lpKeyState);
+
+        // Virtual key codes for modifier keys
+        private const byte VK_SHIFT = 0x10;
+        private const byte VK_CONTROL = 0x11;
+        private const byte VK_MENU = 0x12;     // Alt key
+        private const byte VK_LSHIFT = 0xA0;
+        private const byte VK_RSHIFT = 0xA1;
+        private const byte VK_LCONTROL = 0xA2;
+        private const byte VK_RCONTROL = 0xA3;
+        private const byte VK_LMENU = 0xA4;    // Left Alt
+        private const byte VK_RMENU = 0xA5;    // Right Alt
+        private const byte VK_LWIN = 0x5B;
+        private const byte VK_RWIN = 0x5C;
+
+        /// <summary>
+        /// Resets keyboard state by clearing all modifier keys.
+        /// This is a defensive safeguard to prevent stuck modifier keys after window activation.
+        /// </summary>
+        /// <remarks>
+        /// **FIX FOR KEYBOARD LOCKUP**: If keyboard simulation during window activation doesn't complete cleanly,
+        /// or if thread input attachment corrupts state, Windows might believe modifier keys are still pressed.
+        /// This method explicitly clears all modifier key states to prevent "partial keyboard functionality" issues.
+        /// </remarks>
+        private static bool ResetKeyboardState()
+        {
+            try
+            {
+                byte[] keyState = new byte[256];
+                if (!GetKeyboardState(keyState))
+                {
+                    System.Diagnostics.Debug.WriteLine("[KEYBOARD RESET] Failed to get keyboard state");
+                    return false;
+                }
+
+                // Clear all modifier keys (both generic and left/right specific)
+                keyState[VK_SHIFT] = 0;
+                keyState[VK_CONTROL] = 0;
+                keyState[VK_MENU] = 0;
+                keyState[VK_LSHIFT] = 0;
+                keyState[VK_RSHIFT] = 0;
+                keyState[VK_LCONTROL] = 0;
+                keyState[VK_RCONTROL] = 0;
+                keyState[VK_LMENU] = 0;
+                keyState[VK_RMENU] = 0;
+                keyState[VK_LWIN] = 0;
+                keyState[VK_RWIN] = 0;
+
+                if (!SetKeyboardState(keyState))
+                {
+                    System.Diagnostics.Debug.WriteLine("[KEYBOARD RESET] Failed to set keyboard state");
+                    return false;
+                }
+
+                System.Diagnostics.Debug.WriteLine("[KEYBOARD RESET] Successfully cleared all modifier keys");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[KEYBOARD RESET] Exception: {ex.Message}");
+                return false;
+            }
+        }
 
         /// <summary>
         /// Checks if a window handle is still valid and exists.

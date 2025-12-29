@@ -738,9 +738,7 @@
                                                         <StackPanel Grid.Column="0">
                                                             <TextBox Text="{Binding SelectedStep.TemplatePath, UpdateSourceTrigger=PropertyChanged}"
                                                      Margin="0,0,0,8"
-                                                     IsReadOnly="True"
-                                                     IsReadOnlyCaretVisible="False"
-                                                     ToolTip="Path to template image file (use 'Select Image' button to change)"/>
+                                                     ToolTip="Path to template image file"/>
 
                                                             <!-- Template Management Buttons -->
                                                             <StackPanel Orientation="Horizontal">
@@ -748,8 +746,15 @@
                                                         Command="{Binding SelectTemplateImageCommand}"
                                                         Width="140"
                                                         Height="28"
+                                                        Margin="0,0,4,0"
                                                         Style="{StaticResource CircularPrimaryButton}"
-                                                        ToolTip="Select a screenshot and crop the template region"/>
+                                                        ToolTip="Select a screenshot or image to create a template"/>
+                                                                <Button Content="🔄 Replace"
+                                                        Command="{Binding ReplaceTemplateImageCommand}"
+                                                        Width="100"
+                                                        Height="28"
+                                                        Style="{StaticResource CircularSecondaryButton}"
+                                                        ToolTip="Replace the existing template image"/>
                                                             </StackPanel>
                                                         </StackPanel>
 
@@ -1196,17 +1201,22 @@ Template image behavior:
                                                             <StackPanel Grid.Column="0">
                                                                 <TextBox Text="{Binding ActionTemplatePath, UpdateSourceTrigger=PropertyChanged}"
                                                                          Margin="0,0,0,8"
-                                                                         IsReadOnly="True"
-                                                                         IsReadOnlyCaretVisible="False"
-                                                                         ToolTip="Template image for screen detection (use 'Select Image' button to change)"/>
+                                                                         ToolTip="Template image for screen detection&#x0a;Leave empty if no template matching needed"/>
 
                                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                                                     <Button Content="📷"
                                                                             Command="{Binding SelectActionTemplateImageCommand}"
                                                                             Width="36"
                                                                             Height="36"
+                                                                            Margin="0,0,4,0"
                                                                             Style="{StaticResource CircularPrimaryButton}"
-                                                                            ToolTip="Select a screenshot and crop the template region"/>
+                                                                            ToolTip="Select a screenshot for template matching"/>
+                                                                    <Button Content="🔄"
+                                                                            Command="{Binding ReplaceActionTemplateImageCommand}"
+                                                                            Width="36"
+                                                                            Height="36"
+                                                                            Style="{StaticResource CircularSecondaryButton}"
+                                                                            ToolTip="Replace the existing template image"/>
                                                                 </StackPanel>
                                                             </StackPanel>
 

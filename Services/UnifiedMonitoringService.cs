@@ -731,7 +731,7 @@ namespace FFXIManager.Services
             {
                 try
                 {
-                    await _logging.LogDebugAsync("Running minimal safety scan (fallback polling disabled)", "UnifiedMonitoringService");
+                    await _logging.LogDebugAsync("Running minimal safety scan (dead process cleanup only)", "UnifiedMonitoringService");
 
                     // Only check for dead processes - no additional polling to avoid conflicts
                     List<int> deadProcessIds;
@@ -787,8 +787,9 @@ namespace FFXIManager.Services
                         }
                     }
 
-                    // Scan for new processes
-                    await InitialScanAsync();
+                    // **FIX**: DO NOT re-scan for new processes - WMI watchers handle this in real-time
+                    // The aggressive re-scanning was causing race conditions and overwriting event-driven window title updates
+                    // await InitialScanAsync(); // REMOVED - causes window title loss
                 }
                 catch (Exception ex)
                 {

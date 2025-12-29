@@ -40,10 +40,6 @@
                     Drag on the image below to select the region you want to use as the template.
                     If your screenshot is already the correct size, click "Use Full Image".
                 </TextBlock>
-                <TextBlock TextWrapping="Wrap"
-                           Foreground="{DynamicResource SecondaryTextBrush}">
-                    ⚠️ Please ensure that the title bar is not included for center-relative flows.
-                </TextBlock>
             </StackPanel>
         </Border>
 
