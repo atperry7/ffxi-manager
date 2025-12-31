@@ -51,6 +51,10 @@ namespace FFXIManager.Infrastructure
         private readonly ILoggingService _loggingService; // Added for consistency in GetWindowTitle
         private const int DEFAULT_TIMEOUT_MS = 5000;
 
+        // **FIX FOR WINDOW LOCKUP**: Serialize all window activations to prevent overlapping
+        // AttachThreadInput calls that can corrupt a window's input queue when cancelled rapidly.
+        private static readonly SemaphoreSlim _activationLock = new(1, 1);
+
         #region Windows API Imports
 
         [DllImport("user32.dll")]
@@ -226,6 +230,13 @@ namespace FFXIManager.Infrastructure
         {
             var stopwatch = Stopwatch.StartNew();
 
+            // **FIX FOR WINDOW LOCKUP**: Acquire lock to serialize activations
+            if (!await _activationLock.WaitAsync(timeoutMs))
+            {
+                return WindowActivationResult.Failed(windowHandle, WindowActivationFailureReason.Timeout,
+                    "Activation lock timeout - another activation in progress");
+            }
+
             try
             {
                 // **VALIDATION**: Check if window handle is valid
@@ -312,12 +323,25 @@ namespace FFXIManager.Infrastructure
 
                 return WindowActivationResult.Failed(windowHandle, WindowActivationFailureReason.Unknown, ex.Message);
             }
+            finally
+            {
+                // **FIX FOR WINDOW LOCKUP**: Always release the activation lock
+                _activationLock.Release();
+            }
         }
 
         public async Task<bool> ActivateWindowAsync(IntPtr windowHandle, int timeoutMs = DEFAULT_TIMEOUT_MS)
         {
             if (windowHandle == IntPtr.Zero || !IsWindow(windowHandle))
             {
+                return false;
+            }
+
+            // **FIX FOR WINDOW LOCKUP**: Acquire lock to serialize activations
+            // This prevents overlapping AttachThreadInput calls that can corrupt input queues
+            if (!await _activationLock.WaitAsync(timeoutMs))
+            {
+                await _logging.LogWarningAsync($"Activation lock timeout for 0x{windowHandle.ToInt64():X}", "ProcessUtilityService");
                 return false;
             }
 
@@ -442,6 +466,11 @@ namespace FFXIManager.Infrastructure
                 ResetKeyboardState();
 
                 return false;
+            }
+            finally
+            {
+                // **FIX FOR WINDOW LOCKUP**: Always release the activation lock
+                _activationLock.Release();
             }
         }
 
