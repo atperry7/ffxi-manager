@@ -17,6 +17,13 @@ namespace FFXIManager.Services
         private TimeSpan _hotkeyDebounceInterval = TimeSpan.FromMilliseconds(50);
         private bool _disposed;
 
+        // **EMERGENCY PROTECTION**: Circuit breaker for hotkey flooding
+        private static int _hotkeyPressCount;
+        private static DateTime _lastHotkeyReset = DateTime.UtcNow;
+        private static volatile bool _hotkeyFloodProtection;
+        private const int MAX_HOTKEYS_PER_SECOND = 15;
+        private const int FLOOD_PROTECTION_DURATION_MS = 2000;
+
         public event EventHandler<HotkeyPressedEventArgs>? HotkeyPressed;
 
         public GlobalHotkeyManager(
@@ -190,6 +197,12 @@ namespace FFXIManager.Services
         {
             try
             {
+                // **EMERGENCY PROTECTION**: Check for hotkey flood
+                if (IsHotkeyFloodProtectionActive())
+                {
+                    return;
+                }
+
                 var now = DateTime.UtcNow;
                 if (_lastHotkeyPress.TryGetValue(e.HotkeyId, out var lastPress))
                 {
@@ -208,6 +221,52 @@ namespace FFXIManager.Services
             {
                 _ = _loggingService.LogErrorAsync("Error handling hotkey press", ex, "GlobalHotkeyManager");
             }
+        }
+
+        /// <summary>
+        /// Checks if flood protection is active and updates counters.
+        /// Returns true if flood protection is blocking hotkeys.
+        /// </summary>
+        private bool IsHotkeyFloodProtectionActive()
+        {
+            var now = DateTime.UtcNow;
+
+            // If flood protection is active, check if cooldown has expired
+            if (_hotkeyFloodProtection)
+            {
+                var timeSinceReset = (now - _lastHotkeyReset).TotalMilliseconds;
+                if (timeSinceReset > FLOOD_PROTECTION_DURATION_MS)
+                {
+                    _hotkeyFloodProtection = false;
+                    _hotkeyPressCount = 0;
+                    _lastHotkeyReset = now;
+                    System.Diagnostics.Debug.WriteLine("Hotkey flood protection deactivated - cooldown expired");
+                }
+                else
+                {
+                    return true; // Still in cooldown
+                }
+            }
+
+            // Reset counter every second
+            var timeSinceLastReset = (now - _lastHotkeyReset).TotalSeconds;
+            if (timeSinceLastReset >= 1.0)
+            {
+                _hotkeyPressCount = 0;
+                _lastHotkeyReset = now;
+            }
+
+            // Increment counter and check threshold
+            _hotkeyPressCount++;
+            if (_hotkeyPressCount > MAX_HOTKEYS_PER_SECOND)
+            {
+                _hotkeyFloodProtection = true;
+                _lastHotkeyReset = now;
+                _ = _loggingService.LogWarningAsync($"HOTKEY FLOOD PROTECTION ACTIVATED: {_hotkeyPressCount} presses/sec exceeded limit of {MAX_HOTKEYS_PER_SECOND}. Blocking for {FLOOD_PROTECTION_DURATION_MS}ms", "GlobalHotkeyManager");
+                return true;
+            }
+
+            return false;
         }
 
         private void OnControllerButtonPressed(object? sender, ControllerButtonPressedEventArgs e)

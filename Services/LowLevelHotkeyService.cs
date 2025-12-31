@@ -28,6 +28,21 @@ namespace FFXIManager.Services
         /// </summary>
         private const int SUPPRESS_KEY_EVENT = 1;
 
+        /// <summary>
+        /// Flag indicating the key event was injected (via SendInput or keybd_event).
+        /// **FIX FOR KEYBOARD LOCKUP**: Skip processing injected keys to prevent feedback loop
+        /// where our own simulated Alt keys (for focus stealing bypass) trigger hotkey logic.
+        /// </summary>
+        private const uint LLKHF_INJECTED = 0x10;
+
+        // **EMERGENCY SAFEGUARDS**: Critical system protection
+        private static readonly object _emergencyLock = new object();
+        private static volatile bool _emergencyMode;
+        private static int _consecutiveFailures;
+        private static DateTime _lastFailureTime = DateTime.MinValue;
+        private const int MAX_CONSECUTIVE_FAILURES = 10;
+        private const int EMERGENCY_COOLDOWN_MS = 2000;
+
         private readonly ConcurrentDictionary<int, HotkeyInfo> _registeredHotkeys = new();
         private readonly ConcurrentDictionary<HotkeyKey, int> _hotkeyLookup = new(); // O(1) lookup for performance
         private volatile int _registeredCount;
@@ -177,11 +192,40 @@ namespace FFXIManager.Services
 
         private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
+            // **EMERGENCY PROTECTION**: If in emergency mode, pass through all keys immediately
+            if (_emergencyMode)
+            {
+                // Check if cooldown has expired
+                lock (_emergencyLock)
+                {
+                    if ((DateTime.UtcNow - _lastFailureTime).TotalMilliseconds > EMERGENCY_COOLDOWN_MS)
+                    {
+                        _emergencyMode = false;
+                        _consecutiveFailures = 0;
+                        System.Diagnostics.Debug.WriteLine("Emergency mode deactivated - cooldown expired");
+                    }
+                }
+                if (_emergencyMode)
+                {
+                    return CallNextHookEx(_hookId, nCode, wParam, lParam);
+                }
+            }
+
             if (nCode >= HC_ACTION && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN))
             {
                 try
                 {
                     var hookStruct = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
+
+                    // **FIX FOR KEYBOARD LOCKUP**: Skip injected keys to prevent feedback loop
+                    // Our window activation code uses keybd_event to simulate Alt key for focus bypass.
+                    // Without this check, GetAsyncKeyState would read these simulated keys as real,
+                    // causing incorrect hotkey detection and stuck modifier states.
+                    if ((hookStruct.flags & LLKHF_INJECTED) != 0)
+                    {
+                        return CallNextHookEx(_hookId, nCode, wParam, lParam);
+                    }
+
                     var vkCode = (int)hookStruct.vkCode;
 
                     // **GAMING OPTIMIZATION**: Inline modifier key state for performance
@@ -208,15 +252,17 @@ namespace FFXIManager.Services
                         // Verify the hotkey is still registered and enabled
                         if (_registeredHotkeys.TryGetValue(hotkeyId, out var hotkeyInfo) && hotkeyInfo.IsRegistered)
                         {
-                            // Non-blocking event fire for performance
+                            // **EMERGENCY PROTECTION**: Non-blocking event fire with failure tracking
                             Task.Run(() =>
                             {
                                 try
                                 {
                                     HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(hotkeyId, modifiers, key));
+                                    ResetFailureCount();
                                 }
                                 catch (Exception ex)
                                 {
+                                    IncrementFailureCount();
                                     System.Diagnostics.Debug.WriteLine($"Hotkey event failed: {ex.Message}");
                                 }
                             });
@@ -354,6 +400,35 @@ namespace FFXIManager.Services
             if (_disposed) return false;
 
             return _registeredHotkeys.TryGetValue(id, out var info) && info.IsRegistered;
+        }
+
+        /// <summary>
+        /// Resets the consecutive failure count after a successful hotkey event.
+        /// </summary>
+        private static void ResetFailureCount()
+        {
+            lock (_emergencyLock)
+            {
+                _consecutiveFailures = 0;
+            }
+        }
+
+        /// <summary>
+        /// Increments failure count and activates emergency mode if threshold exceeded.
+        /// </summary>
+        private static void IncrementFailureCount()
+        {
+            lock (_emergencyLock)
+            {
+                _consecutiveFailures++;
+                _lastFailureTime = DateTime.UtcNow;
+
+                if (_consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && !_emergencyMode)
+                {
+                    _emergencyMode = true;
+                    System.Diagnostics.Debug.WriteLine($"EMERGENCY MODE ACTIVATED: {_consecutiveFailures} consecutive failures. Hotkeys disabled for {EMERGENCY_COOLDOWN_MS}ms");
+                }
+            }
         }
 
         public void Dispose()
