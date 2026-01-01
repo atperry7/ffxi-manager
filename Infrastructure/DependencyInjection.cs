@@ -90,6 +90,7 @@ namespace FFXIManager.Infrastructure
             services.AddSingleton<IWorkflowActionExecutor, FFXIManager.Services.AutoLogin.ActionExecutors.InputOTPActionExecutor>();
             services.AddSingleton<IWorkflowActionExecutor, FFXIManager.Services.AutoLogin.ActionExecutors.MemberSlotActionExecutor>();
             services.AddSingleton<IWorkflowActionExecutor, FFXIManager.Services.AutoLogin.ActionExecutors.CharacterSlotActionExecutor>();
+            services.AddSingleton<IWorkflowActionExecutor, FFXIManager.Services.AutoLogin.ActionExecutors.CharacterSlotKeyboardActionExecutor>();
             services.AddSingleton<IWorkflowActionExecutorFactory, WorkflowActionExecutorFactory>();
 
             // Auto-login queue services (refactored for SOLID principles)
