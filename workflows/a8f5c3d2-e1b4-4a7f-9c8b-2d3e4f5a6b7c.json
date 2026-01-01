@@ -1,12 +1,12 @@
 ﻿{
-  "WorkflowId": "a8f5c3d2-e1b4-4a7f-9c8b-2d3e4f5a6b7e",
-  "Name": "POL (1440p 100% DPI)",
+  "WorkflowId": "a8f5c3d2-e1b4-4a7f-9c8b-2d3e4f5a6b7c",
+  "Name": "FFXI Character Login",
   "Description": "Complete workflow for logging into PlayOnline and FFXI. Handles member selection, password entry, optional OTP, and FFXI character login.",
   "Version": "2.0.0",
-  "IsDefault": false,
+  "IsDefault": true,
   "IsReadOnly": false,
-  "CreatedDate": "2025-11-20T00:00:00Z",
-  "LastModifiedDate": "2025-12-31T18:24:45.3700986Z",
+  "CreatedDate": "2025-01-15T00:00:00Z",
+  "LastModifiedDate": "2026-01-01T13:54:51.3773782Z",
   "Steps": [
     {
       "StepId": "launch_pol_proxy",
@@ -689,7 +689,7 @@
           {
             "Action": "Wait",
             "Count": 1,
-            "DelayMs": 3500,
+            "DelayMs": 4000,
             "Description": "Navigate to next field",
             "Parameters": {}
           },
@@ -738,12 +738,12 @@
           {
             "Action": "Wait",
             "Count": 1,
-            "DelayMs": 1500,
+            "DelayMs": 2000,
             "Description": "Navigate to next field",
             "Parameters": {}
           },
           {
-            "Action": "CharacterSlot",
+            "Action": "CharacterSlotKeyboard",
             "Count": 1,
             "DelayMs": 50,
             "Description": "Click desired character slot (change to enter if all in 1st slot)",
