@@ -55,6 +55,11 @@ namespace FFXIManager.Infrastructure
         // AttachThreadInput calls that can corrupt a window's input queue when cancelled rapidly.
         private static readonly SemaphoreSlim _activationLock = new(1, 1);
 
+        // **FIX FOR ISSUE #12**: Track the most recently AttachThreadInput-attached target thread so we
+        // can defensively detach it before any new activation. Win11 KB5083769 delays full release of
+        // AttachThreadInput, causing keystrokes to leak into prior windows. Cleared on successful detach.
+        private static uint _lastAttachedTargetThread;
+
         #region Windows API Imports
 
         [DllImport("user32.dll")]
@@ -112,14 +117,13 @@ namespace FFXIManager.Infrastructure
         private static extern bool AllowSetForegroundWindow(int dwProcessId);
 
         [DllImport("user32.dll")]
-        private static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
-
-        [DllImport("user32.dll")]
         private static extern void SwitchToThisWindow(IntPtr hWnd, bool fAltTab);
 
-        private const uint SPI_GETFOREGROUNDLOCKTIMEOUT = 0x2000;
-        private const uint SPI_SETFOREGROUNDLOCKTIMEOUT = 0x2001;
-        private const uint SPIF_SENDCHANGE = 0x02;
+        // **FIX FOR ISSUE #12**: Per-call foreground-lock bypass. Safer than SPI_SETFOREGROUNDLOCKTIMEOUT
+        // because it doesn't mutate a global registry-backed setting that could leak on crash/interrupt.
+        [DllImport("user32.dll")]
+        private static extern bool LockSetForegroundWindow(uint uLockCode);
+        private const uint LSFW_UNLOCK = 2;
 
         [DllImport("user32.dll")]
         private static extern int GetLastError();
@@ -239,6 +243,15 @@ namespace FFXIManager.Infrastructure
 
             try
             {
+                // **FIX FOR ISSUE #12**: Defensive detach of any stale thread input attachment from a
+                // prior activation. Without this, Win11 KB5083769 can leave the OS routing keystrokes
+                // into the previously-activated window's queue.
+                if (_lastAttachedTargetThread != 0)
+                {
+                    AttachThreadInput(GetCurrentThreadId(), _lastAttachedTargetThread, false);
+                    _lastAttachedTargetThread = 0;
+                }
+
                 // **VALIDATION**: Check if window handle is valid
                 if (windowHandle == IntPtr.Zero || !IsWindow(windowHandle))
                 {
@@ -283,10 +296,19 @@ namespace FFXIManager.Infrastructure
 
                 if (success || finalState.IsForeground)
                 {
-                    await _logging.LogDebugAsync($"Window activation succeeded after {attempts} attempts in {stopwatch.ElapsedMilliseconds}ms", "ProcessUtilityService");
+                    // **FIX FOR ISSUE #12**: Surface attempt count at Info level so beta testers can
+                    // confirm activations are succeeding on the lighter-touch attempts (1=Simple, 2=Switch)
+                    // and not falling back to the heavier ThreadAttachment path.
+                    await _logging.LogInfoAsync($"Window activation succeeded on attempt {attempts}/3 in {stopwatch.ElapsedMilliseconds}ms", "ProcessUtilityService");
 
                     // **FIX FOR KEYBOARD LOCKUP**: Reset keyboard state after successful activation
                     ResetKeyboardState();
+
+                    // **FIX FOR ISSUE #12**: Brief settle delay (inside the lock) gives the OS input
+                    // router time to fully retire the prior foreground assignment before the next
+                    // hotkey can begin its activation. Combined with the upstream 150ms minimum
+                    // interval check, this keeps the input queue chain from accumulating.
+                    await Task.Delay(15, cts.Token);
 
                     var successResult = WindowActivationResult.Successful(windowHandle, stopwatch.Elapsed, attempts);
                     successResult.WindowState = finalState;
@@ -727,22 +749,29 @@ namespace FFXIManager.Infrastructure
         /// <summary>
         /// Attempts window activation using progressive strategies.
         /// </summary>
+        /// <remarks>
+        /// **FIX FOR ISSUE #12**: Ordering deliberately defers AttachThreadInput-based activation to the
+        /// last attempt. Win11 KB5083769 causes thread-input attachment chains to leak keystrokes into
+        /// previously-activated windows, so we prefer non-attaching strategies first.
+        /// </remarks>
         private static async Task<bool> AttemptWindowActivation(IntPtr hWnd, int attemptNumber, CancellationToken cancellationToken)
         {
-            // Strategy varies by attempt number
             switch (attemptNumber)
             {
                 case 1:
-                    // **ATTEMPT 1**: Simple activation
+                    // **ATTEMPT 1**: Simple activation - SetForegroundWindow + BringWindowToTop, no attach
                     return await SimpleActivation(hWnd, cancellationToken);
 
                 case 2:
-                    // **ATTEMPT 2**: Thread attachment
-                    return await ThreadAttachmentActivation(hWnd, cancellationToken);
+                    // **ATTEMPT 2**: Switch activation - SwitchToThisWindow + LockSetForegroundWindow unlock,
+                    // still no thread attachment. Sufficient for the vast majority of activations.
+                    return await SwitchActivation(hWnd, cancellationToken);
 
                 case 3:
-                    // **ATTEMPT 3**: Aggressive activation with window restoration
-                    return await AggressiveActivation(hWnd, cancellationToken);
+                    // **ATTEMPT 3**: Thread-attachment activation. Last resort because AttachThreadInput
+                    // is the source of the input-leak bug — we rely on the defensive detach at the top
+                    // of ActivateWindowEnhancedAsync to prevent the chain from accumulating.
+                    return await ThreadAttachmentActivation(hWnd, cancellationToken);
 
                 default:
                     return false;
@@ -786,6 +815,11 @@ namespace FFXIManager.Infrastructure
                 attached = AttachThreadInput(currentThread, targetThread, true);
                 if (attached)
                 {
+                    // **FIX FOR ISSUE #12**: Record the attached thread so the next activation can
+                    // defensively detach it on entry (in case our finally-block detach below is
+                    // delayed by the OS — a Win11 KB5083769 behavior).
+                    _lastAttachedTargetThread = targetThread;
+
                     if (IsIconic(hWnd))
                     {
                         ShowWindow(hWnd, SW_RESTORE);
@@ -805,107 +839,72 @@ namespace FFXIManager.Infrastructure
                 if (attached)
                 {
                     AttachThreadInput(currentThread, targetThread, false);
+                    // **FIX FOR ISSUE #12**: Clear the tracked thread only after our own detach call
+                    // completes. If a future activation finds it non-zero, it means a prior detach
+                    // didn't fully take and a defensive retry is warranted.
+                    _lastAttachedTargetThread = 0;
                 }
             }
 
             return GetForegroundWindow() == hWnd;
         }
 
-        private static async Task<bool> AggressiveActivation(IntPtr hWnd, CancellationToken cancellationToken)
+        /// <summary>
+        /// **FIX FOR ISSUE #12**: Switch-based activation that bypasses Win11 foreground-lock without
+        /// AttachThreadInput. Combines SwitchToThisWindow, LockSetForegroundWindow(LSFW_UNLOCK), and
+        /// the Alt-tap user-input simulation. Replaces the previous AggressiveActivation, which mutated
+        /// the system-wide SPI_SETFOREGROUNDLOCKTIMEOUT — fragile under KB5083769 and crash-unsafe.
+        /// </summary>
+        private static async Task<bool> SwitchActivation(IntPtr hWnd, CancellationToken cancellationToken)
         {
-            // Get the process ID of the target window
-            var threadId = GetWindowThreadProcessId(hWnd, out uint targetPid);
-            if (threadId == 0)
-            {
-                System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Failed to get thread ID for window 0x{hWnd.ToInt64():X}");
-            }
+            _ = GetWindowThreadProcessId(hWnd, out uint targetPid);
 
-            // Allow the target process to set foreground window
+            // Grant the target process foreground rights so SetForegroundWindow can succeed.
             AllowSetForegroundWindow((int)targetPid);
 
-            // **ENHANCED**: Log current foreground window for debugging
-            var currentForeground = GetForegroundWindow();
-            if (currentForeground != IntPtr.Zero)
+            // Per-call unlock of the foreground-window state. Safer than the SPI timeout mutation —
+            // scoped to this activation, no global cleanup required.
+            LockSetForegroundWindow(LSFW_UNLOCK);
+
+            // SwitchToThisWindow is more reliable than SetForegroundWindow for game windows on Win11.
+            SwitchToThisWindow(hWnd, true);
+
+            if (IsIconic(hWnd))
             {
-                var fgState = GetWindowState(currentForeground);
-                System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Current foreground before activation: {fgState.WindowTitle} (0x{currentForeground.ToInt64():X})");
+                ShowWindow(hWnd, SW_RESTORE);
+                await Task.Delay(30, cancellationToken);
             }
 
-            // **FIX FOR KEYBOARD LOCKUP**: Temporarily disable focus stealing prevention
-            // Must always restore original timeout to prevent system-wide keyboard routing corruption
-            IntPtr timeout = Marshal.AllocHGlobal(sizeof(uint));
-            uint originalTimeout = 0;
-            bool timeoutModified = false;
+            ShowWindow(hWnd, SW_SHOW);
+            BringWindowToTop(hWnd);
 
-            try
+            for (int i = 0; i < 5; i++)
             {
-                // Get current timeout
-                SystemParametersInfo(SPI_GETFOREGROUNDLOCKTIMEOUT, 0, timeout, 0);
-                originalTimeout = (uint)Marshal.ReadInt32(timeout);
+                SetForegroundWindow(hWnd);
 
-                // Set timeout to 0 (disable focus stealing prevention)
-                Marshal.WriteInt32(timeout, 0);
-                SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, timeout, SPIF_SENDCHANGE);
-                timeoutModified = true;
-
-                // **FIX**: Use SwitchToThisWindow for better reliability with games
-                // This API is more reliable for switching to game windows
-                SwitchToThisWindow(hWnd, true);
-
-                // Force window to restore and show
-                if (IsIconic(hWnd))
+                if (i == 1)
                 {
-                    ShowWindow(hWnd, SW_RESTORE);
-                    await Task.Delay(30, cancellationToken);
+                    SwitchToThisWindow(hWnd, true);
                 }
 
-                ShowWindow(hWnd, SW_SHOW);
-                BringWindowToTop(hWnd);
-
-                // Multiple activation attempts in quick succession
-                for (int i = 0; i < 5; i++)
+                if (i == 2)
                 {
-                    // **ENHANCED**: Try multiple activation methods
-                    SetForegroundWindow(hWnd);
-
-                    if (i == 1)
-                    {
-                        // Try SwitchToThisWindow again
-                        SwitchToThisWindow(hWnd, true);
-                    }
-
-                    // Use SendKeys to simulate user input (bypasses focus stealing prevention)
-                    if (i == 2)
-                    {
-                        // Simulate an Alt key press to trick Windows into allowing focus change
-                        keybd_event(0x12, 0, 0, 0); // Alt key down
-                        keybd_event(0x12, 0, 2, 0); // Alt key up
-                        System.Diagnostics.Debug.WriteLine("[ACTIVATION] Sent Alt key to bypass focus stealing prevention");
-                    }
-
-                    await Task.Delay(10, cancellationToken);
-
-                    if (GetForegroundWindow() == hWnd)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[ACTIVATION] Successfully activated window after {i + 1} attempts");
-                        return true;
-                    }
+                    // Synthetic Alt-tap fakes user input, which lets the OS treat our SetForegroundWindow
+                    // call as user-initiated. LowLevelHotkeyService skips LLKHF_INJECTED keys, so this
+                    // doesn't re-enter our own hotkey hook.
+                    keybd_event(0x12, 0, 0, 0); // Alt down
+                    keybd_event(0x12, 0, 2, 0); // Alt up (KEYEVENTF_KEYUP)
                 }
 
-                return false;
+                await Task.Delay(10, cancellationToken);
+
+                if (GetForegroundWindow() == hWnd)
+                {
+                    return true;
+                }
             }
-            finally
-            {
-                // **CRITICAL**: Always restore original timeout, even if cancelled or exception thrown
-                // If timeout stays at 0, any application can steal focus, corrupting keyboard routing
-                if (timeoutModified)
-                {
-                    Marshal.WriteInt32(timeout, (int)originalTimeout);
-                    SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, timeout, SPIF_SENDCHANGE);
-                    System.Diagnostics.Debug.WriteLine("[ACTIVATION] Restored focus stealing prevention timeout");
-                }
-                Marshal.FreeHGlobal(timeout);
-            }
+
+            return false;
         }
 
         [DllImport("user32.dll")]
