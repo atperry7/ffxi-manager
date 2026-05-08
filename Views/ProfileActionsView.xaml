@@ -51,75 +51,73 @@
 
         <!-- Application Manager Tab -->
         <TabItem Header="🚀 Apps">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <StackPanel>
-                    <!-- Application List (independent scroll) -->
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="300">
-                        <ItemsControl ItemsSource="{Binding ExternalApplications}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Style="{StaticResource SurfaceCardBorder}">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,12,0"
-                                                 VerticalAlignment="Center"
-                                                 Fill="{Binding StatusColor}"/>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" FontFamily="Segoe UI"/>
-                                                <TextBlock Text="{Binding StatusText}" FontSize="11" Margin="0,2,0,0" FontFamily="Segoe UI" Style="{StaticResource SecondaryTextBlock}"/>
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="2" Orientation="Horizontal">
-                                                <Button Content="▶️"
-                                                    Style="{StaticResource CircularSuccessButton}"
-                                                    Command="{Binding DataContext.LaunchApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    ToolTip="Launch Application"
-                                                    AutomationProperties.Name="Launch Application"/>
-                                                <Button Content="⏹️"
-                                                    Style="{StaticResource CircularDangerButton}"
-                                                    Command="{Binding DataContext.KillApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    ToolTip="Stop Application"
-                                                    AutomationProperties.Name="Stop Application"
-                                                    IsEnabled="{Binding IsRunning}"/>
-                                                <Button Content="⚙️"
-                                                    Style="{StaticResource CircularWarningButton}"
-                                                    Command="{Binding DataContext.EditApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    ToolTip="Edit Application"
-                                                    AutomationProperties.Name="Edit Application"/>
-                                                <Button Content="🗑️"
-                                                    Style="{StaticResource CircularSecondaryButton}"
-                                                    Command="{Binding DataContext.RemoveApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    ToolTip="Remove Application"
-                                                    AutomationProperties.Name="Remove Application"/>
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                    <!-- Application control buttons -->
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0" HorizontalAlignment="Right">
-                        <Button Content="➕"
-                                Style="{StaticResource CircularPrimaryButton}"
-                                Command="{Binding AddApplicationCommand}"
-                                ToolTip="Add Application"
-                                AutomationProperties.Name="Add Application"/>
-                        <Button Content="🔄"
-                                Style="{StaticResource CircularInfoButton}"
-                                Command="{Binding RefreshApplicationsCommand}"
-                                ToolTip="Refresh Status"
-                                AutomationProperties.Name="Refresh Application Status"/>
-                    </StackPanel>
+            <DockPanel LastChildFill="True">
+                <!-- Add/Refresh buttons pinned at the bottom so they don't scroll out of view -->
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0" HorizontalAlignment="Right">
+                    <Button Content="➕"
+                            Style="{StaticResource CircularPrimaryButton}"
+                            Command="{Binding AddApplicationCommand}"
+                            ToolTip="Add Application"
+                            AutomationProperties.Name="Add Application"/>
+                    <Button Content="🔄"
+                            Style="{StaticResource CircularInfoButton}"
+                            Command="{Binding RefreshApplicationsCommand}"
+                            ToolTip="Refresh Status"
+                            AutomationProperties.Name="Refresh Application Status"/>
                 </StackPanel>
-            </ScrollViewer>
+                <!-- Application list fills remaining space; scrollbar appears only on genuine overflow -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding ExternalApplications}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource SurfaceCardBorder}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,12,0"
+                                             VerticalAlignment="Center"
+                                             Fill="{Binding StatusColor}"/>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" FontFamily="Segoe UI"/>
+                                            <TextBlock Text="{Binding StatusText}" FontSize="11" Margin="0,2,0,0" FontFamily="Segoe UI" Style="{StaticResource SecondaryTextBlock}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                            <Button Content="▶️"
+                                                Style="{StaticResource CircularSuccessButton}"
+                                                Command="{Binding DataContext.LaunchApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip="Launch Application"
+                                                AutomationProperties.Name="Launch Application"/>
+                                            <Button Content="⏹️"
+                                                Style="{StaticResource CircularDangerButton}"
+                                                Command="{Binding DataContext.KillApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip="Stop Application"
+                                                AutomationProperties.Name="Stop Application"
+                                                IsEnabled="{Binding IsRunning}"/>
+                                            <Button Content="⚙️"
+                                                Style="{StaticResource CircularWarningButton}"
+                                                Command="{Binding DataContext.EditApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip="Edit Application"
+                                                AutomationProperties.Name="Edit Application"/>
+                                            <Button Content="🗑️"
+                                                Style="{StaticResource CircularSecondaryButton}"
+                                                Command="{Binding DataContext.RemoveApplicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip="Remove Application"
+                                                AutomationProperties.Name="Remove Application"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
         </TabItem>
     </TabControl>
 </UserControl>
